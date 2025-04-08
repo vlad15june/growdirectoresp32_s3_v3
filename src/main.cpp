@@ -5,7 +5,6 @@
 #include <Wire.h>
 #include <Update.h>
 #include <PubSubClient.h>
-#include <MqttLogger.h>
 #include <T67XX.h>
 #include "globals.h"
 
