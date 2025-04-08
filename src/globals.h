@@ -3,8 +3,13 @@
 
 #include <WiFi.h>
 #include <PubSubClient.h>
+
 #include "Core/Domain/Interfaces/ILogger.h"
+#include "Core/Domain/Interfaces/IModuleConfig.h"
+
 #include "Infrastructure/Logging/MqttLogger.h"
+#include "Infrastructure/Configuration/ModuleConfig.h"
+
 
 const char *mqttUser = "GrowDirectorMqtt";
 const char *mqttPassword = "lasdfh329483457sfdjhs92_w";
@@ -25,6 +30,8 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
 WiFiClient wifiClient;
 PubSubClient mqttClient(mqttBroker, 1883, mqttCallback, wifiClient);
 MqttLogger mqttLogger(mqttClient, mqttDefaultTopic, MqttLoggerMode::MqttAndSerial);
+
+ModuleConfig moduleConfig(&mqttLogger);
 
 // Variables for IP change example
 IPAddress myIP;

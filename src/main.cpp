@@ -8,8 +8,14 @@
 #include <T67XX.h>
 #include "globals.h"
 
+
+// Create ModuleConfig instance
+
+
 void setup() {
   Serial.begin(115200);
+  
+  moduleConfig.configureModuleType();
 
   Serial.println("System initialized.");
 }

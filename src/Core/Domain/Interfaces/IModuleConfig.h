@@ -1,0 +1,25 @@
+#ifndef IMODULECONFIG_H
+#define IMODULECONFIG_H
+
+// Module type constants
+#define MODULE_TYPE_SENSOR 1
+#define MODULE_TYPE_DEVICE 2
+#define MODULE_TYPE_HYDRO 3
+#define MODULE_TYPE_ANALOG_INPUT_DEVICE 4
+
+// Module subtype constants
+#define MODULE_SUBTYPE_NONE 0
+#define MODULE_SUBTYPE_SOKET 1
+#define MODULE_SUBTYPE_RELAY 2
+#define MODULE_SUBTYPE_DIMMER 3
+
+class IModuleConfig
+{
+public:
+    virtual void configureModuleType() = 0;
+    virtual int getModuleType() const = 0;
+    virtual int getModuleSubType() const = 0;
+    virtual ~IModuleConfig() = default;
+};
+
+#endif // IMODULECONFIG_H
