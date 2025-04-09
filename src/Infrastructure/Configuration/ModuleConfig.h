@@ -7,15 +7,14 @@
 #include "Core/Domain/Interfaces/IModuleConfig.h"
 #include "Core/Domain/Interfaces/IDebugSystem.h"
 #include "Core/Domain/Interfaces/ISettings.h"
+#include "Infrastructure/Adapters/Time/INTPTimeAdapter.h"
 
 #include "Infrastructure/Configuration/Settings.h"
 
-// CID pin definitions - these should be adjusted to match your hardware
 #define CID_0 5
 #define CID_1 6
 #define CID_2 7
 
-// Concrete implementation of IModuleConfig
 class ModuleConfig : public IModuleConfig
 {
 private:
@@ -24,10 +23,11 @@ private:
     ILogger *logger;
     IDebugSystem *debugSystem;
     ISettings *settings;
+    INTPTimeAdapter *timeAdapter;
 
     void log(const char *format, ...)
     {
-        if (logger != nullptr && debugSystem->isFeatureEnabled(DebugFeatures::SETUP_DEBUG))
+        if (logger != nullptr && debugSystem != nullptr && debugSystem->isFeatureEnabled(DebugFeatures::SETUP_DEBUG))
         {
             char buffer[128];
             va_list args;
@@ -40,20 +40,41 @@ private:
     }
 
 public:
-    ModuleConfig(ILogger *loggerInstance = nullptr, IDebugSystem *debugSystemInstance = nullptr, ISettings *settingsInstance = nullptr)
-        : moduleType(MODULE_TYPE_DEVICE), moduleSubType(MODULE_SUBTYPE_RELAY), 
-          logger(loggerInstance), debugSystem(debugSystemInstance), settings(settingsInstance) {}
+    ModuleConfig(ILogger *loggerInstance = nullptr, 
+                IDebugSystem *debugSystemInstance = nullptr, 
+                ISettings *settingsInstance = nullptr,
+                INTPTimeAdapter *timeAdapterInstance = nullptr)
+        : moduleType(MODULE_TYPE_DEVICE), moduleSubType(MODULE_SUBTYPE_RELAY),
+          logger(loggerInstance), debugSystem(debugSystemInstance), 
+          settings(settingsInstance), timeAdapter(timeAdapterInstance) {}
 
     void Init() override
     {
         configureModuleType();
-        
-        if (settings != nullptr) {
+
+        if (settings != nullptr)
+        {
             // Initialize settings based on the module type and subtype
             settings->begin();
             log("SETUP: Settings initialized for module type: %d, subtype: %d\n", moduleType, moduleSubType);
-        } else {
+        }
+        else
+        {
             log("SETUP: Warning - Settings instance is null, skipping initialization\n");
+        }
+
+        // Initialize time adapter if available
+        if (timeAdapter != nullptr)
+        {
+            // Setup NTP time services
+            timeAdapter->setup();
+            // Restore time from storage
+            timeAdapter->restoreTimeFromStorage();
+            log("SETUP: Time adapter initialized\n");
+        }
+        else
+        {
+            log("SETUP: Warning - Time adapter instance is null, skipping initialization\n");
         }
     }
 
@@ -120,9 +141,19 @@ public:
         settings = settingsInstance;
     }
 
-    ISettings* getSettings() override
+    ISettings *getSettings() override
     {
         return settings;
+    }
+
+    void setTimeAdapter(INTPTimeAdapter *timeAdapterInstance)
+    {
+        timeAdapter = timeAdapterInstance;
+    }
+
+    INTPTimeAdapter *getTimeAdapter()
+    {
+        return timeAdapter;
     }
 };
 

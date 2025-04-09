@@ -11,7 +11,7 @@
 #include "Infrastructure/Logging/MqttLogger.h"
 #include "Infrastructure/Configuration/ModuleConfig.h"
 #include "Infrastructure/Logging/DebugSystem.h"
-
+#include "Infrastructure/Adapters/Time/NTPTimeAdapter.h" // Add NTPTimeAdapter include
 
 const char *mqttUser = "GrowDirectorMqtt";
 const char *mqttPassword = "lasdfh329483457sfdjhs92_w";
@@ -38,9 +38,12 @@ DebugSystem debugSystem;
 EepromAdapter eeprom(1024, 0);
 Settings settings(eeprom);
 
-ModuleConfig moduleConfig(&mqttLogger, &debugSystem, &settings);
+// Create NTP Time Adapter instance
+// Using default NTP server with UTC offset of 0 and daylight offset of 0
+NTPTimeAdapter ntpTimeAdapter(&mqttLogger, &debugSystem, &settings);
 
-// Variables for IP change example
+ModuleConfig moduleConfig(&mqttLogger, &debugSystem, &settings, &ntpTimeAdapter);
+
 IPAddress myIP;
 
 #endif // GLOBALS_H

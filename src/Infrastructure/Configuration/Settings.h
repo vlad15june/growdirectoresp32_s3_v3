@@ -43,7 +43,7 @@ private:
 
     void log(const char *format, ...)
     {
-        if (_logger != nullptr && debugSystem->isFeatureEnabled(DebugFeatures::SETTINGS_DEBUG))
+        if (_logger != nullptr && debugSystem != nullptr && debugSystem->isFeatureEnabled(DebugFeatures::SETTINGS_DEBUG))
         {
             char buffer[128];
             va_list args;
