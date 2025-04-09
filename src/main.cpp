@@ -14,10 +14,10 @@
 
 void setup() {
   Serial.begin(115200);
+  Serial.println("System initialized.");
   
   moduleConfig.configureModuleType();
-
-  Serial.println("System initialized.");
+  
 }
 
 void loop() {

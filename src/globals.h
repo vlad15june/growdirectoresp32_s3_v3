@@ -33,9 +33,12 @@ WiFiClient wifiClient;
 PubSubClient mqttClient(mqttBroker, 1883, mqttCallback, wifiClient);
 MqttLogger mqttLogger(mqttClient, mqttDefaultTopic, MqttLoggerMode::MqttAndSerial);
 
-ModuleConfig moduleConfig(&mqttLogger);
+DebugSystem debugSystem;
 
-DebugSystem debugSystem();
+EepromAdapter eeprom(1024, 0);
+Settings settings(eeprom);
+
+ModuleConfig moduleConfig(&mqttLogger, &debugSystem, &settings);
 
 // Variables for IP change example
 IPAddress myIP;

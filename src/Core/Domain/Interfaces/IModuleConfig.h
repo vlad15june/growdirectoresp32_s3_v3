@@ -1,6 +1,8 @@
 #ifndef IMODULECONFIG_H
 #define IMODULECONFIG_H
 
+#include "ISettings.h"
+
 // Module type constants
 #define MODULE_TYPE_SENSOR 1
 #define MODULE_TYPE_DEVICE 2
@@ -17,8 +19,10 @@ class IModuleConfig
 {
 public:
     virtual void configureModuleType() = 0;
+    virtual void Init() = 0;
     virtual int getModuleType() const = 0;
     virtual int getModuleSubType() const = 0;
+    virtual ISettings* getSettings() = 0;
     virtual ~IModuleConfig() = default;
 };
 
