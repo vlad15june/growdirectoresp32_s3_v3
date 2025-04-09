@@ -6,9 +6,11 @@
 
 #include "Core/Domain/Interfaces/ILogger.h"
 #include "Core/Domain/Interfaces/IModuleConfig.h"
+#include "Core/Domain/Interfaces/IDebugSystem.h"
 
 #include "Infrastructure/Logging/MqttLogger.h"
 #include "Infrastructure/Configuration/ModuleConfig.h"
+#include "Infrastructure/Logging/DebugSystem.h"
 
 
 const char *mqttUser = "GrowDirectorMqtt";
@@ -32,6 +34,8 @@ PubSubClient mqttClient(mqttBroker, 1883, mqttCallback, wifiClient);
 MqttLogger mqttLogger(mqttClient, mqttDefaultTopic, MqttLoggerMode::MqttAndSerial);
 
 ModuleConfig moduleConfig(&mqttLogger);
+
+DebugSystem debugSystem();
 
 // Variables for IP change example
 IPAddress myIP;

@@ -4,14 +4,12 @@
 #include <Arduino.h>
 #include "Core/Domain/Interfaces/ILogger.h"
 #include "Core/Domain/Interfaces/IModuleConfig.h"
+#include "Core/Domain/Interfaces/IDebugSystem.h"
 
 // CID pin definitions - these should be adjusted to match your hardware
-#define CID_0 12 // Example pin, adjust as needed
-#define CID_1 13 // Example pin, adjust as needed
-#define CID_2 14 // Example pin, adjust as needed
-
-// SETUP_DEBUG flag
-#define SETUP_DEBUG true
+#define CID_0 5
+#define CID_1 6
+#define CID_2 7
 
 // Concrete implementation of IModuleConfig
 class ModuleConfig : public IModuleConfig
@@ -20,10 +18,11 @@ private:
     int moduleType;
     int moduleSubType;
     ILogger *logger;
+    IDebugSystem *debugSystem;
 
 public:
-    ModuleConfig(ILogger *loggerInstance = nullptr)
-        : moduleType(MODULE_TYPE_DEVICE), moduleSubType(MODULE_SUBTYPE_RELAY), logger(loggerInstance) {}
+    ModuleConfig(ILogger *loggerInstance = nullptr, IDebugSystem *debugSystemInstance = nullptr)
+        : moduleType(MODULE_TYPE_DEVICE), moduleSubType(MODULE_SUBTYPE_RELAY), logger(loggerInstance), debugSystem(debugSystemInstance) {}
 
     void configureModuleType() override
     {
@@ -33,7 +32,7 @@ public:
 
         int code = digitalRead(CID_0) + digitalRead(CID_1) * 2 + digitalRead(CID_2) * 4;
 
-        if (SETUP_DEBUG && logger)
+        if (debugSystem->isFeatureEnabled(DebugFeatures::SETUP_DEBUG) && logger)
             logger->printf("SETUP: module type code: %d\n", code);
 
         if (code == 1)
@@ -66,7 +65,7 @@ public:
             moduleSubType = MODULE_SUBTYPE_DIMMER;
         }
 
-        if (SETUP_DEBUG && logger)
+        if (debugSystem->isFeatureEnabled(DebugFeatures::SETUP_DEBUG) && logger)
             logger->printf("SETUP: moduleType: %d moduleSubType: %d \n", moduleType, moduleSubType);
     }
 
