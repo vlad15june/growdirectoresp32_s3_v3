@@ -1,7 +1,6 @@
 #ifndef ISETTINGS_H
 #define ISETTINGS_H
 
-#include <Arduino.h>
 #include <time.h>
 
 // Buffer size for string operations

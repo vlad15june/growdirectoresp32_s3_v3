@@ -1,9 +1,7 @@
 #include <unity.h>
 
-// Include your project headers to test (without hardware-specific code)
-// For example:
-// #include "utils.h"
-// #include "data_processing.h"
+// External test functions
+extern "C" void run_mock_settings_tests(void);
 
 void setUp(void) {
     // Setup for each test
@@ -19,17 +17,14 @@ void test_simple_math(void) {
     TEST_ASSERT_NOT_EQUAL(2 + 2, 5);
 }
 
-// Add more tests for your non-hardware dependent code
-// void test_your_function(void) {
-//     TEST_ASSERT_EQUAL(expected_value, your_function(input));
-// }
-
 int main(void) {
     UNITY_BEGIN();
     
+    // Run tests defined in this file
     RUN_TEST(test_simple_math);
-    // Add your other test functions here
-    // RUN_TEST(test_your_function);
+    
+    // Run tests from the MockSettings test file
+    run_mock_settings_tests();
     
     return UNITY_END();
 }
