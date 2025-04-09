@@ -1,15 +1,20 @@
 #ifndef GLOBALS_H
 #define GLOBALS_H
 
+#include <Arduino.h>
+#include <WiFiClient.h>
 #include <WiFi.h>
 #include <PubSubClient.h>
 
 #include "Core/Domain/Interfaces/ILogger.h"
 #include "Core/Domain/Interfaces/IModuleConfig.h"
 #include "Core/Domain/Interfaces/IDebugSystem.h"
+#include "Core/Domain/Interfaces/ISettings.h"
 
+#include "Infrastructure/Adapters/eepromAdapter.h"
 #include "Infrastructure/Logging/MqttLogger.h"
 #include "Infrastructure/Configuration/ModuleConfig.h"
+#include "Infrastructure/Configuration/Settings.h"
 #include "Infrastructure/Logging/DebugSystem.h"
 #include "Infrastructure/Adapters/Time/NTPTimeAdapter.h" // Add NTPTimeAdapter include
 

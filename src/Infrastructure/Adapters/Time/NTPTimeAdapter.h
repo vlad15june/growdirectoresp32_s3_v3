@@ -31,6 +31,9 @@ private:
     // Utility buffer for logging
     char _logBuffer[256];
 
+    // Buffer to store formatted time string
+    char _timeBuffer[150];
+
     // Time synchronization callback
     static void timeSyncCallback(struct timeval *tv);
 
@@ -76,9 +79,9 @@ public:
     // Interface implementations
     void setup() override;
     unsigned long getEpochTime() override;
-    String getFormattedTime() override;
+    const char* getFormattedTime() override;
     void printTime() override;
-    bool isCommandTimeValid(String createdDate, unsigned long maxAgeSeconds) override;
+    bool isCommandTimeValid(const char* createdDate, unsigned long maxAgeSeconds) override;
     void saveTimeToStorage() override;
     void restoreTimeFromStorage() override;
 
@@ -147,28 +150,27 @@ unsigned long NTPTimeAdapter::getEpochTime()
     return static_cast<unsigned long>(now);
 }
 
-String NTPTimeAdapter::getFormattedTime()
+const char* NTPTimeAdapter::getFormattedTime()
 {
-    char buffer[150];
     struct tm timeinfo;
 
     if (!getLocalTime(&timeinfo))
     {
-        snprintf(buffer, sizeof(buffer), "No time available (yet)");
+        snprintf(_timeBuffer, sizeof(_timeBuffer), "No time available (yet)");
         log("TIME: No time available (yet)\n");
-        return String(buffer);
+        return _timeBuffer;
     }
 
     // Format time as ISO 8601 (YYYY-MM-DDThh:mm:ss.SSSZ)
-    strftime(buffer, sizeof(buffer), "%Y-%m-%dT%H:%M:%S", &timeinfo);
+    strftime(_timeBuffer, sizeof(_timeBuffer), "%Y-%m-%dT%H:%M:%S", &timeinfo);
 
     // Add milliseconds
     struct timeval tv;
     gettimeofday(&tv, NULL);
     unsigned long milliseconds = tv.tv_usec / 1000;
-    snprintf(buffer + strlen(buffer), sizeof(buffer) - strlen(buffer), ".%03luZ", milliseconds % 1000);
+    snprintf(_timeBuffer + strlen(_timeBuffer), sizeof(_timeBuffer) - strlen(_timeBuffer), ".%03luZ", milliseconds % 1000);
 
-    return String(buffer);
+    return _timeBuffer;
 }
 
 void NTPTimeAdapter::printTime()
@@ -193,17 +195,18 @@ void NTPTimeAdapter::printTime()
     log("TIME: %s\n", _logBuffer);
 }
 
-bool NTPTimeAdapter::isCommandTimeValid(String createdDate, unsigned long maxAgeSeconds)
+bool NTPTimeAdapter::isCommandTimeValid(const char* createdDate, unsigned long maxAgeSeconds)
 {
     // Update real time seconds if needed
     updateRealTimeSeconds();
 
     // Parse the ISO timestamp
-    int splitT = createdDate.indexOf("T");
-    int splitPoint = createdDate.indexOf(".");
+    String createdDateStr(createdDate);
+    int splitT = createdDateStr.indexOf("T");
+    int splitPoint = createdDateStr.indexOf(".");
 
     // Extract time portion
-    String timeStamp = createdDate.substring(splitT + 1, splitPoint);
+    String timeStamp = createdDateStr.substring(splitT + 1, splitPoint);
 
     // Parse hours, minutes, seconds
     String hoursStr = timeStamp.substring(0, 2);

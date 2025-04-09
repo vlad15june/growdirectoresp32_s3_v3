@@ -2,8 +2,6 @@
 #ifndef I_LOGGER_H
 #define I_LOGGER_H
 
-#include <Arduino.h>
-
 // Enum to define logger mode
 enum class MqttLoggerMode {
     MqttOnly,        // Log only to MQTT

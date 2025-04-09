@@ -1,7 +1,6 @@
 #ifndef I_DEBUG_SYSTEM_H
 #define I_DEBUG_SYSTEM_H
 
-#include <Arduino.h>
 #include <map>
 #include <vector>
 
@@ -79,7 +78,7 @@ public:
     // Feature management
     virtual IDebugFeature *registerFeature(const char *name, const char *mqttTopic = nullptr, bool initialState = false) = 0;
     virtual IDebugFeature *getFeature(const char *name) = 0;
-    virtual void setDebugFeatureState(String feature, bool isEnabled) = 0;
+    virtual void setDebugFeatureState(const char *feature, bool isEnabled) = 0;
 
     // Check if a feature is enabled (for use in if statements)
     virtual bool isFeatureEnabled(const char *featureName) = 0;

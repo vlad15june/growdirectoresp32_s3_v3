@@ -1,15 +1,11 @@
 #ifndef MODULE_CONFIG_H
 #define MODULE_CONFIG_H
 
-#include <Arduino.h>
-
 #include "Core/Domain/Interfaces/ILogger.h"
 #include "Core/Domain/Interfaces/IModuleConfig.h"
 #include "Core/Domain/Interfaces/IDebugSystem.h"
 #include "Core/Domain/Interfaces/ISettings.h"
 #include "Infrastructure/Adapters/Time/INTPTimeAdapter.h"
-
-#include "Infrastructure/Configuration/Settings.h"
 
 #define CID_0 5
 #define CID_1 6

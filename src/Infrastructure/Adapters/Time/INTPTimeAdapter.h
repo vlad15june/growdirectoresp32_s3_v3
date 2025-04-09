@@ -1,9 +1,6 @@
 #ifndef I_NTP_TIME_ADAPTER_H
 #define I_NTP_TIME_ADAPTER_H
 
-#include <Arduino.h>
-#include <time.h>
-
 // Base class (interface) for NTP time functionality
 class INTPTimeAdapter {
 public:
@@ -17,13 +14,13 @@ public:
     virtual unsigned long getEpochTime() = 0;
     
     // Get formatted current time
-    virtual String getFormattedTime() = 0;
+    virtual const char* getFormattedTime() = 0;
     
     // Print current time to Serial (for debugging)
     virtual void printTime() = 0;
     
     // Check if command time is within the allowed time window
-    virtual bool isCommandTimeValid(String createdDate, unsigned long maxAgeSeconds) = 0;
+    virtual bool isCommandTimeValid(const char* createdDate, unsigned long maxAgeSeconds) = 0;
     
     // Save current time to persistent storage
     virtual void saveTimeToStorage() = 0;

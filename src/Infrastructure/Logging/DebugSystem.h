@@ -114,9 +114,9 @@ public:
     }
 
     // Enable or disable a feature - compatible with old SetDebugLevel method
-    void setDebugFeatureState(String feature, bool isEnabled) override
+    void setDebugFeatureState(const char *feature, bool isEnabled) override
     {
-        IDebugFeature *featurePtr = getFeature(feature.c_str());
+        IDebugFeature *featurePtr = getFeature(feature);
         if (featurePtr)
         {
             featurePtr->setEnabled(isEnabled);
