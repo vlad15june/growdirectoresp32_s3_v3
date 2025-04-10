@@ -41,7 +41,7 @@ static void test_default_module_types(void) {
 
 static void test_init_calls_dependencies(void) {
     module_config_setup();
-    g_moduleConfig->Init();
+    g_moduleConfig->init();
     
     // Verify settings was initialized
     // TEST_ASSERT_TRUE(g_mockSettings.wasBeginCalled());
@@ -72,7 +72,7 @@ static void test_setters(void) {
     g_moduleConfig->setTimeAdapter(&newTimeAdapter);
     
     // Test initialization with new instances
-    g_moduleConfig->Init();
+    g_moduleConfig->init();
     
     // Verify new settings was initialized
     // TEST_ASSERT_TRUE(newSettings.wasBeginCalled());

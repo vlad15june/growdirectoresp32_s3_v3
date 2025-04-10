@@ -39,7 +39,7 @@ public:
         _modifiedFields["configureModuleType"] = true;
     }
 
-    void Init() override {
+    void init() override {
         _isInitialized = true;
         configureModuleType();
         

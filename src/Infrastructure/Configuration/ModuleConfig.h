@@ -44,7 +44,7 @@ public:
           logger(loggerInstance), debugSystem(debugSystemInstance), 
           settings(settingsInstance), timeAdapter(timeAdapterInstance) {}
 
-    void Init() override
+    void init() override
     {
         configureModuleType();
 
