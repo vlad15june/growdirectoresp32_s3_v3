@@ -96,6 +96,11 @@ inline void ModuleSetupService::setupModule() {
         ledUseCases->ledOnLoad();
         log("SETUP: LED on-load sequence executed");
     }
+
+    if (ledUseCases) {
+        ledUseCases->ledOffLoad();
+        log("SETUP: LED off-load sequence executed");
+    }
     
     log("SETUP: Module setup completed");
 }

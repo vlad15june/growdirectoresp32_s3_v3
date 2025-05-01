@@ -20,6 +20,7 @@
 #include "Infrastructure/Logging/DebugSystem.h"
 #include "Infrastructure/Adapters/Time/NTPTimeAdapter.h"
 #include "Infrastructure/Adapters/Led/LedAdapter.h"
+#include "Infrastructure/Adapters/ArduinoAdapter.h"
 #include "Application/Services/ModuleSetupService.h"
 
 const char *mqttUser = "GrowDirectorMqtt";
@@ -48,6 +49,8 @@ EepromAdapter eeprom(1024, 0);
 Settings settings(eeprom);
 
 LedAdapter ledAdapter;
+
+ArduinoAdapter arduinoAdapter;
 
 // Create NTP Time Adapter instance
 // Using default NTP server with UTC offset of 0 and daylight offset of 0
