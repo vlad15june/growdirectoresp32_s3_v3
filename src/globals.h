@@ -58,7 +58,7 @@ NTPTimeAdapter ntpTimeAdapter(&mqttLogger, &debugSystem, &settings);
 
 ModuleConfig moduleConfig(&mqttLogger, &debugSystem, &settings, &ntpTimeAdapter);
 
-LedUseCases ledUseCases(&ledAdapter, &moduleConfig);
+LedUseCases ledUseCases(&ledAdapter, &moduleConfig, &arduinoAdapter);
 
 ModuleSetupService moduleSetupService(&mqttLogger, &debugSystem, &moduleConfig, &ledAdapter, &ledUseCases);
 

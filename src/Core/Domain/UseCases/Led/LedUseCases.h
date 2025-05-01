@@ -4,6 +4,7 @@
 #include "Core/Domain/Interfaces/ILedAdapter.h"
 #include "Core/Domain/Interfaces/IModuleConfig.h"
 #include "Core/Domain/Interfaces/ILedUseCases.h"
+#include "Core/Domain/Interfaces/IArduinoAdapter.h"
 #include <memory>
 
 // Use case class for LED behaviors and patterns
@@ -11,10 +12,11 @@ class LedUseCases : public ILedUseCases {
 private:
     ILedAdapter* ledAdapter;
     IModuleConfig* moduleConfig;
+    IArduinoAdapter* arduinoAdapter;
 
 public:
     // Constructor
-    LedUseCases(ILedAdapter* adapter, IModuleConfig* moduleConfig);
+    LedUseCases(ILedAdapter* adapter, IModuleConfig* moduleConfig, IArduinoAdapter* arduinoAdapter);
     
     // Destructor
     ~LedUseCases() override;

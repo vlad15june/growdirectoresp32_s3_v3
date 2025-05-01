@@ -2,9 +2,10 @@
 #include "esp_timer.h" // For esp_timer functions
 
 // Constructor
-LedUseCases::LedUseCases(ILedAdapter* adapter, IModuleConfig* moduleConfig)
+LedUseCases::LedUseCases(ILedAdapter* adapter, IModuleConfig* moduleConfig, IArduinoAdapter* arduinoAdapter)
     : ledAdapter(adapter),
-      moduleConfig(moduleConfig) {    
+      moduleConfig(moduleConfig),
+      arduinoAdapter(arduinoAdapter) {    
 }
 
 // Destructor
@@ -24,15 +25,22 @@ void LedUseCases::ledOffLoad() {
 
 // Blink green LED twice
 void LedUseCases::ledBlinkGreen2Times() {
-    
+    ledAdapter->setGreenLedOn(0);
+    arduinoAdapter->delay(500);
+    ledAdapter->setGreenLedOff(0);
+    arduinoAdapter->delay(500);
+    ledAdapter->setGreenLedOn(0);
+    arduinoAdapter->delay(500);
+    ledAdapter->setGreenLedOff(0);
 }
 
 // Blink yellow LED (red+green together) twice
 void LedUseCases::ledBlinkYellow2Times() {
-    
-}
-
-// Helper method for delays
-void delay(unsigned int ms) {
-    
+    ledAdapter->setAllYellowLedOn();
+    arduinoAdapter->delay(500);
+    ledAdapter->setAllYellowLedOff();
+    arduinoAdapter->delay(500);
+    ledAdapter->setAllYellowLedOn();
+    arduinoAdapter->delay(500);
+    ledAdapter->setAllYellowLedOff();
 }
