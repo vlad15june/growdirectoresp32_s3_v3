@@ -9,7 +9,6 @@
 #include "Mock/Infrastructure/Logging/MockLogger.h"
 #include "Mock/Infrastructure/Logging/MockDebugSystem.h"
 
-
 // Global test variables
 static MockLogger g_mockLogger;
 static MockDebugSystem g_mockDebugSystem;
@@ -36,6 +35,18 @@ static void test_default_module_types(void) {
     module_config_setup();
     TEST_ASSERT_EQUAL(MODULE_TYPE_DEVICE, g_moduleConfig->getModuleType());
     TEST_ASSERT_EQUAL(MODULE_SUBTYPE_RELAY, g_moduleConfig->getModuleSubType());
+    module_config_teardown();
+}
+
+static void test_default_values(void) {
+    module_config_setup();
+    
+    // Test all default constructor values
+    TEST_ASSERT_EQUAL(MODULE_TYPE_DEVICE, g_moduleConfig->getModuleType());
+    TEST_ASSERT_EQUAL(MODULE_SUBTYPE_RELAY, g_moduleConfig->getModuleSubType());
+    TEST_ASSERT_EQUAL(4, g_moduleConfig->getDeviceCount());
+    TEST_ASSERT_EQUAL(4, g_moduleConfig->getLedsCount());
+    
     module_config_teardown();
 }
 
@@ -87,14 +98,151 @@ static void test_setters(void) {
     module_config_teardown();
 }
 
+static void test_led_getters(void) {
+    module_config_setup();
+    
+    // Before initialization, LED arrays should be nullptr
+    TEST_ASSERT_NULL(g_moduleConfig->getRedLeds());
+    TEST_ASSERT_NULL(g_moduleConfig->getGreenLeds());
+    TEST_ASSERT_EQUAL(4, g_moduleConfig->getLedsCount());
+    
+    // Initialize module config
+    g_moduleConfig->init();
+    
+    // After initialization, LED arrays should be initialized
+    TEST_ASSERT_NOT_NULL(g_moduleConfig->getRedLeds());
+    TEST_ASSERT_NOT_NULL(g_moduleConfig->getGreenLeds());
+    TEST_ASSERT_EQUAL(4, g_moduleConfig->getLedsCount());
+    
+    // For default config (MODULE_TYPE_DEVICE, MODULE_SUBTYPE_RELAY), 
+    // verify the LED pin values match the static definitions
+    uint8_t* redLeds = g_moduleConfig->getRedLeds();
+    uint8_t* greenLeds = g_moduleConfig->getGreenLeds();
+    
+    // Expected values from ModuleConfig.h static arrays
+    // uint8_t ModuleConfig::LED_R_RELAY[4] = {35, 36, 37, 38};
+    // uint8_t ModuleConfig::LED_G_RELAY[4] = {15, 14, 13, 12};
+    TEST_ASSERT_EQUAL(35, redLeds[0]);
+    TEST_ASSERT_EQUAL(36, redLeds[1]);
+    TEST_ASSERT_EQUAL(37, redLeds[2]);
+    TEST_ASSERT_EQUAL(38, redLeds[3]);
+    
+    TEST_ASSERT_EQUAL(15, greenLeds[0]);
+    TEST_ASSERT_EQUAL(14, greenLeds[1]);
+    TEST_ASSERT_EQUAL(13, greenLeds[2]);
+    TEST_ASSERT_EQUAL(12, greenLeds[3]);
+    
+    module_config_teardown();
+}
+
+static void test_all_module_types(void) {
+    // Structure to hold test cases
+    struct TestCase {
+        int cid0Value;
+        int cid1Value;
+        int cid2Value;
+        int expectedModuleType;
+        int expectedModuleSubType;
+        int expectedDeviceCount;
+        int expectedLedsCount;
+        uint8_t* expectedRedLeds;
+        uint8_t* expectedGreenLeds;
+    };
+    
+    // Pin values for different module types - based on the if conditions in configureModuleType()
+    // code 1: MODULE_TYPE_DEVICE, MODULE_SUBTYPE_RELAY
+    // code 2: MODULE_TYPE_DEVICE, MODULE_SUBTYPE_SOKET
+    // code 3: MODULE_TYPE_SENSOR, MODULE_SUBTYPE_NONE
+    // code 4: MODULE_TYPE_HYDRO, MODULE_SUBTYPE_NONE
+    // code 5: MODULE_TYPE_ANALOG_INPUT_DEVICE, MODULE_SUBTYPE_DIMMER
+    
+    // Expected LED values from static definitions in ModuleConfig.h
+    uint8_t expectedRelayRed[4] = {35, 36, 37, 38};
+    uint8_t expectedRelayGreen[4] = {15, 14, 13, 12};
+    uint8_t expectedSktRed[2] = {38, 37};
+    uint8_t expectedSktGreen[2] = {40, 39};
+    uint8_t expectedHydroRed[3] = {16, 8, 34};
+    uint8_t expectedHydroGreen[3] = {13, 14, 12};
+    uint8_t expectedDimmerRed[2] = {42, 41};
+    uint8_t expectedDimmerGreen[2] = {40, 39};
+    
+    // Define test cases for all module types
+    TestCase testCases[] = {
+        // cid0, cid1, cid2, type, subtype, deviceCount, ledsCount, redLeds, greenLeds
+        {0, 0, 0, MODULE_TYPE_DEVICE, MODULE_SUBTYPE_RELAY, 4, 4, expectedRelayRed, expectedRelayGreen},
+        {1, 0, 0, MODULE_TYPE_DEVICE, MODULE_SUBTYPE_RELAY, 4, 4, expectedRelayRed, expectedRelayGreen},
+        {0, 1, 0, MODULE_TYPE_DEVICE, MODULE_SUBTYPE_SOKET, 2, 2, expectedSktRed, expectedSktGreen},
+        {1, 1, 0, MODULE_TYPE_SENSOR, MODULE_SUBTYPE_NONE, 0, 1, nullptr, nullptr},
+        {0, 0, 1, MODULE_TYPE_HYDRO, MODULE_SUBTYPE_NONE, 3, 3, expectedHydroRed, expectedHydroGreen},
+        {1, 0, 1, MODULE_TYPE_ANALOG_INPUT_DEVICE, MODULE_SUBTYPE_DIMMER, 2, 2, expectedDimmerRed, expectedDimmerGreen}
+    };
+    
+    // Run all test cases
+    for (const auto& testCase : testCases) {
+        // Set up
+        module_config_setup();
+        
+        // Set mock digital read values for CID pins
+        // Code is calculated as: digitalRead(CID_0) + digitalRead(CID_1) * 2 + digitalRead(CID_2) * 4
+        setDigitalReadMockValue(CID_0, testCase.cid0Value);
+        setDigitalReadMockValue(CID_1, testCase.cid1Value);
+        setDigitalReadMockValue(CID_2, testCase.cid2Value);
+        
+        // Calculate expected code for debugging
+        int expectedCode = testCase.cid0Value + testCase.cid1Value * 2 + testCase.cid2Value * 4;
+        
+        // Initialize module which will read the CID pins
+        g_moduleConfig->init();
+        
+        // Verify module configuration
+        char errorMsg[100];
+        snprintf(errorMsg, sizeof(errorMsg), "Failed for code %d", expectedCode);
+        
+        TEST_ASSERT_EQUAL_MESSAGE(testCase.expectedModuleType, g_moduleConfig->getModuleType(), errorMsg);
+        TEST_ASSERT_EQUAL_MESSAGE(testCase.expectedModuleSubType, g_moduleConfig->getModuleSubType(), errorMsg);
+        TEST_ASSERT_EQUAL_MESSAGE(testCase.expectedDeviceCount, g_moduleConfig->getDeviceCount(), errorMsg);
+        TEST_ASSERT_EQUAL_MESSAGE(testCase.expectedLedsCount, g_moduleConfig->getLedsCount(), errorMsg);
+        
+        // Verify LED arrays are not null (except for sensor which has special handling)
+        TEST_ASSERT_NOT_NULL_MESSAGE(g_moduleConfig->getRedLeds(), errorMsg);
+        TEST_ASSERT_NOT_NULL_MESSAGE(g_moduleConfig->getGreenLeds(), errorMsg);
+        
+        // For sensor type, verify single LED value
+        if (testCase.expectedModuleType == MODULE_TYPE_SENSOR) {
+            TEST_ASSERT_EQUAL_MESSAGE(12, g_moduleConfig->getRedLeds()[0], errorMsg);  // LED_R_Sensor
+            TEST_ASSERT_EQUAL_MESSAGE(13, g_moduleConfig->getGreenLeds()[0], errorMsg); // LED_G_Sensor
+        } 
+        // For other types, verify all LED values
+        else if (testCase.expectedRedLeds != nullptr && testCase.expectedGreenLeds != nullptr) {
+            uint8_t* actualRedLeds = g_moduleConfig->getRedLeds();
+            uint8_t* actualGreenLeds = g_moduleConfig->getGreenLeds();
+            
+            for (int i = 0; i < testCase.expectedLedsCount; i++) {
+                char pinErrorMsg[120];
+                snprintf(pinErrorMsg, sizeof(pinErrorMsg), "Red LED[%d] mismatch for code %d", i, expectedCode);
+                TEST_ASSERT_EQUAL_MESSAGE(testCase.expectedRedLeds[i], actualRedLeds[i], pinErrorMsg);
+                
+                snprintf(pinErrorMsg, sizeof(pinErrorMsg), "Green LED[%d] mismatch for code %d", i, expectedCode);
+                TEST_ASSERT_EQUAL_MESSAGE(testCase.expectedGreenLeds[i], actualGreenLeds[i], pinErrorMsg);
+            }
+        }
+        
+        // Tear down
+        module_config_teardown();
+    }
+}
+
 // Main test runner function
 extern "C" int run_module_config_tests(void) {
     printf("\n----- Running ModuleConfig Tests -----\n");
     
     RUN_TEST(test_default_module_types);
+    RUN_TEST(test_default_values);
     RUN_TEST(test_init_calls_dependencies);
     RUN_TEST(test_get_settings);
     RUN_TEST(test_setters);
+    RUN_TEST(test_led_getters);
+    RUN_TEST(test_all_module_types);  // Add this line
     
     printf("\n----- ModuleConfig Tests Complete -----\n");
     
