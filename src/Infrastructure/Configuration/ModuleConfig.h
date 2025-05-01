@@ -127,7 +127,7 @@ public:
                 IDebugSystem *debugSystemInstance = nullptr, 
                 ISettings *settingsInstance = nullptr,
                 INTPTimeAdapter *timeAdapterInstance = nullptr)
-        : moduleType(MODULE_TYPE_DEVICE), moduleSubType(MODULE_SUBTYPE_RELAY), deviceCount(0),
+        : moduleType(MODULE_TYPE_DEVICE), moduleSubType(MODULE_SUBTYPE_RELAY), deviceCount(4), ledsCount(4),
           logger(loggerInstance), debugSystem(debugSystemInstance), 
           settings(settingsInstance), timeAdapter(timeAdapterInstance) {}
           
