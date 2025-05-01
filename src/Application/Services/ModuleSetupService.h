@@ -73,12 +73,18 @@ inline void ModuleSetupService::setupModule() {
     // Setup LEDs if LED adapter is available
     if (ledAdapter) {
         // Use module config values for LEDs
-        uint8_t* greenLeds = reinterpret_cast<uint8_t*>(moduleConfig->getGreenLeds());
-        uint8_t* redLeds = reinterpret_cast<uint8_t*>(moduleConfig->getRedLeds());
-        uint8_t ledsCount = static_cast<uint8_t>(moduleConfig->getLedsCount());
+        uint8_t* greenLeds = moduleConfig->getGreenLeds();
+        uint8_t* redLeds = moduleConfig->getRedLeds();
+        uint8_t ledsCount = moduleConfig->getLedsCount();
         
         ledAdapter->setupModuleLeds(greenLeds, redLeds, ledsCount);
+
         log("SETUP: LEDs initialized for %d devices", ledsCount);
+        log("SETUP: LED Arrays contents:");
+        for (uint8_t i = 0; i < ledsCount; i++) {
+            log("SETUP: LED[%d] - Green: %d, Red: %d", i, greenLeds[i], redLeds[i]);
+        }                
+        
     }
     
     log("SETUP: Module setup completed");

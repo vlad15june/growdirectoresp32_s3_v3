@@ -12,9 +12,18 @@ static MockDebugSystem g_mockDebugSystem;
 static MockModuleConfig g_mockModuleConfig;
 static MockLedAdapter g_mockLedAdapter;
 static ModuleSetupService* g_moduleSetupService;
+static FILE* debug_file = nullptr;
 
 // Test setup and teardown
 static void module_setup_service_setup(void) {
+    // Open debug log file in append mode
+    debug_file = fopen("module_setup_test_debug.log", "a");
+    if (debug_file == nullptr) {
+        printf("ERROR: Could not open debug log file\n");
+    } else {
+        fprintf(debug_file, "--- Test Started ---\n");
+    }
+    
     g_mockLogger.reset();
     g_mockDebugSystem.reset();
     g_mockDebugSystem.featureEnabled = true;
@@ -32,51 +41,65 @@ static void module_setup_service_setup(void) {
 static void module_setup_service_teardown(void) {
     delete g_moduleSetupService;
     g_moduleSetupService = nullptr;
+    
+    if (debug_file != nullptr) {
+        fprintf(debug_file, "--- Test Finished ---\n\n");
+        fclose(debug_file);
+        debug_file = nullptr;
+    }
 }
 
 // Test functions
 static void test_setup_module_initializes_config(void) {
-    printf("DEBUG: Starting test_setup_module_initializes_config\n");
+    if (debug_file != nullptr) fprintf(debug_file, "Starting test_setup_module_initializes_config\n");
     module_setup_service_setup();
     
-    printf("DEBUG: Calling setupModule()\n");
+    if (debug_file != nullptr) fprintf(debug_file, "Calling setupModule()\n");
     g_moduleSetupService->setupModule();
     
-    printf("DEBUG: Checking if config was initialized: %s\n", g_mockModuleConfig.isInitialized() ? "Yes" : "No");
+    if (debug_file != nullptr) fprintf(debug_file, "Checking if config was initialized: %s\n", 
+                                g_mockModuleConfig.isInitialized() ? "Yes" : "No");
     TEST_ASSERT_TRUE(g_mockModuleConfig.isInitialized());
-    printf("DEBUG: Checking if config was modified with 'init': %s\n", g_mockModuleConfig.wasModified("init") ? "Yes" : "No");
+    
+    if (debug_file != nullptr) fprintf(debug_file, "Checking if config was modified with 'init': %s\n", 
+                                g_mockModuleConfig.wasModified("init") ? "Yes" : "No");
     TEST_ASSERT_TRUE(g_mockModuleConfig.wasModified("init"));
-    printf("DEBUG: Checking if logger.print was called: %s\n", g_mockLogger.printCalled ? "Yes" : "No");
+    
+    if (debug_file != nullptr) fprintf(debug_file, "Checking if logger.print was called: %s\n", 
+                                g_mockLogger.printCalled ? "Yes" : "No");
     TEST_ASSERT_TRUE(g_mockLogger.printCalled);
     
     module_setup_service_teardown();
-    printf("DEBUG: Finished test_setup_module_initializes_config\n");
+    if (debug_file != nullptr) fprintf(debug_file, "Finished test_setup_module_initializes_config\n");
 }
 
 static void test_setup_module_configures_leds(void) {
-    printf("DEBUG: Starting test_setup_module_configures_leds\n");
+    if (debug_file != nullptr) fprintf(debug_file, "Starting test_setup_module_configures_leds\n");
     module_setup_service_setup();
     
-    printf("DEBUG: Calling setupModule()\n");
+    if (debug_file != nullptr) fprintf(debug_file, "Calling setupModule()\n");
     g_moduleSetupService->setupModule();
     
-    printf("DEBUG: setupModuleLedsCalled: %s\n", g_mockLedAdapter.setupModuleLedsCalled ? "Yes" : "No");
+    if (debug_file != nullptr) fprintf(debug_file, "setupModuleLedsCalled: %s\n", 
+                                g_mockLedAdapter.setupModuleLedsCalled ? "Yes" : "No");
     TEST_ASSERT_TRUE(g_mockLedAdapter.setupModuleLedsCalled);
-    printf("DEBUG: Expected LEDs count: %d, Actual: %d\n", g_mockModuleConfig.getLedsCount(), g_mockLedAdapter.ledsCount);
+    
+    if (debug_file != nullptr) fprintf(debug_file, "Expected LEDs count: %d, Actual: %d\n", 
+                                g_mockModuleConfig.getLedsCount(), g_mockLedAdapter.ledsCount);
     TEST_ASSERT_EQUAL(g_mockModuleConfig.getLedsCount(), g_mockLedAdapter.ledsCount);
     
-    printf("DEBUG: Verifying LED arrays\n");
+    if (debug_file != nullptr) fprintf(debug_file, "Verifying LED arrays\n");
     // Verify that the correct LED arrays were passed to the adapter
     for (int i = 0; i < g_mockModuleConfig.getLedsCount(); i++) {
-        printf("DEBUG: Checking LED %d - Green: expected=%d, actual=%d; Red: expected=%d, actual=%d\n", 
-               i, g_mockModuleConfig.getGreenLeds()[i], g_mockLedAdapter.greenLeds[i],
-               g_mockModuleConfig.getRedLeds()[i], g_mockLedAdapter.redLeds[i]);
+        if (debug_file != nullptr) fprintf(debug_file, "Checking LED %d - Green: expected=%d, actual=%d; Red: expected=%d, actual=%d\n", 
+                                    i, g_mockModuleConfig.getGreenLeds()[i], g_mockLedAdapter.greenLeds[i],
+                                    g_mockModuleConfig.getRedLeds()[i], g_mockLedAdapter.redLeds[i]);
         TEST_ASSERT_EQUAL(g_mockModuleConfig.getGreenLeds()[i], g_mockLedAdapter.greenLeds[i]);
         TEST_ASSERT_EQUAL(g_mockModuleConfig.getRedLeds()[i], g_mockLedAdapter.redLeds[i]);
     }
     
     module_setup_service_teardown();
-    printf("DEBUG: Finished test_setup_module_configures_leds\n");
+    if (debug_file != nullptr) fprintf(debug_file, "Finished test_setup_module_configures_leds\n");
 }
 
 static void test_setup_module_without_led_adapter(void) {
@@ -122,14 +145,14 @@ static void test_setup_module_without_config(void) {
 
 // Main test runner function
 extern "C" int run_module_setup_service_tests(void) {
-    printf("\n----- Running ModuleSetupService Tests -----\n");
+    if (debug_file != nullptr) fprintf(debug_file, "\n----- Running ModuleSetupService Tests -----\n");
     
     RUN_TEST(test_setup_module_initializes_config);
     RUN_TEST(test_setup_module_configures_leds);
     RUN_TEST(test_setup_module_without_led_adapter);
     RUN_TEST(test_setup_module_without_config);
     
-    printf("\n----- ModuleSetupService Tests Complete -----\n");
+    if (debug_file != nullptr) fprintf(debug_file, "\n----- ModuleSetupService Tests Complete -----\n");
     
     return 0;
 }

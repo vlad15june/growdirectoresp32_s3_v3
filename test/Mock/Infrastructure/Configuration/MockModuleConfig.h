@@ -22,9 +22,9 @@ private:
     std::map<std::string, bool> _modifiedFields;
     
     // LED related members
-    int* _redLeds;
-    int* _greenLeds;
-    int _ledsCount;
+    uint8_t* _redLeds;
+    uint8_t* _greenLeds;
+    uint8_t _ledsCount;
 
 public:
     MockModuleConfig(ILogger* logger = nullptr, 
@@ -44,8 +44,8 @@ public:
           _greenLeds(nullptr),
           _ledsCount(4) {
         // Initialize LED arrays with default values
-        _redLeds = new int[_ledsCount];
-        _greenLeds = new int[_ledsCount];
+        _redLeds = new uint8_t[_ledsCount];
+        _greenLeds = new uint8_t[_ledsCount];
         for (int i = 0; i < _ledsCount; i++) {
             _redLeds[i] = i + 10;    // Example default values
             _greenLeds[i] = i + 20;  // Example default values
@@ -98,15 +98,15 @@ public:
         return _settings;
     }
     
-    int* getRedLeds() const override {
+    uint8_t* getRedLeds() const override {
         return _redLeds;
     }
     
-    int* getGreenLeds() const override {
+    uint8_t* getGreenLeds() const override {
         return _greenLeds;
     }
     
-    int getLedsCount() const override {
+    uint8_t getLedsCount() const override {
         return _ledsCount;
     }
 
@@ -146,15 +146,15 @@ public:
         _modifiedFields["timeAdapter"] = true;
     }
     
-    void setLedsCount(int count) {
+    void setLedsCount(uint8_t count) {
         // Clean up old arrays
         if (_redLeds) delete[] _redLeds;
         if (_greenLeds) delete[] _greenLeds;
         
         // Create new arrays
         _ledsCount = count;
-        _redLeds = new int[count];
-        _greenLeds = new int[count];
+        _redLeds = new uint8_t[count];
+        _greenLeds = new uint8_t[count];
         
         // Initialize with default values
         for (int i = 0; i < count; i++) {
@@ -165,7 +165,7 @@ public:
         _modifiedFields["ledsCount"] = true;
     }
     
-    void setRedLeds(int* leds, int count) {
+    void setRedLeds(uint8_t* leds, uint8_t count) {
         if (_redLeds && count <= _ledsCount) {
             for (int i = 0; i < count; i++) {
                 _redLeds[i] = leds[i];
@@ -174,7 +174,7 @@ public:
         }
     }
     
-    void setGreenLeds(int* leds, int count) {
+    void setGreenLeds(uint8_t* leds, uint8_t count) {
         if (_greenLeds && count <= _ledsCount) {
             for (int i = 0; i < count; i++) {
                 _greenLeds[i] = leds[i];

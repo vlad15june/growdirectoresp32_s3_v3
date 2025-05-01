@@ -30,21 +30,21 @@ private:
     INTPTimeAdapter *timeAdapter;
 
     // LED arrays
-    int* redLeds;
-    int* greenLeds;
-    int ledsCount;
+    uint8_t* redLeds;
+    uint8_t* greenLeds;
+    uint8_t ledsCount;
     
     // LED pin definitions
-    static int LED_R_SKT[2];
-    static int LED_G_SKT[2];
-    static int LED_G_RELAY[4];
-    static int LED_R_RELAY[4];
+    static uint8_t LED_R_SKT[2];
+    static uint8_t LED_G_SKT[2];
+    static uint8_t LED_G_RELAY[4];
+    static uint8_t LED_R_RELAY[4];
     static uint8_t LED_R_HYDRO[3];
     static uint8_t LED_G_HYDRO[3];
-    static int LED_R_DIMMER[2];
-    static int LED_G_DIMMER[2];
-    static int LED_R_Sensor;
-    static int LED_G_Sensor;
+    static uint8_t LED_R_DIMMER[2];
+    static uint8_t LED_G_DIMMER[2];
+    static uint8_t LED_R_Sensor;
+    static uint8_t LED_G_Sensor;
 
     void log(const char *format, ...)
     {
@@ -75,8 +75,8 @@ private:
         // Set LED arrays based on module type and subtype
         if (moduleType == MODULE_TYPE_DEVICE) {
             if (moduleSubType == MODULE_SUBTYPE_RELAY) {
-                redLeds = new int[ledsCount];
-                greenLeds = new int[ledsCount];
+                redLeds = new uint8_t[ledsCount];
+                greenLeds = new uint8_t[ledsCount];
                 
                 for (int i = 0; i < ledsCount; i++) {
                     redLeds[i] = LED_R_RELAY[i];
@@ -84,8 +84,8 @@ private:
                 }
             } 
             else if (moduleSubType == MODULE_SUBTYPE_SOKET) {
-                redLeds = new int[ledsCount];
-                greenLeds = new int[ledsCount];
+                redLeds = new uint8_t[ledsCount];
+                greenLeds = new uint8_t[ledsCount];
                 
                 for (int i = 0; i < ledsCount; i++) {
                     redLeds[i] = LED_R_SKT[i];
@@ -95,14 +95,14 @@ private:
         } 
         else if (moduleType == MODULE_TYPE_SENSOR) {
             ledsCount = 1;
-            redLeds = new int[1];
-            greenLeds = new int[1];
+            redLeds = new uint8_t[1];
+            greenLeds = new uint8_t[1];
             redLeds[0] = LED_R_Sensor;
             greenLeds[0] = LED_G_Sensor;
         } 
         else if (moduleType == MODULE_TYPE_HYDRO) {
-            redLeds = new int[ledsCount];
-            greenLeds = new int[ledsCount];
+            redLeds = new uint8_t[ledsCount];
+            greenLeds = new uint8_t[ledsCount];
             
             for (int i = 0; i < ledsCount; i++) {
                 redLeds[i] = LED_R_HYDRO[i];
@@ -110,8 +110,8 @@ private:
             }
         } 
         else if (moduleType == MODULE_TYPE_ANALOG_INPUT_DEVICE && moduleSubType == MODULE_SUBTYPE_DIMMER) {
-            redLeds = new int[ledsCount];
-            greenLeds = new int[ledsCount];
+            redLeds = new uint8_t[ledsCount];
+            greenLeds = new uint8_t[ledsCount];
             
             for (int i = 0; i < ledsCount; i++) {
                 redLeds[i] = LED_R_DIMMER[i];
@@ -267,33 +267,33 @@ public:
         return timeAdapter;
     }
 
-    int* getRedLeds() const override {
+    uint8_t* getRedLeds() const override {
         return redLeds;
     }
     
-    int* getGreenLeds() const override {
+    uint8_t* getGreenLeds() const override {
         return greenLeds;
     }
     
-    int getLedsCount() const override {
+    uint8_t getLedsCount() const override {
         return ledsCount;
     }
 };
 
 // Define static members
-int ModuleConfig::LED_R_SKT[2] = {38, 37};
-int ModuleConfig::LED_G_SKT[2] = {40, 39};
+uint8_t ModuleConfig::LED_R_SKT[2] = {38, 37};
+uint8_t ModuleConfig::LED_G_SKT[2] = {40, 39};
 
-int ModuleConfig::LED_G_RELAY[4] = {15, 14, 13, 12};
-int ModuleConfig::LED_R_RELAY[4] = {35, 36, 37, 38};
+uint8_t ModuleConfig::LED_G_RELAY[4] = {15, 14, 13, 12};
+uint8_t ModuleConfig::LED_R_RELAY[4] = {35, 36, 37, 38};
 
 uint8_t ModuleConfig::LED_R_HYDRO[3] = {16, 8, 34};
 uint8_t ModuleConfig::LED_G_HYDRO[3] = {13, 14, 12};
 
-int ModuleConfig::LED_R_DIMMER[2] = {42, 41};
-int ModuleConfig::LED_G_DIMMER[2] = {40, 39};
+uint8_t ModuleConfig::LED_R_DIMMER[2] = {42, 41};
+uint8_t ModuleConfig::LED_G_DIMMER[2] = {40, 39};
 
-int ModuleConfig::LED_R_Sensor = 12;
-int ModuleConfig::LED_G_Sensor = 13;
+uint8_t ModuleConfig::LED_R_Sensor = 12;
+uint8_t ModuleConfig::LED_G_Sensor = 13;
 
 #endif // MODULE_CONFIG_H
