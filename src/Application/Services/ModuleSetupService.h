@@ -6,6 +6,7 @@
 #include "Core/Domain/Interfaces/IModuleConfig.h"
 #include "Core/Domain/Interfaces/ILedAdapter.h"
 #include "Core/Domain/Interfaces/ILedUseCases.h"
+#include "Core/Domain/Enums/ModuleModeEnum.h"  // Added ModuleModeEnum include
 
 class IModuleSetupService {
 public:
@@ -95,6 +96,28 @@ inline void ModuleSetupService::setupModule() {
     if (ledUseCases) {
         ledUseCases->ledOnLoad();
         log("SETUP: LED on-load sequence executed");
+    }
+
+    // Check and handle module configuration status
+    if (moduleConfig) {
+        ISettings* settings = moduleConfig->getSettings();
+        if (settings) {
+            uint8_t isConfigured = settings->getIfConfigured();
+            log("SETUP: Current configuration status: %d", isConfigured);
+            
+            if (isConfigured != ModuleModeEnum::CONFIGURED_NEED_RESTART && 
+                isConfigured != ModuleModeEnum::AP_TEST_MODE && 
+                isConfigured != ModuleModeEnum::USER_CAN_CONFIGURE &&
+                isConfigured != ModuleModeEnum::USER_CAN_RE_CONFIGURE && 
+                isConfigured != ModuleModeEnum::CONFIGURED_DONE)
+            {
+                settings->setConfigured(ModuleModeEnum::USER_CAN_CONFIGURE);
+                isConfigured = ModuleModeEnum::CONFIGURED_NEED_RESTART;
+                log("SETUP: Updated configuration status to USER_CAN_CONFIGURE, needs restart");
+            }
+        } else {
+            log("SETUP: Error - Settings not available");
+        }
     }
 
     if (ledUseCases) {
