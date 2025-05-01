@@ -23,6 +23,10 @@ private:
     ILedUseCases* ledUseCases;
 
     void log(const char* format, ...);
+    
+    bool initializeModuleConfiguration();
+    bool setupLeds(); // Modified return type from void to bool
+    void handleModuleMode();
 
 public:
     ModuleSetupService(
@@ -62,13 +66,12 @@ inline void ModuleSetupService::log(const char* format, ...) {
     }
 }
 
-inline void ModuleSetupService::setupModule() {
+inline bool ModuleSetupService::initializeModuleConfiguration() {
     if (!moduleConfig) {
         log("SETUP: Error - Module configuration is missing");
-        return;
-    }        
-
-    // Initialize the module configuration (includes settings)
+        return false;
+    }
+    
     moduleConfig->init();
     
     log("SETUP: Module configured as Type: %d, SubType: %d, DeviceCount: %d",
@@ -76,50 +79,74 @@ inline void ModuleSetupService::setupModule() {
         moduleConfig->getModuleSubType(),
         moduleConfig->getDeviceCount());
     
-    // Setup LEDs if LED adapter is available
-    if (ledAdapter) {
-        // Use module config values for LEDs
-        uint8_t* greenLeds = moduleConfig->getGreenLeds();
-        uint8_t* redLeds = moduleConfig->getRedLeds();
-        uint8_t ledsCount = moduleConfig->getLedsCount();
-        
-        ledAdapter->setupModuleLeds(greenLeds, redLeds, ledsCount);
+    return true;
+}
 
-        log("SETUP: LEDs initialized for %d devices", ledsCount);
-        log("SETUP: LED Arrays contents:");
-        for (uint8_t i = 0; i < ledsCount; i++) {
-            log("SETUP: LED[%d] - Green: %d, Red: %d", i, greenLeds[i], redLeds[i]);
-        } 
+inline bool ModuleSetupService::setupLeds() {
+    if (!ledAdapter) return false;
+    
+    // Use module config values for LEDs
+    uint8_t* greenLeds = moduleConfig->getGreenLeds();
+    uint8_t* redLeds = moduleConfig->getRedLeds();
+    uint8_t ledsCount = moduleConfig->getLedsCount();
+    
+    ledAdapter->setupModuleLeds(greenLeds, redLeds, ledsCount);
+
+    log("SETUP: LEDs initialized for %d devices", ledsCount);
+    log("SETUP: LED Arrays contents:");
+    for (uint8_t i = 0; i < ledsCount; i++) {
+        log("SETUP: LED[%d] - Green: %d, Red: %d", i, greenLeds[i], redLeds[i]);
     }
     
-    // Use LED use cases for initial LED indication if available
+    return true;
+}
+
+inline void ModuleSetupService::handleModuleMode() {
+    if (!moduleConfig) return;
+    
+    ISettings* settings = moduleConfig->getSettings();
+    if (!settings) {
+        log("SETUP: Error - Settings not available");
+        return;
+    }
+    
+    uint8_t isConfigured = settings->getIfConfigured();
+    log("SETUP: Current configuration status: %d", isConfigured);
+    
+    if (isConfigured != ModuleModeEnum::CONFIGURED_NEED_RESTART && 
+        isConfigured != ModuleModeEnum::AP_TEST_MODE && 
+        isConfigured != ModuleModeEnum::USER_CAN_CONFIGURE &&
+        isConfigured != ModuleModeEnum::USER_CAN_RE_CONFIGURE && 
+        isConfigured != ModuleModeEnum::CONFIGURED_DONE)
+    {
+        settings->setConfigured(ModuleModeEnum::USER_CAN_CONFIGURE);
+        isConfigured = ModuleModeEnum::CONFIGURED_NEED_RESTART;
+        log("SETUP: Updated configuration status to USER_CAN_CONFIGURE, needs restart");
+    }
+}
+
+inline void ModuleSetupService::setupModule() {
+    // Initialize configuration
+    if (!initializeModuleConfiguration()) {
+        log("SETUP: Module setup failed - unable to initialize configuration");
+        return;
+    }
+    
+    // Setup LEDs
+    if (!setupLeds()) {
+        log("SETUP: LED setup failed");
+        // Continue with setup even if LEDs fail
+    }
+    
+    // Initial LED indication
     if (ledUseCases) {
         ledUseCases->ledOnLoad();
         log("SETUP: LED on-load sequence executed");
     }
 
-    // Check and handle module configuration status
-    if (moduleConfig) {
-        ISettings* settings = moduleConfig->getSettings();
-        if (settings) {
-            uint8_t isConfigured = settings->getIfConfigured();
-            log("SETUP: Current configuration status: %d", isConfigured);
-            
-            if (isConfigured != ModuleModeEnum::CONFIGURED_NEED_RESTART && 
-                isConfigured != ModuleModeEnum::AP_TEST_MODE && 
-                isConfigured != ModuleModeEnum::USER_CAN_CONFIGURE &&
-                isConfigured != ModuleModeEnum::USER_CAN_RE_CONFIGURE && 
-                isConfigured != ModuleModeEnum::CONFIGURED_DONE)
-            {
-                settings->setConfigured(ModuleModeEnum::USER_CAN_CONFIGURE);
-                isConfigured = ModuleModeEnum::CONFIGURED_NEED_RESTART;
-                log("SETUP: Updated configuration status to USER_CAN_CONFIGURE, needs restart");
-            }
-        } else {
-            log("SETUP: Error - Settings not available");
-        }
-    }
+    handleModuleMode();
 
+    // LED off sequence
     if (ledUseCases) {
         ledUseCases->ledOffLoad();
         log("SETUP: LED off-load sequence executed");
