@@ -5,83 +5,23 @@
 #include <Arduino.h>
 #include <vector>
 
-// Module type constants
-#define MODULE_TYPE_DEVICE 1
-#define MODULE_TYPE_SENSOR 2
-#define MODULE_TYPE_HYDRO 3
-#define MODULE_TYPE_ANALOG_INPUT_DEVICE 4
-
-// Module subtype constants
-#define MODULE_SUBTYPE_RELAY 1
-#define MODULE_SUBTYPE_SOKET 2
-#define MODULE_SUBTYPE_DIMMER 3
-
 // Implementation of LED adapter for ESP32 hardware
 class LedAdapter : public ILedAdapter {
-private:
-    // Arrays to store LED pins for different module types
-    uint8_t LED_G_RELAY[4];
-    uint8_t LED_R_RELAY[4];
-    uint8_t LED_G_SKT[4];
-    uint8_t LED_R_SKT[4];
-    uint8_t LED_G_DIMMER[4];
-    uint8_t LED_R_DIMMER[4];
-    uint8_t LED_G_HYDRO[4];
-    uint8_t LED_R_HYDRO[4];
+private:    
+    // Default LED pin values as class constants
+    static uint8_t DEFAULT_GREEN_LEDS[4];
+    static uint8_t DEFAULT_RED_LEDS[4];
     
     // Current working LED pins
-    uint8_t LED_G[4];
-    uint8_t LED_R[4];
-    
-    // Sensor LED pins
-    uint8_t LED_G_Sensor;
-    uint8_t LED_R_Sensor;
+    uint8_t greenLedPins[4];
+    uint8_t redLedPins[4];
     
     // Number of devices
-    uint8_t deviceCount;
+    uint8_t ledsCount;
 
 public:
-    // Constructor
-    LedAdapter(uint8_t deviceCount = 1) : deviceCount(deviceCount) {
-        // Initialize arrays to defaults (all zeros)
-        for (int i = 0; i < 4; i++) {
-            LED_G_RELAY[i] = 0;
-            LED_R_RELAY[i] = 0;
-            LED_G_SKT[i] = 0;
-            LED_R_SKT[i] = 0;
-            LED_G_DIMMER[i] = 0;
-            LED_R_DIMMER[i] = 0;
-            LED_G_HYDRO[i] = 0;
-            LED_R_HYDRO[i] = 0;
-            LED_G[i] = 0;
-            LED_R[i] = 0;
-        }
-        
-        LED_G_Sensor = 0;
-        LED_R_Sensor = 0;
-    }
-    
-    // Initialize with pin mappings
-    void initialize(const uint8_t* greenRelayPins, const uint8_t* redRelayPins,
-                   const uint8_t* greenSocketPins, const uint8_t* redSocketPins,
-                   const uint8_t* greenDimmerPins, const uint8_t* redDimmerPins,
-                   const uint8_t* greenHydroPins, const uint8_t* redHydroPins,
-                   uint8_t greenSensorPin, uint8_t redSensorPin) {
-        // Copy pin values to internal arrays
-        for (int i = 0; i < deviceCount; i++) {
-            if (greenRelayPins) LED_G_RELAY[i] = greenRelayPins[i];
-            if (redRelayPins) LED_R_RELAY[i] = redRelayPins[i];
-            if (greenSocketPins) LED_G_SKT[i] = greenSocketPins[i];
-            if (redSocketPins) LED_R_SKT[i] = redSocketPins[i];
-            if (greenDimmerPins) LED_G_DIMMER[i] = greenDimmerPins[i];
-            if (redDimmerPins) LED_R_DIMMER[i] = redDimmerPins[i];
-            if (greenHydroPins) LED_G_HYDRO[i] = greenHydroPins[i];
-            if (redHydroPins) LED_R_HYDRO[i] = redHydroPins[i];
-        }
-        
-        LED_G_Sensor = greenSensorPin;
-        LED_R_Sensor = redSensorPin;
-    }
+    // Empty constructor
+    LedAdapter() : ledsCount(0) {}
     
     // Implementation of ILedAdapter methods
     void setupLed(uint8_t pin, uint8_t mode) override {
@@ -92,13 +32,13 @@ public:
     
     void setLedOn(uint8_t pin) override {
         if (pin != 0) {
-            digitalWrite(pin, LOW);
+            digitalWrite(pin, HIGH);  // Changed to HIGH for active high
         }
     }
     
     void setLedOff(uint8_t pin) override {
         if (pin != 0) {
-            digitalWrite(pin, HIGH);
+            digitalWrite(pin, LOW);  // Changed to LOW for active high
         }
     }
     
@@ -108,66 +48,45 @@ public:
         }
     }
     
-    void setupRgbLed(uint8_t redPin, uint8_t greenPin, uint8_t bluePin) override {
-        setupLed(redPin, OUTPUT);
-        setupLed(greenPin, OUTPUT);
-        setupLed(bluePin, OUTPUT);
-    }
-    
-    void setRgbColor(uint8_t redPin, uint8_t greenPin, uint8_t bluePin,
-                     bool redState, bool greenState, bool blueState) override {
-        digitalWrite(redPin, redState ? LOW : HIGH);
-        digitalWrite(greenPin, greenState ? LOW : HIGH);
-        digitalWrite(bluePin, blueState ? LOW : HIGH);
-    }
-    
-    void setupModuleLeds(uint8_t moduleType, uint8_t moduleSubType) override {
-        if (moduleType == MODULE_TYPE_DEVICE || moduleType == MODULE_TYPE_ANALOG_INPUT_DEVICE) {
-            if (moduleSubType == MODULE_SUBTYPE_RELAY) {
-                LED_G[0] = LED_G_RELAY[0];
-                LED_R[0] = LED_R_RELAY[0];
-            } else if (moduleSubType == MODULE_SUBTYPE_SOKET) {
-                LED_G[0] = LED_G_SKT[0];
-                LED_R[0] = LED_R_SKT[0];
-            } else if (moduleSubType == MODULE_SUBTYPE_DIMMER) {
-                LED_G[0] = LED_G_DIMMER[0];
-                LED_R[0] = LED_R_DIMMER[0];
+    void setupModuleLeds(const uint8_t* greenLeds = nullptr, const uint8_t* redLeds = nullptr, 
+                        uint8_t ledsCount = 1) override {
+        // Set the LED count
+        this->ledsCount = ledsCount;
+        
+        // Copy provided LED data or use defaults
+        for (uint8_t i = 0; i < 4 && i < ledsCount; i++) {
+            greenLedPins[i] = greenLeds ? greenLeds[i] : DEFAULT_GREEN_LEDS[i];
+            redLedPins[i] = redLeds ? redLeds[i] : DEFAULT_RED_LEDS[i];
+            
+            // Initialize pins as OUTPUT mode
+            if (greenLedPins[i] != 0) {
+                pinMode(greenLedPins[i], OUTPUT);
+                digitalWrite(greenLedPins[i], LOW);  // Turn off initially (HIGH active)
             }
             
-            setupLed(LED_G[0], OUTPUT);
-            setupLed(LED_R[0], OUTPUT);
-            setLedOff(LED_G[0]);  // Initialize to OFF state
-            setLedOff(LED_R[0]);  // Initialize to OFF state
-        } 
-        else if (moduleType == MODULE_TYPE_SENSOR) {
-            setupLed(LED_G_Sensor, OUTPUT);
-            setupLed(LED_R_Sensor, OUTPUT);
-            setLedOff(LED_G_Sensor);  // Initialize to OFF state
-            setLedOff(LED_R_Sensor);  // Initialize to OFF state
-        } 
-        else if (moduleType == MODULE_TYPE_HYDRO) {
-            LED_G[0] = LED_G_HYDRO[0];
-            LED_R[0] = LED_R_HYDRO[0];
-            setupLed(LED_G[0], OUTPUT);
-            setupLed(LED_R[0], OUTPUT);
-            setLedOff(LED_G[0]);  // Initialize to OFF state
-            setLedOff(LED_R[0]);  // Initialize to OFF state
+            if (redLedPins[i] != 0) {
+                pinMode(redLedPins[i], OUTPUT);
+                digitalWrite(redLedPins[i], LOW);  // Turn off initially (HIGH active)
+            }
         }
     }
     
     uint8_t getGreenLedPin(uint8_t index) override {
-        if (index < deviceCount) {
-            return LED_G[index];
+        if (index < ledsCount) {
+            return greenLedPins[index];
         }
         return 0;
     }
     
     uint8_t getRedLedPin(uint8_t index) override {
-        if (index < deviceCount) {
-            return LED_R[index];
+        if (index < ledsCount) {
+            return redLedPins[index];
         }
         return 0;
     }
 };
+
+uint8_t LedAdapter::DEFAULT_GREEN_LEDS[4] = {38, 37, 38, 37};
+uint8_t LedAdapter::DEFAULT_RED_LEDS[4] = {12, 13, 14, 15};
 
 #endif // LED_ADAPTER_H

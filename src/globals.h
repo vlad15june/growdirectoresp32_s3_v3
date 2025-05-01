@@ -10,13 +10,16 @@
 #include "Core/Domain/Interfaces/IModuleConfig.h"
 #include "Core/Domain/Interfaces/IDebugSystem.h"
 #include "Core/Domain/Interfaces/ISettings.h"
+#include "Core/Domain/Interfaces/ILedAdapter.h"
 
 #include "Infrastructure/Adapters/eepromAdapter.h"
 #include "Infrastructure/Logging/MqttLogger.h"
 #include "Infrastructure/Configuration/ModuleConfig.h"
 #include "Infrastructure/Configuration/Settings.h"
 #include "Infrastructure/Logging/DebugSystem.h"
-#include "Infrastructure/Adapters/Time/NTPTimeAdapter.h" // Add NTPTimeAdapter include
+#include "Infrastructure/Adapters/Time/NTPTimeAdapter.h"
+#include "Infrastructure/Adapters/Led/LedAdapter.h"
+#include "Application/Services/ModuleSetupService.h"
 
 const char *mqttUser = "GrowDirectorMqtt";
 const char *mqttPassword = "lasdfh329483457sfdjhs92_w";
@@ -43,11 +46,16 @@ DebugSystem debugSystem;
 EepromAdapter eeprom(1024, 0);
 Settings settings(eeprom);
 
+// Create LED Adapter instance
+LedAdapter ledAdapter;
+
 // Create NTP Time Adapter instance
 // Using default NTP server with UTC offset of 0 and daylight offset of 0
 NTPTimeAdapter ntpTimeAdapter(&mqttLogger, &debugSystem, &settings);
 
 ModuleConfig moduleConfig(&mqttLogger, &debugSystem, &settings, &ntpTimeAdapter);
+
+ModuleSetupService moduleSetupService(&mqttLogger, &debugSystem, &moduleConfig, &ledAdapter);
 
 IPAddress myIP;
 

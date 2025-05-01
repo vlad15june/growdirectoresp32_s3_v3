@@ -22,7 +22,11 @@ public:
     virtual void init() = 0;
     virtual int getModuleType() const = 0;
     virtual int getModuleSubType() const = 0;
+    virtual int getDeviceCount() const = 0;
     virtual ISettings* getSettings() = 0;
+    virtual int* getRedLeds() const = 0;
+    virtual int* getGreenLeds() const = 0;
+    virtual int getLedsCount() const = 0;
     virtual ~IModuleConfig() = default;
 };
 
