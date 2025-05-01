@@ -3,6 +3,7 @@
 // External test functions
 extern "C" void run_mock_settings_tests(void);
 extern "C" int run_module_config_tests(void);
+extern "C" int run_module_setup_service_tests(void);
 
 static void setUp_module_config(void) {
     // Setup for each test
@@ -31,6 +32,9 @@ int main(void) {
     
     // Run tests from the ModuleConfig test file
     run_module_config_tests();
+    
+    // Run tests from the ModuleSetupService test file
+    run_module_setup_service_tests();
     
     return UNITY_END();
 }

@@ -2,6 +2,7 @@
 #define MOCK_LOGGER_H
 
 #include "Core/Domain/Interfaces/ILogger.h"
+#include <string>
 
 class MockLogger : public ILogger {
 public:

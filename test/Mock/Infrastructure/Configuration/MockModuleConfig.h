@@ -12,6 +12,7 @@ class MockModuleConfig : public IModuleConfig {
 private:
     int _moduleType;
     int _moduleSubType;
+    int _deviceCount;
     ILogger* _logger;
     IDebugSystem* _debugSystem;
     ISettings* _settings;
@@ -19,6 +20,11 @@ private:
     bool _isInitialized;
     bool _isTypeConfigure;
     std::map<std::string, bool> _modifiedFields;
+    
+    // LED related members
+    int* _redLeds;
+    int* _greenLeds;
+    int _ledsCount;
 
 public:
     MockModuleConfig(ILogger* logger = nullptr, 
@@ -27,12 +33,33 @@ public:
                     INTPTimeAdapter* timeAdapter = nullptr)
         : _moduleType(MODULE_TYPE_DEVICE),
           _moduleSubType(MODULE_SUBTYPE_RELAY),
+          _deviceCount(4),
           _logger(logger),
           _debugSystem(debugSystem),
           _settings(settings),
           _timeAdapter(timeAdapter),
           _isInitialized(false),
-          _isTypeConfigure(false) {}
+          _isTypeConfigure(false),
+          _redLeds(nullptr),
+          _greenLeds(nullptr),
+          _ledsCount(4) {
+        // Initialize LED arrays with default values
+        _redLeds = new int[_ledsCount];
+        _greenLeds = new int[_ledsCount];
+        for (int i = 0; i < _ledsCount; i++) {
+            _redLeds[i] = i + 10;    // Example default values
+            _greenLeds[i] = i + 20;  // Example default values
+        }
+    }
+    
+    ~MockModuleConfig() {
+        if (_redLeds != nullptr) {
+            delete[] _redLeds;
+        }
+        if (_greenLeds != nullptr) {
+            delete[] _greenLeds;
+        }
+    }
 
     void configureModuleType() override {
         _isTypeConfigure = true;
@@ -62,9 +89,25 @@ public:
     int getModuleSubType() const override {
         return _moduleSubType;
     }
+    
+    int getDeviceCount() const override {
+        return _deviceCount;
+    }
 
     ISettings* getSettings() override {
         return _settings;
+    }
+    
+    int* getRedLeds() const override {
+        return _redLeds;
+    }
+    
+    int* getGreenLeds() const override {
+        return _greenLeds;
+    }
+    
+    int getLedsCount() const override {
+        return _ledsCount;
     }
 
     // Additional methods for testing
@@ -76,6 +119,11 @@ public:
     void setModuleSubType(int subType) {
         _moduleSubType = subType;
         _modifiedFields["moduleSubType"] = true;
+    }
+    
+    void setDeviceCount(int count) {
+        _deviceCount = count;
+        _modifiedFields["deviceCount"] = true;
     }
 
     void setLogger(ILogger* logger) {
@@ -96,6 +144,43 @@ public:
     void setTimeAdapter(INTPTimeAdapter* timeAdapter) {
         _timeAdapter = timeAdapter;
         _modifiedFields["timeAdapter"] = true;
+    }
+    
+    void setLedsCount(int count) {
+        // Clean up old arrays
+        if (_redLeds) delete[] _redLeds;
+        if (_greenLeds) delete[] _greenLeds;
+        
+        // Create new arrays
+        _ledsCount = count;
+        _redLeds = new int[count];
+        _greenLeds = new int[count];
+        
+        // Initialize with default values
+        for (int i = 0; i < count; i++) {
+            _redLeds[i] = i + 10;    // Example default values
+            _greenLeds[i] = i + 20;  // Example default values
+        }
+        
+        _modifiedFields["ledsCount"] = true;
+    }
+    
+    void setRedLeds(int* leds, int count) {
+        if (_redLeds && count <= _ledsCount) {
+            for (int i = 0; i < count; i++) {
+                _redLeds[i] = leds[i];
+            }
+            _modifiedFields["redLeds"] = true;
+        }
+    }
+    
+    void setGreenLeds(int* leds, int count) {
+        if (_greenLeds && count <= _ledsCount) {
+            for (int i = 0; i < count; i++) {
+                _greenLeds[i] = leds[i];
+            }
+            _modifiedFields["greenLeds"] = true;
+        }
     }
 
     ILogger* getLogger() const {
@@ -126,8 +211,24 @@ public:
     void reset() {
         _moduleType = MODULE_TYPE_DEVICE;
         _moduleSubType = MODULE_SUBTYPE_RELAY;
+        _deviceCount = 4;
+        _ledsCount = 4;
         _isInitialized = false;
         _isTypeConfigure = false;
+        
+        // Re-initialize LED arrays with default values
+        if (_redLeds) {
+            for (int i = 0; i < _ledsCount; i++) {
+                _redLeds[i] = i + 10;
+            }
+        }
+        
+        if (_greenLeds) {
+            for (int i = 0; i < _ledsCount; i++) {
+                _greenLeds[i] = i + 20;
+            }
+        }
+        
         _modifiedFields.clear();
     }
 };
