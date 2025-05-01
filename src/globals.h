@@ -11,6 +11,7 @@
 #include "Core/Domain/Interfaces/IDebugSystem.h"
 #include "Core/Domain/Interfaces/ISettings.h"
 #include "Core/Domain/Interfaces/ILedAdapter.h"
+#include "Core/Domain/UseCases/Led/LedUseCases.h"
 
 #include "Infrastructure/Adapters/eepromAdapter.h"
 #include "Infrastructure/Logging/MqttLogger.h"
@@ -46,7 +47,6 @@ DebugSystem debugSystem;
 EepromAdapter eeprom(1024, 0);
 Settings settings(eeprom);
 
-// Create LED Adapter instance
 LedAdapter ledAdapter;
 
 // Create NTP Time Adapter instance
@@ -54,6 +54,8 @@ LedAdapter ledAdapter;
 NTPTimeAdapter ntpTimeAdapter(&mqttLogger, &debugSystem, &settings);
 
 ModuleConfig moduleConfig(&mqttLogger, &debugSystem, &settings, &ntpTimeAdapter);
+
+LedUseCases ledUseCases(std::make_shared<LedAdapter>(ledAdapter), std::make_shared<ModuleConfig>(moduleConfig));
 
 ModuleSetupService moduleSetupService(&mqttLogger, &debugSystem, &moduleConfig, &ledAdapter);
 

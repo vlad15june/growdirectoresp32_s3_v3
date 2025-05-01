@@ -14,12 +14,12 @@ LedUseCases::~LedUseCases() {
 
 // Turn LEDs on during module load
 void LedUseCases::ledOnLoad() {
-    
+    ledAdapter->setAllYellowLedOn();    
 }
 
 // Turn LEDs off during module unload
 void LedUseCases::ledOffLoad() {
-    
+    ledAdapter->setAllYellowLedOff();
 }
 
 // Blink green LED twice

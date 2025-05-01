@@ -84,6 +84,106 @@ public:
         }
         return 0;
     }
+
+    void setAllGreenLedOn() override {
+        for (uint8_t i = 0; i < ledsCount; i++) {
+            if (greenLedPins[i] != 0) {
+                digitalWrite(greenLedPins[i], HIGH);
+            }
+        }
+    }
+    
+    void setAllGreenLedOff() override {
+        for (uint8_t i = 0; i < ledsCount; i++) {
+            if (greenLedPins[i] != 0) {
+                digitalWrite(greenLedPins[i], LOW);
+            }
+        }
+    }
+    
+    void setGreenLedOn(uint8_t index) override {
+        if (index < ledsCount && greenLedPins[index] != 0) {
+            digitalWrite(greenLedPins[index], HIGH);
+        }
+    }
+    
+    void setGreenLedOff(uint8_t index) override {
+        if (index < ledsCount && greenLedPins[index] != 0) {
+            digitalWrite(greenLedPins[index], LOW);
+        }
+    }
+    
+    void setRedLedOn(uint8_t index) override {
+        if (index < ledsCount && redLedPins[index] != 0) {
+            digitalWrite(redLedPins[index], HIGH);
+        }
+    }
+    
+    void setRedLedOff(uint8_t index) override {
+        if (index < ledsCount && redLedPins[index] != 0) {
+            digitalWrite(redLedPins[index], LOW);
+        }
+    }
+
+    void setAllRedLedOn() override {
+        for (uint8_t i = 0; i < ledsCount; i++) {
+            if (redLedPins[i] != 0) {
+                digitalWrite(redLedPins[i], HIGH);
+            }
+        }
+    }
+    
+    void setAllRedLedOff() override {
+        for (uint8_t i = 0; i < ledsCount; i++) {
+            if (redLedPins[i] != 0) {
+                digitalWrite(redLedPins[i], LOW);
+            }
+        }
+    }
+
+    void setAllYellowLedOn() override {
+        for (uint8_t i = 0; i < ledsCount; i++) {
+            if (greenLedPins[i] != 0) {
+                digitalWrite(greenLedPins[i], HIGH);
+            }
+            if (redLedPins[i] != 0) {
+                digitalWrite(redLedPins[i], HIGH);
+            }
+        }
+    }
+    
+    void setAllYellowLedOff() override {
+        for (uint8_t i = 0; i < ledsCount; i++) {
+            if (greenLedPins[i] != 0) {
+                digitalWrite(greenLedPins[i], LOW);
+            }
+            if (redLedPins[i] != 0) {
+                digitalWrite(redLedPins[i], LOW);
+            }
+        }
+    }
+    
+    void setYellowLedOn(uint8_t index) override {
+        if (index < ledsCount) {
+            if (greenLedPins[index] != 0) {
+                digitalWrite(greenLedPins[index], HIGH);
+            }
+            if (redLedPins[index] != 0) {
+                digitalWrite(redLedPins[index], HIGH);
+            }
+        }
+    }
+    
+    void setYellowLedOff(uint8_t index) override {
+        if (index < ledsCount) {
+            if (greenLedPins[index] != 0) {
+                digitalWrite(greenLedPins[index], LOW);
+            }
+            if (redLedPins[index] != 0) {
+                digitalWrite(redLedPins[index], LOW);
+            }
+        }
+    }
 };
 
 uint8_t LedAdapter::DEFAULT_GREEN_LEDS[4] = {38, 37, 38, 37};

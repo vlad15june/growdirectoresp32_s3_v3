@@ -5,6 +5,7 @@
 #include "Core/Domain/Interfaces/IDebugSystem.h"
 #include "Core/Domain/Interfaces/IModuleConfig.h"
 #include "Core/Domain/Interfaces/ILedAdapter.h"
+#include "Core/Domain/Interfaces/ILedUseCases.h"
 
 class IModuleSetupService {
 public:
@@ -18,6 +19,7 @@ private:
     IDebugSystem* debugSystem;
     IModuleConfig* moduleConfig;
     ILedAdapter* ledAdapter;
+    ILedUseCases* ledUseCases;
 
     void log(const char* format, ...);
 
@@ -26,7 +28,8 @@ public:
         ILogger* logger,
         IDebugSystem* debugSystem,
         IModuleConfig* moduleConfig,
-        ILedAdapter* ledAdapter = nullptr
+        ILedAdapter* ledAdapter = nullptr,
+        ILedUseCases* ledUseCases = nullptr
     );
 
     void setupModule() override;
@@ -38,11 +41,13 @@ inline ModuleSetupService::ModuleSetupService(
     ILogger* logger,
     IDebugSystem* debugSystem,
     IModuleConfig* moduleConfig,
-    ILedAdapter* ledAdapter
+    ILedAdapter* ledAdapter,
+    ILedUseCases* ledUseCases
 ) : logger(logger),
     debugSystem(debugSystem),
     moduleConfig(moduleConfig),
-    ledAdapter(ledAdapter) {}
+    ledAdapter(ledAdapter),
+    ledUseCases(ledUseCases) {}
 
 inline void ModuleSetupService::log(const char* format, ...) {
     if (logger != nullptr && debugSystem != nullptr && debugSystem->isFeatureEnabled(DebugFeatures::SETUP_DEBUG)) {
@@ -83,8 +88,13 @@ inline void ModuleSetupService::setupModule() {
         log("SETUP: LED Arrays contents:");
         for (uint8_t i = 0; i < ledsCount; i++) {
             log("SETUP: LED[%d] - Green: %d, Red: %d", i, greenLeds[i], redLeds[i]);
-        }                
-        
+        } 
+    }
+    
+    // Use LED use cases for initial LED indication if available
+    if (ledUseCases) {
+        ledUseCases->ledOnLoad();
+        log("SETUP: LED on-load sequence executed");
     }
     
     log("SETUP: Module setup completed");
