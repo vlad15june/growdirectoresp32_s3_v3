@@ -9,12 +9,12 @@
 // Use case class for LED behaviors and patterns
 class LedUseCases : public ILedUseCases {
 private:
-    std::shared_ptr<ILedAdapter> ledAdapter;
-    std::shared_ptr<IModuleConfig> moduleConfig;
+    ILedAdapter* ledAdapter;
+    IModuleConfig* moduleConfig;
 
 public:
     // Constructor
-    LedUseCases(std::shared_ptr<ILedAdapter> adapter, std::shared_ptr<IModuleConfig> moduleConfig);
+    LedUseCases(ILedAdapter* adapter, IModuleConfig* moduleConfig);
     
     // Destructor
     ~LedUseCases() override;

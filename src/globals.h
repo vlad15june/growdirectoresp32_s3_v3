@@ -58,7 +58,7 @@ NTPTimeAdapter ntpTimeAdapter(&mqttLogger, &debugSystem, &settings);
 
 ModuleConfig moduleConfig(&mqttLogger, &debugSystem, &settings, &ntpTimeAdapter);
 
-LedUseCases ledUseCases(std::make_shared<LedAdapter>(ledAdapter), std::make_shared<ModuleConfig>(moduleConfig));
+LedUseCases ledUseCases(&ledAdapter, &moduleConfig);
 
 ModuleSetupService moduleSetupService(&mqttLogger, &debugSystem, &moduleConfig, &ledAdapter, &ledUseCases);
 

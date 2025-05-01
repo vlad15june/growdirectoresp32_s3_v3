@@ -2,7 +2,7 @@
 #include "esp_timer.h" // For esp_timer functions
 
 // Constructor
-LedUseCases::LedUseCases(std::shared_ptr<ILedAdapter> adapter, std::shared_ptr<IModuleConfig> moduleConfig)
+LedUseCases::LedUseCases(ILedAdapter* adapter, IModuleConfig* moduleConfig)
     : ledAdapter(adapter),
       moduleConfig(moduleConfig) {    
 }

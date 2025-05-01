@@ -9,18 +9,19 @@
 #include "globals.h"
 
 
-// Create ModuleConfig instance
-
-
-void setup() {
+void setup()
+{
   Serial.begin(115200);
   Serial.println("System initialized.");
-  
+
   moduleSetupService.setupModule();
-  
 }
 
-void loop() {
+void loop()
+{
+  // pinMode(15, OUTPUT);
+  // digitalWrite(15, HIGH);
+
   Serial.printf("loop\n");
   delay(1000);
 }
