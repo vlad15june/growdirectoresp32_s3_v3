@@ -57,7 +57,7 @@ ModuleConfig moduleConfig(&mqttLogger, &debugSystem, &settings, &ntpTimeAdapter)
 
 LedUseCases ledUseCases(std::make_shared<LedAdapter>(ledAdapter), std::make_shared<ModuleConfig>(moduleConfig));
 
-ModuleSetupService moduleSetupService(&mqttLogger, &debugSystem, &moduleConfig, &ledAdapter);
+ModuleSetupService moduleSetupService(&mqttLogger, &debugSystem, &moduleConfig, &ledAdapter, &ledUseCases);
 
 IPAddress myIP;
 

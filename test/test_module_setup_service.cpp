@@ -5,12 +5,14 @@
 #include "Mock/Infrastructure/Logging/MockDebugSystem.h"
 #include "Mock/Infrastructure/Led/MockLedAdapter.h"
 #include "Mock/Infrastructure/Configuration/MockModuleConfig.h"
+#include "Mock/Core/Domain/MockLedUseCases.h"
 
 // Global test variables
 static MockLogger g_mockLogger;
 static MockDebugSystem g_mockDebugSystem;
 static MockModuleConfig g_mockModuleConfig;
 static MockLedAdapter g_mockLedAdapter;
+static MockLedUseCases g_mockLedUseCases;
 static ModuleSetupService* g_moduleSetupService;
 static FILE* debug_file = nullptr;
 
@@ -29,12 +31,14 @@ static void module_setup_service_setup(void) {
     g_mockDebugSystem.featureEnabled = true;
     g_mockModuleConfig.reset();
     g_mockLedAdapter.reset();
+    g_mockLedUseCases.reset();
     
     g_moduleSetupService = new ModuleSetupService(
         &g_mockLogger,
         &g_mockDebugSystem,
         &g_mockModuleConfig,
-        &g_mockLedAdapter
+        &g_mockLedAdapter,
+        &g_mockLedUseCases
     );
 }
 
@@ -111,7 +115,8 @@ static void test_setup_module_without_led_adapter(void) {
         &g_mockLogger,
         &g_mockDebugSystem,
         &g_mockModuleConfig,
-        nullptr
+        nullptr,
+        &g_mockLedUseCases
     );
     
     // This should not crash and should still initialize the config
@@ -132,13 +137,51 @@ static void test_setup_module_without_config(void) {
         &g_mockLogger,
         &g_mockDebugSystem,
         nullptr,
-        &g_mockLedAdapter
+        &g_mockLedAdapter,
+        &g_mockLedUseCases
     );
     
     // This should not crash and should log an error
     g_moduleSetupService->setupModule();
     
     TEST_ASSERT_TRUE(g_mockLogger.printCalled);
+    
+    module_setup_service_teardown();
+}
+
+static void test_setup_module_triggers_led_use_cases(void) {
+    if (debug_file != nullptr) fprintf(debug_file, "Starting test_setup_module_triggers_led_use_cases\n");
+    module_setup_service_setup();
+    
+    if (debug_file != nullptr) fprintf(debug_file, "Calling setupModule()\n");
+    g_moduleSetupService->setupModule();
+    
+    if (debug_file != nullptr) fprintf(debug_file, "Checking if ledOnLoad was called: %s\n", 
+                                g_mockLedUseCases.onLoadCalled ? "Yes" : "No");
+    TEST_ASSERT_TRUE(g_mockLedUseCases.onLoadCalled);
+    
+    module_setup_service_teardown();
+    if (debug_file != nullptr) fprintf(debug_file, "Finished test_setup_module_triggers_led_use_cases\n");
+}
+
+static void test_setup_module_without_led_use_cases(void) {
+    module_setup_service_setup();
+    
+    // Create a new service without LED use cases
+    delete g_moduleSetupService;
+    g_moduleSetupService = new ModuleSetupService(
+        &g_mockLogger,
+        &g_mockDebugSystem,
+        &g_mockModuleConfig,
+        &g_mockLedAdapter,
+        nullptr
+    );
+    
+    // This should not crash and should still initialize the config and LEDs
+    g_moduleSetupService->setupModule();
+    
+    TEST_ASSERT_TRUE(g_mockModuleConfig.isInitialized());
+    TEST_ASSERT_TRUE(g_mockLedAdapter.setupModuleLedsCalled);
     
     module_setup_service_teardown();
 }
@@ -151,6 +194,8 @@ extern "C" int run_module_setup_service_tests(void) {
     RUN_TEST(test_setup_module_configures_leds);
     RUN_TEST(test_setup_module_without_led_adapter);
     RUN_TEST(test_setup_module_without_config);
+    RUN_TEST(test_setup_module_triggers_led_use_cases);
+    RUN_TEST(test_setup_module_without_led_use_cases);
     
     if (debug_file != nullptr) fprintf(debug_file, "\n----- ModuleSetupService Tests Complete -----\n");
     
