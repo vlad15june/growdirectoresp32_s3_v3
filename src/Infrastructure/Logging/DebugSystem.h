@@ -63,6 +63,7 @@ private:
         registerFeature(DebugFeatures::MQTT_COMMAND_DEBUG, "mqtt_command", true);
         registerFeature(DebugFeatures::MQTT_CALLBACK_DEBUG, "mqtt_callback", false);
         registerFeature(DebugFeatures::BUTTON_DEBUG, "button", false);
+        registerFeature(DebugFeatures::LED_DEBUG, "led", false);
         registerFeature(DebugFeatures::UPDATE_FIRMWARE_DEBUG, "update_firmware", true);
     }
 

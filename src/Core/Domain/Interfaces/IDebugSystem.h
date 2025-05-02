@@ -53,6 +53,7 @@ namespace DebugFeatures {
     constexpr const char* DATA_DEBUG = "DATA_DEBUG";
     constexpr const char* SETTINGS_DEBUG = "SETTINGS_DEBUG";
     constexpr const char* BUTTON_DEBUG = "BUTTON_DEBUG";
+    constexpr const char* LED_DEBUG = "LED_DEBUG";
     constexpr const char* UPDATE_FIRMWARE_DEBUG = "UPDATE_FIRMWARE_DEBUG";
 }
 
