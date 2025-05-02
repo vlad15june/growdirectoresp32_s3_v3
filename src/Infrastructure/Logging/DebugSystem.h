@@ -52,7 +52,7 @@ private:
         registerFeature(DebugFeatures::SETUP_SENSOR_DEBUG, "setup_sensor", true);
         registerFeature(DebugFeatures::SENSOR_ERROR_DEBUG, "sensor_error", false);
         registerFeature(DebugFeatures::DATA_DEBUG, "data", false);
-        registerFeature(DebugFeatures::SETTINGS_DEBUG, "settings", false);
+        registerFeature(DebugFeatures::SETTINGS_DEBUG, "settings", true);
         registerFeature(DebugFeatures::SETUP_DEBUG, "setup", true);
         registerFeature(DebugFeatures::TEST_DEBUG, "test", false);
         registerFeature(DebugFeatures::LOG_DEBUG, "log", false);

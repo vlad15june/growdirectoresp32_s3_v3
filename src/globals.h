@@ -57,7 +57,7 @@ MqttLogger mqttLogger(mqttClient, mqttDefaultTopic, MqttLoggerMode::MqttAndSeria
 DebugSystem debugSystem;
 
 EepromAdapter eeprom(1024, 0);
-Settings settings(eeprom);
+Settings settings(eeprom, &mqttLogger, &debugSystem);
 
 LedAdapter ledAdapter;
 
