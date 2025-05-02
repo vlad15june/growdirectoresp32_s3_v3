@@ -8,3 +8,5 @@
 /led_use_cases_test_debug.log
 /button_use_cases_test_debug.log
 /.DS_Store
+
+.fake
