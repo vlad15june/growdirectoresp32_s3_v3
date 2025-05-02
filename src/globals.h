@@ -59,7 +59,7 @@ DebugSystem debugSystem;
 EepromAdapter eeprom(1024, 0);
 Settings settings(eeprom, &mqttLogger, &debugSystem);
 
-LedAdapter ledAdapter;
+LedAdapter ledAdapter(&mqttLogger, &debugSystem);
 
 ArduinoAdapter arduinoAdapter;
 

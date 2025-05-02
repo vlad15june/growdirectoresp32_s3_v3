@@ -235,15 +235,15 @@ public:
     {
         log("All yellow LEDs turned ON");
         for (uint8_t i = 0; i < ledsCount; i++)
-        {
-            log("Yellow LED %u turned ON", i);
+        {            
             if (greenLedPins[i] != 0)
             {
+                log("Green LED pin[%u]=%d turned ON", i, greenLedPins[i]);
                 digitalWrite(greenLedPins[i], HIGH);
-            }
-            log("Red LED %u turned ON", i);
+            }            
             if (redLedPins[i] != 0)
             {
+                log("Red LED pin[%u]=%d turned ON", i, redLedPins[i]);
                 digitalWrite(redLedPins[i], HIGH);
             }
         }
@@ -253,15 +253,15 @@ public:
     {
         log("All yellow LEDs turned OFF");
         for (uint8_t i = 0; i < ledsCount; i++)
-        {
-            log("Yellow LED %u turned OFF", i);
+        {            
             if (greenLedPins[i] != 0)
             {
+                log("Green LED pin[%u]=%d turned OFF", i, greenLedPins[i]);
                 digitalWrite(greenLedPins[i], LOW);
-            }
-            log("Red LED %u turned OFF", i);
+            }            
             if (redLedPins[i] != 0)
             {
+                log("Red LED pin[%u]= turned OFF", i, redLedPins[i]);
                 digitalWrite(redLedPins[i], LOW);
             }
         }

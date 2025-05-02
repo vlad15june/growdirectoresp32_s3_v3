@@ -36,7 +36,7 @@ inline void LedUseCases::log(const char *format, ...)
 void LedUseCases::ledOnLoad()
 {
     log("Setting all yellow LEDs on during module load");
-    ledAdapter->setAllYellowLedOn();
+    ledAdapter->setYellowLedOn(0);
 }
 
 // Turn LEDs off during module unload
