@@ -30,8 +30,8 @@ private:
 
 public:
     WebServerLauncher(
-        ILogger* loggerInstance = nullptr,
-        IDebugSystem* debugSystemInstance = nullptr,
+        ILogger* loggerInstance,
+        IDebugSystem* debugSystemInstance,
         ModuleConfigurationWebServer moduleConfigServer
     ) : 
         logger(loggerInstance),

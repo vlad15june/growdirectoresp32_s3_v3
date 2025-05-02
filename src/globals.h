@@ -27,6 +27,7 @@
 #include "Infrastructure/Adapters/ArduinoAdapter.h"
 #include "Infrastructure/Adapters/Button/ButtonAdapter.h"
 #include "Infrastructure/Controllers/WebServices/ModuleConfigurationWebServer.h"
+#include "Infrastructure/Controllers/WebServices/Launchers/WebServerLauncher.h"
 #include "Application/Services/ModuleSetupService.h"
 
 const char *mqttUser = "GrowDirectorMqtt";
@@ -67,17 +68,9 @@ NTPTimeAdapter ntpTimeAdapter(&mqttLogger, &debugSystem, &settings);
 
 ModuleConfig moduleConfig(&mqttLogger, &debugSystem, &settings, &ntpTimeAdapter);
 
-LedUseCases ledUseCases(&ledAdapter, &moduleConfig, &arduinoAdapter, &mqttLogger, &debugSystem);
-
-ButtonUseCases buttonUseCases(&buttonAdapter, &mqttLogger, &debugSystem, 0);
-
-ModuleSetupService moduleSetupService(&mqttLogger, &debugSystem, &moduleConfig, &ledAdapter, &ledUseCases, &buttonUseCases);
-
-// Create WebServer and WiFiMulti instances for web configuration
 WebServer webServer(80);
 WiFiMulti wifiMulti;
 
-// Create ModuleConfigurationWebServer instance
 ModuleConfigurationWebServer moduleConfigurationWebServer(
     webServer, 
     wifiMulti,
@@ -86,6 +79,19 @@ ModuleConfigurationWebServer moduleConfigurationWebServer(
     &settings
 );
 
+WebServerLauncher webServerLauncher(
+    &mqttLogger,
+    &debugSystem,
+    moduleConfigurationWebServer
+);
+
 IPAddress myIP;
+
+LedUseCases ledUseCases(&ledAdapter, &moduleConfig, &arduinoAdapter, &mqttLogger, &debugSystem);
+
+ButtonUseCases buttonUseCases(&buttonAdapter, &mqttLogger, &debugSystem, 0);
+
+ModuleSetupService moduleSetupService(&mqttLogger, &debugSystem, &moduleConfig, &ledAdapter, &ledUseCases, &buttonUseCases);
+
 
 #endif // GLOBALS_H
