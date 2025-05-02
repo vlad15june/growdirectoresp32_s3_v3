@@ -2,7 +2,7 @@
 #define ARDUINO_ADAPTER_H
 
 #include <Arduino.h>
-#include "Core/Domain/Interfaces/IArduinoAdapter.h"
+#include "Core/Domain/Interfaces/Adapters/IArduinoAdapter.h"
 
 class ArduinoAdapter : public IArduinoAdapter {
 public:

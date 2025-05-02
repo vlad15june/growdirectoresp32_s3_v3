@@ -1,10 +1,10 @@
 #ifndef LED_USE_CASES_H
 #define LED_USE_CASES_H
 
-#include "Core/Domain/Interfaces/ILedAdapter.h"
+#include "Core/Domain/Interfaces/Adapters/ILedAdapter.h"
 #include "Core/Domain/Interfaces/IModuleConfig.h"
 #include "Core/Domain/Interfaces/ILedUseCases.h"
-#include "Core/Domain/Interfaces/IArduinoAdapter.h"
+#include "Core/Domain/Interfaces/Adapters/IArduinoAdapter.h"
 #include <memory>
 
 // Use case class for LED behaviors and patterns

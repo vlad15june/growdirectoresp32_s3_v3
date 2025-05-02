@@ -4,7 +4,7 @@
 #include "Core/Domain/Interfaces/ILogger.h"
 #include "Core/Domain/Interfaces/IDebugSystem.h"
 #include "Core/Domain/Interfaces/IModuleConfig.h"
-#include "Core/Domain/Interfaces/ILedAdapter.h"
+#include "Core/Domain/Interfaces/Adapters/ILedAdapter.h"
 #include "Core/Domain/Interfaces/ILedUseCases.h"
 #include "Core/Domain/Enums/ModuleModeEnum.h"  // Added ModuleModeEnum include
 

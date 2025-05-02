@@ -10,7 +10,7 @@
 #include "Core/Domain/Interfaces/IModuleConfig.h"
 #include "Core/Domain/Interfaces/IDebugSystem.h"
 #include "Core/Domain/Interfaces/ISettings.h"
-#include "Core/Domain/Interfaces/ILedAdapter.h"
+#include "Core/Domain/Interfaces/Adapters/ILedAdapter.h"
 #include "Core/Domain/UseCases/Led/LedUseCases.h"
 
 #include "Infrastructure/Adapters/eepromAdapter.h"

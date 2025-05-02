@@ -1,7 +1,7 @@
 #ifndef LED_ADAPTER_H
 #define LED_ADAPTER_H
 
-#include "Core/Domain/Interfaces/ILedAdapter.h"
+#include "Core/Domain/Interfaces/Adapters/ILedAdapter.h"
 #include "Core/Domain/Interfaces/ILogger.h"
 #include "Core/Domain/Interfaces/IDebugSystem.h"
 #include <Arduino.h>

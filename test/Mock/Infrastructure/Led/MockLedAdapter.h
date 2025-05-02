@@ -1,7 +1,7 @@
 #ifndef MOCK_LED_ADAPTER_H
 #define MOCK_LED_ADAPTER_H
 
-#include "Core/Domain/Interfaces/ILedAdapter.h"
+#include "Core/Domain/Interfaces/Adapters/ILedAdapter.h"
 
 class MockLedAdapter : public ILedAdapter {
 public:
