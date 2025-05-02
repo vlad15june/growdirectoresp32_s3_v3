@@ -18,7 +18,7 @@ LedUseCases::~LedUseCases()
     log("LedUseCases destroyed");
 }
 
-void LedUseCases::log(const char *format, ...)
+inline void LedUseCases::log(const char *format, ...)
 {
     if (logger != nullptr && debugSystem != nullptr && debugSystem->isFeatureEnabled(DebugFeatures::LED_DEBUG))
     {
@@ -49,27 +49,11 @@ void LedUseCases::ledOffLoad()
 // Blink green LED twice
 void LedUseCases::ledBlinkGreen2Times()
 {
-    log("Blinking green LED 2 times");
-    ledAdapter->setGreenLedOn(0);
-    arduinoAdapter->delay(500);
-    ledAdapter->setGreenLedOff(0);
-    arduinoAdapter->delay(500);
-    ledAdapter->setGreenLedOn(0);
-    arduinoAdapter->delay(500);
-    ledAdapter->setGreenLedOff(0);
-    log("Completed blinking green LED 2 times");
+
 }
 
 // Blink yellow LED (red+green together) twice
 void LedUseCases::ledBlinkYellow2Times()
 {
-    log("Blinking yellow LED 2 times");
-    ledAdapter->setAllYellowLedOn();
-    arduinoAdapter->delay(500);
-    ledAdapter->setAllYellowLedOff();
-    arduinoAdapter->delay(500);
-    ledAdapter->setAllYellowLedOn();
-    arduinoAdapter->delay(500);
-    ledAdapter->setAllYellowLedOff();
-    log("Completed blinking yellow LED 2 times");
+
 }

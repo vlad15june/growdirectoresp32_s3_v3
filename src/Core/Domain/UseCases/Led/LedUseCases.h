@@ -7,7 +7,6 @@
 #include "Core/Domain/Interfaces/Adapters/IArduinoAdapter.h"
 #include "Core/Domain/Interfaces/ILogger.h"
 #include "Core/Domain/Interfaces/IDebugSystem.h"
-#include <memory>
 #include <stdarg.h>
 
 // Use case class for LED behaviors and patterns
