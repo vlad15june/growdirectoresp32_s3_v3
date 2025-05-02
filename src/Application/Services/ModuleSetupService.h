@@ -5,9 +5,11 @@
 #include "Core/Domain/Interfaces/IDebugSystem.h"
 #include "Core/Domain/Interfaces/IModuleConfig.h"
 #include "Core/Domain/Interfaces/Adapters/ILedAdapter.h"
+#include "Core/Domain/Interfaces/Adapters/IWifiAdapter.h" // Added IWifiAdapter include
 #include "Core/Domain/Interfaces/UseCases/ILedUseCases.h"
 #include "Core/Domain/Interfaces/UseCases/IButtonUseCases.h" // Added IButtonUseCases include
 #include "Core/Domain/Enums/ModuleModeEnum.h"                // Added ModuleModeEnum include
+#include "Application/Interfaces/WebServices/IWebServerLauncher.h"
 
 class IModuleSetupService
 {
@@ -25,6 +27,8 @@ private:
     ILedAdapter *ledAdapter;
     ILedUseCases *ledUseCases;
     IButtonUseCases *buttonUseCases;
+    IWifiAdapter *wifiAdapter; // Added wifiAdapter member
+    IWebServerLauncher *webServerLauncher;
 
     void log(const char *format, ...);
 
@@ -44,7 +48,9 @@ public:
         IModuleConfig *moduleConfig,
         ILedAdapter *ledAdapter = nullptr,
         ILedUseCases *ledUseCases = nullptr,
-        IButtonUseCases *buttonUseCases = nullptr);
+        IButtonUseCases *buttonUseCases = nullptr,
+        IWifiAdapter *wifiAdapter = nullptr,
+        IWebServerLauncher *webServerLauncher = nullptr);
 
     void setupModule() override;
 };
@@ -57,14 +63,18 @@ inline ModuleSetupService::ModuleSetupService(
     IModuleConfig *moduleConfig,
     ILedAdapter *ledAdapter,
     ILedUseCases *ledUseCases,
-    IButtonUseCases *buttonUseCases) : logger(logger),
-                                       debugSystem(debugSystem),
-                                       moduleConfig(moduleConfig),
-                                       ledAdapter(ledAdapter),
-                                       ledUseCases(ledUseCases),
-                                       buttonUseCases(buttonUseCases)
+    IButtonUseCases *buttonUseCases,
+    IWifiAdapter *wifiAdapter, // Added wifiAdapter parameter
+    IWebServerLauncher *webServerLauncher) : logger(logger),
+                                             debugSystem(debugSystem),
+                                             moduleConfig(moduleConfig),
+                                             ledAdapter(ledAdapter),
+                                             ledUseCases(ledUseCases),
+                                             buttonUseCases(buttonUseCases),
+                                             wifiAdapter(wifiAdapter), // Initialize wifiAdapter
+                                             webServerLauncher(webServerLauncher)
 {
-} // Initialize buttonUseCases
+}
 
 inline void ModuleSetupService::log(const char *format, ...)
 {
@@ -199,7 +209,8 @@ inline void ModuleSetupService::setupAP()
 
 inline void ModuleSetupService::setupWebServer()
 {
-    // Empty implementation
+    webServerLauncher->launchConfigurationServer();
+    log("SETUP: Web server setup completed");
 }
 
 inline void ModuleSetupService::setupModule()

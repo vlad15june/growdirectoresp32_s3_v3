@@ -26,6 +26,7 @@
 #include "Infrastructure/Adapters/Led/LedAdapter.h"
 #include "Infrastructure/Adapters/ArduinoAdapter.h"
 #include "Infrastructure/Adapters/Button/ButtonAdapter.h"
+#include "Infrastructure/Adapters/WiFi/WifiAdapter.h"
 #include "Infrastructure/Controllers/WebServices/ModuleConfigurationWebServer.h"
 #include "Infrastructure/Controllers/WebServices/Launchers/WebServerLauncher.h"
 #include "Application/Services/ModuleSetupService.h"
@@ -37,6 +38,9 @@ const char *mqttPassword = "lasdfh329483457sfdjhs92_w";
 IPAddress mqttBroker(116, 203, 235, 144);
 const int mqttPort = 1883;
 const char* mqttDefaultTopic = "hardware/log";
+
+WebServer webServer(80);
+WiFiMulti wifiMulti;
 
 // Callback function for MQTT
 void mqttCallback(char* topic, byte* payload, unsigned int length) {
@@ -59,17 +63,15 @@ LedAdapter ledAdapter;
 
 ArduinoAdapter arduinoAdapter;
 
-// Create Button Adapter instance
 ButtonAdapter buttonAdapter(&arduinoAdapter);
+
+WifiAdapter wifiAdapter(wifiMulti);
 
 // Create NTP Time Adapter instance
 // Using default NTP server with UTC offset of 0 and daylight offset of 0
 NTPTimeAdapter ntpTimeAdapter(&mqttLogger, &debugSystem, &settings);
 
 ModuleConfig moduleConfig(&mqttLogger, &debugSystem, &settings, &ntpTimeAdapter);
-
-WebServer webServer(80);
-WiFiMulti wifiMulti;
 
 ModuleConfigurationWebServer moduleConfigurationWebServer(
     webServer, 
