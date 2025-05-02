@@ -14,6 +14,8 @@ void setup()
   Serial.begin(115200);
   Serial.println("System initialized.");
 
+  settings.setConfigured(ModuleModeEnum::USER_CAN_CONFIGURE);
+
   moduleSetupService.setupModule();
 }
 
@@ -22,6 +24,8 @@ void loop()
   // pinMode(15, OUTPUT);
   // digitalWrite(15, HIGH);
 
-  Serial.printf("loop\n");
-  delay(1000);
+  // Serial.printf("loop\n");
+  // delay(1000);
+
+  ledUseCases.loop();
 }

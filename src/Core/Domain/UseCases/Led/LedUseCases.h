@@ -7,6 +7,7 @@
 #include "Core/Domain/Interfaces/Adapters/IArduinoAdapter.h"
 #include "Core/Domain/Interfaces/ILogger.h"
 #include "Core/Domain/Interfaces/IDebugSystem.h"
+#include "Core/Domain/Enums/ModuleModeEnum.h"
 #include <stdarg.h>
 
 // Use case class for LED behaviors and patterns
@@ -17,6 +18,16 @@ private:
     IArduinoAdapter* arduinoAdapter;
     ILogger* logger;
     IDebugSystem* debugSystem;
+
+    // LED timing constants (in milliseconds)
+    static const unsigned long BLINK_FAST_ON_TIME = 500;     // 0.5 seconds on
+    static const unsigned long BLINK_FAST_OFF_TIME = 500;    // 0.5 seconds off
+    static const unsigned long BLINK_SLOW_ON_TIME = 1000;    // 1 second on
+    static const unsigned long BLINK_SLOW_OFF_TIME = 5000;   // 5 seconds off
+    
+    // State variables for LED blinking
+    unsigned long lastBlinkTime = 0;
+    bool ledState = false;
 
     void log(const char* format, ...);
 
@@ -33,6 +44,9 @@ public:
     void ledOffLoad() override;
     void ledBlinkGreen2Times() override;
     void ledBlinkYellow2Times() override;
+    
+    // LED state management based on module configuration
+    void loop() override;
 };
 
 #endif // LED_USE_CASES_H

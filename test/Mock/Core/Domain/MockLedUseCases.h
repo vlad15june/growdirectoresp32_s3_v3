@@ -9,8 +9,10 @@ public:
     bool offLoadCalled = false;
     bool blinkGreenCalled = false;
     bool blinkYellowCalled = false;
+    bool loopCalled = false;
     int blinkGreenCount = 0;
     int blinkYellowCount = 0;
+    int loopCount = 0;
 
     // Reset all state for fresh test
     void reset() {
@@ -18,8 +20,10 @@ public:
         offLoadCalled = false;
         blinkGreenCalled = false;
         blinkYellowCalled = false;
+        loopCalled = false;
         blinkGreenCount = 0;
         blinkYellowCount = 0;
+        loopCount = 0;
     }
 
     // Implementations of the interface methods
@@ -39,6 +43,11 @@ public:
     void ledBlinkYellow2Times() override {
         blinkYellowCalled = true;
         blinkYellowCount++;
+    }
+    
+    void loop() override {
+        loopCalled = true;
+        loopCount++;
     }
 };
 
