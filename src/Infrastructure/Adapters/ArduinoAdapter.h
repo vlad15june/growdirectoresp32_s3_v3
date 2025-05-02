@@ -6,6 +6,27 @@
 
 class ArduinoAdapter : public IArduinoAdapter {
 public:
+    // Constants
+    uint8_t getPinModeInput() const override {
+        return INPUT;
+    }
+    
+    uint8_t getPinModeOutput() const override {
+        return OUTPUT;
+    }
+    
+    uint8_t getPinModeInputPullup() const override {
+        return INPUT_PULLUP;
+    }
+    
+    uint8_t getDigitalLow() const override {
+        return LOW;
+    }
+    
+    uint8_t getDigitalHigh() const override {
+        return HIGH;
+    }
+
     // Time functions
     void delay(unsigned long ms) override {
         ::delay(ms);

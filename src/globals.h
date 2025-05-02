@@ -11,6 +11,7 @@
 #include "Core/Domain/Interfaces/IDebugSystem.h"
 #include "Core/Domain/Interfaces/ISettings.h"
 #include "Core/Domain/Interfaces/Adapters/ILedAdapter.h"
+#include "Core/Domain/Interfaces/Adapters/IButtonAdapter.h"
 #include "Core/Domain/UseCases/Led/LedUseCases.h"
 
 #include "Infrastructure/Adapters/eepromAdapter.h"
@@ -21,6 +22,7 @@
 #include "Infrastructure/Adapters/Time/NTPTimeAdapter.h"
 #include "Infrastructure/Adapters/Led/LedAdapter.h"
 #include "Infrastructure/Adapters/ArduinoAdapter.h"
+#include "Infrastructure/Adapters/Button/ButtonAdapter.h"
 #include "Application/Services/ModuleSetupService.h"
 
 const char *mqttUser = "GrowDirectorMqtt";
@@ -51,6 +53,9 @@ Settings settings(eeprom);
 LedAdapter ledAdapter;
 
 ArduinoAdapter arduinoAdapter;
+
+// Create Button Adapter instance
+ButtonAdapter buttonAdapter(&arduinoAdapter);
 
 // Create NTP Time Adapter instance
 // Using default NTP server with UTC offset of 0 and daylight offset of 0

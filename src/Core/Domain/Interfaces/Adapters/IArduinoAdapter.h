@@ -1,9 +1,18 @@
 #ifndef I_ARDUINO_ADAPTER_H
 #define I_ARDUINO_ADAPTER_H
 
+#include <cstddef> // For size_t
+
 class IArduinoAdapter {
 public:
     virtual ~IArduinoAdapter() = default;
+
+    // Constants
+    virtual uint8_t getPinModeInput() const = 0;
+    virtual uint8_t getPinModeOutput() const = 0;
+    virtual uint8_t getPinModeInputPullup() const = 0;
+    virtual uint8_t getDigitalLow() const = 0;
+    virtual uint8_t getDigitalHigh() const = 0;
 
     // Time functions
     virtual void delay(unsigned long ms) = 0;
