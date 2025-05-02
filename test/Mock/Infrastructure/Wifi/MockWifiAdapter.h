@@ -2,120 +2,176 @@
 #define MOCK_WIFI_ADAPTER_H
 
 #include "Core/Domain/Interfaces/Adapters/IWifiAdapter.h"
+#include <cstring>
 
 class MockWifiAdapter : public IWifiAdapter {
 public:
-    bool createAPCalled = false;
-    bool configureAPCalled = false;
-    bool stopAPCalled = false;
-    bool isAPActiveCalled = false;
+    // Mock state variables
+    bool createAccessPointCalled = false;
+    bool configureAccessPointCalled = false;
+    bool stopAccessPointCalled = false;
+    bool isAccessPointActiveCalled = false;
     bool connectCalled = false;
     bool disconnectCalled = false;
     bool isConnectedCalled = false;
-    bool scanNetworksCalled = false;
-    bool setStationModeCalled = false;
-    bool setAPModeCalled = false;
-    bool setStationAndAPModeCalled = false;
-    
-    const char* lastSSID = nullptr;
-    const char* lastPassword = nullptr;
-    const char* lastLocalIP = nullptr;
-    const char* lastGateway = nullptr;
-    const char* lastSubnet = nullptr;
+    bool getLocalIPCalled = false;
+    bool getMACAddressCalled = false;
+
+    // Parameters captured from last call
+    char lastSSID[64] = {0};
+    char lastPassword[64] = {0};
     int lastChannel = 0;
     bool lastHidden = false;
     int lastMaxConnections = 0;
-    bool apActive = false;
-    bool wifiConnected = false;
     
+    char lastLocalIP[32] = {0};
+    char lastGateway[32] = {0};
+    char lastSubnet[32] = {0};
+    
+    // Return values for mock methods
+    bool accessPointActive = false;
+    bool connected = false;
+    bool configureAccessPointSuccess = true;
+    
+    char localIP[32] = "192.168.0.1";
+    char macAddress[32] = "00:11:22:33:44:55";
+    int rssi = -70;
+    
+    // Reset all state variables
     void reset() {
-        createAPCalled = false;
-        configureAPCalled = false;
-        stopAPCalled = false;
-        isAPActiveCalled = false;
+        createAccessPointCalled = false;
+        configureAccessPointCalled = false;
+        stopAccessPointCalled = false;
+        isAccessPointActiveCalled = false;
         connectCalled = false;
         disconnectCalled = false;
         isConnectedCalled = false;
-        scanNetworksCalled = false;
-        setStationModeCalled = false;
-        setAPModeCalled = false;
-        setStationAndAPModeCalled = false;
+        getLocalIPCalled = false;
+        getMACAddressCalled = false;
         
-        lastSSID = nullptr;
-        lastPassword = nullptr;
-        lastLocalIP = nullptr;
-        lastGateway = nullptr;
-        lastSubnet = nullptr;
+        lastSSID[0] = '\0';
+        lastPassword[0] = '\0';
         lastChannel = 0;
         lastHidden = false;
         lastMaxConnections = 0;
-        apActive = false;
-        wifiConnected = false;
+        
+        lastLocalIP[0] = '\0';
+        lastGateway[0] = '\0';
+        lastSubnet[0] = '\0';
+        
+        accessPointActive = false;
+        connected = false;
+        configureAccessPointSuccess = true;
+        
+        strcpy(localIP, "192.168.0.1");
+        strcpy(macAddress, "00:11:22:33:44:55");
+        rssi = -70;
     }
     
+    // Helper methods for tests
+    void setAccessPointActive(bool active) {
+        accessPointActive = active;
+    }
+    
+    void setConnected(bool isConnected) {
+        connected = isConnected;
+    }
+    
+    void setLocalIP(const char* ip) {
+        strncpy(localIP, ip, sizeof(localIP));
+    }
+    
+    void setMACAddress(const char* mac) {
+        strncpy(macAddress, mac, sizeof(macAddress));
+    }
+    
+    // Interface implementation
     bool createAccessPoint(const char* ssid, const char* password, int channel = 1, bool hidden = false, int maxConnections = 4) override {
-        createAPCalled = true;
-        lastSSID = ssid;
-        lastPassword = password;
+        createAccessPointCalled = true;
+        strncpy(lastSSID, ssid, sizeof(lastSSID));
+        strncpy(lastPassword, password, sizeof(lastPassword));
         lastChannel = channel;
         lastHidden = hidden;
         lastMaxConnections = maxConnections;
-        apActive = true;
+        accessPointActive = true;
         return true;
     }
     
+    bool configureAccessPoint(const char* localIP, const char* gateway, const char* subnet) override {
+        configureAccessPointCalled = true;
+        strncpy(lastLocalIP, localIP, sizeof(lastLocalIP));
+        strncpy(lastGateway, gateway, sizeof(lastGateway));
+        strncpy(lastSubnet, subnet, sizeof(lastSubnet));
+        strncpy(this->localIP, localIP, sizeof(this->localIP));
+        return configureAccessPointSuccess;
+    }
+    
     bool stopAccessPoint() override {
-        stopAPCalled = true;
-        apActive = false;
+        stopAccessPointCalled = true;
+        accessPointActive = false;
         return true;
     }
     
     bool isAccessPointActive() override {
-        isAPActiveCalled = true;
-        return apActive;
+        isAccessPointActiveCalled = true;
+        return accessPointActive;
     }
     
     bool connect(const char* ssid, const char* password, unsigned long timeout = 20000) override {
         connectCalled = true;
-        lastSSID = ssid;
-        lastPassword = password;
-        wifiConnected = true;
+        strncpy(lastSSID, ssid, sizeof(lastSSID));
+        strncpy(lastPassword, password, sizeof(lastPassword));
+        connected = true;
         return true;
     }
     
     bool disconnect() override {
         disconnectCalled = true;
-        wifiConnected = false;
+        connected = false;
         return true;
     }
     
     bool isConnected() override {
         isConnectedCalled = true;
-        return wifiConnected;
+        return connected;
     }
     
-    const char* getLocalIP() override { return "192.168.4.1"; }
-    const char* getMACAddress() override { return "AA:BB:CC:DD:EE:FF"; }
-    int getRSSI() override { return -50; }
+    const char* getLocalIP() override {
+        getLocalIPCalled = true;
+        return localIP;
+    }
+    
+    const char* getMACAddress() override {
+        getMACAddressCalled = true;
+        return macAddress;
+    }
+    
+    int getRSSI() override {
+        return rssi;
+    }
     
     int scanNetworks() override {
-        scanNetworksCalled = true;
-        return 5; // Mock 5 networks found
+        return 0;
     }
     
-    const char* getSSID(int networkIndex) override { return "TestNetwork"; }
-    int getSignalStrength(int networkIndex) override { return -60; }
+    const char* getSSID(int networkIndex) override {
+        return "TestSSID";
+    }
     
-    void setStationMode() override { setStationModeCalled = true; }
-    void setAccessPointMode() override { setAPModeCalled = true; }
-    void setStationAndAccessPointMode() override { setStationAndAPModeCalled = true; }
+    int getSignalStrength(int networkIndex) override {
+        return -65;
+    }
     
-    bool configureAccessPoint(const char* localIP, const char* gateway, const char* subnet) override {
-        configureAPCalled = true;
-        lastLocalIP = localIP;
-        lastGateway = gateway;
-        lastSubnet = subnet;
-        return true;
+    void setStationMode() override {
+        // Not implemented for mock
+    }
+    
+    void setAccessPointMode() override {
+        // Not implemented for mock
+    }
+    
+    void setStationAndAccessPointMode() override {
+        // Not implemented for mock
     }
 };
 

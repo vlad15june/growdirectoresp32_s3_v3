@@ -18,6 +18,9 @@ public:
     virtual ~IModuleSetupService() = default;
 };
 
+// Forward declaration of the test helper class
+class ModuleSetupServiceTestHelper;
+
 class ModuleSetupService : public IModuleSetupService
 {
 private:
@@ -42,6 +45,9 @@ private:
     void setupWebServer();
 
 public:
+    // Declare the test helper as a friend class so it can access private methods
+    friend class ModuleSetupServiceTestHelper;
+
     ModuleSetupService(
         ILogger *logger,
         IDebugSystem *debugSystem,

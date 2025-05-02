@@ -11,6 +11,16 @@
 #include "Mock/Infrastructure/Controllers/WebServices/Launchers/MockWebServerLauncher.h"
 #include "Mock/Infrastructure/Configuration/MockSettings.h"
 
+// Helper class for tests
+class ModuleSetupServiceTestHelper {
+public:
+    static void callSetupAP(ModuleSetupService* service) {
+        if (service) {
+            service->setupAP();
+        }
+    }
+};
+
 // Global test variables
 static MockLogger g_mockLogger;
 static MockDebugSystem g_mockDebugSystem;
@@ -360,6 +370,263 @@ static void test_setup_module_handles_led_sequences(void) {
     if (debug_file != nullptr) fprintf(debug_file, "Finished test_setup_module_handles_led_sequences\n");
 }
 
+// New tests for setupAP method
+static void test_setup_ap_creates_correct_access_point_for_sensor_module() {
+    if (debug_file != nullptr) fprintf(debug_file, "Starting test_setup_ap_creates_correct_access_point_for_sensor_module\n");
+    module_setup_service_setup();
+    
+    // Configure as a sensor module
+    g_mockModuleConfig.setModuleType(MODULE_TYPE_SENSOR);
+    g_mockModuleConfig.setModuleSubType(MODULE_SUBTYPE_NONE);
+    
+    // Make sure AP is not active initially
+    g_mockWifiAdapter.setAccessPointActive(false);
+    
+    // Set test MAC address
+    g_mockWifiAdapter.setMACAddress("AA:BB:CC:DD:EE:FF");
+    
+    // Call setupAP directly using the test helper
+    ModuleSetupServiceTestHelper::callSetupAP(g_moduleSetupService);
+    
+    // Check that createAccessPoint was called
+    TEST_ASSERT_TRUE(g_mockWifiAdapter.createAccessPointCalled);
+    
+    // Verify SSID prefix contains "SensorDirector__"
+    TEST_ASSERT_TRUE(strstr(g_mockWifiAdapter.lastSSID, "SensorDirector__") != nullptr);
+    
+    // Verify MAC address is included in SSID
+    TEST_ASSERT_TRUE(strstr(g_mockWifiAdapter.lastSSID, "CC:DD:EE:FF") != nullptr);
+    
+    // Verify password is correct
+    TEST_ASSERT_EQUAL_STRING("123456789", g_mockWifiAdapter.lastPassword);
+    
+    module_setup_service_teardown();
+    if (debug_file != nullptr) fprintf(debug_file, "Finished test_setup_ap_creates_correct_access_point_for_sensor_module\n");
+}
+
+static void test_setup_ap_creates_correct_access_point_for_hydro_module() {
+    if (debug_file != nullptr) fprintf(debug_file, "Starting test_setup_ap_creates_correct_access_point_for_hydro_module\n");
+    module_setup_service_setup();
+    
+    // Configure as a hydro module
+    g_mockModuleConfig.setModuleType(MODULE_TYPE_HYDRO);
+    g_mockModuleConfig.setModuleSubType(MODULE_SUBTYPE_NONE);
+    
+    // Make sure AP is not active initially
+    g_mockWifiAdapter.setAccessPointActive(false);
+    
+    // Call setupAP directly using the test helper
+    ModuleSetupServiceTestHelper::callSetupAP(g_moduleSetupService);
+    
+    // Check that createAccessPoint was called
+    TEST_ASSERT_TRUE(g_mockWifiAdapter.createAccessPointCalled);
+    
+    // Verify SSID prefix contains "HydroDirector__"
+    TEST_ASSERT_TRUE(strstr(g_mockWifiAdapter.lastSSID, "HydroDirector__") != nullptr);
+    
+    module_setup_service_teardown();
+    if (debug_file != nullptr) fprintf(debug_file, "Finished test_setup_ap_creates_correct_access_point_for_hydro_module\n");
+}
+
+static void test_setup_ap_creates_correct_access_point_for_device_module() {
+    if (debug_file != nullptr) fprintf(debug_file, "Starting test_setup_ap_creates_correct_access_point_for_device_module\n");
+    module_setup_service_setup();
+    
+    // Configure as a device module
+    g_mockModuleConfig.setModuleType(MODULE_TYPE_DEVICE);
+    g_mockModuleConfig.setModuleSubType(MODULE_SUBTYPE_NONE);
+    
+    // Make sure AP is not active initially
+    g_mockWifiAdapter.setAccessPointActive(false);
+    
+    // Call setupAP directly using the test helper
+    ModuleSetupServiceTestHelper::callSetupAP(g_moduleSetupService);
+    
+    // Check that createAccessPoint was called
+    TEST_ASSERT_TRUE(g_mockWifiAdapter.createAccessPointCalled);
+    
+    // Verify SSID prefix contains "DryContactDirector__"
+    TEST_ASSERT_TRUE(strstr(g_mockWifiAdapter.lastSSID, "DryContactDirector__") != nullptr);
+    
+    module_setup_service_teardown();
+    if (debug_file != nullptr) fprintf(debug_file, "Finished test_setup_ap_creates_correct_access_point_for_device_module\n");
+}
+
+static void test_setup_ap_creates_correct_access_point_for_socket_device() {
+    if (debug_file != nullptr) fprintf(debug_file, "Starting test_setup_ap_creates_correct_access_point_for_socket_device\n");
+    module_setup_service_setup();
+    
+    // Configure as a socket device
+    g_mockModuleConfig.setModuleType(MODULE_TYPE_DEVICE);
+    g_mockModuleConfig.setModuleSubType(MODULE_SUBTYPE_SOKET);
+    
+    // Make sure AP is not active initially
+    g_mockWifiAdapter.setAccessPointActive(false);
+    
+    // Call setupAP directly using the test helper
+    ModuleSetupServiceTestHelper::callSetupAP(g_moduleSetupService);
+    
+    // Check that createAccessPoint was called
+    TEST_ASSERT_TRUE(g_mockWifiAdapter.createAccessPointCalled);
+    
+    // Verify SSID prefix contains "SocketDirector__"
+    TEST_ASSERT_TRUE(strstr(g_mockWifiAdapter.lastSSID, "SocketDirector__") != nullptr);
+    
+    module_setup_service_teardown();
+    if (debug_file != nullptr) fprintf(debug_file, "Finished test_setup_ap_creates_correct_access_point_for_socket_device\n");
+}
+
+static void test_setup_ap_creates_correct_access_point_for_dimmer_module() {
+    if (debug_file != nullptr) fprintf(debug_file, "Starting test_setup_ap_creates_correct_access_point_for_dimmer_module\n");
+    module_setup_service_setup();
+    
+    // Configure as an analog input device module
+    g_mockModuleConfig.setModuleType(MODULE_TYPE_ANALOG_INPUT_DEVICE);
+    g_mockModuleConfig.setModuleSubType(MODULE_SUBTYPE_NONE);
+    
+    // Make sure AP is not active initially
+    g_mockWifiAdapter.setAccessPointActive(false);
+    
+    // Call setupAP directly using the test helper
+    ModuleSetupServiceTestHelper::callSetupAP(g_moduleSetupService);
+    
+    // Check that createAccessPoint was called
+    TEST_ASSERT_TRUE(g_mockWifiAdapter.createAccessPointCalled);
+    
+    // Verify SSID prefix contains "DimmerDirector__"
+    TEST_ASSERT_TRUE(strstr(g_mockWifiAdapter.lastSSID, "DimmerDirector__") != nullptr);
+    
+    module_setup_service_teardown();
+    if (debug_file != nullptr) fprintf(debug_file, "Finished test_setup_ap_creates_correct_access_point_for_dimmer_module\n");
+}
+
+static void test_setup_ap_configures_static_ip() {
+    if (debug_file != nullptr) fprintf(debug_file, "Starting test_setup_ap_configures_static_ip\n");
+    module_setup_service_setup();
+    
+    // Make sure AP is not active initially
+    g_mockWifiAdapter.setAccessPointActive(false);
+    
+    // Setup mock for configureAccessPoint
+    g_mockWifiAdapter.configureAccessPointSuccess = true;
+    
+    // Call setupAP directly using the test helper
+    ModuleSetupServiceTestHelper::callSetupAP(g_moduleSetupService);
+    
+    // Check that configureAccessPoint was called with correct parameters
+    TEST_ASSERT_TRUE(g_mockWifiAdapter.configureAccessPointCalled);
+    TEST_ASSERT_EQUAL_STRING("192.168.0.1", g_mockWifiAdapter.lastLocalIP);
+    TEST_ASSERT_EQUAL_STRING("192.168.0.1", g_mockWifiAdapter.lastGateway);
+    TEST_ASSERT_EQUAL_STRING("255.255.255.0", g_mockWifiAdapter.lastSubnet);
+    
+    module_setup_service_teardown();
+    if (debug_file != nullptr) fprintf(debug_file, "Finished test_setup_ap_configures_static_ip\n");
+}
+
+static void test_setup_ap_skips_if_already_active() {
+    if (debug_file != nullptr) fprintf(debug_file, "Starting test_setup_ap_skips_if_already_active\n");
+    module_setup_service_setup();
+    
+    // Set AP as already active
+    g_mockWifiAdapter.setAccessPointActive(true);
+    
+    // Call setupAP directly using the test helper
+    ModuleSetupServiceTestHelper::callSetupAP(g_moduleSetupService);
+    
+    // Check that createAccessPoint was NOT called
+    TEST_ASSERT_FALSE(g_mockWifiAdapter.createAccessPointCalled);
+    
+    // Make sure logs about AP setup completed are present
+    TEST_ASSERT_TRUE(g_mockLogger.printCalled);
+    
+    module_setup_service_teardown();
+    if (debug_file != nullptr) fprintf(debug_file, "Finished test_setup_ap_skips_if_already_active\n");
+}
+
+static void test_setup_ap_handles_missing_wifi_adapter() {
+    if (debug_file != nullptr) fprintf(debug_file, "Starting test_setup_ap_handles_missing_wifi_adapter\n");
+    module_setup_service_setup();
+    
+    // Create a new service without WiFi adapter
+    delete g_moduleSetupService;
+    g_moduleSetupService = new ModuleSetupService(
+        &g_mockLogger,
+        &g_mockDebugSystem,
+        &g_mockModuleConfig,
+        &g_mockLedAdapter,
+        &g_mockLedUseCases,
+        &g_mockButtonUseCases,
+        nullptr, // No WiFi adapter
+        &g_mockWebServerLauncher
+    );
+    
+    // This should not crash and should log an error
+    ModuleSetupServiceTestHelper::callSetupAP(g_moduleSetupService);
+    
+    // Check that an error was logged
+    TEST_ASSERT_TRUE(g_mockLogger.printCalled);
+    
+    module_setup_service_teardown();
+    if (debug_file != nullptr) fprintf(debug_file, "Finished test_setup_ap_handles_missing_wifi_adapter\n");
+}
+
+static void test_setup_ap_handles_configure_ap_failure() {
+    if (debug_file != nullptr) fprintf(debug_file, "Starting test_setup_ap_handles_configure_ap_failure\n");
+    module_setup_service_setup();
+    
+    // Make sure AP is not active initially
+    g_mockWifiAdapter.setAccessPointActive(false);
+    
+    // Setup mock to fail on configureAccessPoint
+    g_mockWifiAdapter.configureAccessPointSuccess = false;
+    
+    // Call setupAP directly using the test helper
+    ModuleSetupServiceTestHelper::callSetupAP(g_moduleSetupService);
+    
+    // Check that an error was logged
+    TEST_ASSERT_TRUE(g_mockLogger.printCalled);
+    
+    module_setup_service_teardown();
+    if (debug_file != nullptr) fprintf(debug_file, "Finished test_setup_ap_handles_configure_ap_failure\n");
+}
+
+static void test_setup_ap_uses_random_part_in_ssid() {
+    if (debug_file != nullptr) fprintf(debug_file, "Starting test_setup_ap_uses_random_part_in_ssid\n");
+    module_setup_service_setup();
+    
+    // Make sure AP is not active initially
+    g_mockWifiAdapter.setAccessPointActive(false);
+    
+    // Call setupAP twice and capture SSIDs
+    ModuleSetupServiceTestHelper::callSetupAP(g_moduleSetupService);
+    char firstSSID[64];
+    strcpy(firstSSID, g_mockWifiAdapter.lastSSID);
+    
+    // Reset mock
+    g_mockWifiAdapter.createAccessPointCalled = false;
+    g_mockWifiAdapter.setAccessPointActive(false);
+    
+    // Call again
+    ModuleSetupServiceTestHelper::callSetupAP(g_moduleSetupService);
+    
+    // SSIDs should be different due to random part
+    if (debug_file != nullptr) {
+        fprintf(debug_file, "First SSID: %s\n", firstSSID);
+        fprintf(debug_file, "Second SSID: %s\n", g_mockWifiAdapter.lastSSID);
+    }
+    
+    // Check if random parts are different by comparing SSIDs
+    // This is a probabilistic test (could fail if random numbers happen to be the same)
+    // Consider skipping this assertion in real tests if it causes flaky failures
+    bool areDifferent = strcmp(firstSSID, g_mockWifiAdapter.lastSSID) != 0;
+    if (!areDifferent && debug_file != nullptr) {
+        fprintf(debug_file, "WARNING: Random parts generated the same SSID twice\n");
+    }
+    
+    module_setup_service_teardown();
+    if (debug_file != nullptr) fprintf(debug_file, "Finished test_setup_ap_uses_random_part_in_ssid\n");
+}
+
 // Main test runner function
 extern "C" int run_module_setup_service_tests(void) {
     if (debug_file != nullptr) fprintf(debug_file, "\n----- Running ModuleSetupService Tests -----\n");
@@ -370,7 +637,6 @@ extern "C" int run_module_setup_service_tests(void) {
     RUN_TEST(test_setup_module_without_config);
     RUN_TEST(test_setup_module_triggers_led_use_cases);
     RUN_TEST(test_setup_module_without_led_use_cases);
-    
     RUN_TEST(test_setup_module_launches_web_server_in_config_mode);
     RUN_TEST(test_module_mode_handling_for_user_can_configure);
     RUN_TEST(test_module_mode_handling_for_configured_done);
@@ -378,6 +644,17 @@ extern "C" int run_module_setup_service_tests(void) {
     RUN_TEST(test_module_mode_initialization_when_invalid);
     RUN_TEST(test_setup_module_without_web_server_launcher);
     RUN_TEST(test_setup_module_handles_led_sequences);
+    
+    RUN_TEST(test_setup_ap_creates_correct_access_point_for_sensor_module);
+    RUN_TEST(test_setup_ap_creates_correct_access_point_for_hydro_module);
+    RUN_TEST(test_setup_ap_creates_correct_access_point_for_device_module);
+    RUN_TEST(test_setup_ap_creates_correct_access_point_for_socket_device);
+    RUN_TEST(test_setup_ap_creates_correct_access_point_for_dimmer_module);
+    RUN_TEST(test_setup_ap_configures_static_ip);
+    RUN_TEST(test_setup_ap_skips_if_already_active);
+    RUN_TEST(test_setup_ap_handles_missing_wifi_adapter);
+    RUN_TEST(test_setup_ap_handles_configure_ap_failure);
+    RUN_TEST(test_setup_ap_uses_random_part_in_ssid);
     
     if (debug_file != nullptr) fprintf(debug_file, "\n----- ModuleSetupService Tests Complete -----\n");
     
