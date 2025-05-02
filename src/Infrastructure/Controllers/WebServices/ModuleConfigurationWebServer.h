@@ -342,11 +342,14 @@ public:
             server.sendHeader("Connection", "close");
             server.send(200); });
 
-        log("SETUP: setupWebServer begin");
-
+        log("SETUP: setupWebServer all endpoints configured");
+    }
+    
+    void launchServer() 
+    {
+        log("LAUNCH: Starting web server");
         server.begin();
-
-        log("SETUP: setupWebServer all ok");
+        log("LAUNCH: Web server started successfully");
     }
 };
 
