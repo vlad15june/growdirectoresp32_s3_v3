@@ -7,32 +7,38 @@ class MockLedUseCases : public ILedUseCases {
 public:
     bool onLoadCalled = false;
     bool offLoadCalled = false;
-    bool blinkGreen2TimesCalled = false;
-    bool blinkYellow2TimesCalled = false;
-    
+    bool blinkGreenCalled = false;
+    bool blinkYellowCalled = false;
+    int blinkGreenCount = 0;
+    int blinkYellowCount = 0;
+
     // Reset all state for fresh test
     void reset() {
         onLoadCalled = false;
         offLoadCalled = false;
-        blinkGreen2TimesCalled = false;
-        blinkYellow2TimesCalled = false;
+        blinkGreenCalled = false;
+        blinkYellowCalled = false;
+        blinkGreenCount = 0;
+        blinkYellowCount = 0;
     }
-    
+
     // Implementations of the interface methods
     void ledOnLoad() override {
         onLoadCalled = true;
     }
-    
+
     void ledOffLoad() override {
         offLoadCalled = true;
     }
-    
+
     void ledBlinkGreen2Times() override {
-        blinkGreen2TimesCalled = true;
+        blinkGreenCalled = true;
+        blinkGreenCount++;
     }
-    
+
     void ledBlinkYellow2Times() override {
-        blinkYellow2TimesCalled = true;
+        blinkYellowCalled = true;
+        blinkYellowCount++;
     }
 };
 

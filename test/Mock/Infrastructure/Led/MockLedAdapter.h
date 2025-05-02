@@ -22,7 +22,14 @@ public:
     bool setAllYellowLedOffCalled = false;
     bool setYellowLedOnCalled = false;
     bool setYellowLedOffCalled = false;
-    
+
+    int greenLedOnCount = 0;
+    int greenLedOffCount = 0;
+    int redLedOnCount = 0;
+    int redLedOffCount = 0;
+    int allYellowLedOnCount = 0;
+    int allYellowLedOffCount = 0;
+
     uint8_t lastSetupPin = 0;
     uint8_t lastSetupMode = 0;
     uint8_t lastOnPin = 0;
@@ -31,7 +38,7 @@ public:
     uint8_t lastGreenLedIndex = 0;
     uint8_t lastRedLedIndex = 0;
     uint8_t lastYellowLedIndex = 0;
-    
+
     uint8_t greenLeds[4] = {0};
     uint8_t redLeds[4] = {0};
     uint8_t ledsCount = 0;
@@ -42,102 +49,108 @@ public:
         lastSetupPin = pin;
         lastSetupMode = mode;
     }
-    
+
     void setLedOn(uint8_t pin) override {
         setLedOnCalled = true;
         lastOnPin = pin;
     }
-    
+
     void setLedOff(uint8_t pin) override {
         setLedOffCalled = true;
         lastOffPin = pin;
     }
-    
+
     void toggleLed(uint8_t pin) override {
         toggleLedCalled = true;
         lastTogglePin = pin;
     }
-    
+
     // Module specific LED setup
     void setupModuleLeds(const uint8_t* greenLedPins, const uint8_t* redLedPins, uint8_t count) override {
         setupModuleLedsCalled = true;
         ledsCount = count;
-        
+
         // Store the LED pin configurations
         if (greenLedPins != nullptr) {
             for (int i = 0; i < count && i < 4; i++) {
                 greenLeds[i] = greenLedPins[i];
             }
         }
-        
+
         if (redLedPins != nullptr) {
             for (int i = 0; i < count && i < 4; i++) {
                 redLeds[i] = redLedPins[i];
             }
         }
     }
-    
+
     // Get the current LED pin based on module type/subtype
     uint8_t getGreenLedPin(uint8_t index) override {
         return (index < ledsCount) ? greenLeds[index] : 0;
     }
-    
+
     uint8_t getRedLedPin(uint8_t index) override {
         return (index < ledsCount) ? redLeds[index] : 0;
     }
-    
+
     // Green LED control
     void setAllGreenLedOn() override {
         setAllGreenLedOnCalled = true;
     }
-    
+
     void setAllGreenLedOff() override {
         setAllGreenLedOffCalled = true;
     }
-    
+
     void setGreenLedOn(uint8_t index) override {
         setGreenLedOnCalled = true;
         lastGreenLedIndex = index;
+        greenLedOnCount++;
     }
-    
+
     void setGreenLedOff(uint8_t index) override {
         setGreenLedOffCalled = true;
         lastGreenLedIndex = index;
+        greenLedOffCount++;
     }
-    
+
     // Red LED control
     void setAllRedLedOn() override {
         setAllRedLedOnCalled = true;
     }
-    
+
     void setAllRedLedOff() override {
         setAllRedLedOffCalled = true;
     }
-    
+
     void setRedLedOn(uint8_t index) override {
         setRedLedOnCalled = true;
         lastRedLedIndex = index;
+        redLedOnCount++;
     }
-    
+
     void setRedLedOff(uint8_t index) override {
         setRedLedOffCalled = true;
         lastRedLedIndex = index;
+        redLedOffCount++;
     }
-    
+
     // Yellow LED control (Red + Green together)
     void setAllYellowLedOn() override {
         setAllYellowLedOnCalled = true;
+        allYellowLedOnCount++;
     }
-    
+
     void setAllYellowLedOff() override {
         setAllYellowLedOffCalled = true;
+        allYellowLedOffCount++;
     }
-    
+
     void setYellowLedOn(uint8_t index) override {
         setYellowLedOnCalled = true;
         lastYellowLedIndex = index;
     }
-    
+
     void setYellowLedOff(uint8_t index) override {
         setYellowLedOffCalled = true;
         lastYellowLedIndex = index;
@@ -161,7 +174,14 @@ public:
         setAllYellowLedOffCalled = false;
         setYellowLedOnCalled = false;
         setYellowLedOffCalled = false;
-        
+
+        greenLedOnCount = 0;
+        greenLedOffCount = 0;
+        redLedOnCount = 0;
+        redLedOffCount = 0;
+        allYellowLedOnCount = 0;
+        allYellowLedOffCount = 0;
+
         lastSetupPin = 0;
         lastSetupMode = 0;
         lastOnPin = 0;
@@ -170,7 +190,7 @@ public:
         lastGreenLedIndex = 0;
         lastRedLedIndex = 0;
         lastYellowLedIndex = 0;
-        
+
         ledsCount = 0;
         memset(greenLeds, 0, sizeof(greenLeds));
         memset(redLeds, 0, sizeof(redLeds));

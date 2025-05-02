@@ -1,20 +1,19 @@
 #include "LedUseCases.h"
-#include "esp_timer.h" // For esp_timer functions
 
 // Constructor
-LedUseCases::LedUseCases(ILedAdapter* adapter, IModuleConfig* moduleConfig, IArduinoAdapter* arduinoAdapter,
-                        ILogger* loggerInstance, IDebugSystem* debugSystemInstance, uint8_t index)
+LedUseCases::LedUseCases(ILedAdapter *adapter, IModuleConfig *moduleConfig, IArduinoAdapter *arduinoAdapter,
+                         ILogger *loggerInstance, IDebugSystem *debugSystemInstance)
     : ledAdapter(adapter),
       moduleConfig(moduleConfig),
       arduinoAdapter(arduinoAdapter),
       logger(loggerInstance),
-      debugSystem(debugSystemInstance),
-      buttonIndex(index) {
-    log("LedUseCases initialized for button index %d", buttonIndex);
+      debugSystem(debugSystemInstance)
+{
 }
 
 // Destructor
-LedUseCases::~LedUseCases() {
+LedUseCases::~LedUseCases()
+{
     // No dynamic memory to clean up
     log("LedUseCases destroyed");
 }
@@ -34,19 +33,22 @@ void LedUseCases::log(const char *format, ...)
 }
 
 // Turn LEDs on during module load
-void LedUseCases::ledOnLoad() {
+void LedUseCases::ledOnLoad()
+{
     log("Setting all yellow LEDs on during module load");
-    ledAdapter->setAllYellowLedOn();    
+    ledAdapter->setAllYellowLedOn();
 }
 
 // Turn LEDs off during module unload
-void LedUseCases::ledOffLoad() {
+void LedUseCases::ledOffLoad()
+{
     log("Setting all yellow LEDs off during module unload");
     ledAdapter->setAllYellowLedOff();
 }
 
 // Blink green LED twice
-void LedUseCases::ledBlinkGreen2Times() {
+void LedUseCases::ledBlinkGreen2Times()
+{
     log("Blinking green LED 2 times");
     ledAdapter->setGreenLedOn(0);
     arduinoAdapter->delay(500);
@@ -59,7 +61,8 @@ void LedUseCases::ledBlinkGreen2Times() {
 }
 
 // Blink yellow LED (red+green together) twice
-void LedUseCases::ledBlinkYellow2Times() {
+void LedUseCases::ledBlinkYellow2Times()
+{
     log("Blinking yellow LED 2 times");
     ledAdapter->setAllYellowLedOn();
     arduinoAdapter->delay(500);

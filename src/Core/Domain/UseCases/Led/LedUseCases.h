@@ -18,14 +18,13 @@ private:
     IArduinoAdapter* arduinoAdapter;
     ILogger* logger;
     IDebugSystem* debugSystem;
-    const uint8_t buttonIndex;
 
     void log(const char* format, ...);
 
 public:
     // Constructor
     LedUseCases(ILedAdapter* adapter, IModuleConfig* moduleConfig, IArduinoAdapter* arduinoAdapter,
-                ILogger* loggerInstance = nullptr, IDebugSystem* debugSystemInstance = nullptr, uint8_t index = 0);
+                ILogger* loggerInstance = nullptr, IDebugSystem* debugSystemInstance = nullptr);
     
     // Destructor
     ~LedUseCases() override;
