@@ -13,6 +13,7 @@
 #include "Core/Domain/Interfaces/Adapters/ILedAdapter.h"
 #include "Core/Domain/Interfaces/Adapters/IButtonAdapter.h"
 #include "Core/Domain/UseCases/Led/LedUseCases.h"
+#include "Core/Domain/UseCases/Buttons/ButtonUseCases.h"
 
 #include "Infrastructure/Adapters/eepromAdapter.h"
 #include "Infrastructure/Logging/MqttLogger.h"
@@ -65,7 +66,9 @@ ModuleConfig moduleConfig(&mqttLogger, &debugSystem, &settings, &ntpTimeAdapter)
 
 LedUseCases ledUseCases(&ledAdapter, &moduleConfig, &arduinoAdapter, &mqttLogger, &debugSystem);
 
-ModuleSetupService moduleSetupService(&mqttLogger, &debugSystem, &moduleConfig, &ledAdapter, &ledUseCases);
+ButtonUseCases buttonUseCases(&buttonAdapter, &mqttLogger, &debugSystem, 0);
+
+ModuleSetupService moduleSetupService(&mqttLogger, &debugSystem, &moduleConfig, &ledAdapter, &ledUseCases, &buttonUseCases);
 
 IPAddress myIP;
 

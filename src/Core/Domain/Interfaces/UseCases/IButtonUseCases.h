@@ -10,6 +10,7 @@ public:
     virtual ~IButtonUseCases() = default;
     
     // Button behavior use cases
+    virtual bool checkButtonPressedWhenOn() = 0;
     virtual bool isButtonPressedWhenOn() = 0;
     virtual bool isButtonHeldForDuration() = 0;
 };

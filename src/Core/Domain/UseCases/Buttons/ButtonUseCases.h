@@ -41,13 +41,18 @@ public:
     
     // Check if button is pressed and store the state
     // This method will be called only on system start
-    bool isButtonPressedWhenOn() override {
+    bool checkButtonPressedWhenOn() override {
         bool pressed = buttonAdapter->isButtonPressed(buttonIndex);
         if (pressed) {
             buttonPressedState = true;
             log("Button %d is pressed when system is on", buttonIndex);
         }
         log("Button %d pressed state: %s", buttonIndex, buttonPressedState ? "true" : "false");
+        return buttonPressedState;
+    }
+    
+    // Check if button is currently pressed (returns current state)
+    bool isButtonPressedWhenOn() override {
         return buttonPressedState;
     }
     
