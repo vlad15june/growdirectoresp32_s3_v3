@@ -5,6 +5,8 @@
 #include <WiFiClient.h>
 #include <WiFi.h>
 #include <PubSubClient.h>
+#include <WebServer.h>
+#include <WiFiMulti.h>
 
 #include "Core/Domain/Interfaces/ILogger.h"
 #include "Core/Domain/Interfaces/IModuleConfig.h"
@@ -24,6 +26,7 @@
 #include "Infrastructure/Adapters/Led/LedAdapter.h"
 #include "Infrastructure/Adapters/ArduinoAdapter.h"
 #include "Infrastructure/Adapters/Button/ButtonAdapter.h"
+#include "Infrastructure/Controllers/WebServices/ModuleConfigurationWebServer.h"
 #include "Application/Services/ModuleSetupService.h"
 
 const char *mqttUser = "GrowDirectorMqtt";
@@ -69,6 +72,19 @@ LedUseCases ledUseCases(&ledAdapter, &moduleConfig, &arduinoAdapter, &mqttLogger
 ButtonUseCases buttonUseCases(&buttonAdapter, &mqttLogger, &debugSystem, 0);
 
 ModuleSetupService moduleSetupService(&mqttLogger, &debugSystem, &moduleConfig, &ledAdapter, &ledUseCases, &buttonUseCases);
+
+// Create WebServer and WiFiMulti instances for web configuration
+WebServer webServer(80);
+WiFiMulti wifiMulti;
+
+// Create ModuleConfigurationWebServer instance
+ModuleConfigurationWebServer moduleConfigurationWebServer(
+    webServer, 
+    wifiMulti,
+    &mqttLogger, 
+    &debugSystem, 
+    &settings
+);
 
 IPAddress myIP;
 

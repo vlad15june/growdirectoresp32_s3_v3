@@ -1,3 +1,6 @@
+#ifndef MODULE_MODE_ENUM_H
+#define MODULE_MODE_ENUM_H
+
 enum ModuleModeEnum {
     USER_CAN_CONFIGURE = 42,
     USER_CAN_RE_CONFIGURE = 142,
@@ -5,3 +8,5 @@ enum ModuleModeEnum {
     CONFIGURED_DONE = 106,
     CONFIGURED_NEED_RESTART = 111
 };
+
+#endif // MODULE_MODE_ENUM_H
