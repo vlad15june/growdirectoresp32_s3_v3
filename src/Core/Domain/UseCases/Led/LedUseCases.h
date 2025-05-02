@@ -3,7 +3,7 @@
 
 #include "Core/Domain/Interfaces/Adapters/ILedAdapter.h"
 #include "Core/Domain/Interfaces/IModuleConfig.h"
-#include "Core/Domain/Interfaces/ILedUseCases.h"
+#include "Core/Domain/Interfaces/UseCases/ILedUseCases.h"
 #include "Core/Domain/Interfaces/Adapters/IArduinoAdapter.h"
 #include <memory>
 

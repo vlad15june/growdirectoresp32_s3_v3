@@ -1,7 +1,7 @@
 #ifndef MOCK_LED_USE_CASES_H
 #define MOCK_LED_USE_CASES_H
 
-#include "Core/Domain/Interfaces/ILedUseCases.h"
+#include "Core/Domain/Interfaces/UseCases/ILedUseCases.h"
 
 class MockLedUseCases : public ILedUseCases {
 public:
