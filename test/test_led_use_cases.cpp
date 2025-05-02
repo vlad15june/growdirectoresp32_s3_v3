@@ -1,5 +1,6 @@
 #include <unity.h>
 #include "Core/Domain/UseCases/Led/LedUseCases.h"
+#include "Core/Domain/UseCases/Led/LedUseCases.cpp"
 #include "Mock/Infrastructure/Logging/MockLogger.h"
 #include "Mock/Infrastructure/Logging/MockDebugSystem.h"
 #include "Mock/Infrastructure/Led/MockLedAdapter.h"
@@ -57,63 +58,63 @@ static void led_use_cases_teardown(void)
     }
 }
 
-// // Test functions
-// static void test_led_on_load(void) {
-//     if (debug_file != nullptr) fprintf(debug_file, "Starting test_led_on_load\n");
-//     led_use_cases_setup();
+// Test functions
+static void test_led_on_load(void) {
+    if (debug_file != nullptr) fprintf(debug_file, "Starting test_led_on_load\n");
+    led_use_cases_setup();
 
-//     if (debug_file != nullptr) fprintf(debug_file, "Calling ledOnLoad()\n");
-//     g_ledUseCases->ledOnLoad();
+    if (debug_file != nullptr) fprintf(debug_file, "Calling ledOnLoad()\n");
+    g_ledUseCases->ledOnLoad();
 
-//     if (debug_file != nullptr) fprintf(debug_file, "Checking if setAllYellowLedOn was called: %s\n",
-//                                 g_mockLedAdapter.setAllYellowLedOnCalled ? "Yes" : "No");
-//     TEST_ASSERT_TRUE(g_mockLedAdapter.setAllYellowLedOnCalled);
+    if (debug_file != nullptr) fprintf(debug_file, "Checking if setAllYellowLedOn was called: %s\n",
+                                g_mockLedAdapter.setAllYellowLedOnCalled ? "Yes" : "No");
+    TEST_ASSERT_TRUE(g_mockLedAdapter.setAllYellowLedOnCalled);
 
-//     led_use_cases_teardown();
-//     if (debug_file != nullptr) fprintf(debug_file, "Finished test_led_on_load\n");
-// }
+    led_use_cases_teardown();
+    if (debug_file != nullptr) fprintf(debug_file, "Finished test_led_on_load\n");
+}
 
-// static void test_led_off_load(void) {
-//     if (debug_file != nullptr) fprintf(debug_file, "Starting test_led_off_load\n");
-//     led_use_cases_setup();
+static void test_led_off_load(void) {
+    if (debug_file != nullptr) fprintf(debug_file, "Starting test_led_off_load\n");
+    led_use_cases_setup();
 
-//     if (debug_file != nullptr) fprintf(debug_file, "Calling ledOffLoad()\n");
-//     g_ledUseCases->ledOffLoad();
+    if (debug_file != nullptr) fprintf(debug_file, "Calling ledOffLoad()\n");
+    g_ledUseCases->ledOffLoad();
 
-//     if (debug_file != nullptr) fprintf(debug_file, "Checking if setAllYellowLedOff was called: %s\n",
-//                                 g_mockLedAdapter.setAllYellowLedOffCalled ? "Yes" : "No");
-//     TEST_ASSERT_TRUE(g_mockLedAdapter.setAllYellowLedOffCalled);
+    if (debug_file != nullptr) fprintf(debug_file, "Checking if setAllYellowLedOff was called: %s\n",
+                                g_mockLedAdapter.setAllYellowLedOffCalled ? "Yes" : "No");
+    TEST_ASSERT_TRUE(g_mockLedAdapter.setAllYellowLedOffCalled);
 
-//     led_use_cases_teardown();
-//     if (debug_file != nullptr) fprintf(debug_file, "Finished test_led_off_load\n");
-// }
+    led_use_cases_teardown();
+    if (debug_file != nullptr) fprintf(debug_file, "Finished test_led_off_load\n");
+}
 
-// static void test_null_dependencies_handle_gracefully(void) {
-//     if (debug_file != nullptr) fprintf(debug_file, "Starting test_null_dependencies_handle_gracefully\n");
-//     led_use_cases_setup();
+static void test_null_dependencies_handle_gracefully(void) {
+    if (debug_file != nullptr) fprintf(debug_file, "Starting test_null_dependencies_handle_gracefully\n");
+    led_use_cases_setup();
 
-//     // Create a new use case with null logger and debug system
-//     delete g_ledUseCases;
-//     g_ledUseCases = new LedUseCases(
-//         &g_mockLedAdapter,
-//         &g_mockModuleConfig,
-//         &g_mockArduinoAdapter,
-//         nullptr,
-//         nullptr
-//     );
+    // Create a new use case with null logger and debug system
+    delete g_ledUseCases;
+    g_ledUseCases = new LedUseCases(
+        &g_mockLedAdapter,
+        &g_mockModuleConfig,
+        &g_mockArduinoAdapter,
+        nullptr,
+        nullptr
+    );
 
-//     // This should not crash
-//     if (debug_file != nullptr) fprintf(debug_file, "Calling ledOnLoad() with null logger/debugSystem\n");
-//     g_ledUseCases->ledOnLoad();
+    // This should not crash
+    if (debug_file != nullptr) fprintf(debug_file, "Calling ledOnLoad() with null logger/debugSystem\n");
+    g_ledUseCases->ledOnLoad();
 
-//     // Verify LED adapter was still called
-//     if (debug_file != nullptr) fprintf(debug_file, "Checking if setAllYellowLedOn was called: %s\n",
-//                                 g_mockLedAdapter.setAllYellowLedOnCalled ? "Yes" : "No");
-//     TEST_ASSERT_TRUE(g_mockLedAdapter.setAllYellowLedOnCalled);
+    // Verify LED adapter was still called
+    if (debug_file != nullptr) fprintf(debug_file, "Checking if setAllYellowLedOn was called: %s\n",
+                                g_mockLedAdapter.setAllYellowLedOnCalled ? "Yes" : "No");
+    TEST_ASSERT_TRUE(g_mockLedAdapter.setAllYellowLedOnCalled);
 
-//     led_use_cases_teardown();
-//     if (debug_file != nullptr) fprintf(debug_file, "Finished test_null_dependencies_handle_gracefully\n");
-// }
+    led_use_cases_teardown();
+    if (debug_file != nullptr) fprintf(debug_file, "Finished test_null_dependencies_handle_gracefully\n");
+}
 
 // Main test runner function
 extern "C" int run_led_use_cases_tests(void)
@@ -121,9 +122,9 @@ extern "C" int run_led_use_cases_tests(void)
     if (debug_file != nullptr)
         fprintf(debug_file, "\n----- Running LedUseCases Tests -----\n");
 
-    // RUN_TEST(test_led_on_load);
-    // RUN_TEST(test_led_off_load);
-    // RUN_TEST(test_null_dependencies_handle_gracefully);
+    RUN_TEST(test_led_on_load);
+    RUN_TEST(test_led_off_load);
+    RUN_TEST(test_null_dependencies_handle_gracefully);
 
     if (debug_file != nullptr)
         fprintf(debug_file, "\n----- LedUseCases Tests Complete -----\n");
