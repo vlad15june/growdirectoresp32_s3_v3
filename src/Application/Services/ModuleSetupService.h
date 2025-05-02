@@ -154,7 +154,7 @@ inline void ModuleSetupService::handleModuleMode()
         settings->setConfigured(ModuleModeEnum::USER_CAN_CONFIGURE);
 
         // isConfigured = ModuleModeEnum::CONFIGURED_NEED_RESTART; //NOTE need create in ModuleConfig currentModuleMode
-        
+
         log("SETUP: Updated configuration status to USER_CAN_CONFIGURE, needs restart");
     }
 
@@ -206,7 +206,106 @@ inline void ModuleSetupService::clearStoreRules()
 
 inline void ModuleSetupService::setupAP()
 {
-    // Empty implementation
+    if (!wifiAdapter)
+    {
+        log("SETUP: Error - WiFi adapter is missing");
+        return;
+    }
+
+    if (wifiAdapter->isAccessPointActive() == false)
+    {
+        // Get module type and subtype from the configuration
+        int moduleType = moduleConfig->getModuleType();
+        int moduleSubType = moduleConfig->getModuleSubType();
+
+        // Connect to Wi-Fi
+        const char *wifiPrefix = "GrowDirector__";
+        if (moduleType == MODULE_TYPE_SENSOR)
+        {
+            wifiPrefix = "SensorDirector__";
+        }
+        if (moduleType == MODULE_TYPE_HYDRO)
+        {
+            wifiPrefix = "HydroDirector__";
+        }
+        if (moduleType == MODULE_TYPE_DEVICE)
+        {
+            wifiPrefix = "DryContactDirector__";
+            if (moduleSubType == MODULE_SUBTYPE_SOKET)
+            {
+                wifiPrefix = "SocketDirector__";
+            }
+        }
+        if (moduleType == MODULE_TYPE_ANALOG_INPUT_DEVICE)
+        {
+            wifiPrefix = "DimmerDirector__";
+        }
+
+        const char *macAddress = wifiAdapter->getMACAddress();
+
+        // Generate random part
+        char randomPart[10];
+        int randomNum = (int)(std::rand() % 1000);
+        snprintf(randomPart, sizeof(randomPart), "_%d", randomNum);
+
+        // Calculate the total SSID
+        char ssid_ap_test[33]; // Max 32 chars + null terminator
+        size_t prefixLen = strlen(wifiPrefix);
+        size_t macLen = strlen(macAddress);
+        size_t randomLen = strlen(randomPart);
+
+        // Ensure the SSID fits in 32 characters
+        size_t maxMacLen = 32 - prefixLen - randomLen;
+
+        // Copy prefix to SSID
+        strcpy(ssid_ap_test, wifiPrefix);
+
+        // If macAddress is too long, truncate from the start
+        if (macLen > maxMacLen)
+        {
+            strcat(ssid_ap_test, macAddress + (macLen - maxMacLen));
+        }
+        else
+        {
+            strcat(ssid_ap_test, macAddress);
+        }
+
+        // Add random part
+        strcat(ssid_ap_test, randomPart);
+
+        log("SETUP: WiFi Name: %s", ssid_ap_test);
+
+        const char *pswrd = "123456789";
+        wifiAdapter->createAccessPoint(ssid_ap_test, pswrd, 1, false, 4);
+        log("SETUP: WiFi Password: %s", pswrd);
+
+        // WiFi.onEvent(WiFiStationApStart, WiFiEvent_t::ARDUINO_EVENT_WIFI_AP_START);
+        // WiFi.onEvent(WiFiStationApStop, WiFiEvent_t::ARDUINO_EVENT_WIFI_AP_STOP);
+        // WiFi.onEvent(WiFiStationConnected, WiFiEvent_t::ARDUINO_EVENT_WIFI_AP_STACONNECTED);
+        // WiFi.onEvent(WiFiStationDisconnected, WiFiEvent_t::ARDUINO_EVENT_WIFI_AP_STADISCONNECTED);
+        // WiFi.onEvent(WiFiStationIpAssign, WiFiEvent_t::ARDUINO_EVENT_WIFI_AP_STAIPASSIGNED);
+        // WiFi.onEvent(WiFiStationProbeRequest, WiFiEvent_t::ARDUINO_EVENT_WIFI_AP_PROBEREQRECVED);
+
+        const char *IP = wifiAdapter->getLocalIP();
+        log("SETUP: Initial AP IP address: %s", IP);
+
+        // Set static IP using char* instead of IPAddress
+        const char *AP_LOCAL_IP = "192.168.0.1";
+        const char *AP_GATEWAY_IP = "192.168.0.1";
+        const char *AP_NETWORK_MASK = "255.255.255.0";
+
+        if (wifiAdapter->configureAccessPoint(AP_LOCAL_IP, AP_GATEWAY_IP, AP_NETWORK_MASK) == false)
+        {
+            log("SETUP: AP Config Failed");
+            return;
+        }
+
+        // Show the local IP
+        const char *staticIP = wifiAdapter->getLocalIP();
+        log("SETUP: Final AP IP address: %s", staticIP);
+    }
+
+    log("SETUP: Access Point setup completed");
 }
 
 inline void ModuleSetupService::setupWebServer()

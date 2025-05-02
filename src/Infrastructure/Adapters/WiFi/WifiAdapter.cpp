@@ -25,6 +25,18 @@ bool WifiAdapter::createAccessPoint(const char* ssid, const char* password, int 
     return apActive;
 }
 
+bool WifiAdapter::configureAccessPoint(const char* localIP, const char* gateway, const char* subnet) {
+    IPAddress local_IP;
+    IPAddress gateway_IP;
+    IPAddress subnet_mask;
+    
+    if (!local_IP.fromString(localIP) || !gateway_IP.fromString(gateway) || !subnet_mask.fromString(subnet)) {
+        return false;
+    }
+    
+    return WiFi.softAPConfig(local_IP, gateway_IP, subnet_mask);
+}
+
 bool WifiAdapter::stopAccessPoint() {
     bool result = WiFi.softAPdisconnect(true);
     

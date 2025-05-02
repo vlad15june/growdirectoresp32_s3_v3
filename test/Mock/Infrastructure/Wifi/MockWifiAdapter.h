@@ -6,6 +6,7 @@
 class MockWifiAdapter : public IWifiAdapter {
 public:
     bool createAPCalled = false;
+    bool configureAPCalled = false;
     bool stopAPCalled = false;
     bool isAPActiveCalled = false;
     bool connectCalled = false;
@@ -18,6 +19,9 @@ public:
     
     const char* lastSSID = nullptr;
     const char* lastPassword = nullptr;
+    const char* lastLocalIP = nullptr;
+    const char* lastGateway = nullptr;
+    const char* lastSubnet = nullptr;
     int lastChannel = 0;
     bool lastHidden = false;
     int lastMaxConnections = 0;
@@ -26,6 +30,7 @@ public:
     
     void reset() {
         createAPCalled = false;
+        configureAPCalled = false;
         stopAPCalled = false;
         isAPActiveCalled = false;
         connectCalled = false;
@@ -38,6 +43,9 @@ public:
         
         lastSSID = nullptr;
         lastPassword = nullptr;
+        lastLocalIP = nullptr;
+        lastGateway = nullptr;
+        lastSubnet = nullptr;
         lastChannel = 0;
         lastHidden = false;
         lastMaxConnections = 0;
@@ -101,6 +109,14 @@ public:
     void setStationMode() override { setStationModeCalled = true; }
     void setAccessPointMode() override { setAPModeCalled = true; }
     void setStationAndAccessPointMode() override { setStationAndAPModeCalled = true; }
+    
+    bool configureAccessPoint(const char* localIP, const char* gateway, const char* subnet) override {
+        configureAPCalled = true;
+        lastLocalIP = localIP;
+        lastGateway = gateway;
+        lastSubnet = subnet;
+        return true;
+    }
 };
 
 #endif // MOCK_WIFI_ADAPTER_H

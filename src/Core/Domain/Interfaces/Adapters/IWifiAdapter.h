@@ -7,6 +7,7 @@ public:
 
     // Access Point (AP) functionality
     virtual bool createAccessPoint(const char* ssid, const char* password, int channel = 1, bool hidden = false, int maxConnections = 4) = 0;
+    virtual bool configureAccessPoint(const char* localIP, const char* gateway, const char* subnet) = 0;
     virtual bool stopAccessPoint() = 0;
     virtual bool isAccessPointActive() = 0;
     

@@ -12,6 +12,7 @@ public:
 
     // Access Point (AP) functionality
     bool createAccessPoint(const char* ssid, const char* password, int channel = 1, bool hidden = false, int maxConnections = 4) override;
+    bool configureAccessPoint(const char* localIP, const char* gateway, const char* subnet) override;
     bool stopAccessPoint() override;
     bool isAccessPointActive() override;
     
