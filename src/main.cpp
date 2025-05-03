@@ -18,18 +18,18 @@ void setup()
   // settings.setConfigured(ModuleModeEnum::USER_CAN_CONFIGURE);
 
   moduleSetupService.setupModule();
+  // will create loop service according to module mode and module type
+  // loopService = moduleSetupService.getLoopService();
 }
 
 void loop()
 {
-  // pinMode(15, OUTPUT);
-  // digitalWrite(15, HIGH);
 
-  // Serial.printf("loop\n");
-  // delay(1000);
 
-  ledUseCases.loop(); //need ledService.loop(), service put in use case device state and other things
-  // buttonUseCases.loop(); //need buttonService.loop(), service put in use case device state and other things
+  //will be one service for execute loop
+  // loopService.loop();
+  ledUseCases.loop(); //need loopService.loop(), service put in use case device state and other things
+  // buttonUseCases.loop(); //need loopService.loop(), service put in use case device state and other things
 
-  webServer.handleClient();
+  moduleConfigurationWebServer.loop();
 }

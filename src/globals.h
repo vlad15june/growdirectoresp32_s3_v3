@@ -30,6 +30,8 @@
 #include "Infrastructure/Controllers/WebServices/ModuleConfigurationWebServer.h"
 #include "Infrastructure/Controllers/WebServices/Launchers/WebServerLauncher.h"
 #include "Application/Services/ModuleSetupService.h"
+#include "Application/Interfaces/LoopServices/ILoopServiceFactory.h"
+#include "Application/Services/LoopServices/LoopServiceFactory.h"
 
 const char *mqttUser = "GrowDirectorMqtt";
 const char *mqttPassword = "lasdfh329483457sfdjhs92_w";
@@ -72,6 +74,9 @@ WifiAdapter wifiAdapter(wifiMulti);
 NTPTimeAdapter ntpTimeAdapter(&mqttLogger, &debugSystem, &settings);
 
 ModuleConfig moduleConfig(&mqttLogger, &debugSystem, &settings, &ntpTimeAdapter);
+
+// Create LoopServiceFactory instance
+LoopServiceFactory loopServiceFactory;
 
 ModuleConfigurationWebServer moduleConfigurationWebServer(
     webServer, 

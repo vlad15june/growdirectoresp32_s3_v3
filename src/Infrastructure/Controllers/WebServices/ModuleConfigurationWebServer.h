@@ -411,6 +411,11 @@ public:
         server.begin();
         log("LAUNCH: Web server started successfully");
     }
+    
+    void loop()
+    {
+        server.handleClient();
+    }
 };
 
 #endif // MODULE_CONFIGURATION_WEB_SERVER_H
