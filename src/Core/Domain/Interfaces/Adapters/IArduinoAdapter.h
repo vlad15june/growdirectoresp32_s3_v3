@@ -35,6 +35,9 @@ public:
     virtual size_t serialPrintln(const char* str) = 0;
     virtual int serialAvailable() = 0;
     virtual int serialRead() = 0;
+    
+    // System control
+    virtual void restart() = 0;
 };
 
 #endif // I_ARDUINO_ADAPTER_H

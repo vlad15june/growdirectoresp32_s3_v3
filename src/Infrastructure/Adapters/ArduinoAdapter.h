@@ -86,6 +86,12 @@ public:
     int serialRead() override {
         return Serial.read();
     }
+
+    // System control
+    void restart() override {
+        // For ESP32
+        ESP.restart();
+    }
 };
 
 #endif // ARDUINO_ADAPTER_H

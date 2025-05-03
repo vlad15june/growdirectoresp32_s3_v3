@@ -9,6 +9,7 @@
 #include "Core/Domain/Interfaces/ILogger.h"
 #include "Core/Domain/Interfaces/IDebugSystem.h"
 #include "Core/Domain/Interfaces/ISettings.h"
+#include "Core/Domain/Interfaces/IModuleConfig.h"
 #include "Core/Domain/Enums/ModuleModeEnum.h" // Added include for ModuleModeEnum
 
 class ModuleConfigurationWebServer
@@ -19,6 +20,7 @@ private:
     ILogger *logger;
     IDebugSystem *debugSystem;
     ISettings *settings;
+    IModuleConfig *moduleConfig;
 
     void log(const char *format, ...)
     {
@@ -40,14 +42,14 @@ private:
         return WiFi.macAddress();
     }
 
-    bool getMode()
+    uint8_t getMode()
     {
         if (settings != nullptr)
         {
             return settings->getIfConfigured();
         }
         log("Warning: settings is null in getMode(), returning default value");
-        return false;
+        return 250;
     }
 
     int getWifiStatus()
@@ -66,7 +68,10 @@ private:
         {
             settings->setConfigured(ModuleModeEnum::USER_CAN_CONFIGURE);
 
-            // isConfigured = ModuleModeEnum::CONFIGURED_NEED_RESTART; //NOTE need create in ModuleConfig currentModuleMode
+            if (moduleConfig != nullptr)
+            {
+                moduleConfig->setRequestedModuleMode(ModuleModeEnum::CONFIGURED_NEED_RESTART);
+            }
         }
         else
         {
@@ -128,11 +133,13 @@ public:
         ILogger *loggerInstance = nullptr,
         IDebugSystem *debugSystemInstance = nullptr,
         ISettings *settingsInstance = nullptr,
+        IModuleConfig *moduleConfigInstance = nullptr,
         bool setupDebug = true) : server(webServer),
                                   wifiMulti(wifiMultiRef),
                                   logger(loggerInstance),
                                   debugSystem(debugSystemInstance),
-                                  settings(settingsInstance) {}
+                                  settings(settingsInstance),
+                                  moduleConfig(moduleConfigInstance) {}
 
     void setupWebServer()
     {
@@ -202,10 +209,21 @@ public:
             log(body.c_str());
 
             DynamicJsonDocument doc(1024);
-            deserializeJson(doc, body);
+            DeserializationError error = deserializeJson(doc, body);
+            
+            if (error) {
+                log("Failed to parse JSON");
+                server.send(400, "application/json", "{\"error\":\"Invalid JSON\"}");
+                return;
+            }
+            
+            if (!doc.containsKey("ssid") || !doc.containsKey("password")) {
+                log("Missing required fields: ssid or password");
+                server.send(400, "application/json", "{\"error\":\"Missing required fields\"}");
+                return;
+            }
 
             saveWifiCredentials(doc["ssid"], doc["password"]);
-            // connectToWifi(ssid, password);
             
             log("Connected to WiFi - ok");
             log("ok, send 200");
@@ -224,15 +242,27 @@ public:
             log(body.c_str());
 
             DynamicJsonDocument doc(1024);
-            deserializeJson(doc, body);
+            DeserializationError error = deserializeJson(doc, body);
+            
+            if (error) {
+                log("Failed to parse JSON");
+                server.send(400, "application/json", "{\"error\":\"Invalid JSON\"}");
+                return;
+            }
+            
+            if (!doc.containsKey("ssid") || !doc.containsKey("password")) {
+                log("Missing required fields: ssid or password");
+                server.send(400, "application/json", "{\"error\":\"Missing required fields\"}");
+                return;
+            }
 
             saveWifiCredentials(doc["ssid"], doc["password"]);
-            // wifiMulti.addAP(ssid, password);
+            wifiMulti.addAP(doc["ssid"], doc["password"]);
             
-            // if (WiFi.status() != WL_CONNECTED) {
-            //     wifiMulti.run();
-            //     log("Connecting to WiFi..");
-            // }
+            if (WiFi.status() != WL_CONNECTED) {
+                wifiMulti.run();
+                log("Connecting to WiFi..");
+            }
 
             // addWifiToFile(doc["ssid"], doc["password"]);
             log("ok, send 200");
@@ -243,13 +273,17 @@ public:
                   {
             log("handle /set_module_to_configured");
             
-            // if (isConfigured == IS_USER_CAN_RE_CONFIGURE) {
-            //     putIfConfigured(IS_CONFIGURED_DONE);
-            //     isConfigured = IS_CONFIGURED_NEED_RESTART;
-            //     log("ok, send 200");
-            //     server.send(200);
-            //     return;
-            // }
+            if (settings != nullptr && settings->getIfConfigured() == ModuleModeEnum::USER_CAN_CONFIGURE) {
+                settings->setConfigured(ModuleModeEnum::CONFIGURED_DONE);
+                
+                if (moduleConfig != nullptr) {
+                    moduleConfig->setRequestedModuleMode(ModuleModeEnum::CONFIGURED_NEED_RESTART);
+                }
+                
+                log("ok, send 200");
+                server.send(200);
+                return;
+            }
 
             log("ok, send 400");
             server.send(400); });
@@ -267,7 +301,19 @@ public:
             log(body.c_str());
 
             DynamicJsonDocument doc(1024);
-            deserializeJson(doc, body);
+            DeserializationError error = deserializeJson(doc, body);
+            
+            if (error) {
+                log("Failed to parse JSON");
+                server.send(400, "application/json", "{\"error\":\"Invalid JSON\"}");
+                return;
+            }
+            
+            if (!doc.containsKey("ssid") || !doc.containsKey("password")) {
+                log("Missing required fields: ssid or password");
+                server.send(400, "application/json", "{\"error\":\"Missing required fields\"}");
+                return;
+            }
 
             char ssid_temp[BUFSIZE];
             char password_temp[BUFSIZE];
@@ -325,7 +371,21 @@ public:
             log(body.c_str());
 
             DynamicJsonDocument doc(1024);
-            deserializeJson(doc, body);
+            DeserializationError error = deserializeJson(doc, body);
+            
+            if (error) {
+                log("Failed to parse JSON");
+                server.send(400, "application/json", "{\"error\":\"Invalid JSON\"}");
+                return;
+            }
+            
+            if (!doc.containsKey("user") || !doc.containsKey("token") || !doc.containsKey("server") ||
+                !doc.containsKey("ssid") || !doc.containsKey("password") || !doc.containsKey("accountUid") ||
+                !doc.containsKey("lat") || !doc.containsKey("lng")) {
+                log("Missing required fields in JSON");
+                server.send(400, "application/json", "{\"error\":\"Missing required fields\"}");
+                return;
+            }
 
             saveServerConfig(
                 doc["user"], doc["token"], doc["server"],
@@ -344,8 +404,8 @@ public:
 
         log("SETUP: setupWebServer all endpoints configured");
     }
-    
-    void launchServer() 
+
+    void launchServer()
     {
         log("LAUNCH: Starting web server");
         server.begin();

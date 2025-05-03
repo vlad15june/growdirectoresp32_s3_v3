@@ -2,6 +2,7 @@
 #define IMODULECONFIG_H
 
 #include "ISettings.h"
+#include "Core/Domain/Enums/ModuleModeEnum.h"
 
 // Module type constants
 #define MODULE_TYPE_SENSOR 1
@@ -27,6 +28,8 @@ public:
     virtual uint8_t* getRedLeds() const = 0;
     virtual uint8_t* getGreenLeds() const = 0;
     virtual uint8_t getLedsCount() const = 0;
+    virtual ModuleModeEnum getRequestedModuleMode() const = 0;
+    virtual void setRequestedModuleMode(ModuleModeEnum mode) = 0;
     virtual ~IModuleConfig() = default;
 };
 

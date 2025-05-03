@@ -28,6 +28,7 @@ private:
     IDebugSystem *debugSystem;
     ISettings *settings;
     INTPTimeAdapter *timeAdapter;
+    ModuleModeEnum requestedModuleMode; // New field to store the module mode
 
     // LED arrays
     uint8_t* redLeds;
@@ -129,7 +130,8 @@ public:
                 INTPTimeAdapter *timeAdapterInstance = nullptr)
         : moduleType(MODULE_TYPE_DEVICE), moduleSubType(MODULE_SUBTYPE_RELAY), deviceCount(4), ledsCount(4),
           logger(loggerInstance), debugSystem(debugSystemInstance), 
-          settings(settingsInstance), timeAdapter(timeAdapterInstance) {}
+          settings(settingsInstance), timeAdapter(timeAdapterInstance),
+          requestedModuleMode(ModuleModeEnum::USER_CAN_CONFIGURE) {} // Initialize with default mode
           
     ~ModuleConfig() {
         if (redLeds != nullptr) {
@@ -277,6 +279,15 @@ public:
     
     uint8_t getLedsCount() const override {
         return ledsCount;
+    }
+
+    ModuleModeEnum getRequestedModuleMode() const override {
+        return requestedModuleMode;
+    }
+    
+    void setRequestedModuleMode(ModuleModeEnum mode) override {
+        requestedModuleMode = mode;
+        log("MODULE: Module mode set to: %d\n", static_cast<int>(mode));
     }
 };
 

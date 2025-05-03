@@ -30,6 +30,7 @@ namespace DebugFeatures {
     
     // Command debug features
     constexpr const char* MODULE_COMMAND_DEBUG = "MODULE_COMMAND_DEBUG";
+    constexpr const char* MODULE_MODE_DEBUG = "MODULE_MODE_DEBUG";
     constexpr const char* DEVICE_COMMAND_DEBUG = "DEVICE_COMMAND_DEBUG";
     constexpr const char* ANALOG_INPUT_DEVICE_COMMAND_DEBUG = "ANALOG_INPUT_DEVICE_COMMAND_DEBUG";
     

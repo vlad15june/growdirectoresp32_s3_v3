@@ -78,7 +78,8 @@ ModuleConfigurationWebServer moduleConfigurationWebServer(
     wifiMulti,
     &mqttLogger, 
     &debugSystem, 
-    &settings
+    &settings,
+    &moduleConfig
 );
 
 WebServerLauncher webServerLauncher(

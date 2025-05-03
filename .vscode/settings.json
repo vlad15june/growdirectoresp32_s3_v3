@@ -1,5 +1,7 @@
 {
     "files.associations": {
-        "cstdarg": "cpp"
+        "cstdarg": "cpp",
+        "fstream": "cpp",
+        "sstream": "cpp"
     }
 }
