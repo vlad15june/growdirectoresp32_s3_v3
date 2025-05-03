@@ -1,9 +1,9 @@
-#ifndef MODULE_MODE_SERVICE_H
-#define MODULE_MODE_SERVICE_H
+#ifndef ON_CHANGE_MODULE_MODE_USE_CASE_H
+#define ON_CHANGE_MODULE_MODE_USE_CASE_H
 
 #include <cstdarg>
 #include <cstdio>
-#include "Application/Interfaces/IModuleModeService.h"
+#include "Core/Domain/Interfaces/UseCases/IOnChangeModuleModeUseCase.h"
 #include "Core/Domain/Interfaces/Adapters/IArduinoAdapter.h"
 #include "Core/Domain/Interfaces/IModuleConfig.h"
 #include "Core/Domain/Interfaces/ILogger.h"
@@ -11,8 +11,7 @@
 #include "Core/Domain/Enums/ModuleModeEnum.h"
 #include "Core/Domain/Enums/BootTypeEnum.h"
 
-//TODO: move to usecase -> OnChangeModuleModeUseCase
-class ModuleModeService : public IModuleModeService {
+class OnChangeModuleModeUseCase : public IOnChangeModuleModeUseCase {
 private:
     IArduinoAdapter& _arduinoAdapter;
     IModuleConfig& _moduleConfig;
@@ -21,7 +20,7 @@ private:
     ModuleModeEnum _currentMode;
     
 public:
-    ModuleModeService(IArduinoAdapter& arduinoAdapter, 
+    OnChangeModuleModeUseCase(IArduinoAdapter& arduinoAdapter, 
                       IModuleConfig& moduleConfig,
                       ILogger* loggerInstance = nullptr,
                       IDebugSystem* debugSystemInstance = nullptr)
@@ -31,7 +30,7 @@ public:
           debugSystem(debugSystemInstance),
           _currentMode(CONFIGURED_DONE) {
         
-        log("ModuleModeService: Initialized with mode %d", static_cast<int>(_currentMode));
+        log("OnChangeModuleModeUseCase: Initialized with mode %d", static_cast<int>(_currentMode));
     }
     
     void loop() override {
@@ -39,13 +38,13 @@ public:
         
         // Only process if the requested mode is different from current mode
         if (requestedMode != _currentMode) {
-            log("ModuleModeService: Mode transition from %d to %d", 
+            log("OnChangeModuleModeUseCase: Mode transition from %d to %d", 
                 static_cast<int>(_currentMode), static_cast<int>(requestedMode));
             
             // Handle mode transitions
             switch (requestedMode) {
                 case CONFIGURED_NEED_RESTART:
-                    log("ModuleModeService: Preparing for restart");
+                    log("OnChangeModuleModeUseCase: Preparing for restart");
                     // Save any necessary state before restarting
                     _moduleConfig.getSettings()->setBootType(BOOT_TYPE_USER);
                     
@@ -63,7 +62,7 @@ public:
                 case CONFIGURED_DONE:
                     // Update current mode
                     _currentMode = requestedMode;
-                    log("ModuleModeService: Mode updated to %d", static_cast<int>(_currentMode));
+                    log("OnChangeModuleModeUseCase: Mode updated to %d", static_cast<int>(_currentMode));
                     break;
             }
         }
@@ -71,7 +70,7 @@ public:
     
 private:
     void restart() {
-        log("ModuleModeService: Restarting device...");        
+        log("OnChangeModuleModeUseCase: Restarting device...");        
         _arduinoAdapter.delay(1000);
         _arduinoAdapter.restart();
     }
@@ -90,4 +89,4 @@ private:
     }
 };
 
-#endif // MODULE_MODE_SERVICE_H
+#endif // ON_CHANGE_MODULE_MODE_USE_CASE_H
