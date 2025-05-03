@@ -4,7 +4,7 @@
 LedUseCases::LedUseCases(ILedAdapter *adapter, IModuleConfig *moduleConfig, IArduinoAdapter *arduinoAdapter,
                          ILogger *loggerInstance, IDebugSystem *debugSystemInstance)
     : ledAdapter(adapter),
-      moduleConfig(moduleConfig),
+      moduleConfig(moduleConfig), //TODO: remove and set all need data from LedUseService
       arduinoAdapter(arduinoAdapter),
       logger(loggerInstance),
       debugSystem(debugSystemInstance)

@@ -14,7 +14,8 @@ void setup()
   Serial.begin(115200);
   Serial.println("System initialized.");
 
-  settings.setConfigured(ModuleModeEnum::USER_CAN_CONFIGURE);
+  // settings.begin();
+  // settings.setConfigured(ModuleModeEnum::USER_CAN_CONFIGURE);
 
   moduleSetupService.setupModule();
 }
@@ -27,5 +28,6 @@ void loop()
   // Serial.printf("loop\n");
   // delay(1000);
 
-  ledUseCases.loop();
+  ledUseCases.loop(); //need ledService.loop(), service put in use case device state and other things
+  // buttonUseCases.loop(); //need buttonService.loop(), service put in use case device state and other things
 }
