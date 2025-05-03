@@ -11,18 +11,16 @@ public:
     void executeLoopImplementation() override {
         log("Running loop for USER_CAN_RE_CONFIGURE mode");
         
-        // Re-configuration specific operations
-        // Handle button presses for reconfiguration options
         if (buttonUseCases && buttonUseCases->isButtonHeldForDuration()) {
             log("Button held in RE_CONFIGURE mode - processing action");
             
-            // Example: indicate reconfiguration activity with LED
-            if (ledUseCases) {
-                ledUseCases->ledBlinkYellow2Times();
-            }
         }
         
-        // Additional reconfiguration specific checks and operations
+        // Handle web server requests
+        if (webServer)
+        {
+            webServer->loop();
+        }
     }
 };
 

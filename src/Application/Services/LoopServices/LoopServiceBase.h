@@ -7,6 +7,7 @@
 #include "Core/Domain/Interfaces/UseCases/IOnChangeModuleModeUseCase.h"
 #include "Core/Domain/Interfaces/ILogger.h"
 #include "Core/Domain/Interfaces/IDebugSystem.h"
+#include "Application/Interfaces/WebServices/IWebServerLooper.h"
 #include <stdarg.h>
 
 class LoopServiceBase : public ILoopService {
@@ -16,18 +17,21 @@ protected:
     IOnChangeModuleModeUseCase* moduleModeUseCase;
     ILogger* logger;
     IDebugSystem* debugSystem;
+    IWebServerLooper* webServer;
     
     LoopServiceBase(
         ILedUseCases* ledUseCases = nullptr,
         IButtonUseCases* buttonUseCases = nullptr,
         IOnChangeModuleModeUseCase* moduleModeUseCase = nullptr,
         ILogger* logger = nullptr,
-        IDebugSystem* debugSystem = nullptr
+        IDebugSystem* debugSystem = nullptr,
+        IWebServerLooper* webServer = nullptr
     ) : ledUseCases(ledUseCases),
         buttonUseCases(buttonUseCases),
         moduleModeUseCase(moduleModeUseCase),
         logger(logger),
-        debugSystem(debugSystem) {}
+        debugSystem(debugSystem),
+        webServer(webServer) {}
     
     void log(const char* format, ...) {
         if (logger != nullptr && debugSystem != nullptr && 
@@ -47,6 +51,7 @@ public:
     
     // Common loop implementation that will be called by derived classes
     void loop() override {
+                
         // Check module mode changes
         if (moduleModeUseCase) {
             moduleModeUseCase->loop();
@@ -78,6 +83,11 @@ public:
     virtual void setLogging(ILogger* logger, IDebugSystem* debugSystem) {
         this->logger = logger;
         this->debugSystem = debugSystem;
+    }
+    
+    // Method to set web server
+    virtual void setWebServer(IWebServerLooper* server) {
+        this->webServer = server;
     }
 };
 

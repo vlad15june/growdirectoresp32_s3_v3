@@ -5,24 +5,14 @@
 
 class LoopServiceConfigureDone : public LoopServiceBase {
 private:
-    unsigned long lastStatusCheck = 0;
-    const unsigned long STATUS_CHECK_INTERVAL_MS = 30000; // 30 seconds
+
 
 public:
     LoopServiceConfigureDone() : LoopServiceBase() {}
     ~LoopServiceConfigureDone() override = default;
     
     void executeLoopImplementation() override {
-        log("Running loop for CONFIGURED_DONE mode");
-        
-        // Normal operation mode
-        unsigned long currentTime = millis();
-        
-        // Periodic status check
-        if (currentTime - lastStatusCheck >= STATUS_CHECK_INTERVAL_MS) {
-            lastStatusCheck = currentTime;
-            performStatusCheck();
-        }
+        log("Running loop for CONFIGURED_DONE mode");        
         
         // Handle special button combinations for maintenance or reconfiguration
         if (buttonUseCases) {

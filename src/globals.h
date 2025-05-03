@@ -42,6 +42,8 @@ IPAddress mqttBroker(116, 203, 235, 144);
 const int mqttPort = 1883;
 const char* mqttDefaultTopic = "hardware/log";
 
+IPAddress myIP;
+
 WebServer webServer(80);
 WiFiMulti wifiMulti;
 
@@ -83,15 +85,6 @@ LedUseCases ledUseCases(&ledAdapter, &moduleConfig, &arduinoAdapter, &mqttLogger
 
 ButtonUseCases buttonUseCases(&buttonAdapter, &mqttLogger, &debugSystem, 0);
 
-// Create LoopServiceFactory instance with proper dependencies
-LoopServiceFactory loopServiceFactory(
-    &ledUseCases,
-    &buttonUseCases,
-    &moduleModeUseCase,
-    &mqttLogger,
-    &debugSystem
-);
-
 ModuleConfigurationWebServer moduleConfigurationWebServer(
     webServer, 
     wifiMulti,
@@ -107,7 +100,15 @@ WebServerLauncher webServerLauncher(
     moduleConfigurationWebServer
 );
 
-IPAddress myIP;
+// Create LoopServiceFactory instance with proper dependencies
+LoopServiceFactory loopServiceFactory(
+  &ledUseCases,
+  &buttonUseCases,
+  &moduleModeUseCase,
+  &mqttLogger,
+  &debugSystem,
+  &moduleConfigurationWebServer
+);
 
 ModuleSetupService moduleSetupService(
     &mqttLogger, 

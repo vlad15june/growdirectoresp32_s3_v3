@@ -20,6 +20,7 @@ private:
     IOnChangeModuleModeUseCase* moduleModeUseCase;
     ILogger* logger;
     IDebugSystem* debugSystem;
+    IWebServerLooper* webServer;
 
 public:
     LoopServiceFactory(
@@ -27,12 +28,14 @@ public:
         IButtonUseCases* buttonUseCases = nullptr,
         IOnChangeModuleModeUseCase* moduleModeUseCase = nullptr,
         ILogger* logger = nullptr,
-        IDebugSystem* debugSystem = nullptr
+        IDebugSystem* debugSystem = nullptr,
+        IWebServerLooper* webServer = nullptr
     ) : ledUseCases(ledUseCases),
         buttonUseCases(buttonUseCases),
         moduleModeUseCase(moduleModeUseCase),
         logger(logger),
-        debugSystem(debugSystem) {}
+        debugSystem(debugSystem),
+        webServer(webServer) {}
     
     ~LoopServiceFactory() override = default;
 
@@ -59,6 +62,7 @@ public:
         // Inject use cases
         service->setUseCases(ledUseCases, buttonUseCases, moduleModeUseCase);
         service->setLogging(logger, debugSystem);
+        service->setWebServer(webServer);
         
         return service;
     }
