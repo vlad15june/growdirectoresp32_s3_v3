@@ -40,14 +40,14 @@ public:
     }
     
     bool launchConfigurationServer() override {
-        log("Launching configuration web server...");
+        log("SETUP: Launching configuration web server...");
         
         try {
             configServer.setupWebServer();
 
             configServer.launchServer();
             
-            log("Configuration web server launched successfully");
+            log("SETUP: Configuration web server launched successfully");
             return true;
         } catch (const std::exception& e) {
             if (logger != nullptr) {

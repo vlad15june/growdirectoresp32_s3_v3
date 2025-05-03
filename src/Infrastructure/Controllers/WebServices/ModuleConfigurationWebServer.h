@@ -136,7 +136,7 @@ public:
 
     void setupWebServer()
     {
-        log("setupWebServer");
+        log("SETUP: setupWebServer");
 
         // Test endpoint
         server.on("/test", HTTP_OPTIONS, [this]()

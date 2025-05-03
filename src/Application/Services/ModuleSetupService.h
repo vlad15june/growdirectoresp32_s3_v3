@@ -357,8 +357,22 @@ inline bool ModuleSetupService::createAndConfigureAP(const char *ssid, const cha
 
 inline void ModuleSetupService::setupWebServer()
 {
+    if (!webServerLauncher)
+    {
+        log("SETUP: Error - Web server launcher is missing");
+        return;
+    }
+    
+    log("SETUP: Starting web server configuration...");
     webServerLauncher->launchConfigurationServer();
     log("SETUP: Web server setup completed");
+    
+    // Get the server URL if available
+    if (wifiAdapter)
+    {
+        const char* ip = wifiAdapter->getLocalIP();
+        log("SETUP: Configuration interface available at http://%s/", ip);
+    }
 }
 
 inline void ModuleSetupService::setupModule()

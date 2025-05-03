@@ -30,4 +30,6 @@ void loop()
 
   ledUseCases.loop(); //need ledService.loop(), service put in use case device state and other things
   // buttonUseCases.loop(); //need buttonService.loop(), service put in use case device state and other things
+
+  webServer.handleClient();
 }

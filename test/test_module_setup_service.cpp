@@ -19,6 +19,12 @@ public:
             service->setupAP();
         }
     }
+    
+    static void callSetupWebServer(ModuleSetupService* service) {
+        if (service) {
+            service->setupWebServer();
+        }
+    }
 };
 
 // Global test variables
@@ -627,6 +633,36 @@ static void test_setup_ap_uses_random_part_in_ssid() {
     if (debug_file != nullptr) fprintf(debug_file, "Finished test_setup_ap_uses_random_part_in_ssid\n");
 }
 
+static void test_setup_web_server_handles_null_launcher() {
+    if (debug_file != nullptr) fprintf(debug_file, "Starting test_setup_web_server_handles_null_launcher\n");
+    module_setup_service_setup();
+    
+    // Create a new service without web server launcher
+    delete g_moduleSetupService;
+    g_moduleSetupService = new ModuleSetupService(
+        &g_mockLogger,
+        &g_mockDebugSystem,
+        &g_mockModuleConfig,
+        &g_mockLedAdapter,
+        &g_mockLedUseCases,
+        &g_mockButtonUseCases,
+        &g_mockWifiAdapter,
+        nullptr  // Pass null web server launcher
+    );
+    
+    // This should not crash and should log an error
+    ModuleSetupServiceTestHelper::callSetupWebServer(g_moduleSetupService);
+    
+    // Check that an error was logged
+    TEST_ASSERT_TRUE(g_mockLogger.printCalled);
+    
+    // Verify that specific error message was logged (if you have a way to check message content)
+    // This depends on how your MockLogger implements message capturing
+    
+    module_setup_service_teardown();
+    if (debug_file != nullptr) fprintf(debug_file, "Finished test_setup_web_server_handles_null_launcher\n");
+}
+
 // Main test runner function
 extern "C" int run_module_setup_service_tests(void) {
     if (debug_file != nullptr) fprintf(debug_file, "\n----- Running ModuleSetupService Tests -----\n");
@@ -655,6 +691,7 @@ extern "C" int run_module_setup_service_tests(void) {
     RUN_TEST(test_setup_ap_handles_missing_wifi_adapter);
     RUN_TEST(test_setup_ap_handles_configure_ap_failure);
     RUN_TEST(test_setup_ap_uses_random_part_in_ssid);
+    RUN_TEST(test_setup_web_server_handles_null_launcher);
     
     if (debug_file != nullptr) fprintf(debug_file, "\n----- ModuleSetupService Tests Complete -----\n");
     

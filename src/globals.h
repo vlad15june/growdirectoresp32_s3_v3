@@ -93,7 +93,7 @@ LedUseCases ledUseCases(&ledAdapter, &moduleConfig, &arduinoAdapter, &mqttLogger
 
 ButtonUseCases buttonUseCases(&buttonAdapter, &mqttLogger, &debugSystem, 0);
 
-ModuleSetupService moduleSetupService(&mqttLogger, &debugSystem, &moduleConfig, &ledAdapter, &ledUseCases, &buttonUseCases);
+ModuleSetupService moduleSetupService(&mqttLogger, &debugSystem, &moduleConfig, &ledAdapter, &ledUseCases, &buttonUseCases, &wifiAdapter, &webServerLauncher);
 
 
 #endif // GLOBALS_H
