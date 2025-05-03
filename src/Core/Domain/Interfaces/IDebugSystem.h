@@ -20,6 +20,9 @@ namespace DebugFeatures {
     constexpr const char* FILE_DEBUG = "FILE_DEBUG";
     constexpr const char* DIAGNOSTIC_DEBUG = "DIAGNOSTIC_DEBUG";
     
+    // Loop service debug feature
+    constexpr const char* LOOP_SERVICE_DEBUG = "LOOP_SERVICE_DEBUG";
+    
     // Rule debug features
     constexpr const char* RULE_DEBUG = "RULE_DEBUG";
     constexpr const char* RULE_SYNC_DEBUG = "RULE_SYNC_DEBUG";

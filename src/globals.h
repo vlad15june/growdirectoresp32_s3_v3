@@ -16,6 +16,7 @@
 #include "Core/Domain/Interfaces/Adapters/IButtonAdapter.h"
 #include "Core/Domain/UseCases/Led/LedUseCases.h"
 #include "Core/Domain/UseCases/Buttons/ButtonUseCases.h"
+#include "Core/Domain/UseCases/ModuleMode/OnChangeModuleModeUseCase.h"
 
 #include "Infrastructure/Adapters/eepromAdapter.h"
 #include "Infrastructure/Logging/MqttLogger.h"
@@ -75,8 +76,21 @@ NTPTimeAdapter ntpTimeAdapter(&mqttLogger, &debugSystem, &settings);
 
 ModuleConfig moduleConfig(&mqttLogger, &debugSystem, &settings, &ntpTimeAdapter);
 
-// Create LoopServiceFactory instance
-LoopServiceFactory loopServiceFactory;
+// Create OnChangeModuleModeUseCase instance
+OnChangeModuleModeUseCase moduleModeUseCase(arduinoAdapter, moduleConfig, &mqttLogger, &debugSystem);
+
+LedUseCases ledUseCases(&ledAdapter, &moduleConfig, &arduinoAdapter, &mqttLogger, &debugSystem);
+
+ButtonUseCases buttonUseCases(&buttonAdapter, &mqttLogger, &debugSystem, 0);
+
+// Create LoopServiceFactory instance with proper dependencies
+LoopServiceFactory loopServiceFactory(
+    &ledUseCases,
+    &buttonUseCases,
+    &moduleModeUseCase,
+    &mqttLogger,
+    &debugSystem
+);
 
 ModuleConfigurationWebServer moduleConfigurationWebServer(
     webServer, 
@@ -94,10 +108,6 @@ WebServerLauncher webServerLauncher(
 );
 
 IPAddress myIP;
-
-LedUseCases ledUseCases(&ledAdapter, &moduleConfig, &arduinoAdapter, &mqttLogger, &debugSystem);
-
-ButtonUseCases buttonUseCases(&buttonAdapter, &mqttLogger, &debugSystem, 0);
 
 ModuleSetupService moduleSetupService(
     &mqttLogger, 

@@ -66,6 +66,7 @@ private:
         registerFeature(DebugFeatures::BUTTON_DEBUG, "button", false);
         registerFeature(DebugFeatures::LED_DEBUG, "led", false);
         registerFeature(DebugFeatures::UPDATE_FIRMWARE_DEBUG, "update_firmware", true);
+        registerFeature(DebugFeatures::LOOP_SERVICE_DEBUG, "loop_service", true); // Adding the new debug feature
     }
 
 public:
