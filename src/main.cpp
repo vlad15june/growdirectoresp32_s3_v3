@@ -8,6 +8,8 @@
 #include <T67XX.h>
 #include "globals.h"
 
+// Global loop service instance
+std::unique_ptr<ILoopService> loopService;
 
 void setup()
 {
@@ -18,18 +20,19 @@ void setup()
   // settings.setConfigured(ModuleModeEnum::USER_CAN_CONFIGURE);
 
   moduleSetupService.setupModule();
-  // will create loop service according to module mode and module type
-  // loopService = moduleSetupService.getLoopService();
+  // Create loop service according to module mode and module type
+  loopService = moduleSetupService.getLoopService();
 }
 
 void loop()
 {
-
-
-  //will be one service for execute loop
-  // loopService.loop();
-  ledUseCases.loop(); //need loopService.loop(), service put in use case device state and other things
-  // buttonUseCases.loop(); //need loopService.loop(), service put in use case device state and other things
+  // Execute the appropriate loop service
+  if (loopService) {
+    loopService->loop();
+  }
+  
+  ledUseCases.loop(); 
+  // buttonUseCases.loop();
 
   moduleConfigurationWebServer.loop();
 }

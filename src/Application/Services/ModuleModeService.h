@@ -11,6 +11,7 @@
 #include "Core/Domain/Enums/ModuleModeEnum.h"
 #include "Core/Domain/Enums/BootTypeEnum.h"
 
+//TODO: move to usecase -> OnChangeModuleModeUseCase
 class ModuleModeService : public IModuleModeService {
 private:
     IArduinoAdapter& _arduinoAdapter;

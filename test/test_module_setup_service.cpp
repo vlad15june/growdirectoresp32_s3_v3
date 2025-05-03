@@ -10,6 +10,8 @@
 #include "Mock/Infrastructure/Wifi/MockWifiAdapter.h"
 #include "Mock/Infrastructure/Controllers/WebServices/Launchers/MockWebServerLauncher.h"
 #include "Mock/Infrastructure/Configuration/MockSettings.h"
+#include "Mock/Application/LoopServices/MockLoopServiceFactory.h"
+#include "Mock/Application/LoopServices/MockLoopService.h"
 
 // Helper class for tests
 class ModuleSetupServiceTestHelper {
@@ -36,6 +38,7 @@ static MockLedUseCases g_mockLedUseCases;
 static MockButtonUseCases g_mockButtonUseCases;
 static MockWifiAdapter g_mockWifiAdapter;
 static MockWebServerLauncher g_mockWebServerLauncher;
+static MockLoopServiceFactory g_mockLoopServiceFactory;
 static MockSettings g_mockSettings;
 static ModuleSetupService* g_moduleSetupService;
 static FILE* debug_file = nullptr;
@@ -59,6 +62,7 @@ static void module_setup_service_setup(void) {
     g_mockButtonUseCases.reset();
     g_mockWifiAdapter.reset();
     g_mockWebServerLauncher.reset();
+    g_mockLoopServiceFactory.reset();
     g_mockSettings.reset();
     
     // Set up the mock settings for module config
@@ -72,7 +76,8 @@ static void module_setup_service_setup(void) {
         &g_mockLedUseCases,
         &g_mockButtonUseCases,
         &g_mockWifiAdapter,
-        &g_mockWebServerLauncher
+        &g_mockWebServerLauncher,
+        &g_mockLoopServiceFactory
     );
 }
 
@@ -153,7 +158,8 @@ static void test_setup_module_without_led_adapter(void) {
         &g_mockLedUseCases,
         &g_mockButtonUseCases,
         &g_mockWifiAdapter,
-        &g_mockWebServerLauncher
+        &g_mockWebServerLauncher,
+        &g_mockLoopServiceFactory
     );
     
     // This should not crash and should still initialize the config
@@ -178,7 +184,8 @@ static void test_setup_module_without_config(void) {
         &g_mockLedUseCases,
         &g_mockButtonUseCases,
         &g_mockWifiAdapter,
-        &g_mockWebServerLauncher
+        &g_mockWebServerLauncher,
+        &g_mockLoopServiceFactory
     );
     
     // This should not crash and should log an error
@@ -217,7 +224,8 @@ static void test_setup_module_without_led_use_cases(void) {
         nullptr,
         &g_mockButtonUseCases,
         &g_mockWifiAdapter,
-        &g_mockWebServerLauncher
+        &g_mockWebServerLauncher,
+        &g_mockLoopServiceFactory
     );
     
     // This should not crash and should still initialize the config and LEDs
@@ -341,7 +349,8 @@ static void test_setup_module_without_web_server_launcher(void) {
         &g_mockLedUseCases,
         &g_mockButtonUseCases,
         &g_mockWifiAdapter,
-        &g_mockWebServerLauncher
+        nullptr,
+        &g_mockLoopServiceFactory
     );
     
     // Set up the mock to simulate USER_CAN_CONFIGURE mode
@@ -563,7 +572,8 @@ static void test_setup_ap_handles_missing_wifi_adapter() {
         &g_mockLedUseCases,
         &g_mockButtonUseCases,
         nullptr, // No WiFi adapter
-        &g_mockWebServerLauncher
+        &g_mockWebServerLauncher,
+        &g_mockLoopServiceFactory
     );
     
     // This should not crash and should log an error
@@ -663,6 +673,165 @@ static void test_setup_web_server_handles_null_launcher() {
     if (debug_file != nullptr) fprintf(debug_file, "Finished test_setup_web_server_handles_null_launcher\n");
 }
 
+// Tests for getLoopService method
+static void test_get_loop_service_returns_service_for_current_mode() {
+    if (debug_file != nullptr) fprintf(debug_file, "Starting test_get_loop_service_returns_service_for_current_mode\n");
+    module_setup_service_setup();
+    
+    // Set up mock to simulate a specific module mode
+    g_mockSettings.setConfigured(ModuleModeEnum::USER_CAN_CONFIGURE);
+    
+    // Call getLoopService
+    auto loopService = g_moduleSetupService->getLoopService();
+    
+    // Verify a service was returned
+    TEST_ASSERT_NOT_NULL(loopService.get());
+    
+    // Verify loopServiceFactory was called with correct mode
+    TEST_ASSERT_TRUE(g_mockLoopServiceFactory.createLoopServiceCalled);
+    TEST_ASSERT_EQUAL(ModuleModeEnum::USER_CAN_CONFIGURE, g_mockLoopServiceFactory.lastModuleMode);
+    
+    module_setup_service_teardown();
+    if (debug_file != nullptr) fprintf(debug_file, "Finished test_get_loop_service_returns_service_for_current_mode\n");
+}
+
+static void test_get_loop_service_handles_null_factory() {
+    if (debug_file != nullptr) fprintf(debug_file, "Starting test_get_loop_service_handles_null_factory\n");
+    module_setup_service_setup();
+    
+    // Create service without factory
+    delete g_moduleSetupService;
+    g_moduleSetupService = new ModuleSetupService(
+        &g_mockLogger,
+        &g_mockDebugSystem,
+        &g_mockModuleConfig,
+        &g_mockLedAdapter,
+        &g_mockLedUseCases,
+        &g_mockButtonUseCases,
+        &g_mockWifiAdapter,
+        &g_mockWebServerLauncher,
+        nullptr  // Null factory
+    );
+    
+    // Call getLoopService - should not crash
+    auto loopService = g_moduleSetupService->getLoopService();
+    
+    // No service should be returned
+    TEST_ASSERT_NULL(loopService.get());
+    
+    // Error should be logged
+    TEST_ASSERT_TRUE(g_mockLogger.printCalled);
+    
+    module_setup_service_teardown();
+    if (debug_file != nullptr) fprintf(debug_file, "Finished test_get_loop_service_handles_null_factory\n");
+}
+
+static void test_get_loop_service_handles_null_config() {
+    if (debug_file != nullptr) fprintf(debug_file, "Starting test_get_loop_service_handles_null_config\n");
+    module_setup_service_setup();
+    
+    // Create service without config
+    delete g_moduleSetupService;
+    g_moduleSetupService = new ModuleSetupService(
+        &g_mockLogger,
+        &g_mockDebugSystem,
+        nullptr,  // Null config
+        &g_mockLedAdapter,
+        &g_mockLedUseCases,
+        &g_mockButtonUseCases,
+        &g_mockWifiAdapter,
+        &g_mockWebServerLauncher,
+        &g_mockLoopServiceFactory
+    );
+    
+    // Call getLoopService - should not crash
+    auto loopService = g_moduleSetupService->getLoopService();
+    
+    // No service should be returned
+    TEST_ASSERT_NULL(loopService.get());
+    
+    // Error should be logged
+    TEST_ASSERT_TRUE(g_mockLogger.printCalled);
+    
+    module_setup_service_teardown();
+    if (debug_file != nullptr) fprintf(debug_file, "Finished test_get_loop_service_handles_null_config\n");
+}
+
+static void test_get_loop_service_handles_null_settings() {
+    if (debug_file != nullptr) fprintf(debug_file, "Starting test_get_loop_service_handles_null_settings\n");
+    module_setup_service_setup();
+    
+    // Set null settings in module config
+    g_mockModuleConfig.setSettings(nullptr);
+    
+    // Call getLoopService - should not crash
+    auto loopService = g_moduleSetupService->getLoopService();
+    
+    // No service should be returned
+    TEST_ASSERT_NULL(loopService.get());
+    
+    // Error should be logged
+    TEST_ASSERT_TRUE(g_mockLogger.printCalled);
+    
+    module_setup_service_teardown();
+    if (debug_file != nullptr) fprintf(debug_file, "Finished test_get_loop_service_handles_null_settings\n");
+}
+
+static void test_get_loop_service_handles_factory_exception() {
+    if (debug_file != nullptr) fprintf(debug_file, "Starting test_get_loop_service_handles_factory_exception\n");
+    module_setup_service_setup();
+    
+    // Set up mock to throw exception on the first call
+    g_mockLoopServiceFactory.reset();
+    g_mockLoopServiceFactory.configureMockToThrowException(true, "Test exception");
+    
+    // Call getLoopService - should handle exception and return fallback service
+    auto loopService = g_moduleSetupService->getLoopService();
+    
+    // Service should be returned (fallback)
+    TEST_ASSERT_NOT_NULL(loopService.get());
+    
+    // Error should be logged
+    TEST_ASSERT_TRUE(g_mockLogger.printCalled);
+    
+    module_setup_service_teardown();
+    if (debug_file != nullptr) fprintf(debug_file, "Finished test_get_loop_service_handles_factory_exception\n");
+}
+
+static void test_get_loop_service_for_each_module_mode() {
+    if (debug_file != nullptr) fprintf(debug_file, "Starting test_get_loop_service_for_each_module_mode\n");
+    
+    // Test all module modes
+    ModuleModeEnum testModes[] = {
+        ModuleModeEnum::USER_CAN_CONFIGURE,
+        ModuleModeEnum::USER_CAN_RE_CONFIGURE,
+        ModuleModeEnum::AP_TEST_MODE,
+        ModuleModeEnum::CONFIGURED_DONE,
+        ModuleModeEnum::CONFIGURED_NEED_RESTART
+    };
+    
+    for (auto mode : testModes) {
+        module_setup_service_setup();
+        
+        // Set up mock for this mode
+        g_mockSettings.setConfigured(mode);
+        
+        // Call getLoopService
+        auto loopService = g_moduleSetupService->getLoopService();
+        
+        // Verify service was returned
+        TEST_ASSERT_NOT_NULL(loopService.get());
+        
+        // Verify correct mode was passed to factory
+        TEST_ASSERT_TRUE(g_mockLoopServiceFactory.createLoopServiceCalled);
+        TEST_ASSERT_EQUAL(mode, g_mockLoopServiceFactory.lastModuleMode);
+        
+        module_setup_service_teardown();
+    }
+    
+    if (debug_file != nullptr) fprintf(debug_file, "Finished test_get_loop_service_for_each_module_mode\n");
+}
+
 // Main test runner function
 extern "C" int run_module_setup_service_tests(void) {
     if (debug_file != nullptr) fprintf(debug_file, "\n----- Running ModuleSetupService Tests -----\n");
@@ -692,6 +861,13 @@ extern "C" int run_module_setup_service_tests(void) {
     RUN_TEST(test_setup_ap_handles_configure_ap_failure);
     RUN_TEST(test_setup_ap_uses_random_part_in_ssid);
     RUN_TEST(test_setup_web_server_handles_null_launcher);
+    
+    RUN_TEST(test_get_loop_service_returns_service_for_current_mode);
+    RUN_TEST(test_get_loop_service_handles_null_factory);
+    RUN_TEST(test_get_loop_service_handles_null_config);
+    RUN_TEST(test_get_loop_service_handles_null_settings);
+    RUN_TEST(test_get_loop_service_handles_factory_exception);
+    RUN_TEST(test_get_loop_service_for_each_module_mode);
     
     if (debug_file != nullptr) fprintf(debug_file, "\n----- ModuleSetupService Tests Complete -----\n");
     

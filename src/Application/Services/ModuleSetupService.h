@@ -10,11 +10,14 @@
 #include "Core/Domain/Interfaces/UseCases/IButtonUseCases.h" // Added IButtonUseCases include
 #include "Core/Domain/Enums/ModuleModeEnum.h"                // Added ModuleModeEnum include
 #include "Application/Interfaces/WebServices/IWebServerLauncher.h"
+#include "Application/Interfaces/LoopServices/ILoopService.h"
+#include "Application/Interfaces/LoopServices/ILoopServiceFactory.h"
 
 class IModuleSetupService
 {
 public:
     virtual void setupModule() = 0;
+    virtual std::unique_ptr<ILoopService> getLoopService() = 0;
     virtual ~IModuleSetupService() = default;
 };
 
@@ -32,6 +35,7 @@ private:
     IButtonUseCases *buttonUseCases;
     IWifiAdapter *wifiAdapter; // Added wifiAdapter member
     IWebServerLauncher *webServerLauncher;
+    ILoopServiceFactory *loopServiceFactory; // Add LoopServiceFactory pointer
 
     void log(const char *format, ...);
 
@@ -63,9 +67,11 @@ public:
         ILedUseCases *ledUseCases = nullptr,
         IButtonUseCases *buttonUseCases = nullptr,
         IWifiAdapter *wifiAdapter = nullptr,
-        IWebServerLauncher *webServerLauncher = nullptr);
+        IWebServerLauncher *webServerLauncher = nullptr,
+        ILoopServiceFactory *loopServiceFactory = nullptr); // Add loopServiceFactory parameter
 
     void setupModule() override;
+    std::unique_ptr<ILoopService> getLoopService() override; // Add getLoopService method
 };
 
 // Implementation
@@ -78,14 +84,16 @@ inline ModuleSetupService::ModuleSetupService(
     ILedUseCases *ledUseCases,
     IButtonUseCases *buttonUseCases,
     IWifiAdapter *wifiAdapter, // Added wifiAdapter parameter
-    IWebServerLauncher *webServerLauncher) : logger(logger),
+    IWebServerLauncher *webServerLauncher,
+    ILoopServiceFactory *loopServiceFactory) : logger(logger),
                                              debugSystem(debugSystem),
                                              moduleConfig(moduleConfig),
                                              ledAdapter(ledAdapter),
                                              ledUseCases(ledUseCases),
                                              buttonUseCases(buttonUseCases),
                                              wifiAdapter(wifiAdapter), // Initialize wifiAdapter
-                                             webServerLauncher(webServerLauncher)
+                                             webServerLauncher(webServerLauncher),
+                                             loopServiceFactory(loopServiceFactory) // Initialize loopServiceFactory
 {
 }
 
@@ -408,6 +416,34 @@ inline void ModuleSetupService::setupModule()
     }
 
     log("SETUP: Module setup completed");
+}
+
+inline std::unique_ptr<ILoopService> ModuleSetupService::getLoopService()
+{
+    if (!moduleConfig || !loopServiceFactory)
+    {
+        log("SETUP: Error - Cannot create loop service, required dependencies are missing");
+        return nullptr;
+    }
+
+    ISettings *settings = moduleConfig->getSettings();
+    if (!settings)
+    {
+        log("SETUP: Error - Settings not available for loop service creation");
+        return nullptr;
+    }
+
+    ModuleModeEnum moduleMode = static_cast<ModuleModeEnum>(settings->getIfConfigured());
+    log("SETUP: Creating loop service for module mode: %d", static_cast<int>(moduleMode));
+
+    try {
+        return loopServiceFactory->createLoopService(moduleMode);
+    }
+    catch (const std::exception& e) {
+        log("SETUP: Error creating loop service: %s", e.what());
+        // Fallback to a default service (USER_CAN_CONFIGURE) if creation fails
+        return loopServiceFactory->createLoopService(ModuleModeEnum::USER_CAN_CONFIGURE);
+    }
 }
 
 #endif // MODULE_SETUP_SERVICE_H
