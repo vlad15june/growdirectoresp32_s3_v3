@@ -2,6 +2,7 @@
 #define MOCK_ARDUINO_ADAPTER_H
 
 #include "Core/Domain/Interfaces/Adapters/IArduinoAdapter.h"
+#include <map>
 
 class MockArduinoAdapter : public IArduinoAdapter {
 public:
@@ -16,12 +17,22 @@ public:
     bool serialPrintlnCalled = false;
     bool serialAvailableCalled = false;
     bool serialReadCalled = false;
+    bool restartCalled = false;
     
     int delayCount = 0;
     int delayMicrosecondsCount = 0;
     unsigned long lastDelayMs = 0;
     unsigned long lastDelayUs = 0;
     unsigned long currentTime = 0;
+    
+    // Store pin mode settings
+    std::map<uint8_t, uint8_t> pinModes;
+    // Store digital output states
+    std::map<uint8_t, uint8_t> digitalOutputs;
+    // Store digital input values to be returned by digitalRead
+    std::map<uint8_t, int> digitalInputs;
+    // Store analog input values to be returned by analogRead
+    std::map<uint8_t, int> analogInputs;
     
     // Implementation of IArduinoAdapter interface
     
@@ -56,25 +67,32 @@ public:
     // Digital I/O
     void pinMode(uint8_t pin, uint8_t mode) override {
         pinModeCalled = true;
+        pinModes[pin] = mode;
     }
     
     void digitalWrite(uint8_t pin, uint8_t val) override {
         digitalWriteCalled = true;
+        digitalOutputs[pin] = val;
     }
     
     int digitalRead(uint8_t pin) override {
         digitalReadCalled = true;
-        return 0; // Default return
+        // Return the specified input value if one has been set
+        auto it = digitalInputs.find(pin);
+        return (it != digitalInputs.end()) ? it->second : 0;
     }
 
     // Analog I/O
     int analogRead(uint8_t pin) override {
         analogReadCalled = true;
-        return 0; // Default return
+        // Return the specified analog value if one has been set
+        auto it = analogInputs.find(pin);
+        return (it != analogInputs.end()) ? it->second : 0;
     }
     
     void analogWrite(uint8_t pin, int val) override {
         analogWriteCalled = true;
+        // Could store the analog output value if needed
     }
     
     // Serial communication
@@ -84,12 +102,12 @@ public:
     
     size_t serialPrint(const char* str) override {
         serialPrintCalled = true;
-        return 0; // Default return
+        return strlen(str);
     }
     
     size_t serialPrintln(const char* str) override {
         serialPrintlnCalled = true;
-        return 0; // Default return
+        return strlen(str) + 2; // +2 for CR+LF
     }
     
     int serialAvailable() override {
@@ -100,6 +118,37 @@ public:
     int serialRead() override {
         serialReadCalled = true;
         return -1; // Default return (no data)
+    }
+    
+    // System control
+    void restart() override {
+        restartCalled = true;
+        // In a real implementation, this would restart the device
+        // For testing, we just set a flag
+    }
+    
+    // Additional methods for testing
+    
+    // Set a digital input value to be returned by digitalRead
+    void setDigitalInputValue(uint8_t pin, int value) {
+        digitalInputs[pin] = value;
+    }
+    
+    // Set an analog input value to be returned by analogRead
+    void setAnalogInputValue(uint8_t pin, int value) {
+        analogInputs[pin] = value;
+    }
+    
+    // Get the current pin mode
+    uint8_t getPinMode(uint8_t pin) const {
+        auto it = pinModes.find(pin);
+        return (it != pinModes.end()) ? it->second : 255; // 255 means undefined
+    }
+    
+    // Get the current digital output value
+    uint8_t getDigitalOutput(uint8_t pin) const {
+        auto it = digitalOutputs.find(pin);
+        return (it != digitalOutputs.end()) ? it->second : 255; // 255 means undefined
     }
     
     // Reset method for tests
@@ -114,11 +163,18 @@ public:
         serialPrintlnCalled = false;
         serialAvailableCalled = false;
         serialReadCalled = false;
+        restartCalled = false;
+        
         delayCount = 0;
         delayMicrosecondsCount = 0;
         lastDelayMs = 0;
         lastDelayUs = 0;
         currentTime = 0;
+        
+        pinModes.clear();
+        digitalOutputs.clear();
+        digitalInputs.clear();
+        analogInputs.clear();
     }
 };
 

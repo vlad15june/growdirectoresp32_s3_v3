@@ -25,6 +25,9 @@ private:
     uint8_t* _redLeds;
     uint8_t* _greenLeds;
     uint8_t _ledsCount;
+    
+    // Module mode - updated to use CONFIGURED_DONE as default
+    ModuleModeEnum _requestedModuleMode = ModuleModeEnum::CONFIGURED_DONE;
 
 public:
     MockModuleConfig(ILogger* logger = nullptr, 
@@ -108,6 +111,15 @@ public:
     
     uint8_t getLedsCount() const override {
         return _ledsCount;
+    }
+
+    ModuleModeEnum getRequestedModuleMode() const override {
+        return _requestedModuleMode;
+    }
+    
+    void setRequestedModuleMode(ModuleModeEnum mode) override {
+        _requestedModuleMode = mode;
+        _modifiedFields["requestedModuleMode"] = true;
     }
 
     // Additional methods for testing
@@ -215,6 +227,7 @@ public:
         _ledsCount = 4;
         _isInitialized = false;
         _isTypeConfigure = false;
+        _requestedModuleMode = ModuleModeEnum::CONFIGURED_DONE; // Reset mode too
         
         // Re-initialize LED arrays with default values
         if (_redLeds) {

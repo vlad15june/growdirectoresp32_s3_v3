@@ -232,6 +232,36 @@ static void test_all_module_types(void) {
     }
 }
 
+// Update the module mode test function to use correct enum values
+static void test_module_mode(void) {
+    module_config_setup();
+    
+    // Test default module mode (ModuleConfig should initialize to a valid default)
+    ModuleModeEnum defaultMode = g_moduleConfig->getRequestedModuleMode();
+    
+    // Test setting module mode to USER_CAN_CONFIGURE
+    g_moduleConfig->setRequestedModuleMode(ModuleModeEnum::USER_CAN_CONFIGURE);
+    TEST_ASSERT_EQUAL(ModuleModeEnum::USER_CAN_CONFIGURE, g_moduleConfig->getRequestedModuleMode());
+    
+    // Test setting module mode to USER_CAN_RE_CONFIGURE
+    g_moduleConfig->setRequestedModuleMode(ModuleModeEnum::USER_CAN_RE_CONFIGURE);
+    TEST_ASSERT_EQUAL(ModuleModeEnum::USER_CAN_RE_CONFIGURE, g_moduleConfig->getRequestedModuleMode());
+    
+    // Test setting module mode to AP_TEST_MODE
+    g_moduleConfig->setRequestedModuleMode(ModuleModeEnum::AP_TEST_MODE);
+    TEST_ASSERT_EQUAL(ModuleModeEnum::AP_TEST_MODE, g_moduleConfig->getRequestedModuleMode());
+    
+    // Test setting module mode to CONFIGURED_DONE
+    g_moduleConfig->setRequestedModuleMode(ModuleModeEnum::CONFIGURED_DONE);
+    TEST_ASSERT_EQUAL(ModuleModeEnum::CONFIGURED_DONE, g_moduleConfig->getRequestedModuleMode());
+    
+    // Test setting module mode to CONFIGURED_NEED_RESTART
+    g_moduleConfig->setRequestedModuleMode(ModuleModeEnum::CONFIGURED_NEED_RESTART);
+    TEST_ASSERT_EQUAL(ModuleModeEnum::CONFIGURED_NEED_RESTART, g_moduleConfig->getRequestedModuleMode());
+    
+    module_config_teardown();
+}
+
 // Main test runner function
 extern "C" int run_module_config_tests(void) {
     printf("\n----- Running ModuleConfig Tests -----\n");
@@ -242,7 +272,8 @@ extern "C" int run_module_config_tests(void) {
     RUN_TEST(test_get_settings);
     RUN_TEST(test_setters);
     RUN_TEST(test_led_getters);
-    RUN_TEST(test_all_module_types);  // Add this line
+    RUN_TEST(test_all_module_types);
+    RUN_TEST(test_module_mode);  // Add the new test function
     
     printf("\n----- ModuleConfig Tests Complete -----\n");
     
