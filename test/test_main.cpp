@@ -6,6 +6,7 @@ extern "C" int run_module_config_tests(void);
 extern "C" int run_module_setup_service_tests(void);
 extern "C" int run_led_use_cases_tests(void);
 extern "C" int run_button_use_cases_tests(void);
+extern "C" int run_loop_service_factory_tests(void);
 
 static void setUp_module_config(void) {
     // Setup for each test
@@ -43,6 +44,9 @@ int main(void) {
     
     // Run tests from the ButtonUseCases test file
     run_button_use_cases_tests();
+    
+    // Run tests from the LoopServiceFactory test file
+    run_loop_service_factory_tests();
     
     return UNITY_END();
 }
