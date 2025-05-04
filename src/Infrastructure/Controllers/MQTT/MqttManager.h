@@ -48,7 +48,16 @@ private:
             log("Setting up MQTT topic handlers");
             auto handlers = _topicHandlerFactory->createHandlers();
             for (auto* handler : handlers) {
+                // Add the handler to the message processor
                 _messageProcessor->addTopicHandler(handler);
+                
+                // Subscribe to the handler's topic pattern
+                const char* topicPattern = handler->getTopicPattern();
+                if (subscribe(topicPattern)) {
+                    log("Subscribed to topic pattern: %s", topicPattern);
+                } else {
+                    log("Failed to subscribe to topic pattern: %s", topicPattern);
+                }
             }
             log("MQTT topic handlers setup completed");
         }

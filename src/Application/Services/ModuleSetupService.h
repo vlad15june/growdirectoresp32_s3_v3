@@ -5,10 +5,11 @@
 #include "Core/Domain/Interfaces/IDebugSystem.h"
 #include "Core/Domain/Interfaces/IModuleConfig.h"
 #include "Core/Domain/Interfaces/Adapters/ILedAdapter.h"
-#include "Core/Domain/Interfaces/Adapters/IWifiAdapter.h" // Added IWifiAdapter include
+#include "Core/Domain/Interfaces/Adapters/IWifiAdapter.h"
 #include "Core/Domain/Interfaces/UseCases/ILedUseCases.h"
-#include "Core/Domain/Interfaces/UseCases/IButtonUseCases.h" // Added IButtonUseCases include
-#include "Core/Domain/Enums/ModuleModeEnum.h"                // Added ModuleModeEnum include
+#include "Core/Domain/Interfaces/UseCases/IButtonUseCases.h"
+#include "Core/Domain/Enums/ModuleModeEnum.h"
+#include "Core/Domain/Interfaces/Mqtt/IMqttManager.h"
 #include "Application/Interfaces/WebServices/IWebServerLauncher.h"
 #include "Application/Interfaces/LoopServices/ILoopService.h"
 #include "Application/Interfaces/LoopServices/ILoopServiceFactory.h"
@@ -33,9 +34,10 @@ private:
     ILedAdapter *ledAdapter;
     ILedUseCases *ledUseCases;
     IButtonUseCases *buttonUseCases;
-    IWifiAdapter *wifiAdapter; // Added wifiAdapter member
+    IWifiAdapter *wifiAdapter;
     IWebServerLauncher *webServerLauncher;
-    ILoopServiceFactory *loopServiceFactory; // Add LoopServiceFactory pointer
+    ILoopServiceFactory *loopServiceFactory;
+    IMqttManager *mqttManager;
 
     void log(const char *format, ...);
 
@@ -57,6 +59,9 @@ private:
 
     void setupWebServer();
 
+    // Add method to setup MQTT connection for configured mode
+    void setupMqttConnection();
+
 public:
     // Declare the test helper as a friend class so it can access private methods
     friend class ModuleSetupServiceTestHelper;
@@ -70,10 +75,11 @@ public:
         IButtonUseCases *buttonUseCases = nullptr,
         IWifiAdapter *wifiAdapter = nullptr,
         IWebServerLauncher *webServerLauncher = nullptr,
-        ILoopServiceFactory *loopServiceFactory = nullptr); // Add loopServiceFactory parameter
+        ILoopServiceFactory *loopServiceFactory = nullptr,
+        IMqttManager *mqttManager = nullptr);
 
     void setupModule() override;
-    std::unique_ptr<ILoopService> getLoopService() override; // Add getLoopService method
+    std::unique_ptr<ILoopService> getLoopService() override;
 };
 
 // Implementation
@@ -85,17 +91,19 @@ inline ModuleSetupService::ModuleSetupService(
     ILedAdapter *ledAdapter,
     ILedUseCases *ledUseCases,
     IButtonUseCases *buttonUseCases,
-    IWifiAdapter *wifiAdapter, // Added wifiAdapter parameter
+    IWifiAdapter *wifiAdapter,
     IWebServerLauncher *webServerLauncher,
-    ILoopServiceFactory *loopServiceFactory) : logger(logger),
-                                             debugSystem(debugSystem),
-                                             moduleConfig(moduleConfig),
-                                             ledAdapter(ledAdapter),
-                                             ledUseCases(ledUseCases),
-                                             buttonUseCases(buttonUseCases),
-                                             wifiAdapter(wifiAdapter), // Initialize wifiAdapter
-                                             webServerLauncher(webServerLauncher),
-                                             loopServiceFactory(loopServiceFactory) // Initialize loopServiceFactory
+    ILoopServiceFactory *loopServiceFactory,
+    IMqttManager *mqttManager) : logger(logger),
+                               debugSystem(debugSystem),
+                               moduleConfig(moduleConfig),
+                               ledAdapter(ledAdapter),
+                               ledUseCases(ledUseCases),
+                               buttonUseCases(buttonUseCases),
+                               wifiAdapter(wifiAdapter),
+                               webServerLauncher(webServerLauncher),
+                               loopServiceFactory(loopServiceFactory),
+                               mqttManager(mqttManager)
 {
 }
 
@@ -230,9 +238,10 @@ inline void ModuleSetupService::UserReConfigModeConfigure()
 
 inline void ModuleSetupService::ConfigureDoneModeConfigure()
 {
-
+    // Setup MQTT connection for configured mode
+    setupMqttConnection();
     
-    log("SETUP: Module prepared for reconfiguration");
+    log("SETUP: Module prepared for operation");
 }
 
 inline void ModuleSetupService::clearAllFileLog()
@@ -400,6 +409,25 @@ inline void ModuleSetupService::setupWebServer()
     {
         const char* ip = wifiAdapter->getLocalIP();
         log("SETUP: Configuration interface available at http://%s/", ip);
+    }
+}
+
+inline void ModuleSetupService::setupMqttConnection()
+{
+    if (!mqttManager)
+    {
+        log("SETUP: Error - MQTT manager is missing");
+        return;
+    }
+
+    // Connect to MQTT broker
+    if (mqttManager->connect())
+    {
+        log("SETUP: Connected to MQTT broker");                
+    }
+    else
+    {
+        log("SETUP: Failed to connect to MQTT broker");
     }
 }
 

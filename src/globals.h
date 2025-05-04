@@ -141,6 +141,7 @@ ModuleSetupService moduleSetupService(
     &buttonUseCases, 
     &wifiAdapter, 
     &webServerLauncher,
-    &loopServiceFactory);
+    &loopServiceFactory,
+    &mqttManager);
 
 #endif // GLOBALS_H
