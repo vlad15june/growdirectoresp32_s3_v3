@@ -5,8 +5,8 @@
 #include <PubSubClient.h>
 #include "Core/Domain/Interfaces/ILogger.h"
 #include "Core/Domain/Interfaces/IDebugSystem.h"
-#include "IMqttManager.h"
-#include "MessageProcessor.h"
+#include "Core/Domain/Interfaces/Mqtt/IMessageProcessor.h"
+#include "Core/Domain/Interfaces/Mqtt/IMqttManager.h"
 #include "TopicHandlerFactory.h"
 
 /**

@@ -43,7 +43,8 @@ private:
     bool setupLeds();
     void handleModuleMode();
     void UserCanConfigModeConfigure();
-    void UserReConfigModeConfigure(); // Added method for re-configuration mode
+    void UserReConfigModeConfigure();
+    void ConfigureDoneModeConfigure();
     void clearAllFileLog();
     void clearStoreRules();
     void setupAP();
@@ -205,6 +206,7 @@ inline void ModuleSetupService::handleModuleMode()
     else if (isConfigured == ModuleModeEnum::CONFIGURED_DONE)
     {
         log("SETUP: Module is in CONFIGURED_DONE mode");
+        ConfigureDoneModeConfigure();
     }
     else
     {
@@ -222,6 +224,13 @@ inline void ModuleSetupService::UserReConfigModeConfigure()
 {
     setupAP();
     setupWebServer();
+    
+    log("SETUP: Module prepared for reconfiguration");
+}
+
+inline void ModuleSetupService::ConfigureDoneModeConfigure()
+{
+
     
     log("SETUP: Module prepared for reconfiguration");
 }

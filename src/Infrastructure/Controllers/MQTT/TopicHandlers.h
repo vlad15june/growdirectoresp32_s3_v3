@@ -1,7 +1,7 @@
 #ifndef TOPIC_HANDLERS_H
 #define TOPIC_HANDLERS_H
 
-#include "ITopicHandler.h"
+#include "Core/Domain/Interfaces/Mqtt/ITopicHandler.h"
 #include <string.h>
 
 /**
@@ -83,7 +83,7 @@ public:
     ) : BaseTopicHandler("command/#", logger, debugSystem) {
     }
     
-    void handleMessage(const char* topic, const byte* payload, unsigned int length) override {
+    void handleMessage(const char* topic, const uint8_t* payload, unsigned int length) override {
         log("Handling command message");
         
         // Convert payload to a null-terminated string

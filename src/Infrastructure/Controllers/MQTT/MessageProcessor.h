@@ -5,8 +5,8 @@
 #include <vector>
 #include "Core/Domain/Interfaces/ILogger.h"
 #include "Core/Domain/Interfaces/IDebugSystem.h"
-#include "IMessageProcessor.h"
-#include "ITopicHandler.h"
+#include "Core/Domain/Interfaces/Mqtt/IMessageProcessor.h"
+#include "Core/Domain/Interfaces/Mqtt/ITopicHandler.h"
 
 /**
  * MQTT Message Processor implementation
@@ -40,7 +40,7 @@ public:
     
     ~MessageProcessor() override = default;
     
-    void processMessage(const char* topic, const byte* payload, unsigned int length) override {
+    void processMessage(const char* topic, const uint8_t* payload, unsigned int length) override {
         log("Processing message from topic: %s", topic);
         
         // Convert payload to a null-terminated string for logging

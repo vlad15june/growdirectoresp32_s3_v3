@@ -4,7 +4,7 @@
 #include <vector>
 #include "Core/Domain/Interfaces/ILogger.h"
 #include "Core/Domain/Interfaces/IDebugSystem.h"
-#include "ITopicHandler.h"
+#include "Core/Domain/Interfaces/Mqtt/ITopicHandler.h"
 #include "TopicHandlers.h"
 
 /**
