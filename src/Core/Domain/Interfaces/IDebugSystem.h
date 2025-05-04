@@ -23,6 +23,9 @@ namespace DebugFeatures {
     // Loop service debug feature
     constexpr const char* LOOP_SERVICE_DEBUG = "LOOP_SERVICE_DEBUG";
     
+    // Web server debug feature
+    constexpr const char* CONFIG_WEB_SERVER = "CONFIG_WEB_SERVER";
+    
     // Rule debug features
     constexpr const char* RULE_DEBUG = "RULE_DEBUG";
     constexpr const char* RULE_SYNC_DEBUG = "RULE_SYNC_DEBUG";

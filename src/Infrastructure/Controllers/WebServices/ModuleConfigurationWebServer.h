@@ -25,7 +25,7 @@ private:
 
     void log(const char *format, ...)
     {
-        if (logger != nullptr && debugSystem != nullptr && debugSystem->isFeatureEnabled(DebugFeatures::SETUP_DEBUG))
+        if (logger != nullptr && debugSystem != nullptr && debugSystem->isFeatureEnabled(DebugFeatures::CONFIG_WEB_SERVER))
         {
             char buffer[128];
             va_list args;
@@ -226,6 +226,12 @@ public:
 
             saveWifiCredentials(doc["ssid"], doc["password"]);
             
+            if (WiFi.status() != WL_CONNECTED)
+            {
+              WiFi.begin(ssid, password);
+              Serial.println("Connecting to WiFi..");
+            }
+
             log("Connected to WiFi - ok");
             log("ok, send 200");
             server.send(200); });
