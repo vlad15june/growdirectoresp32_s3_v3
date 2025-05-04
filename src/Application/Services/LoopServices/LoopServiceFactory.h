@@ -12,6 +12,7 @@
 #include "Core/Domain/Interfaces/ILogger.h"
 #include "Core/Domain/Interfaces/IDebugSystem.h"
 #include "Core/Domain/Interfaces/IModuleConfig.h"
+#include "Core/Domain/Interfaces/Adapters/IArduinoAdapter.h"
 #include <stdexcept>
 
 class LoopServiceFactory : public ILoopServiceFactory {
@@ -23,6 +24,7 @@ private:
     IDebugSystem* debugSystem;
     IWebServerLooper* webServer;
     IModuleConfig* moduleConfig;
+    IArduinoAdapter* arduinoAdapter;
 
 public:
     LoopServiceFactory(
@@ -32,14 +34,16 @@ public:
         ILogger* logger = nullptr,
         IDebugSystem* debugSystem = nullptr,
         IWebServerLooper* webServer = nullptr,
-        IModuleConfig* moduleConfig = nullptr
+        IModuleConfig* moduleConfig = nullptr,
+        IArduinoAdapter* arduinoAdapter = nullptr
     ) : ledUseCases(ledUseCases),
         buttonUseCases(buttonUseCases),
         moduleModeUseCase(moduleModeUseCase),
         logger(logger),
         debugSystem(debugSystem),
         webServer(webServer),
-        moduleConfig(moduleConfig) {}
+        moduleConfig(moduleConfig),
+        arduinoAdapter(arduinoAdapter) {}
     
     ~LoopServiceFactory() override = default;
 
@@ -68,6 +72,7 @@ public:
         service->setLogging(logger, debugSystem);
         service->setWebServer(webServer);
         service->setModuleConfig(moduleConfig);
+        service->setArduinoAdapter(arduinoAdapter);
         
         return service;
     }

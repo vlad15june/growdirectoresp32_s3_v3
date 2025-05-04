@@ -108,7 +108,8 @@ LoopServiceFactory loopServiceFactory(
   &mqttLogger,
   &debugSystem,
   &moduleConfigurationWebServer,
-  &moduleConfig
+  &moduleConfig,
+  &arduinoAdapter
 );
 
 ModuleSetupService moduleSetupService(

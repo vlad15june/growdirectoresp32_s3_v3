@@ -20,10 +20,7 @@ public:
             if (buttonUseCases->isButtonHeldForDuration()) {
                 log("Long button press detected in CONFIGURED_DONE mode - potential reconfiguration");
                 
-                // Could trigger a mode change, for example:
-                // if (moduleModeUseCase) {
-                //    // Request mode change to reconfiguration
-                // }
+                moduleConfig->setRequestedModuleMode(ModuleModeEnum::USER_CAN_RE_CONFIGURE);
             }
         }
         

@@ -8,6 +8,7 @@
 #include "Core/Domain/Interfaces/ILogger.h"
 #include "Core/Domain/Interfaces/IDebugSystem.h"
 #include "Core/Domain/Interfaces/IModuleConfig.h"
+#include "Core/Domain/Interfaces/Adapters/IArduinoAdapter.h"
 #include "Application/Interfaces/WebServices/IWebServerLooper.h"
 #include <stdarg.h>
 
@@ -20,6 +21,7 @@ protected:
     IDebugSystem* debugSystem;
     IWebServerLooper* webServer;
     IModuleConfig* moduleConfig;
+    IArduinoAdapter* arduinoAdapter;
     
     LoopServiceBase(
         ILedUseCases* ledUseCases = nullptr,
@@ -28,14 +30,16 @@ protected:
         ILogger* logger = nullptr,
         IDebugSystem* debugSystem = nullptr,
         IWebServerLooper* webServer = nullptr,
-        IModuleConfig* moduleConfig = nullptr
+        IModuleConfig* moduleConfig = nullptr,
+        IArduinoAdapter* arduinoAdapter = nullptr
     ) : ledUseCases(ledUseCases),
         buttonUseCases(buttonUseCases),
         onChangeModuleModeUseCase(moduleModeUseCase),
         logger(logger),
         debugSystem(debugSystem),
         webServer(webServer),
-        moduleConfig(moduleConfig) {}
+        moduleConfig(moduleConfig),
+        arduinoAdapter(arduinoAdapter) {}
     
     void log(const char* format, ...) {
         if (logger != nullptr && debugSystem != nullptr && 
@@ -105,6 +109,11 @@ public:
     // Method to set module config
     virtual void setModuleConfig(IModuleConfig* config) {
         this->moduleConfig = config;
+    }
+    
+    // Method to set Arduino adapter
+    virtual void setArduinoAdapter(IArduinoAdapter* adapter) {
+        this->arduinoAdapter = adapter;
     }
 };
 

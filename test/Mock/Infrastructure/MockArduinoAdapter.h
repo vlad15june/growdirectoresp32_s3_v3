@@ -18,12 +18,14 @@ public:
     bool serialAvailableCalled = false;
     bool serialReadCalled = false;
     bool restartCalled = false;
+    bool millisCalled = false;
     
     int delayCount = 0;
     int delayMicrosecondsCount = 0;
     unsigned long lastDelayMs = 0;
     unsigned long lastDelayUs = 0;
     unsigned long currentTime = 0;
+    unsigned long currentMillis = 0;
     
     // Store pin mode settings
     std::map<uint8_t, uint8_t> pinModes;
@@ -57,7 +59,8 @@ public:
     }
     
     unsigned long millis() override {
-        return currentTime;
+        millisCalled = true;
+        return currentMillis;
     }
     
     unsigned long micros() override {
@@ -164,12 +167,14 @@ public:
         serialAvailableCalled = false;
         serialReadCalled = false;
         restartCalled = false;
+        millisCalled = false;
         
         delayCount = 0;
         delayMicrosecondsCount = 0;
         lastDelayMs = 0;
         lastDelayUs = 0;
         currentTime = 0;
+        currentMillis = 0;
         
         pinModes.clear();
         digitalOutputs.clear();
