@@ -30,6 +30,9 @@
 #include "Infrastructure/Adapters/WiFi/WifiAdapter.h"
 #include "Infrastructure/Controllers/WebServices/ModuleConfigurationWebServer.h"
 #include "Infrastructure/Controllers/WebServices/Launchers/WebServerLauncher.h"
+#include "Infrastructure/Controllers/MQTT/MqttManager.h"
+#include "Infrastructure/Controllers/MQTT/MessageProcessor.h"
+#include "Infrastructure/Controllers/MQTT/TopicHandlers.h"
 #include "Application/Services/ModuleSetupService.h"
 #include "Application/Interfaces/LoopServices/ILoopServiceFactory.h"
 #include "Application/Services/LoopServices/LoopServiceFactory.h"
@@ -49,7 +52,7 @@ WiFiMulti wifiMulti;
 
 // Callback function for MQTT
 void mqttCallback(char* topic, byte* payload, unsigned int length) {
-  // Handle incoming messages
+  // This will be replaced by the MqttManager callback
   Serial.print("Message received on topic: ");
   Serial.println(topic);
 }
@@ -57,9 +60,17 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
 // Initialize WiFi and MQTT clients
 WiFiClient wifiClient;
 PubSubClient mqttClient(mqttBroker, 1883, mqttCallback, wifiClient);
+
 MqttLogger mqttLogger(mqttClient, mqttDefaultTopic, MqttLoggerMode::MqttAndSerial);
 
 DebugSystem debugSystem;
+
+// MQTT components
+MessageProcessor messageProcessor(&mqttLogger, &debugSystem);
+MqttManager mqttManager(mqttClient, &mqttLogger, &debugSystem, "GrowDirectorClient", mqttUser, mqttPassword);
+
+// Initialize topic handlers
+TopicHandlerFactory topicHandlerFactory(&mqttLogger, &debugSystem);
 
 EepromAdapter eeprom(1024, 0);
 Settings settings(eeprom, &mqttLogger, &debugSystem);
