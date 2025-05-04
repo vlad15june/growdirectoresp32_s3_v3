@@ -51,6 +51,7 @@ private:
                 // Add the handler to the message processor
                 _messageProcessor->addTopicHandler(handler);
                 
+                // TODO: Check if need subscribe to the topic for this handler. Add flag to the handler
                 // Subscribe to the handler's topic pattern
                 const char* topicPattern = handler->getTopicPattern();
                 if (subscribe(topicPattern)) {

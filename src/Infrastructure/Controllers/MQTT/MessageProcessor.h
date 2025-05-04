@@ -69,7 +69,7 @@ public:
     void addTopicHandler(ITopicHandler* handler) override {
         if (handler != nullptr) {
             log("Adding topic handler for: %s", handler->getTopicPattern());
-            _topicHandlers.push_back(handler);
+            _topicHandlers.push_back(handler); //TODO: check for duplicates
         }
     }
     
