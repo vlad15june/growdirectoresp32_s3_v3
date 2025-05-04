@@ -15,7 +15,7 @@ private:
     bool isSystemOn;
     bool buttonPressedState;
     unsigned long lastPressTime;
-    const unsigned long durationMs = 1000; // Default duration in milliseconds
+    const unsigned long durationMs = 15000;
 
     void log(const char *format, ...)
     {
@@ -60,6 +60,20 @@ public:
     bool isButtonHeldForDuration() override {
         bool held = buttonAdapter->wasButtonHeld(buttonIndex, durationMs);
         log("Button %d held for %lu ms: %s", buttonIndex, durationMs, held ? "true" : "false");
+        return held;
+    }
+    
+    // Check if button was pressed when system was on and then held for the specified duration
+    bool isButtonPressedWhenOnThenHeldForDuration() override {
+        // First check if the button was pressed when system was on
+        if (!buttonPressedState) {
+            log("Button %d wasn't pressed when system was on", buttonIndex);
+            return false;
+        }
+        
+        // Then check if it's being held for the duration
+        bool held = buttonAdapter->wasButtonHeld(buttonIndex, durationMs);
+        log("Button %d pressed when on and held for %lu ms: %s", buttonIndex, durationMs, held ? "true" : "false");
         return held;
     }
 };

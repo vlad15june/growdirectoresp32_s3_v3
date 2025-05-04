@@ -13,6 +13,7 @@ public:
     virtual bool checkButtonPressedWhenOn() = 0;
     virtual bool isButtonPressedWhenOn() = 0;
     virtual bool isButtonHeldForDuration() = 0;
+    virtual bool isButtonPressedWhenOnThenHeldForDuration() = 0;
 };
 
 #endif // I_BUTTON_USE_CASES_H

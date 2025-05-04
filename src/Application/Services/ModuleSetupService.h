@@ -179,6 +179,8 @@ inline void ModuleSetupService::handleModuleMode()
         log("SETUP: Updated configuration status to USER_CAN_CONFIGURE, needs restart");
     }
 
+    buttonUseCases->checkButtonPressedWhenOn();
+
     if (isConfigured == ModuleModeEnum::CONFIGURED_NEED_RESTART)
     {
         log("SETUP: Module is in CONFIGURED_NEED_RESTART mode");
@@ -190,7 +192,6 @@ inline void ModuleSetupService::handleModuleMode()
     else if (isConfigured == ModuleModeEnum::USER_CAN_CONFIGURE)
     {
         log("SETUP: Module is in USER_CAN_CONFIGURE mode");
-        buttonUseCases->checkButtonPressedWhenOn();
         UserCanConfigModeConfigure();
         clearAllFileLog();
         clearStoreRules();

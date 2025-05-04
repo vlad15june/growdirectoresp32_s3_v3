@@ -225,6 +225,12 @@ public:
             }
 
             saveWifiCredentials(doc["ssid"], doc["password"]);
+
+            char ssid[BUFSIZE];
+            char password[BUFSIZE];
+
+            strcpy(ssid, doc["ssid"]);
+            strcpy(password, doc["password"]);
             
             if (WiFi.status() != WL_CONNECTED)
             {

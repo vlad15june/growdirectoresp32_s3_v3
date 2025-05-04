@@ -14,7 +14,7 @@ class LoopServiceBase : public ILoopService {
 protected:
     ILedUseCases* ledUseCases;
     IButtonUseCases* buttonUseCases;
-    IOnChangeModuleModeUseCase* moduleModeUseCase;
+    IOnChangeModuleModeUseCase* onChangeModuleModeUseCase;
     ILogger* logger;
     IDebugSystem* debugSystem;
     IWebServerLooper* webServer;
@@ -28,7 +28,7 @@ protected:
         IWebServerLooper* webServer = nullptr
     ) : ledUseCases(ledUseCases),
         buttonUseCases(buttonUseCases),
-        moduleModeUseCase(moduleModeUseCase),
+        onChangeModuleModeUseCase(moduleModeUseCase),
         logger(logger),
         debugSystem(debugSystem),
         webServer(webServer) {}
@@ -51,10 +51,17 @@ public:
     
     // Common loop implementation that will be called by derived classes
     void loop() override {
+        // Check if button was pressed when on and then held for duration
+        if (buttonUseCases && onChangeModuleModeUseCase) {
+            if (buttonUseCases->isButtonPressedWhenOnThenHeldForDuration()) {
+                log("Button was pressed when on and held for duration - switching to TEST mode");
+                
+            }
+        }
                 
         // Check module mode changes
-        if (moduleModeUseCase) {
-            moduleModeUseCase->loop();
+        if (onChangeModuleModeUseCase) {
+            onChangeModuleModeUseCase->loop();
         }
         
         // Call specific implementation for this mode
@@ -76,7 +83,7 @@ public:
         IOnChangeModuleModeUseCase* modeUC) {
         this->ledUseCases = ledUC;
         this->buttonUseCases = buttonUC;
-        this->moduleModeUseCase = modeUC;
+        this->onChangeModuleModeUseCase = modeUC;
     }
     
     // Method to set logging components
