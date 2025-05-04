@@ -30,6 +30,7 @@ public:
     virtual uint8_t getLedsCount() const = 0;
     virtual ModuleModeEnum getRequestedModuleMode() const = 0;
     virtual void setRequestedModuleMode(ModuleModeEnum mode) = 0;
+    virtual const char* getModuleUid() const = 0;
     virtual ~IModuleConfig() = default;
 };
 

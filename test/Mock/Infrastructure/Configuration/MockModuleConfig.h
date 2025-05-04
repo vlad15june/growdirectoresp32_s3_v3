@@ -5,6 +5,7 @@
 #include "Core/Domain/Interfaces/ILogger.h"
 #include "Core/Domain/Interfaces/IDebugSystem.h"
 #include "Infrastructure/Adapters/Time/INTPTimeAdapter.h"
+#include "Core/Domain/Interfaces/Adapters/IWifiAdapter.h"
 #include <map>
 #include <string>
 
@@ -17,6 +18,7 @@ private:
     IDebugSystem* _debugSystem;
     ISettings* _settings;
     INTPTimeAdapter* _timeAdapter;
+    IWifiAdapter* _wifiAdapter;
     bool _isInitialized;
     bool _isTypeConfigure;
     std::map<std::string, bool> _modifiedFields;
@@ -29,11 +31,15 @@ private:
     // Module mode - updated to use CONFIGURED_DONE as default
     ModuleModeEnum _requestedModuleMode = ModuleModeEnum::CONFIGURED_DONE;
 
+    // Add module UID field
+    std::string _moduleUid;
+
 public:
     MockModuleConfig(ILogger* logger = nullptr, 
                     IDebugSystem* debugSystem = nullptr, 
                     ISettings* settings = nullptr,
-                    INTPTimeAdapter* timeAdapter = nullptr)
+                    INTPTimeAdapter* timeAdapter = nullptr,
+                    IWifiAdapter* wifiAdapter = nullptr)
         : _moduleType(MODULE_TYPE_DEVICE),
           _moduleSubType(MODULE_SUBTYPE_RELAY),
           _deviceCount(4),
@@ -41,11 +47,13 @@ public:
           _debugSystem(debugSystem),
           _settings(settings),
           _timeAdapter(timeAdapter),
+          _wifiAdapter(wifiAdapter),
           _isInitialized(false),
           _isTypeConfigure(false),
           _redLeds(nullptr),
           _greenLeds(nullptr),
-          _ledsCount(4) {
+          _ledsCount(4),
+          _moduleUid("test_module_uid") { // Initialize with a default module UID
         // Initialize LED arrays with default values
         _redLeds = new uint8_t[_ledsCount];
         _greenLeds = new uint8_t[_ledsCount];
@@ -120,6 +128,26 @@ public:
     void setRequestedModuleMode(ModuleModeEnum mode) override {
         _requestedModuleMode = mode;
         _modifiedFields["requestedModuleMode"] = true;
+    }
+
+    const char* getModuleUid() const override {
+        return _moduleUid.c_str();
+    }
+
+    void setModuleUid(const char* uid) {
+        if (uid != nullptr) {
+            _moduleUid = uid;
+            _modifiedFields["moduleUid"] = true;
+        }
+    }
+
+    IWifiAdapter* getWifiAdapter() const {
+        return _wifiAdapter;
+    }
+
+    void setWifiAdapter(IWifiAdapter* wifiAdapter) {
+        _wifiAdapter = wifiAdapter;
+        _modifiedFields["wifiAdapter"] = true;
     }
 
     // Additional methods for testing
@@ -228,6 +256,7 @@ public:
         _isInitialized = false;
         _isTypeConfigure = false;
         _requestedModuleMode = ModuleModeEnum::CONFIGURED_DONE; // Reset mode too
+        _moduleUid = "test_module_uid";
         
         // Re-initialize LED arrays with default values
         if (_redLeds) {

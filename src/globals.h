@@ -44,7 +44,7 @@ const char *mqttPassword = "lasdfh329483457sfdjhs92_w";
 // MQTT settings
 IPAddress mqttBroker(116, 203, 235, 144);
 const int mqttPort = 1883;
-const char* mqttDefaultTopic = "hardware/log";
+const char *mqttDefaultTopic = "hardware/log";
 
 IPAddress myIP;
 
@@ -52,7 +52,8 @@ WebServer webServer(80);
 WiFiMulti wifiMulti;
 
 // Callback function for MQTT
-void mqttCallback(char* topic, byte* payload, unsigned int length) {
+void mqttCallback(char *topic, byte *payload, unsigned int length)
+{
   // This will be replaced by the MqttManager callback
   Serial.print("Message received on topic: ");
   Serial.println(topic);
@@ -70,16 +71,15 @@ DebugSystem debugSystem;
 TopicHandlerFactory topicHandlerFactory(&mqttLogger, &debugSystem);
 MessageProcessor messageProcessor(&mqttLogger, &debugSystem);
 MqttManager mqttManager(
-    mqttClient, 
-    &mqttLogger, 
-    &debugSystem, 
-    "GrowDirectorClient", 
-    mqttUser, 
-    mqttPassword, 
-    true, 
+    mqttClient,
+    &mqttLogger,
+    &debugSystem,
+    "GrowDirectorClient",
+    mqttUser,
+    mqttPassword,
+    true,
     &messageProcessor,
-    &topicHandlerFactory
-);
+    &topicHandlerFactory);
 
 EepromAdapter eeprom(1024, 0);
 Settings settings(eeprom, &mqttLogger, &debugSystem);
@@ -96,7 +96,7 @@ WifiAdapter wifiAdapter(wifiMulti);
 // Using default NTP server with UTC offset of 0 and daylight offset of 0
 NTPTimeAdapter ntpTimeAdapter(&mqttLogger, &debugSystem, &settings);
 
-ModuleConfig moduleConfig(&mqttLogger, &debugSystem, &settings, &ntpTimeAdapter);
+ModuleConfig moduleConfig(&mqttLogger, &debugSystem, &settings, &ntpTimeAdapter, &wifiAdapter);
 
 // Create OnChangeModuleModeUseCase instance
 OnChangeModuleModeUseCase moduleModeUseCase(arduinoAdapter, moduleConfig, &mqttLogger, &debugSystem);
@@ -106,42 +106,43 @@ LedUseCases ledUseCases(&ledAdapter, &moduleConfig, &arduinoAdapter, &mqttLogger
 ButtonUseCases buttonUseCases(&buttonAdapter, &mqttLogger, &debugSystem, 0);
 
 ModuleConfigurationWebServer moduleConfigurationWebServer(
-    webServer, 
+    webServer,
     wifiMulti,
-    &mqttLogger, 
-    &debugSystem, 
+    &mqttLogger,
+    &debugSystem,
     &settings,
-    &moduleConfig
-);
+    &moduleConfig);
 
 WebServerLauncher webServerLauncher(
     &mqttLogger,
     &debugSystem,
-    moduleConfigurationWebServer
-);
+    moduleConfigurationWebServer);
 
 // Create LoopServiceFactory instance with proper dependencies
 LoopServiceFactory loopServiceFactory(
-  &ledUseCases,
-  &buttonUseCases,
-  &moduleModeUseCase,
-  &mqttLogger,
-  &debugSystem,
-  &moduleConfigurationWebServer,
-  &moduleConfig,
-  &arduinoAdapter
-);
+    &ledUseCases,
+    &buttonUseCases,
+    &moduleModeUseCase,
+    &mqttLogger,
+    &debugSystem,
+    &moduleConfigurationWebServer,
+    &moduleConfig,
+    &arduinoAdapter);
 
 ModuleSetupService moduleSetupService(
-    &mqttLogger, 
-    &debugSystem, 
-    &moduleConfig, 
-    &ledAdapter, 
-    &ledUseCases, 
-    &buttonUseCases, 
-    &wifiAdapter, 
+    &mqttLogger,
+    &debugSystem,
+    &moduleConfig,
+    &ledAdapter,
+    &ledUseCases,
+    &buttonUseCases,
+    &wifiAdapter,
     &webServerLauncher,
     &loopServiceFactory,
     &mqttManager);
 
+void initDependencies()
+{
+  topicHandlerFactory.setModuleConfig(&moduleConfig);
+}
 #endif // GLOBALS_H

@@ -5,6 +5,7 @@
 #include "Core/Domain/Interfaces/IModuleConfig.h"
 #include "Core/Domain/Interfaces/IDebugSystem.h"
 #include "Core/Domain/Interfaces/ISettings.h"
+#include "Core/Domain/Interfaces/Adapters/IWifiAdapter.h" // Add include for IWifiAdapter
 #include "Infrastructure/Adapters/Time/INTPTimeAdapter.h"
 
 #define CID_0 5
@@ -28,8 +29,9 @@ private:
     IDebugSystem *debugSystem;
     ISettings *settings;
     INTPTimeAdapter *timeAdapter;
-    ModuleModeEnum requestedModuleMode; // New field to store the module mode
-
+    IWifiAdapter *wifiAdapter;
+    ModuleModeEnum requestedModuleMode;
+        
     // LED arrays
     uint8_t* redLeds;
     uint8_t* greenLeds;
@@ -127,11 +129,13 @@ public:
     ModuleConfig(ILogger *loggerInstance = nullptr, 
                 IDebugSystem *debugSystemInstance = nullptr, 
                 ISettings *settingsInstance = nullptr,
-                INTPTimeAdapter *timeAdapterInstance = nullptr)
+                INTPTimeAdapter *timeAdapterInstance = nullptr,
+                IWifiAdapter *wifiAdapterInstance = nullptr)
         : moduleType(MODULE_TYPE_DEVICE), moduleSubType(MODULE_SUBTYPE_RELAY), deviceCount(4), ledsCount(4),
           logger(loggerInstance), debugSystem(debugSystemInstance), 
           settings(settingsInstance), timeAdapter(timeAdapterInstance),
-          requestedModuleMode(ModuleModeEnum::USER_CAN_CONFIGURE) {} // Initialize with default mode
+          wifiAdapter(wifiAdapterInstance),
+          requestedModuleMode(ModuleModeEnum::USER_CAN_CONFIGURE){}
           
     ~ModuleConfig() {
         if (redLeds != nullptr) {
@@ -269,6 +273,16 @@ public:
         return timeAdapter;
     }
 
+    void setWifiAdapter(IWifiAdapter *wifiAdapterInstance)
+    {
+        wifiAdapter = wifiAdapterInstance;
+    }
+
+    IWifiAdapter *getWifiAdapter() const
+    {
+        return wifiAdapter;
+    }
+
     uint8_t* getRedLeds() const override {
         return redLeds;
     }
@@ -289,7 +303,17 @@ public:
         requestedModuleMode = mode;
         log("MODULE: Module mode set to: %d\n", static_cast<int>(mode));
     }
-};
+
+    const char* getModuleUid() const override {
+        if (wifiAdapter == nullptr) {
+            return "default_uid";
+        }
+        if (wifiAdapter->getMACAddress() == nullptr) {
+            return "default_uid";
+        }
+        return wifiAdapter->getMACAddress();
+    }
+    };
 
 // Define static members
 uint8_t ModuleConfig::LED_R_SKT[2] = {38, 37};

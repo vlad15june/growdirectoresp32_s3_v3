@@ -3,6 +3,7 @@
 
 #include "Core/Domain/Interfaces/Mqtt/ITopicHandler.h"
 #include <string.h>
+#include <string>
 
 /**
  * Base Topic Handler implementation
@@ -79,8 +80,12 @@ class CommandTopicHandler : public BaseTopicHandler {
 public:
     CommandTopicHandler(
         ILogger* logger,
-        IDebugSystem* debugSystem
-    ) : BaseTopicHandler("command/#", logger, debugSystem) {
+        IDebugSystem* debugSystem,
+        const char* moduleUid
+    ) : BaseTopicHandler(
+            (std::string("GrowDirectorMqttTopic/") + moduleUid).c_str(), 
+            logger, 
+            debugSystem) {
     }
     
     void handleMessage(const char* topic, const uint8_t* payload, unsigned int length) override {
@@ -91,26 +96,7 @@ public:
         memcpy(payloadStr, payload, length);
         payloadStr[length] = '\0';
         
-        // Extract command type from topic (assuming format like "command/[commandType]")
-        const char* commandType = strchr(topic, '/');
-        if (commandType != nullptr) {
-            commandType++; // Skip the '/'
-            
-            log("Command type: %s, Payload: %s", commandType, payloadStr);
-            
-            // Process different command types
-            if (strcmp(commandType, "restart") == 0) {
-                log("Processing restart command");
-                // Implement restart logic
-            } else if (strcmp(commandType, "set_config") == 0) {
-                log("Processing set_config command");
-                // Implement configuration update logic
-            } else {
-                log("Unknown command type: %s", commandType);
-            }
-        } else {
-            log("Invalid command topic format");
-        }
+
         
         delete[] payloadStr;
     }

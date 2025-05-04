@@ -13,6 +13,8 @@ std::unique_ptr<ILoopService> loopService;
 
 void setup()
 {
+  initDependencies();
+  
   Serial.begin(115200);
   Serial.println("System initialized.");
 
