@@ -12,6 +12,8 @@
 #include "Mock/Infrastructure/Configuration/MockSettings.h"
 #include "Mock/Application/LoopServices/MockLoopServiceFactory.h"
 #include "Mock/Application/LoopServices/MockLoopService.h"
+#include "Mock/Infrastructure/Mqtt/MockMqttManager.h"
+#include "Mock/Infrastructure/Mqtt/MockMessageProcessor.h"
 
 // Helper class for tests
 class ModuleSetupServiceTestHelper {
@@ -27,6 +29,12 @@ public:
             service->setupWebServer();
         }
     }
+
+    static void callConfigureDoneModeConfigure(ModuleSetupService* service) {
+        if (service) {
+            service->ConfigureDoneModeConfigure();
+        }
+    }
 };
 
 // Global test variables
@@ -40,6 +48,8 @@ static MockWifiAdapter g_mockWifiAdapter;
 static MockWebServerLauncher g_mockWebServerLauncher;
 static MockLoopServiceFactory g_mockLoopServiceFactory;
 static MockSettings g_mockSettings;
+static MockMqttManager g_mockMqttManager;
+static MockMessageProcessor g_mockMessageProcessor;
 static ModuleSetupService* g_moduleSetupService;
 static FILE* debug_file = nullptr;
 
@@ -64,6 +74,8 @@ static void module_setup_service_setup(void) {
     g_mockWebServerLauncher.reset();
     g_mockLoopServiceFactory.reset();
     g_mockSettings.reset();
+    g_mockMqttManager.reset();
+    g_mockMessageProcessor.reset();
     
     // Set up the mock settings for module config
     g_mockModuleConfig.setSettings(&g_mockSettings);
@@ -77,7 +89,8 @@ static void module_setup_service_setup(void) {
         &g_mockButtonUseCases,
         &g_mockWifiAdapter,
         &g_mockWebServerLauncher,
-        &g_mockLoopServiceFactory
+        &g_mockLoopServiceFactory,
+        &g_mockMqttManager
     );
 }
 
@@ -159,7 +172,8 @@ static void test_setup_module_without_led_adapter(void) {
         &g_mockButtonUseCases,
         &g_mockWifiAdapter,
         &g_mockWebServerLauncher,
-        &g_mockLoopServiceFactory
+        &g_mockLoopServiceFactory,
+        &g_mockMqttManager
     );
     
     // This should not crash and should still initialize the config
@@ -185,7 +199,8 @@ static void test_setup_module_without_config(void) {
         &g_mockButtonUseCases,
         &g_mockWifiAdapter,
         &g_mockWebServerLauncher,
-        &g_mockLoopServiceFactory
+        &g_mockLoopServiceFactory,
+        &g_mockMqttManager
     );
     
     // This should not crash and should log an error
@@ -225,7 +240,8 @@ static void test_setup_module_without_led_use_cases(void) {
         &g_mockButtonUseCases,
         &g_mockWifiAdapter,
         &g_mockWebServerLauncher,
-        &g_mockLoopServiceFactory
+        &g_mockLoopServiceFactory,
+        &g_mockMqttManager
     );
     
     // This should not crash and should still initialize the config and LEDs
@@ -350,7 +366,8 @@ static void test_setup_module_without_web_server_launcher(void) {
         &g_mockButtonUseCases,
         &g_mockWifiAdapter,
         nullptr,
-        &g_mockLoopServiceFactory
+        &g_mockLoopServiceFactory,
+        &g_mockMqttManager
     );
     
     // Set up the mock to simulate USER_CAN_CONFIGURE mode
@@ -781,7 +798,8 @@ static void test_setup_ap_handles_missing_wifi_adapter() {
         &g_mockButtonUseCases,
         nullptr, // No WiFi adapter
         &g_mockWebServerLauncher,
-        &g_mockLoopServiceFactory
+        &g_mockLoopServiceFactory,
+        &g_mockMqttManager
     );
     
     // This should not crash and should log an error
@@ -1040,6 +1058,108 @@ static void test_get_loop_service_for_each_module_mode() {
     if (debug_file != nullptr) fprintf(debug_file, "Finished test_get_loop_service_for_each_module_mode\n");
 }
 
+// MQTT Tests
+static void test_configure_done_mode_configure_sets_up_mqtt_connection() {
+    if (debug_file != nullptr) fprintf(debug_file, "Starting test_configure_done_mode_configure_sets_up_mqtt_connection\n");
+    module_setup_service_setup();
+    
+    // Recreate service with MQTT manager
+    delete g_moduleSetupService;
+    g_moduleSetupService = new ModuleSetupService(
+        &g_mockLogger,
+        &g_mockDebugSystem,
+        &g_mockModuleConfig,
+        &g_mockLedAdapter,
+        &g_mockLedUseCases,
+        &g_mockButtonUseCases,
+        &g_mockWifiAdapter,
+        &g_mockWebServerLauncher,
+        &g_mockLoopServiceFactory,
+        &g_mockMqttManager
+    );
+    
+    // Set up mocks for success case
+    g_mockMqttManager.reset();
+    g_mockMqttManager.connectReturnValue = true;
+    
+    // Call the method under test
+    ModuleSetupServiceTestHelper::callConfigureDoneModeConfigure(g_moduleSetupService);
+    
+    // Verify MQTT connection was attempted
+    TEST_ASSERT_TRUE(g_mockMqttManager.connectCalled);
+    TEST_ASSERT_EQUAL(1, g_mockMqttManager.connectCallCount);    
+    
+    module_setup_service_teardown();
+    if (debug_file != nullptr) fprintf(debug_file, "Finished test_configure_done_mode_configure_sets_up_mqtt_connection\n");
+}
+
+static void test_configure_done_mode_configure_handles_mqtt_connection_subscribe_was_not_called() {
+    if (debug_file != nullptr) fprintf(debug_file, "Starting test_configure_done_mode_configure_handles_mqtt_connection_failure\n");
+    module_setup_service_setup();
+    
+    // Recreate service with MQTT manager
+    delete g_moduleSetupService;
+    g_moduleSetupService = new ModuleSetupService(
+        &g_mockLogger,
+        &g_mockDebugSystem,
+        &g_mockModuleConfig,
+        &g_mockLedAdapter,
+        &g_mockLedUseCases,
+        &g_mockButtonUseCases,
+        &g_mockWifiAdapter,
+        &g_mockWebServerLauncher,
+        &g_mockLoopServiceFactory,
+        &g_mockMqttManager
+    );
+    
+    // Set up mocks for failure case
+    g_mockMqttManager.reset();
+    g_mockMqttManager.connectReturnValue = false;
+    
+    // Call the method under test
+    ModuleSetupServiceTestHelper::callConfigureDoneModeConfigure(g_moduleSetupService);
+    
+    // Verify MQTT connection was attempted but failed
+    TEST_ASSERT_TRUE(g_mockMqttManager.connectCalled);
+    TEST_ASSERT_EQUAL(1, g_mockMqttManager.connectCallCount);
+
+    //not call subscribe separately
+    // Verify that subscribe was not called
+    TEST_ASSERT_FALSE(g_mockMqttManager.subscribeCalled);    
+    
+    module_setup_service_teardown();
+    if (debug_file != nullptr) fprintf(debug_file, "Finished test_configure_done_mode_configure_handles_mqtt_connection_failure\n");
+}
+
+static void test_configure_done_mode_configure_handles_missing_mqtt_manager() {
+    if (debug_file != nullptr) fprintf(debug_file, "Starting test_configure_done_mode_configure_handles_missing_mqtt_manager\n");
+    module_setup_service_setup();
+    
+    // Create a new service without MQTT manager
+    delete g_moduleSetupService;
+    g_moduleSetupService = new ModuleSetupService(
+        &g_mockLogger,
+        &g_mockDebugSystem,
+        &g_mockModuleConfig,
+        &g_mockLedAdapter,
+        &g_mockLedUseCases,
+        &g_mockButtonUseCases,
+        &g_mockWifiAdapter,
+        &g_mockWebServerLauncher,
+        &g_mockLoopServiceFactory,
+        nullptr  // No MQTT manager
+    );
+    
+    // Call the method under test
+    ModuleSetupServiceTestHelper::callConfigureDoneModeConfigure(g_moduleSetupService);
+    
+    // Verify error was logged
+    TEST_ASSERT_TRUE(g_mockLogger.printCalled);
+    
+    module_setup_service_teardown();
+    if (debug_file != nullptr) fprintf(debug_file, "Finished test_configure_done_mode_configure_handles_missing_mqtt_manager\n");
+}
+
 // Main test runner function
 extern "C" int run_module_setup_service_tests(void) {
     if (debug_file != nullptr) fprintf(debug_file, "\n----- Running ModuleSetupService Tests -----\n");
@@ -1076,6 +1196,10 @@ extern "C" int run_module_setup_service_tests(void) {
     RUN_TEST(test_get_loop_service_handles_null_settings);
     RUN_TEST(test_get_loop_service_handles_factory_exception);
     RUN_TEST(test_get_loop_service_for_each_module_mode);
+    
+    RUN_TEST(test_configure_done_mode_configure_sets_up_mqtt_connection);
+    RUN_TEST(test_configure_done_mode_configure_handles_mqtt_connection_subscribe_was_not_called);
+    RUN_TEST(test_configure_done_mode_configure_handles_missing_mqtt_manager);
     
     if (debug_file != nullptr) fprintf(debug_file, "\n----- ModuleSetupService Tests Complete -----\n");
     
