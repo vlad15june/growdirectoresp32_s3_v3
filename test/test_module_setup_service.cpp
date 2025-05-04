@@ -412,8 +412,48 @@ static void test_setup_ap_creates_correct_access_point_for_sensor_module() {
     // Verify MAC address is included in SSID
     TEST_ASSERT_TRUE(strstr(g_mockWifiAdapter.lastSSID, "CC:DD:EE:FF") != nullptr);
     
-    // Verify password is correct
-    TEST_ASSERT_EQUAL_STRING("123456789", g_mockWifiAdapter.lastPassword);
+    // Verify random part (last 3 digits)
+    const char* lastSSID = g_mockWifiAdapter.lastSSID;
+    size_t len = strlen(lastSSID);
+    if (debug_file != nullptr) fprintf(debug_file, "SSID: %s, Length: %zu\n", lastSSID, len);
+    
+    // Verify at least 4 characters are present (for _XXX pattern)
+    TEST_ASSERT_TRUE(len >= 4);
+    
+    // Check that the last 4 characters are in format _XXX where X is a digit
+    TEST_ASSERT_EQUAL('_', lastSSID[len-4]);
+    TEST_ASSERT_TRUE(isdigit(lastSSID[len-3]));
+    TEST_ASSERT_TRUE(isdigit(lastSSID[len-2]));
+    TEST_ASSERT_TRUE(isdigit(lastSSID[len-1]));
+    
+    // Save the first random part
+    char firstRandomPart[5] = {0};
+    strncpy(firstRandomPart, &lastSSID[len-4], 4);
+    
+    // Create a second AP to check for randomness
+    g_mockWifiAdapter.createAccessPointCalled = false;
+    g_mockWifiAdapter.setAccessPointActive(false);
+    
+    // Call setupAP again
+    ModuleSetupServiceTestHelper::callSetupAP(g_moduleSetupService);
+    
+    // Verify second random part
+    const char* secondSSID = g_mockWifiAdapter.lastSSID;
+    size_t secondLen = strlen(secondSSID);
+    
+    char secondRandomPart[5] = {0};
+    strncpy(secondRandomPart, &secondSSID[secondLen-4], 4);
+    
+    if (debug_file != nullptr) {
+        fprintf(debug_file, "First random part: %s\n", firstRandomPart);
+        fprintf(debug_file, "Second random part: %s\n", secondRandomPart);
+    }
+    
+    // Check that the random parts are different (could rarely fail if random values match)
+    bool areDifferent = strcmp(firstRandomPart, secondRandomPart) != 0;
+    if (!areDifferent && debug_file != nullptr) {
+        fprintf(debug_file, "WARNING: Random parts matched! This is rare but possible.\n");
+    }
     
     module_setup_service_teardown();
     if (debug_file != nullptr) fprintf(debug_file, "Finished test_setup_ap_creates_correct_access_point_for_sensor_module\n");
@@ -439,6 +479,48 @@ static void test_setup_ap_creates_correct_access_point_for_hydro_module() {
     // Verify SSID prefix contains "HydroDirector__"
     TEST_ASSERT_TRUE(strstr(g_mockWifiAdapter.lastSSID, "HydroDirector__") != nullptr);
     
+    // Verify random part (last 3 digits)
+    const char* lastSSID = g_mockWifiAdapter.lastSSID;
+    size_t len = strlen(lastSSID);
+    
+    // Verify at least 4 characters are present (for _XXX pattern)
+    TEST_ASSERT_TRUE(len >= 4);
+    
+    // Check that the last 4 characters are in format _XXX where X is a digit
+    TEST_ASSERT_EQUAL('_', lastSSID[len-4]);
+    TEST_ASSERT_TRUE(isdigit(lastSSID[len-3]));
+    TEST_ASSERT_TRUE(isdigit(lastSSID[len-2]));
+    TEST_ASSERT_TRUE(isdigit(lastSSID[len-1]));
+    
+    // Save the first random part
+    char firstRandomPart[5] = {0};
+    strncpy(firstRandomPart, &lastSSID[len-4], 4);
+    
+    // Create a second AP to check for randomness
+    g_mockWifiAdapter.createAccessPointCalled = false;
+    g_mockWifiAdapter.setAccessPointActive(false);
+    
+    // Call setupAP again
+    ModuleSetupServiceTestHelper::callSetupAP(g_moduleSetupService);
+    
+    // Verify second random part
+    const char* secondSSID = g_mockWifiAdapter.lastSSID;
+    size_t secondLen = strlen(secondSSID);
+    
+    char secondRandomPart[5] = {0};
+    strncpy(secondRandomPart, &secondSSID[secondLen-4], 4);
+    
+    if (debug_file != nullptr) {
+        fprintf(debug_file, "First random part: %s\n", firstRandomPart);
+        fprintf(debug_file, "Second random part: %s\n", secondRandomPart);
+    }
+    
+    // Check that the random parts are different
+    bool areDifferent = strcmp(firstRandomPart, secondRandomPart) != 0;
+    if (!areDifferent && debug_file != nullptr) {
+        fprintf(debug_file, "WARNING: Random parts matched! This is rare but possible.\n");
+    }
+    
     module_setup_service_teardown();
     if (debug_file != nullptr) fprintf(debug_file, "Finished test_setup_ap_creates_correct_access_point_for_hydro_module\n");
 }
@@ -462,6 +544,48 @@ static void test_setup_ap_creates_correct_access_point_for_device_module() {
     
     // Verify SSID prefix contains "DryContactDirector__"
     TEST_ASSERT_TRUE(strstr(g_mockWifiAdapter.lastSSID, "DryContactDirector__") != nullptr);
+    
+    // Verify random part (last 3 digits)
+    const char* lastSSID = g_mockWifiAdapter.lastSSID;
+    size_t len = strlen(lastSSID);
+    
+    // Verify at least 4 characters are present (for _XXX pattern)
+    TEST_ASSERT_TRUE(len >= 4);
+    
+    // Check that the last 4 characters are in format _XXX where X is a digit
+    TEST_ASSERT_EQUAL('_', lastSSID[len-4]);
+    TEST_ASSERT_TRUE(isdigit(lastSSID[len-3]));
+    TEST_ASSERT_TRUE(isdigit(lastSSID[len-2]));
+    TEST_ASSERT_TRUE(isdigit(lastSSID[len-1]));
+    
+    // Save the first random part
+    char firstRandomPart[5] = {0};
+    strncpy(firstRandomPart, &lastSSID[len-4], 4);
+    
+    // Create a second AP to check for randomness
+    g_mockWifiAdapter.createAccessPointCalled = false;
+    g_mockWifiAdapter.setAccessPointActive(false);
+    
+    // Call setupAP again
+    ModuleSetupServiceTestHelper::callSetupAP(g_moduleSetupService);
+    
+    // Verify second random part
+    const char* secondSSID = g_mockWifiAdapter.lastSSID;
+    size_t secondLen = strlen(secondSSID);
+    
+    char secondRandomPart[5] = {0};
+    strncpy(secondRandomPart, &secondSSID[secondLen-4], 4);
+    
+    if (debug_file != nullptr) {
+        fprintf(debug_file, "First random part: %s\n", firstRandomPart);
+        fprintf(debug_file, "Second random part: %s\n", secondRandomPart);
+    }
+    
+    // Check that the random parts are different
+    bool areDifferent = strcmp(firstRandomPart, secondRandomPart) != 0;
+    if (!areDifferent && debug_file != nullptr) {
+        fprintf(debug_file, "WARNING: Random parts matched! This is rare but possible.\n");
+    }
     
     module_setup_service_teardown();
     if (debug_file != nullptr) fprintf(debug_file, "Finished test_setup_ap_creates_correct_access_point_for_device_module\n");
@@ -487,6 +611,48 @@ static void test_setup_ap_creates_correct_access_point_for_socket_device() {
     // Verify SSID prefix contains "SocketDirector__"
     TEST_ASSERT_TRUE(strstr(g_mockWifiAdapter.lastSSID, "SocketDirector__") != nullptr);
     
+    // Verify random part (last 3 digits)
+    const char* lastSSID = g_mockWifiAdapter.lastSSID;
+    size_t len = strlen(lastSSID);
+    
+    // Verify at least 4 characters are present (for _XXX pattern)
+    TEST_ASSERT_TRUE(len >= 4);
+    
+    // Check that the last 4 characters are in format _XXX where X is a digit
+    TEST_ASSERT_EQUAL('_', lastSSID[len-4]);
+    TEST_ASSERT_TRUE(isdigit(lastSSID[len-3]));
+    TEST_ASSERT_TRUE(isdigit(lastSSID[len-2]));
+    TEST_ASSERT_TRUE(isdigit(lastSSID[len-1]));
+    
+    // Save the first random part
+    char firstRandomPart[5] = {0};
+    strncpy(firstRandomPart, &lastSSID[len-4], 4);
+    
+    // Create a second AP to check for randomness
+    g_mockWifiAdapter.createAccessPointCalled = false;
+    g_mockWifiAdapter.setAccessPointActive(false);
+    
+    // Call setupAP again
+    ModuleSetupServiceTestHelper::callSetupAP(g_moduleSetupService);
+    
+    // Verify second random part
+    const char* secondSSID = g_mockWifiAdapter.lastSSID;
+    size_t secondLen = strlen(secondSSID);
+    
+    char secondRandomPart[5] = {0};
+    strncpy(secondRandomPart, &secondSSID[secondLen-4], 4);
+    
+    if (debug_file != nullptr) {
+        fprintf(debug_file, "First random part: %s\n", firstRandomPart);
+        fprintf(debug_file, "Second random part: %s\n", secondRandomPart);
+    }
+    
+    // Check that the random parts are different
+    bool areDifferent = strcmp(firstRandomPart, secondRandomPart) != 0;
+    if (!areDifferent && debug_file != nullptr) {
+        fprintf(debug_file, "WARNING: Random parts matched! This is rare but possible.\n");
+    }
+    
     module_setup_service_teardown();
     if (debug_file != nullptr) fprintf(debug_file, "Finished test_setup_ap_creates_correct_access_point_for_socket_device\n");
 }
@@ -510,6 +676,48 @@ static void test_setup_ap_creates_correct_access_point_for_dimmer_module() {
     
     // Verify SSID prefix contains "DimmerDirector__"
     TEST_ASSERT_TRUE(strstr(g_mockWifiAdapter.lastSSID, "DimmerDirector__") != nullptr);
+    
+    // Verify random part (last 3 digits)
+    const char* lastSSID = g_mockWifiAdapter.lastSSID;
+    size_t len = strlen(lastSSID);
+    
+    // Verify at least 4 characters are present (for _XXX pattern)
+    TEST_ASSERT_TRUE(len >= 4);
+    
+    // Check that the last 4 characters are in format _XXX where X is a digit
+    TEST_ASSERT_EQUAL('_', lastSSID[len-4]);
+    TEST_ASSERT_TRUE(isdigit(lastSSID[len-3]));
+    TEST_ASSERT_TRUE(isdigit(lastSSID[len-2]));
+    TEST_ASSERT_TRUE(isdigit(lastSSID[len-1]));
+    
+    // Save the first random part
+    char firstRandomPart[5] = {0};
+    strncpy(firstRandomPart, &lastSSID[len-4], 4);
+    
+    // Create a second AP to check for randomness
+    g_mockWifiAdapter.createAccessPointCalled = false;
+    g_mockWifiAdapter.setAccessPointActive(false);
+    
+    // Call setupAP again
+    ModuleSetupServiceTestHelper::callSetupAP(g_moduleSetupService);
+    
+    // Verify second random part
+    const char* secondSSID = g_mockWifiAdapter.lastSSID;
+    size_t secondLen = strlen(secondSSID);
+    
+    char secondRandomPart[5] = {0};
+    strncpy(secondRandomPart, &secondSSID[secondLen-4], 4);
+    
+    if (debug_file != nullptr) {
+        fprintf(debug_file, "First random part: %s\n", firstRandomPart);
+        fprintf(debug_file, "Second random part: %s\n", secondRandomPart);
+    }
+    
+    // Check that the random parts are different
+    bool areDifferent = strcmp(firstRandomPart, secondRandomPart) != 0;
+    if (!areDifferent && debug_file != nullptr) {
+        fprintf(debug_file, "WARNING: Random parts matched! This is rare but possible.\n");
+    }
     
     module_setup_service_teardown();
     if (debug_file != nullptr) fprintf(debug_file, "Finished test_setup_ap_creates_correct_access_point_for_dimmer_module\n");

@@ -26,12 +26,8 @@ void setup()
 
 void loop()
 {
-  // Execute the appropriate loop service
   if (loopService) {
     loopService->loop();
   }
-  
-  // ledUseCases.loop(); 
-  // buttonUseCases.loop();
-  // moduleConfigurationWebServer.loop();
+
 }
