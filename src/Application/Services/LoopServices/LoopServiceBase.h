@@ -7,6 +7,7 @@
 #include "Core/Domain/Interfaces/UseCases/IOnChangeModuleModeUseCase.h"
 #include "Core/Domain/Interfaces/ILogger.h"
 #include "Core/Domain/Interfaces/IDebugSystem.h"
+#include "Core/Domain/Interfaces/IModuleConfig.h"
 #include "Application/Interfaces/WebServices/IWebServerLooper.h"
 #include <stdarg.h>
 
@@ -18,6 +19,7 @@ protected:
     ILogger* logger;
     IDebugSystem* debugSystem;
     IWebServerLooper* webServer;
+    IModuleConfig* moduleConfig;
     
     LoopServiceBase(
         ILedUseCases* ledUseCases = nullptr,
@@ -25,13 +27,15 @@ protected:
         IOnChangeModuleModeUseCase* moduleModeUseCase = nullptr,
         ILogger* logger = nullptr,
         IDebugSystem* debugSystem = nullptr,
-        IWebServerLooper* webServer = nullptr
+        IWebServerLooper* webServer = nullptr,
+        IModuleConfig* moduleConfig = nullptr
     ) : ledUseCases(ledUseCases),
         buttonUseCases(buttonUseCases),
         onChangeModuleModeUseCase(moduleModeUseCase),
         logger(logger),
         debugSystem(debugSystem),
-        webServer(webServer) {}
+        webServer(webServer),
+        moduleConfig(moduleConfig) {}
     
     void log(const char* format, ...) {
         if (logger != nullptr && debugSystem != nullptr && 
@@ -52,10 +56,11 @@ public:
     // Common loop implementation that will be called by derived classes
     void loop() override {
         // Check if button was pressed when on and then held for duration
-        if (buttonUseCases && onChangeModuleModeUseCase) {
+        if (buttonUseCases && onChangeModuleModeUseCase && moduleConfig) {
             if (buttonUseCases->isButtonPressedWhenOnThenHeldForDuration()) {
                 log("Button was pressed when on and held for duration - switching to TEST mode");
-                
+                // Request test mode by setting the module config
+                moduleConfig->setRequestedModuleMode(ModuleModeEnum::AP_TEST_MODE);
             }
         }
                 
@@ -95,6 +100,11 @@ public:
     // Method to set web server
     virtual void setWebServer(IWebServerLooper* server) {
         this->webServer = server;
+    }
+    
+    // Method to set module config
+    virtual void setModuleConfig(IModuleConfig* config) {
+        this->moduleConfig = config;
     }
 };
 

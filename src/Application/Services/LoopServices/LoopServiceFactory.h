@@ -11,6 +11,7 @@
 #include "Core/Domain/Interfaces/UseCases/IOnChangeModuleModeUseCase.h"
 #include "Core/Domain/Interfaces/ILogger.h"
 #include "Core/Domain/Interfaces/IDebugSystem.h"
+#include "Core/Domain/Interfaces/IModuleConfig.h"
 #include <stdexcept>
 
 class LoopServiceFactory : public ILoopServiceFactory {
@@ -21,6 +22,7 @@ private:
     ILogger* logger;
     IDebugSystem* debugSystem;
     IWebServerLooper* webServer;
+    IModuleConfig* moduleConfig;
 
 public:
     LoopServiceFactory(
@@ -29,13 +31,15 @@ public:
         IOnChangeModuleModeUseCase* moduleModeUseCase = nullptr,
         ILogger* logger = nullptr,
         IDebugSystem* debugSystem = nullptr,
-        IWebServerLooper* webServer = nullptr
+        IWebServerLooper* webServer = nullptr,
+        IModuleConfig* moduleConfig = nullptr
     ) : ledUseCases(ledUseCases),
         buttonUseCases(buttonUseCases),
         moduleModeUseCase(moduleModeUseCase),
         logger(logger),
         debugSystem(debugSystem),
-        webServer(webServer) {}
+        webServer(webServer),
+        moduleConfig(moduleConfig) {}
     
     ~LoopServiceFactory() override = default;
 
@@ -63,6 +67,7 @@ public:
         service->setUseCases(ledUseCases, buttonUseCases, moduleModeUseCase);
         service->setLogging(logger, debugSystem);
         service->setWebServer(webServer);
+        service->setModuleConfig(moduleConfig);
         
         return service;
     }

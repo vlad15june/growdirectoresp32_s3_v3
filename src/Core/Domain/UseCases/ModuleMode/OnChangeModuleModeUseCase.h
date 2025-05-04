@@ -44,25 +44,41 @@ public:
             // Handle mode transitions
             switch (requestedMode) {
                 case CONFIGURED_NEED_RESTART:
-                    log("OnChangeModuleModeUseCase: Preparing for restart");
-                    // Save any necessary state before restarting
+                    // For restart mode, we don't save the mode - just restart
+                    log("OnChangeModuleModeUseCase: NEED_RESTART detected - immediate restart without saving mode");
+                    
+                    // Set boot type before restart
                     _moduleConfig.getSettings()->setBootType(BOOT_TYPE_USER);
+                    log("OnChangeModuleModeUseCase: Set boot type to USER");
                     
                     // Delay to ensure settings are saved
                     _arduinoAdapter.delay(100);
                     
-                    // Restart the device
+                    // Restart immediately
                     restart();
                     break;
                     
-                // Add other mode transitions as needed
                 case USER_CAN_CONFIGURE:
                 case USER_CAN_RE_CONFIGURE:
                 case AP_TEST_MODE:
                 case CONFIGURED_DONE:
-                    // Update current mode
+                    // Save the requested mode to settings for other mode changes
+                    _moduleConfig.getSettings()->setConfigured(requestedMode);
+                    log("OnChangeModuleModeUseCase: Saved requested mode %d to settings", 
+                        static_cast<int>(requestedMode));
+                    
+                    // Set boot type before restart
+                    _moduleConfig.getSettings()->setBootType(BOOT_TYPE_USER);
+                    log("OnChangeModuleModeUseCase: Set boot type to USER");
+                    
+                    // Delay to ensure settings are saved
+                    _arduinoAdapter.delay(100);
+                    
+                    // Update current mode and restart for all mode transitions
                     _currentMode = requestedMode;
-                    log("OnChangeModuleModeUseCase: Mode updated to %d", static_cast<int>(_currentMode));
+                    log("OnChangeModuleModeUseCase: Mode updated to %d, restarting...", 
+                        static_cast<int>(_currentMode));
+                    restart();
                     break;
             }
         }

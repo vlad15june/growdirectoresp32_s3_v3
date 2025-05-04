@@ -107,7 +107,8 @@ LoopServiceFactory loopServiceFactory(
   &moduleModeUseCase,
   &mqttLogger,
   &debugSystem,
-  &moduleConfigurationWebServer
+  &moduleConfigurationWebServer,
+  &moduleConfig
 );
 
 ModuleSetupService moduleSetupService(
