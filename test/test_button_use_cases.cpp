@@ -117,7 +117,7 @@ static void test_is_button_held_for_duration_returns_true() {
     // Verify results
     TEST_ASSERT_TRUE(g_mockButtonAdapter.wasButtonHeldCalled);
     TEST_ASSERT_EQUAL(1, g_mockButtonAdapter.lastButtonIndex);
-    TEST_ASSERT_EQUAL(1000, g_mockButtonAdapter.lastDuration); // Check default duration
+    TEST_ASSERT_EQUAL(15000, g_mockButtonAdapter.lastDuration); // Check default duration
     TEST_ASSERT_TRUE(result);
     
     button_use_cases_teardown();
@@ -137,7 +137,7 @@ static void test_is_button_held_for_duration_returns_false() {
     // Verify results
     TEST_ASSERT_TRUE(g_mockButtonAdapter.wasButtonHeldCalled);
     TEST_ASSERT_EQUAL(1, g_mockButtonAdapter.lastButtonIndex);
-    TEST_ASSERT_EQUAL(1000, g_mockButtonAdapter.lastDuration);
+    TEST_ASSERT_EQUAL(15000, g_mockButtonAdapter.lastDuration);
     TEST_ASSERT_FALSE(result);
     
     button_use_cases_teardown();
@@ -163,6 +163,72 @@ static void test_button_use_cases_with_logging() {
     if (debug_file != nullptr) fprintf(debug_file, "Finished test_button_use_cases_with_logging\n");
 }
 
+static void test_is_button_pressed_when_on_then_held_for_duration_returns_true() {
+    if (debug_file != nullptr) fprintf(debug_file, "Starting test_is_button_pressed_when_on_then_held_for_duration_returns_true\n");
+    button_use_cases_setup();
+    
+    // Set up conditions for the test
+    // First, simulate button pressed when on
+    g_mockButtonAdapter.pressedState = true;
+    g_buttonUseCases->checkButtonPressedWhenOn();
+    
+    // Then, configure mock to return true for button held
+    g_mockButtonAdapter.heldState = true;
+    
+    // Call the method under test
+    bool result = g_buttonUseCases->isButtonPressedWhenOnThenHeldForDuration();
+    
+    // Verify results
+    TEST_ASSERT_TRUE(g_mockButtonAdapter.wasButtonHeldCalled);
+    TEST_ASSERT_EQUAL(1, g_mockButtonAdapter.lastButtonIndex);
+    TEST_ASSERT_EQUAL(15000, g_mockButtonAdapter.lastDuration); // Check correct duration
+    TEST_ASSERT_TRUE(result);
+    
+    button_use_cases_teardown();
+    if (debug_file != nullptr) fprintf(debug_file, "Finished test_is_button_pressed_when_on_then_held_for_duration_returns_true\n");
+}
+
+static void test_is_button_pressed_when_on_then_held_for_duration_returns_false_when_not_pressed() {
+    if (debug_file != nullptr) fprintf(debug_file, "Starting test_is_button_pressed_when_on_then_held_for_duration_returns_false_when_not_pressed\n");
+    button_use_cases_setup();
+    
+    // Don't call checkButtonPressedWhenOn(), so buttonPressedState remains false
+    
+    // Call the method under test
+    bool result = g_buttonUseCases->isButtonPressedWhenOnThenHeldForDuration();
+    
+    // Verify results
+    TEST_ASSERT_FALSE(g_mockButtonAdapter.wasButtonHeldCalled); // This shouldn't be called
+    TEST_ASSERT_FALSE(result);
+    
+    button_use_cases_teardown();
+    if (debug_file != nullptr) fprintf(debug_file, "Finished test_is_button_pressed_when_on_then_held_for_duration_returns_false_when_not_pressed\n");
+}
+
+static void test_is_button_pressed_when_on_then_held_for_duration_returns_false_when_not_held() {
+    if (debug_file != nullptr) fprintf(debug_file, "Starting test_is_button_pressed_when_on_then_held_for_duration_returns_false_when_not_held\n");
+    button_use_cases_setup();
+    
+    // Simulate button pressed when on
+    g_mockButtonAdapter.pressedState = true;
+    g_buttonUseCases->checkButtonPressedWhenOn();
+    
+    // But configure mock to return false for button held
+    g_mockButtonAdapter.heldState = false;
+    
+    // Call the method under test
+    bool result = g_buttonUseCases->isButtonPressedWhenOnThenHeldForDuration();
+    
+    // Verify results
+    TEST_ASSERT_TRUE(g_mockButtonAdapter.wasButtonHeldCalled);
+    TEST_ASSERT_EQUAL(1, g_mockButtonAdapter.lastButtonIndex);
+    TEST_ASSERT_EQUAL(15000, g_mockButtonAdapter.lastDuration);
+    TEST_ASSERT_FALSE(result);
+    
+    button_use_cases_teardown();
+    if (debug_file != nullptr) fprintf(debug_file, "Finished test_is_button_pressed_when_on_then_held_for_duration_returns_false_when_not_held\n");
+}
+
 // Main test runner function
 extern "C" int run_button_use_cases_tests(void) {
     if (debug_file != nullptr) fprintf(debug_file, "\n----- Running ButtonUseCases Tests -----\n");
@@ -173,6 +239,9 @@ extern "C" int run_button_use_cases_tests(void) {
     RUN_TEST(test_is_button_held_for_duration_returns_true);
     RUN_TEST(test_is_button_held_for_duration_returns_false);
     RUN_TEST(test_button_use_cases_with_logging);
+    RUN_TEST(test_is_button_pressed_when_on_then_held_for_duration_returns_true);
+    RUN_TEST(test_is_button_pressed_when_on_then_held_for_duration_returns_false_when_not_pressed);
+    RUN_TEST(test_is_button_pressed_when_on_then_held_for_duration_returns_false_when_not_held);
     
     if (debug_file != nullptr) fprintf(debug_file, "\n----- ButtonUseCases Tests Complete -----\n");
     

@@ -8,20 +8,24 @@ public:
     bool checkButtonPressedWhenOnCalled = false;
     bool isButtonPressedWhenOnCalled = false;
     bool isButtonHeldForDurationCalled = false;
+    bool isButtonPressedWhenOnThenHeldForDurationCalled = false;
     
     // Return values for the mock methods
     bool checkButtonResult = true;
     bool buttonPressedResult = false;
     bool buttonHeldResult = false;
+    bool buttonPressedThenHeldResult = false;
     
     void reset() {
         checkButtonPressedWhenOnCalled = false;
         isButtonPressedWhenOnCalled = false;
         isButtonHeldForDurationCalled = false;
+        isButtonPressedWhenOnThenHeldForDurationCalled = false;
         
         checkButtonResult = true;
         buttonPressedResult = false;
         buttonHeldResult = false;
+        buttonPressedThenHeldResult = false;
     }
     
     bool checkButtonPressedWhenOn() override {
@@ -37,6 +41,11 @@ public:
     bool isButtonHeldForDuration() override {
         isButtonHeldForDurationCalled = true;
         return buttonHeldResult;
+    }
+    
+    bool isButtonPressedWhenOnThenHeldForDuration() override {
+        isButtonPressedWhenOnThenHeldForDurationCalled = true;
+        return buttonPressedThenHeldResult;
     }
 };
 
