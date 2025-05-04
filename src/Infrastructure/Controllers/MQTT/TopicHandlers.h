@@ -13,6 +13,19 @@ protected:
     ILogger* _logger;
     IDebugSystem* _debugSystem;
     
+    // Logging method
+    void log(const char* format, ...) {
+        if (_logger != nullptr && _debugSystem != nullptr && _debugSystem->isFeatureEnabled(DebugFeatures::MQTT_DEBUG)) {
+            char buffer[128];
+            va_list args;
+            va_start(args, format);
+            vsnprintf(buffer, sizeof(buffer), format, args);
+            va_end(args);
+            
+            _logger->println(buffer);
+        }
+    }
+    
     // Helper method to check if topic matches pattern
     bool topicMatches(const char* topic, const char* pattern) {
         // Simple wildcard matching implementation
@@ -71,7 +84,7 @@ public:
     }
     
     void handleMessage(const char* topic, const byte* payload, unsigned int length) override {
-        _logger->log(LogLevel::Info, "Handling command message");
+        log("Handling command message");
         
         // Convert payload to a null-terminated string
         char* payloadStr = new char[length + 1];
@@ -83,26 +96,20 @@ public:
         if (commandType != nullptr) {
             commandType++; // Skip the '/'
             
-            String logMsg = "Command type: ";
-            logMsg += commandType;
-            logMsg += ", Payload: ";
-            logMsg += payloadStr;
-            _logger->log(LogLevel::Info, logMsg.c_str());
+            log("Command type: %s, Payload: %s", commandType, payloadStr);
             
             // Process different command types
             if (strcmp(commandType, "restart") == 0) {
-                _logger->log(LogLevel::Info, "Processing restart command");
+                log("Processing restart command");
                 // Implement restart logic
             } else if (strcmp(commandType, "set_config") == 0) {
-                _logger->log(LogLevel::Info, "Processing set_config command");
+                log("Processing set_config command");
                 // Implement configuration update logic
             } else {
-                String unknownMsg = "Unknown command type: ";
-                unknownMsg += commandType;
-                _logger->log(LogLevel::Warning, unknownMsg.c_str());
+                log("Unknown command type: %s", commandType);
             }
         } else {
-            _logger->log(LogLevel::Warning, "Invalid command topic format");
+            log("Invalid command topic format");
         }
         
         delete[] payloadStr;

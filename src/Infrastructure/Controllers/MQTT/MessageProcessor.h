@@ -17,6 +17,19 @@ private:
     IDebugSystem* _debugSystem;
     std::vector<ITopicHandler*> _topicHandlers;
     
+    // Logging method
+    void log(const char* format, ...) {
+        if (_logger != nullptr && _debugSystem != nullptr && _debugSystem->isFeatureEnabled(DebugFeatures::MQTT_DEBUG)) {
+            char buffer[128];
+            va_list args;
+            va_start(args, format);
+            vsnprintf(buffer, sizeof(buffer), format, args);
+            va_end(args);
+            
+            _logger->println(buffer);
+        }
+    }
+    
 public:
     MessageProcessor(
         ILogger* logger,
@@ -28,16 +41,14 @@ public:
     ~MessageProcessor() override = default;
     
     void processMessage(const char* topic, const byte* payload, unsigned int length) override {
-        _logger->log(LogLevel::Debug, "Processing message from topic: %s", topic);
+        log("Processing message from topic: %s", topic);
         
         // Convert payload to a null-terminated string for logging
         char* payloadStr = new char[length + 1];
         memcpy(payloadStr, payload, length);
         payloadStr[length] = '\0';
         
-        String logMsg = "Payload: ";
-        logMsg += payloadStr;
-        _logger->log(LogLevel::Debug, logMsg.c_str());
+        log("Payload: %s", payloadStr);
         
         // Find a handler for this topic
         ITopicHandler* handler = findHandlerForTopic(topic);
@@ -46,14 +57,10 @@ public:
             try {
                 handler->handleMessage(topic, payload, length);
             } catch (const std::exception& e) {
-                String errorMsg = "Error handling message: ";
-                errorMsg += e.what();
-                _logger->log(LogLevel::Error, errorMsg.c_str());
+                log("Error handling message: %s", e.what());
             }
         } else {
-            String noHandlerMsg = "No handler found for topic: ";
-            noHandlerMsg += topic;
-            _logger->log(LogLevel::Warning, noHandlerMsg.c_str());
+            log("No handler found for topic: %s", topic);
         }
         
         delete[] payloadStr;
@@ -61,10 +68,7 @@ public:
     
     void addTopicHandler(ITopicHandler* handler) override {
         if (handler != nullptr) {
-            String msg = "Adding topic handler for: ";
-            msg += handler->getTopicPattern();
-            _logger->log(LogLevel::Info, msg.c_str());
-            
+            log("Adding topic handler for: %s", handler->getTopicPattern());
             _topicHandlers.push_back(handler);
         }
     }
@@ -73,10 +77,7 @@ public:
         if (handler != nullptr) {
             auto it = std::find(_topicHandlers.begin(), _topicHandlers.end(), handler);
             if (it != _topicHandlers.end()) {
-                String msg = "Removing topic handler for: ";
-                msg += handler->getTopicPattern();
-                _logger->log(LogLevel::Info, msg.c_str());
-                
+                log("Removing topic handler for: %s", handler->getTopicPattern());
                 _topicHandlers.erase(it);
             }
         }

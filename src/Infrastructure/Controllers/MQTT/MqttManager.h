@@ -24,6 +24,19 @@ private:
     uint32_t _lastReconnectAttempt;
     uint16_t _reconnectInterval;
     
+    // Logging method
+    void log(const char* format, ...) {
+        if (_logger != nullptr && _debugSystem != nullptr && _debugSystem->isFeatureEnabled(DebugFeatures::MQTT_DEBUG)) {
+            char buffer[128];
+            va_list args;
+            va_start(args, format);
+            vsnprintf(buffer, sizeof(buffer), format, args);
+            va_end(args);
+            
+            _logger->println(buffer);
+        }
+    }
+    
     // Reconnect to MQTT broker
     bool reconnect() {
         if (millis() - _lastReconnectAttempt < _reconnectInterval) {
@@ -32,7 +45,7 @@ private:
         
         _lastReconnectAttempt = millis();
         
-        _logger->log(LogLevel::Info, "Attempting MQTT connection...");
+        log("Attempting MQTT connection...");
         
         bool connected = false;
         if (_username != nullptr && _password != nullptr) {
@@ -42,13 +55,14 @@ private:
         }
         
         if (connected) {
-            _logger->log(LogLevel::Info, "MQTT connected");
+            log("MQTT connected");
             
             // Resubscribe to topics if needed
             // Implementation depends on how you want to handle topic subscriptions
         } else {
-            String failReason = "Failed, rc=" + String(_mqttClient.state());
-            _logger->log(LogLevel::Error, failReason.c_str());
+            char failReason[64];
+            snprintf(failReason, sizeof(failReason), "Failed, rc=%d", _mqttClient.state());
+            log("%s", failReason);
         }
         
         return connected;
@@ -102,7 +116,7 @@ public:
     void disconnect() override {
         if (_mqttClient.connected()) {
             _mqttClient.disconnect();
-            _logger->log(LogLevel::Info, "MQTT disconnected");
+            log("MQTT disconnected");
         }
     }
     
@@ -119,13 +133,9 @@ public:
         
         bool success = _mqttClient.subscribe(topic);
         if (success) {
-            String msg = "Subscribed to topic: ";
-            msg += topic;
-            _logger->log(LogLevel::Info, msg.c_str());
+            log("Subscribed to topic: %s", topic);
         } else {
-            String msg = "Failed to subscribe to topic: ";
-            msg += topic;
-            _logger->log(LogLevel::Error, msg.c_str());
+            log("Failed to subscribe to topic: %s", topic);
         }
         
         return success;
@@ -138,9 +148,7 @@ public:
         
         bool success = _mqttClient.unsubscribe(topic);
         if (success) {
-            String msg = "Unsubscribed from topic: ";
-            msg += topic;
-            _logger->log(LogLevel::Info, msg.c_str());
+            log("Unsubscribed from topic: %s", topic);
         }
         
         return success;
@@ -156,9 +164,7 @@ public:
         bool success = _mqttClient.publish(topic, payload);
         
         if (!success) {
-            String msg = "Failed to publish to topic: ";
-            msg += topic;
-            _logger->log(LogLevel::Error, msg.c_str());
+            log("Failed to publish to topic: %s", topic);
         }
         
         return success;

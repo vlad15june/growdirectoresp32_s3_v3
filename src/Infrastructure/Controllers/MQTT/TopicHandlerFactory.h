@@ -1,9 +1,11 @@
 #ifndef TOPIC_HANDLER_FACTORY_H
 #define TOPIC_HANDLER_FACTORY_H
 
+#include <vector>
+#include "Core/Domain/Interfaces/ILogger.h"
+#include "Core/Domain/Interfaces/IDebugSystem.h"
 #include "ITopicHandler.h"
 #include "TopicHandlers.h"
-#include <vector>
 
 /**
  * Factory class to create topic handlers
@@ -12,6 +14,19 @@ class TopicHandlerFactory {
 private:
     ILogger* _logger;
     IDebugSystem* _debugSystem;
+    
+    // Logging method
+    void log(const char* format, ...) {
+        if (_logger != nullptr && _debugSystem != nullptr && _debugSystem->isFeatureEnabled(DebugFeatures::MQTT_DEBUG)) {
+            char buffer[128];
+            va_list args;
+            va_start(args, format);
+            vsnprintf(buffer, sizeof(buffer), format, args);
+            va_end(args);
+            
+            _logger->println(buffer);
+        }
+    }
     
 public:
     TopicHandlerFactory(
@@ -27,6 +42,7 @@ public:
         
         // Add command topic handler
         handlers.push_back(new CommandTopicHandler(_logger, _debugSystem));
+        log("Created CommandTopicHandler");
         
         // Add more handlers as needed
         

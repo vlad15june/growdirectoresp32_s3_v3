@@ -33,6 +33,7 @@
 #include "Infrastructure/Controllers/MQTT/MqttManager.h"
 #include "Infrastructure/Controllers/MQTT/MessageProcessor.h"
 #include "Infrastructure/Controllers/MQTT/TopicHandlers.h"
+#include "Infrastructure/Controllers/MQTT/TopicHandlerFactory.h"
 #include "Application/Services/ModuleSetupService.h"
 #include "Application/Interfaces/LoopServices/ILoopServiceFactory.h"
 #include "Application/Services/LoopServices/LoopServiceFactory.h"
@@ -69,7 +70,6 @@ DebugSystem debugSystem;
 MessageProcessor messageProcessor(&mqttLogger, &debugSystem);
 MqttManager mqttManager(mqttClient, &mqttLogger, &debugSystem, "GrowDirectorClient", mqttUser, mqttPassword);
 
-// Initialize topic handlers
 TopicHandlerFactory topicHandlerFactory(&mqttLogger, &debugSystem);
 
 EepromAdapter eeprom(1024, 0);
