@@ -7,6 +7,7 @@
 #include "Core/Domain/Interfaces/IDebugSystem.h"
 #include "IMqttManager.h"
 #include "MessageProcessor.h"
+#include "TopicHandlerFactory.h"
 
 /**
  * MQTT Manager implementation
@@ -17,12 +18,16 @@ private:
     ILogger* _logger;
     IDebugSystem* _debugSystem;
     IMessageProcessor* _messageProcessor;
+    TopicHandlerFactory* _topicHandlerFactory;
     const char* _clientId;
     const char* _username;
     const char* _password;
     bool _cleanSession;
     uint32_t _lastReconnectAttempt;
     uint16_t _reconnectInterval;
+    
+    // Static instance pointer for callback access
+    static MqttManager* _instance;
     
     // Logging method
     void log(const char* format, ...) {
@@ -34,6 +39,18 @@ private:
             va_end(args);
             
             _logger->println(buffer);
+        }
+    }
+    
+    // Setup topic handlers
+    void setupMqttTopicHandlers() {
+        if (_messageProcessor != nullptr && _topicHandlerFactory != nullptr) {
+            log("Setting up MQTT topic handlers");
+            auto handlers = _topicHandlerFactory->createHandlers();
+            for (auto* handler : handlers) {
+                _messageProcessor->addTopicHandler(handler);
+            }
+            log("MQTT topic handlers setup completed");
         }
     }
     
@@ -70,13 +87,11 @@ private:
     
     // Static callback that will be passed to PubSubClient
     static void mqttCallback(char* topic, byte* payload, unsigned int length) {
-        // This is a static method, so we need to get the instance from somewhere
-        // Since this is just an example implementation, we'll leave this incomplete
-        // In a real implementation, you would need to store a reference to the manager
-        // in a static variable or use other techniques to access the instance
-        
-        // Assuming we have access to the instance somehow:
-        // mqttManagerInstance->_messageProcessor->processMessage(topic, payload, length);
+        // Now we can access the instance through the static pointer
+        if (_instance && _instance->_messageProcessor) {
+            _instance->log("Received message on topic: %s", topic);
+            _instance->_messageProcessor->processMessage(topic, payload, length);
+        }
     }
     
 public:
@@ -87,11 +102,14 @@ public:
         const char* clientId,
         const char* username = nullptr,
         const char* password = nullptr,
-        bool cleanSession = true
+        bool cleanSession = true,
+        IMessageProcessor* messageProcessor = nullptr,
+        TopicHandlerFactory* topicHandlerFactory = nullptr
     ) : _mqttClient(mqttClient),
         _logger(logger),
         _debugSystem(debugSystem),
-        _messageProcessor(nullptr),
+        _messageProcessor(messageProcessor),
+        _topicHandlerFactory(topicHandlerFactory),
         _clientId(clientId),
         _username(username),
         _password(password),
@@ -99,11 +117,24 @@ public:
         _lastReconnectAttempt(0),
         _reconnectInterval(5000) {
             
+        // Set this instance as the static instance
+        _instance = this;
+        
         // Set callback function
         _mqttClient.setCallback(mqttCallback);
+        
+        // Setup topic handlers if message processor and factory are provided
+        if (_messageProcessor != nullptr && _topicHandlerFactory != nullptr) {
+            setupMqttTopicHandlers();
+        }
     }
     
-    ~MqttManager() override = default;
+    ~MqttManager() override {
+        // Clear the static instance if this object is being destroyed
+        if (_instance == this) {
+            _instance = nullptr;
+        }
+    }
     
     bool connect() override {
         if (_mqttClient.connected()) {
@@ -180,7 +211,27 @@ public:
     
     void setMessageProcessor(IMessageProcessor* processor) override {
         _messageProcessor = processor;
+        log("Message processor set");
+        
+        // Setup topic handlers if factory is available
+        if (_topicHandlerFactory != nullptr) {
+            setupMqttTopicHandlers();
+        }
+    }
+    
+    // Add a method to set the topic handler factory
+    void setTopicHandlerFactory(TopicHandlerFactory* factory) {
+        _topicHandlerFactory = factory;
+        log("Topic handler factory set");
+        
+        // Setup topic handlers if message processor is available
+        if (_messageProcessor != nullptr) {
+            setupMqttTopicHandlers();
+        }
     }
 };
+
+// Initialize the static instance pointer
+MqttManager* MqttManager::_instance = nullptr;
 
 #endif // MQTT_MANAGER_H

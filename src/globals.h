@@ -67,10 +67,19 @@ MqttLogger mqttLogger(mqttClient, mqttDefaultTopic, MqttLoggerMode::MqttAndSeria
 DebugSystem debugSystem;
 
 // MQTT components
-MessageProcessor messageProcessor(&mqttLogger, &debugSystem);
-MqttManager mqttManager(mqttClient, &mqttLogger, &debugSystem, "GrowDirectorClient", mqttUser, mqttPassword);
-
 TopicHandlerFactory topicHandlerFactory(&mqttLogger, &debugSystem);
+MessageProcessor messageProcessor(&mqttLogger, &debugSystem);
+MqttManager mqttManager(
+    mqttClient, 
+    &mqttLogger, 
+    &debugSystem, 
+    "GrowDirectorClient", 
+    mqttUser, 
+    mqttPassword, 
+    true, 
+    &messageProcessor,
+    &topicHandlerFactory
+);
 
 EepromAdapter eeprom(1024, 0);
 Settings settings(eeprom, &mqttLogger, &debugSystem);
