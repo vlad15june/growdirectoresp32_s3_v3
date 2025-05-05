@@ -1,3 +1,6 @@
+#ifndef MODULE_STRUCTURE_CPP
+#define MODULE_STRUCTURE_CPP
+
 #include "ModuleStructure.h"
 #include <algorithm>
 #include <sstream>
@@ -62,12 +65,29 @@ static int extractIntValue(const std::string& src, const std::string& key) {
     return std::stoi(src.substr(start, end - start));
 }
 
+// Helper function to extract double value
+static double extractDoubleValue(const std::string& src, const std::string& key) {
+    auto keyPos = src.find("\"" + key + "\"");
+    if (keyPos == std::string::npos) return 0.0;
+    auto colon = src.find(':', keyPos);
+    if (colon == std::string::npos) return 0.0;
+    auto start = src.find_first_of("0123456789.-", colon + 1);
+    if (start == std::string::npos) return 0.0;
+    auto end = src.find_first_not_of("0123456789.-", start);
+    if (end == std::string::npos) end = src.length();
+    return std::stod(src.substr(start, end - start));
+}
+
 bool ModuleStructure::fromJson(const std::string& jsonStr) {
     nodes.clear();
     growdirectorUid = extractValue(jsonStr, "GrowdirectorUid");
     firmware = extractValue(jsonStr, "firmware");
     email = extractValue(jsonStr, "email");
     accountUid = extractValue(jsonStr, "accountUid");
+    
+    // Extract latitude and longitude
+    latitude = extractDoubleValue(jsonStr, "lat");
+    longitude = extractDoubleValue(jsonStr, "lng");
 
     std::string nodesArr = extractArray(jsonStr, "nodes");
     auto nodeObjs = splitObjects(nodesArr);
@@ -125,6 +145,8 @@ std::string ModuleStructure::toJson() const {
     if (!firmware.empty()) oss << ",\"firmware\":\"" << firmware << "\"";
     if (!email.empty()) oss << ",\"email\":\"" << email << "\"";
     if (!accountUid.empty()) oss << ",\"accountUid\":\"" << accountUid << "\"";
+    if (latitude != 0.0) oss << ",\"lat\":" << latitude;
+    if (longitude != 0.0) oss << ",\"lng\":" << longitude;
     oss << ",\"nodes\":[";
     for (size_t i = 0; i < nodes.size(); ++i) {
         const Node& node = nodes[i];
@@ -260,3 +282,5 @@ std::string ModuleStructure::getDeviceType() const {
     
     return "unknown";
 }
+
+#endif

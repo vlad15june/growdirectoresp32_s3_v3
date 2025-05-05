@@ -3,8 +3,6 @@
 
 #include <string>
 #include <vector>
-#include <Arduino.h>
-
 
 class Sensor {
 public:
@@ -70,6 +68,8 @@ public:
     const std::string& getEmail() const { return email; }
     const std::string& getAccountUid() const { return accountUid; }
     const std::vector<Node>& getNodes() const { return nodes; }
+    double getLatitude() const { return latitude; }
+    double getLongitude() const { return longitude; }
     
     // Find a sensor by UID
     Sensor* findSensorByUid(const std::string& sensorUid);
@@ -98,6 +98,8 @@ private:
     std::string email;
     std::string accountUid;
     std::vector<Node> nodes;
+    double latitude = 0.0;
+    double longitude = 0.0;
 };
 
 #endif // MODULE_STRUCTURE_H

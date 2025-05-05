@@ -14,9 +14,12 @@
 #include "Core/Domain/Interfaces/ISettings.h"
 #include "Core/Domain/Interfaces/Adapters/ILedAdapter.h"
 #include "Core/Domain/Interfaces/Adapters/IButtonAdapter.h"
+
 #include "Core/Domain/UseCases/Led/LedUseCases.h"
 #include "Core/Domain/UseCases/Buttons/ButtonUseCases.h"
 #include "Core/Domain/UseCases/ModuleMode/OnChangeModuleModeUseCase.h"
+
+#include "Core/Domain/Data/Models/ModuleStructure.h"
 
 #include "Infrastructure/Adapters/eepromAdapter.h"
 #include "Infrastructure/Logging/MqttLogger.h"
@@ -141,6 +144,8 @@ ModuleSetupService moduleSetupService(
     &webServerLauncher,
     &loopServiceFactory,
     &mqttManager);
+
+ModuleStructure moduleStructure;
 
 RestAPIService restApiService(&moduleConfig, &mqttLogger, &debugSystem);
 
