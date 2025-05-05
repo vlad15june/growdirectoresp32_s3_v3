@@ -5,22 +5,20 @@
 #include "Core/Domain/Interfaces/ILogger.h"
 
 /**
- * @brief Implementation of IHTTPClientAdapter using ESP32's HTTPClient
+ * @brief Implementation of IHttpClientAdapter using ESP32's HTTPClient
  */
 class HttpClientAdapter : public IHttpClientAdapter {
 private:
     HTTPClient _client;
     bool _isConnected;
+    String _responseBuffer; // Internal buffer to store response
     
 public:
     /**
      * @brief Construct a new Http Client Adapter
-     * 
-     * @param logger Optional logger for debug output
      */
     HttpClientAdapter() 
         : _isConnected(false) {
-        
     }
     
     /**
@@ -38,18 +36,19 @@ public:
      * @param url Target URL for the HTTP request
      * @return true if successful
      */
-    bool begin(const String& url) override {
-        
+    bool begin(const char* url) override {
         if (_isConnected) {
             _client.end();
             _isConnected = false;
         }
         
-        bool success = _client.begin(url);
+        // We need to convert to String for underlying HTTPClient
+        String urlStr(url);
+        bool success = _client.begin(urlStr);
         _isConnected = success;
         
         if (!success) {
-            Serial.printf("HTTP: Failed to begin connection to %s", url.c_str());
+            Serial.printf("HTTP: Failed to begin connection to %s", url);
         }
         
         return success;
@@ -61,8 +60,9 @@ public:
      * @param headerName Name of the header
      * @param headerValue Value of the header
      */
-    void addHeader(const String& headerName, const String& headerValue) override {
-        _client.addHeader(headerName, headerValue);
+    void addHeader(const char* headerName, const char* headerValue) override {
+        // We need to convert to String for underlying HTTPClient
+        _client.addHeader(String(headerName), String(headerValue));
     }
     
     /**
@@ -90,19 +90,20 @@ public:
      * @param payload Request body
      * @return HTTP response code
      */
-    int POST(const String& payload) override {
-        int responseCode = _client.POST(payload);
+    int POST(const char* payload) override {
+        // We need to convert to String for underlying HTTPClient
+        int responseCode = _client.POST(String(payload));
         return responseCode;
     }
     
     /**
      * @brief Get the response as a string
      * 
-     * @return Response string
+     * @return Response as a C-string
      */
-    String getString() override {
-        String response = _client.getString();
-        return response;
+    const char* getString() override {
+        _responseBuffer = _client.getString();
+        return _responseBuffer.c_str();
     }
     
     /**

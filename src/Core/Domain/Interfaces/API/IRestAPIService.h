@@ -13,10 +13,10 @@ public:
     virtual void sendToServerModuleStructure() = 0;
     
     // Device and rule state methods
-    virtual void sendRuleStateCommand(String msg) = 0;
-    virtual bool sendByUidRuleStateCommand(String uid, String msg) = 0;
+    virtual void sendRuleStateCommand(const char* msg) = 0;
+    virtual bool sendByUidRuleStateCommand(const char* uid, const char* msg) = 0;
     virtual void sendFirmwareVersion() = 0;
-    virtual void sendDeviceCommandExecutionResult(String msg) = 0;
-    virtual void sendAnalogInputDeviceCommandExecutionResult(String msg) = 0;
-    virtual bool sendModuleCommandExecutionResult(String msg) = 0;
+    virtual void sendDeviceCommandExecutionResult(const char* msg) = 0;
+    virtual void sendAnalogInputDeviceCommandExecutionResult(const char* msg) = 0;
+    virtual bool sendModuleCommandExecutionResult(const char* msg) = 0;
 };

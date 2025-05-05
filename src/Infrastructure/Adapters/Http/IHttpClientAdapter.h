@@ -19,7 +19,7 @@ public:
      * @param url Target URL for the HTTP request
      * @return true if successful
      */
-    virtual bool begin(const String& url) = 0;
+    virtual bool begin(const char* url) = 0;
     
     /**
      * @brief Set a request header
@@ -27,7 +27,7 @@ public:
      * @param headerName Name of the header
      * @param headerValue Value of the header
      */
-    virtual void addHeader(const String& headerName, const String& headerValue) = 0;
+    virtual void addHeader(const char* headerName, const char* headerValue) = 0;
     
     /**
      * @brief Set request timeout
@@ -49,14 +49,14 @@ public:
      * @param payload Request body
      * @return HTTP response code
      */
-    virtual int POST(const String& payload) = 0;
+    virtual int POST(const char* payload) = 0;
     
     /**
      * @brief Get the response as a string
      * 
-     * @return Response string
+     * @return Response as a C-string
      */
-    virtual String getString() = 0;
+    virtual const char* getString() = 0;
     
     /**
      * @brief End the HTTP connection and free resources

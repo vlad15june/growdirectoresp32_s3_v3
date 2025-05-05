@@ -37,6 +37,7 @@
 #include "Application/Services/ModuleSetupService.h"
 #include "Application/Interfaces/LoopServices/ILoopServiceFactory.h"
 #include "Application/Services/LoopServices/LoopServiceFactory.h"
+#include "Infrastructure/Controllers/HTTP/RestApiService.h"
 
 const char *mqttUser = "GrowDirectorMqtt";
 const char *mqttPassword = "lasdfh329483457sfdjhs92_w";
@@ -140,6 +141,8 @@ ModuleSetupService moduleSetupService(
     &webServerLauncher,
     &loopServiceFactory,
     &mqttManager);
+
+RestAPIService restApiService(&moduleConfig, &mqttLogger, &debugSystem);
 
 void initDependencies()
 {
