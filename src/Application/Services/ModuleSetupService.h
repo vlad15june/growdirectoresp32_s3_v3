@@ -238,8 +238,38 @@ inline void ModuleSetupService::UserReConfigModeConfigure()
 
 inline void ModuleSetupService::ConfigureDoneModeConfigure()
 {
-    // Setup MQTT connection for configured mode
+    // setupWifiConnection();
+
     setupMqttConnection();
+
+    // fillGrowDirectorStructure();
+    // udpSetup(); 
+
+
+    // if (moduleType == MODULE_TYPE_SENSOR)
+    // {
+    //     setupSensors();
+    // }
+
+    // if (moduleType == MODULE_TYPE_HYDRO)
+    // {
+    //     setupHydroSensors();
+    //     setupHydroPumps();
+    //     syncRulesFromServer("");
+    // }
+
+    // if (moduleType == MODULE_TYPE_DEVICE)
+    // {
+    //     setupDevices();
+    //     syncRulesFromServer("");
+    // }
+
+    // if (moduleType == MODULE_TYPE_ANALOG_INPUT_DEVICE)
+    // {
+    //     setupAnalogInputDevice();
+    //     syncRulesFromServer("");
+    // }
+
     
     log("SETUP: Module prepared for operation");
 }
