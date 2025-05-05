@@ -10,7 +10,6 @@
 
 // Forward declarations for external dependencies
 const char* firmwareVersion;
-const char* growDirectorStructureStr;
 
 class RestAPIService : public IRestAPIService {
 private:
@@ -123,13 +122,15 @@ public:
         }
     }
 
-    void sendToServerModuleStructure() override {
+    void sendToServerModuleStructure(const ModuleStructure& moduleStructure) override {
         if (_settings == nullptr) {
             log("NET: sendToServerModuleStructure - Settings not available");
             return;
         }
 
-        log("NET: /api/v1/HardWare/structure -> %s", growDirectorStructureStr);
+        // Convert module structure to JSON
+        std::string structureJson = moduleStructure.toJson();
+        log("NET: /api/v1/HardWare/structure -> %s", structureJson.c_str());
 
         const char* url = buildUrl("/api/v1/HardWare/structure");
 
@@ -147,7 +148,7 @@ public:
             _httpClient->begin(url);
             _httpClient->addHeader("Content-Type", "application/json");
 
-            httpResponseCode = _httpClient->POST(growDirectorStructureStr);
+            httpResponseCode = _httpClient->POST(structureJson.c_str());
 
             log("NET: /api/v1/HardWare/structure -> response %d, try = %d", httpResponseCode, tries);
 

@@ -1,6 +1,6 @@
 #pragma once
 
-#include <Arduino.h>
+#include "Core/Domain/Data/Models/ModuleStructure.h"
 
 class IRestAPIService {
 public:
@@ -10,7 +10,7 @@ public:
     virtual bool isModuleOnline() = 0;
     
     // Structure update methods
-    virtual void sendToServerModuleStructure() = 0;
+    virtual void sendToServerModuleStructure(const ModuleStructure& moduleStructure) = 0;
     
     // Device and rule state methods
     virtual void sendRuleStateCommand(const char* msg) = 0;
