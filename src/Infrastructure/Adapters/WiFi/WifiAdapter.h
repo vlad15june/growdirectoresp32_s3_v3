@@ -22,9 +22,9 @@ public:
     bool isConnected() override;
     
     // Multi-network functionality
-    bool addNetwork(const char* ssid, const char* password);
-    bool connectToNetworks(unsigned long timeout = 20000);
-    void clearNetworks();
+    bool addNetwork(const char* ssid, const char* password) override;
+    bool connectToNetworks(unsigned long timeout = 20000) override;
+    void clearNetworks() override;
     
     // Network information
     const char* getLocalIP() override;

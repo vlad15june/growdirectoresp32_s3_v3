@@ -15,6 +15,11 @@ public:
     virtual bool connect(const char* ssid, const char* password, unsigned long timeout = 20000) = 0;
     virtual bool disconnect() = 0;
     virtual bool isConnected() = 0;
+
+    // Multi-network functionality
+    virtual bool addNetwork(const char* ssid, const char* password) = 0;
+    virtual bool connectToNetworks(unsigned long timeout = 20000) = 0;
+    virtual void clearNetworks() = 0;
     
     // Network information
     virtual const char* getLocalIP() = 0;

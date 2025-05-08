@@ -3,6 +3,8 @@
 
 #include "Core/Domain/Interfaces/Adapters/IWifiAdapter.h"
 #include <cstring>
+#include <vector>
+#include <string>
 
 class MockWifiAdapter : public IWifiAdapter {
 public:
@@ -16,6 +18,9 @@ public:
     bool isConnectedCalled = false;
     bool getLocalIPCalled = false;
     bool getMACAddressCalled = false;
+    bool addNetworkCalled = false;
+    bool connectToNetworksCalled = false;
+    bool clearNetworksCalled = false;
 
     // Parameters captured from last call
     char lastSSID[64] = {0};
@@ -32,10 +37,19 @@ public:
     bool accessPointActive = false;
     bool connected = false;
     bool configureAccessPointSuccess = true;
+    bool addNetworkSuccess = true;
+    bool connectToNetworksSuccess = true;
     
     char localIP[32] = "192.168.0.1";
     char macAddress[32] = "00:11:22:33:44:55";
     int rssi = -70;
+    
+    // Multi-network functionality storage
+    struct NetworkCredentials {
+        std::string ssid;
+        std::string password;
+    };
+    std::vector<NetworkCredentials> savedNetworks;
     
     // Reset all state variables
     void reset() {
@@ -48,6 +62,9 @@ public:
         isConnectedCalled = false;
         getLocalIPCalled = false;
         getMACAddressCalled = false;
+        addNetworkCalled = false;
+        connectToNetworksCalled = false;
+        clearNetworksCalled = false;
         
         lastSSID[0] = '\0';
         lastPassword[0] = '\0';
@@ -62,10 +79,14 @@ public:
         accessPointActive = false;
         connected = false;
         configureAccessPointSuccess = true;
+        addNetworkSuccess = true;
+        connectToNetworksSuccess = true;
         
         strcpy(localIP, "192.168.0.1");
         strcpy(macAddress, "00:11:22:33:44:55");
         rssi = -70;
+        
+        savedNetworks.clear();
     }
     
     // Helper methods for tests
@@ -172,6 +193,35 @@ public:
     
     void setStationAndAccessPointMode() override {
         // Not implemented for mock
+    }
+    
+    // Multi-network functionality implementation
+    bool addNetwork(const char* ssid, const char* password) override {
+        addNetworkCalled = true;
+        NetworkCredentials creds;
+        creds.ssid = ssid;
+        creds.password = password;
+        savedNetworks.push_back(creds);
+        return addNetworkSuccess;
+    }
+    
+    bool connectToNetworks(unsigned long timeout = 20000) override {
+        connectToNetworksCalled = true;
+        
+        if (savedNetworks.size() > 0 && connectToNetworksSuccess) {
+            // Simulate connecting to the first network
+            strncpy(lastSSID, savedNetworks[0].ssid.c_str(), sizeof(lastSSID));
+            strncpy(lastPassword, savedNetworks[0].password.c_str(), sizeof(lastPassword));
+            connected = true;
+            return true;
+        }
+        
+        return false;
+    }
+    
+    void clearNetworks() override {
+        clearNetworksCalled = true;
+        savedNetworks.clear();
     }
 };
 
