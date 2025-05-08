@@ -1,6 +1,7 @@
 #include <unity.h>
 #include "Core/Domain/Data/Models/ModuleStructure.h"
 #include "Core/Domain/Data/Models/ModuleStructure.cpp"
+#include "Infrastructure/Adapters/Json/JsonConverter.h"
 
 static const char* test_json = R"({
     "GrowdirectorUid":"84:F7:03:FE:88:30",
@@ -34,17 +35,18 @@ static const char* test_json = R"({
 })";
 
 void test_module_structure_parse_and_serialize(void) {
+    JsonConverter jsonConverter;
     ModuleStructure ms;
-    TEST_ASSERT_TRUE(ms.fromJson(test_json));
-    TEST_ASSERT_EQUAL_STRING("84:F7:03:FE:88:30", ms.getGrowdirectorUid().c_str());
-    TEST_ASSERT_EQUAL_STRING("1.9.30", ms.getFirmware().c_str());
-    TEST_ASSERT_EQUAL_STRING("demo@demo.com", ms.getEmail().c_str());
-    TEST_ASSERT_EQUAL_STRING("53444f91-e698-c0c7-caa2-dbc3bdbf93fc", ms.getAccountUid().c_str());
-    TEST_ASSERT_EQUAL(1, ms.getNodes().size());
-    TEST_ASSERT_EQUAL_FLOAT(32.73255, ms.getLatitude());
-    TEST_ASSERT_EQUAL_FLOAT(35.19194, ms.getLongitude());
+    TEST_ASSERT_TRUE(jsonConverter.moduleStructureFromJson(test_json, ms));
+    TEST_ASSERT_EQUAL_STRING("84:F7:03:FE:88:30", ms.growdirectorUid.c_str());
+    TEST_ASSERT_EQUAL_STRING("1.9.30", ms.firmware.c_str());
+    TEST_ASSERT_EQUAL_STRING("demo@demo.com", ms.email.c_str());
+    TEST_ASSERT_EQUAL_STRING("53444f91-e698-c0c7-caa2-dbc3bdbf93fc", ms.accountUid.c_str());
+    TEST_ASSERT_EQUAL(1, ms.nodes.size());
+    TEST_ASSERT_EQUAL_FLOAT(32.73255, ms.latitude);
+    TEST_ASSERT_EQUAL_FLOAT(35.19194, ms.longitude);
 
-    const Node& node = ms.getNodes()[0];
+    const Node& node = ms.nodes[0];
     TEST_ASSERT_EQUAL_STRING("director_wifi", node.type.c_str());
     TEST_ASSERT_EQUAL_STRING("sensor", node.subtype.c_str());
     TEST_ASSERT_EQUAL_STRING("power-on", node.bootType.c_str());
@@ -67,18 +69,19 @@ void test_module_structure_parse_and_serialize(void) {
     TEST_ASSERT_EQUAL(2, node.pumps[0].pin);
 
     // Test serialization (round-trip)
-    std::string jsonOut = ms.toJson();
+    std::string jsonOut = jsonConverter.moduleStructureToJson(ms);
     ModuleStructure ms2;
-    TEST_ASSERT_TRUE(ms2.fromJson(jsonOut));
-    TEST_ASSERT_EQUAL_STRING(ms.getGrowdirectorUid().c_str(), ms2.getGrowdirectorUid().c_str());
-    TEST_ASSERT_EQUAL(ms.getNodes().size(), ms2.getNodes().size());
-    TEST_ASSERT_EQUAL_FLOAT(ms.getLatitude(), ms2.getLatitude());
-    TEST_ASSERT_EQUAL_FLOAT(ms.getLongitude(), ms2.getLongitude());
+    TEST_ASSERT_TRUE(jsonConverter.moduleStructureFromJson(jsonOut, ms2));
+    TEST_ASSERT_EQUAL_STRING(ms.growdirectorUid.c_str(), ms2.growdirectorUid.c_str());
+    TEST_ASSERT_EQUAL(ms.nodes.size(), ms2.nodes.size());
+    TEST_ASSERT_EQUAL_FLOAT(ms.latitude, ms2.latitude);
+    TEST_ASSERT_EQUAL_FLOAT(ms.longitude, ms2.longitude);
 }
 
 void test_module_structure_lookup(void) {
+    JsonConverter jsonConverter;
     ModuleStructure ms;
-    ms.fromJson(test_json);
+    jsonConverter.moduleStructureFromJson(test_json, ms);
 
     // Sensor lookup
     Sensor* s = ms.findSensorByUid("84:F7:03:FE:88:30.00.01");
@@ -107,8 +110,9 @@ void test_module_structure_lookup(void) {
 }
 
 void test_module_structure_device_type(void) {
+    JsonConverter jsonConverter;
     ModuleStructure ms;
-    ms.fromJson(test_json);
+    jsonConverter.moduleStructureFromJson(test_json, ms);
     TEST_ASSERT_EQUAL_STRING("sensor", ms.getDeviceType().c_str());
 }
 
