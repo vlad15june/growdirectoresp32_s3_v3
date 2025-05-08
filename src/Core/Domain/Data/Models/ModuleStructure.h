@@ -56,43 +56,6 @@ class ModuleStructure {
 public:
     ModuleStructure() = default;
     
-    // Parse from JSON string
-    bool fromJson(const std::string& jsonStr);
-    
-    // Convert to JSON string
-    std::string toJson() const;
-    
-    // Getters
-    const std::string& getGrowdirectorUid() const { return growdirectorUid; }
-    const std::string& getFirmware() const { return firmware; }
-    const std::string& getEmail() const { return email; }
-    const std::string& getAccountUid() const { return accountUid; }
-    const std::vector<Node>& getNodes() const { return nodes; }
-    double getLatitude() const { return latitude; }
-    double getLongitude() const { return longitude; }
-    
-    // Find a sensor by UID
-    Sensor* findSensorByUid(const std::string& sensorUid);
-    
-    // Find sensors by type
-    std::vector<Sensor*> findSensorsByType(const std::string& type);
-    
-    // Find a relay by UID
-    Relay* findRelayByUid(const std::string& relayUid);
-    
-    // Find a pump by UID
-    Pump* findPumpByUid(const std::string& pumpUid);
-    
-    // Get all relays
-    std::vector<Relay*> getAllRelays();
-    
-    // Get all pumps
-    std::vector<Pump*> getAllPumps();
-    
-    // Helper method to detect device type
-    std::string getDeviceType() const;
-
-private:
     std::string growdirectorUid;
     std::string firmware;
     std::string email;
@@ -100,6 +63,23 @@ private:
     std::vector<Node> nodes;
     double latitude = 0.0;
     double longitude = 0.0;
+    
+    Sensor* findSensorByUid(const std::string& sensorUid);
+    
+    std::vector<Sensor*> findSensorsByType(const std::string& type);
+    
+    Relay* findRelayByUid(const std::string& relayUid);
+    
+    Pump* findPumpByUid(const std::string& pumpUid);
+    
+    std::vector<Relay*> getAllRelays();
+    
+    std::vector<Pump*> getAllPumps();
+    
+    std::string getDeviceType() const;
+
+private:
+    
 };
 
 #endif // MODULE_STRUCTURE_H

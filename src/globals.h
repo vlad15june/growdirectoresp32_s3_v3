@@ -41,6 +41,7 @@
 #include "Application/Interfaces/LoopServices/ILoopServiceFactory.h"
 #include "Application/Services/LoopServices/LoopServiceFactory.h"
 #include "Infrastructure/Controllers/HTTP/RestApiService.h"
+#include "Infrastructure/Adapters/Json/JsonConverter.h"
 
 const char *mqttUser = "GrowDirectorMqtt";
 const char *mqttPassword = "lasdfh329483457sfdjhs92_w";
@@ -55,7 +56,6 @@ IPAddress myIP;
 WebServer webServer(80);
 WiFiMulti wifiMulti;
 
-// Callback function for MQTT
 void mqttCallback(char *topic, byte *payload, unsigned int length)
 {
   // This will be replaced by the MqttManager callback
@@ -70,6 +70,8 @@ PubSubClient mqttClient(mqttBroker, 1883, mqttCallback, wifiClient);
 MqttLogger mqttLogger(mqttClient, mqttDefaultTopic, MqttLoggerMode::MqttAndSerial);
 
 DebugSystem debugSystem;
+
+JsonConverter jsonConverter;
 
 // MQTT components
 TopicHandlerFactory topicHandlerFactory(&mqttLogger, &debugSystem);
@@ -96,13 +98,11 @@ ButtonAdapter buttonAdapter(&arduinoAdapter);
 
 WifiAdapter wifiAdapter(wifiMulti);
 
-// Create NTP Time Adapter instance
 // Using default NTP server with UTC offset of 0 and daylight offset of 0
 NTPTimeAdapter ntpTimeAdapter(&mqttLogger, &debugSystem, &settings);
 
 ModuleConfig moduleConfig(&mqttLogger, &debugSystem, &settings, &ntpTimeAdapter, &wifiAdapter);
 
-// Create OnChangeModuleModeUseCase instance
 OnChangeModuleModeUseCase moduleModeUseCase(arduinoAdapter, moduleConfig, &mqttLogger, &debugSystem);
 
 LedUseCases ledUseCases(&ledAdapter, &moduleConfig, &arduinoAdapter, &mqttLogger, &debugSystem);
@@ -122,7 +122,6 @@ WebServerLauncher webServerLauncher(
     &debugSystem,
     moduleConfigurationWebServer);
 
-// Create LoopServiceFactory instance with proper dependencies
 LoopServiceFactory loopServiceFactory(
     &ledUseCases,
     &buttonUseCases,
@@ -147,7 +146,7 @@ ModuleSetupService moduleSetupService(
 
 ModuleStructure moduleStructure;
 
-RestAPIService restApiService(&moduleConfig, &mqttLogger, &debugSystem);
+RestAPIService restApiService(&moduleConfig, &mqttLogger, &debugSystem, &jsonConverter);
 
 void initDependencies()
 {

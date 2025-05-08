@@ -7,6 +7,7 @@
 #include "Core/Domain/Interfaces/ISettings.h"
 #include "Infrastructure/Adapters/Http/IHttpClientAdapter.h"
 #include "Infrastructure/Adapters/Http/HttpClientAdapter.h"
+#include "Core/Domain/Interfaces/Adapters/Json/IJsonConverter.h"
 
 // Forward declarations for external dependencies
 const char* firmwareVersion;
@@ -18,6 +19,7 @@ private:
     ILogger* _logger;
     IDebugSystem* _debugSystem;
     ISettings* _settings;
+    IJsonConverter* _jsonConverter;
     
     char _serverUrl[BUFSIZE];
     char _token[BUFSIZE];
@@ -61,11 +63,12 @@ private:
     }
 
 public:
-    RestAPIService(IModuleConfig* moduleConfig, ILogger* logger = nullptr, IDebugSystem* debugSystem = nullptr) 
+    RestAPIService(IModuleConfig* moduleConfig, ILogger* logger = nullptr, IDebugSystem* debugSystem = nullptr, IJsonConverter* jsonConverter = nullptr) 
         : _httpClient(createNewHttpClient()), 
           _moduleConfig(moduleConfig),
           _logger(logger),
-          _debugSystem(debugSystem) {
+          _debugSystem(debugSystem),
+          _jsonConverter(jsonConverter) {
         
         if (_moduleConfig) {
             _settings = _moduleConfig->getSettings();
@@ -129,7 +132,12 @@ public:
         }
 
         // Convert module structure to JSON
-        std::string structureJson = moduleStructure.toJson();
+        std::string structureJson;
+        if (_jsonConverter) {
+            structureJson = _jsonConverter->moduleStructureToJson(moduleStructure);
+        } else {
+            structureJson = "{}";
+        }
         log("NET: /api/v1/HardWare/structure -> %s", structureJson.c_str());
 
         const char* url = buildUrl("/api/v1/HardWare/structure");
