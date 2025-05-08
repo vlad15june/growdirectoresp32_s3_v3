@@ -42,6 +42,8 @@
 #include "Application/Services/LoopServices/LoopServiceFactory.h"
 #include "Infrastructure/Controllers/HTTP/RestApiService.h"
 #include "Infrastructure/Adapters/Json/JsonConverter.h"
+#include "Infrastructure/Adapters/Json/ArduinoJsonConverter.h"
+
 
 const char *mqttUser = "GrowDirectorMqtt";
 const char *mqttPassword = "lasdfh329483457sfdjhs92_w";
@@ -71,7 +73,7 @@ MqttLogger mqttLogger(mqttClient, mqttDefaultTopic, MqttLoggerMode::MqttAndSeria
 
 DebugSystem debugSystem;
 
-JsonConverter jsonConverter;
+ArduinoJsonConverter jsonConverter;
 
 // MQTT components
 TopicHandlerFactory topicHandlerFactory(&mqttLogger, &debugSystem);
