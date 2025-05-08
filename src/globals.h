@@ -14,9 +14,12 @@
 #include "Core/Domain/Interfaces/ISettings.h"
 #include "Core/Domain/Interfaces/Adapters/ILedAdapter.h"
 #include "Core/Domain/Interfaces/Adapters/IButtonAdapter.h"
+
 #include "Core/Domain/UseCases/Led/LedUseCases.h"
 #include "Core/Domain/UseCases/Buttons/ButtonUseCases.h"
 #include "Core/Domain/UseCases/ModuleMode/OnChangeModuleModeUseCase.h"
+
+#include "Core/Domain/Data/Models/ModuleStructure.h"
 
 #include "Infrastructure/Adapters/eepromAdapter.h"
 #include "Infrastructure/Logging/MqttLogger.h"
@@ -38,6 +41,9 @@
 #include "Application/Interfaces/LoopServices/ILoopServiceFactory.h"
 #include "Application/Services/LoopServices/LoopServiceFactory.h"
 #include "Infrastructure/Controllers/HTTP/RestApiService.h"
+#include "Infrastructure/Adapters/Json/JsonConverter.h"
+#include "Infrastructure/Adapters/Json/ArduinoJsonConverter.h"
+
 
 const char *mqttUser = "GrowDirectorMqtt";
 const char *mqttPassword = "lasdfh329483457sfdjhs92_w";
@@ -52,7 +58,6 @@ IPAddress myIP;
 WebServer webServer(80);
 WiFiMulti wifiMulti;
 
-// Callback function for MQTT
 void mqttCallback(char *topic, byte *payload, unsigned int length)
 {
   // This will be replaced by the MqttManager callback
@@ -67,6 +72,8 @@ PubSubClient mqttClient(mqttBroker, 1883, mqttCallback, wifiClient);
 MqttLogger mqttLogger(mqttClient, mqttDefaultTopic, MqttLoggerMode::MqttAndSerial);
 
 DebugSystem debugSystem;
+
+ArduinoJsonConverter jsonConverter;
 
 // MQTT components
 TopicHandlerFactory topicHandlerFactory(&mqttLogger, &debugSystem);
@@ -93,13 +100,11 @@ ButtonAdapter buttonAdapter(&arduinoAdapter);
 
 WifiAdapter wifiAdapter(wifiMulti);
 
-// Create NTP Time Adapter instance
 // Using default NTP server with UTC offset of 0 and daylight offset of 0
 NTPTimeAdapter ntpTimeAdapter(&mqttLogger, &debugSystem, &settings);
 
 ModuleConfig moduleConfig(&mqttLogger, &debugSystem, &settings, &ntpTimeAdapter, &wifiAdapter);
 
-// Create OnChangeModuleModeUseCase instance
 OnChangeModuleModeUseCase moduleModeUseCase(arduinoAdapter, moduleConfig, &mqttLogger, &debugSystem);
 
 LedUseCases ledUseCases(&ledAdapter, &moduleConfig, &arduinoAdapter, &mqttLogger, &debugSystem);
@@ -119,7 +124,6 @@ WebServerLauncher webServerLauncher(
     &debugSystem,
     moduleConfigurationWebServer);
 
-// Create LoopServiceFactory instance with proper dependencies
 LoopServiceFactory loopServiceFactory(
     &ledUseCases,
     &buttonUseCases,
@@ -142,7 +146,9 @@ ModuleSetupService moduleSetupService(
     &loopServiceFactory,
     &mqttManager);
 
-RestAPIService restApiService(&moduleConfig, &mqttLogger, &debugSystem);
+ModuleStructure moduleStructure;
+
+RestAPIService restApiService(&moduleConfig, &mqttLogger, &debugSystem, &jsonConverter);
 
 void initDependencies()
 {

@@ -61,6 +61,7 @@ private:
 
     // Add method to setup MQTT connection for configured mode
     void setupMqttConnection();
+    void setupWifiConnection();
 
 public:
     // Declare the test helper as a friend class so it can access private methods
@@ -95,15 +96,15 @@ inline ModuleSetupService::ModuleSetupService(
     IWebServerLauncher *webServerLauncher,
     ILoopServiceFactory *loopServiceFactory,
     IMqttManager *mqttManager) : logger(logger),
-                               debugSystem(debugSystem),
-                               moduleConfig(moduleConfig),
-                               ledAdapter(ledAdapter),
-                               ledUseCases(ledUseCases),
-                               buttonUseCases(buttonUseCases),
-                               wifiAdapter(wifiAdapter),
-                               webServerLauncher(webServerLauncher),
-                               loopServiceFactory(loopServiceFactory),
-                               mqttManager(mqttManager)
+                                 debugSystem(debugSystem),
+                                 moduleConfig(moduleConfig),
+                                 ledAdapter(ledAdapter),
+                                 ledUseCases(ledUseCases),
+                                 buttonUseCases(buttonUseCases),
+                                 wifiAdapter(wifiAdapter),
+                                 webServerLauncher(webServerLauncher),
+                                 loopServiceFactory(loopServiceFactory),
+                                 mqttManager(mqttManager)
 {
 }
 
@@ -232,19 +233,18 @@ inline void ModuleSetupService::UserReConfigModeConfigure()
 {
     setupAP();
     setupWebServer();
-    
+
     log("SETUP: Module prepared for reconfiguration");
 }
 
 inline void ModuleSetupService::ConfigureDoneModeConfigure()
 {
-    // setupWifiConnection();
+    setupWifiConnection();
 
     setupMqttConnection();
 
     // fillGrowDirectorStructure();
-    // udpSetup(); 
-
+    // udpSetup();
 
     // if (moduleType == MODULE_TYPE_SENSOR)
     // {
@@ -270,7 +270,6 @@ inline void ModuleSetupService::ConfigureDoneModeConfigure()
     //     syncRulesFromServer("");
     // }
 
-    
     log("SETUP: Module prepared for operation");
 }
 
@@ -429,16 +428,48 @@ inline void ModuleSetupService::setupWebServer()
         log("SETUP: Error - Web server launcher is missing");
         return;
     }
-    
+
     log("SETUP: Starting web server configuration...");
     webServerLauncher->launchConfigurationServer();
     log("SETUP: Web server setup completed");
-    
+
     // Get the server URL if available
     if (wifiAdapter)
     {
-        const char* ip = wifiAdapter->getLocalIP();
+        const char *ip = wifiAdapter->getLocalIP();
         log("SETUP: Configuration interface available at http://%s/", ip);
+    }
+}
+
+inline void ModuleSetupService::setupWifiConnection() {
+    if (!wifiAdapter)
+    {
+        log("SETUP: Error - WiFi adapter is missing");
+        return;
+    }
+
+    ISettings *settings = moduleConfig->getSettings();
+    if (!settings)
+    {
+        log("SETUP: Error - Settings not available for WiFi connection");
+        return;
+    }
+
+    char ssid[BUFSIZE] = {0};
+    char password[BUFSIZE] = {0};
+    
+    settings->getSsid(ssid, BUFSIZE);
+    settings->getPassword(password, BUFSIZE);
+    
+    wifiAdapter->addNetwork(ssid, password);
+    if (wifiAdapter->connectToNetworks())
+    {
+        const char *activeSsid = wifiAdapter->getSSID(0);
+        log("SETUP: Connected to WiFi network: %s", activeSsid);        
+    }
+    else
+    {
+        log("SETUP: Failed to connect to WiFi network");
     }
 }
 
@@ -453,7 +484,7 @@ inline void ModuleSetupService::setupMqttConnection()
     // Connect to MQTT broker
     if (mqttManager->connect())
     {
-        log("SETUP: Connected to MQTT broker");                
+        log("SETUP: Connected to MQTT broker");
     }
     else
     {
@@ -514,10 +545,12 @@ inline std::unique_ptr<ILoopService> ModuleSetupService::getLoopService()
     ModuleModeEnum moduleMode = static_cast<ModuleModeEnum>(settings->getIfConfigured());
     log("SETUP: Creating loop service for module mode: %d", static_cast<int>(moduleMode));
 
-    try {
+    try
+    {
         return loopServiceFactory->createLoopService(moduleMode);
     }
-    catch (const std::exception& e) {
+    catch (const std::exception &e)
+    {
         log("SETUP: Error creating loop service: %s", e.what());
         // Fallback to a default service (USER_CAN_CONFIGURE) if creation fails
         return loopServiceFactory->createLoopService(ModuleModeEnum::USER_CAN_CONFIGURE);
