@@ -525,12 +525,13 @@ inline void ModuleSetupService::fillModuleStructure()
         log("SETUP: Preparing sensor module structure");
         currentNode.subtype = "sensor";
 
-        for (int group = 0; group < 4; group++)
+        int sensorPinCount = moduleConfig->getSensorPinCount();
+        for (int group = 0; group < sensorPinCount; group++)
         {
             for (int i = 0; i < 3; i++)
             {
                 Sensor sensor;
-                sensor.pin = 4 - group;
+                sensor.pin = sensorPinCount - group;
                 sensor.type = "none";
 
                 char sensorId[20];
@@ -551,7 +552,8 @@ inline void ModuleSetupService::fillModuleStructure()
         log("SETUP: Preparing hydro module structure");
         currentNode.subtype = "hydro";
 
-        for (int i = 0; i < 4; i++)
+        int sensorPinCount = moduleConfig->getSensorPinCount();
+        for (int i = 0; i < sensorPinCount; i++)
         {
             Sensor sensor;
             sensor.pin = i + 1;
@@ -567,7 +569,7 @@ inline void ModuleSetupService::fillModuleStructure()
                 i, sensor.type.c_str(), sensor.pin, sensor.uid.c_str());
         }
 
-        for (int i = 0; i < 3; i++)
+        for (int i = 0; i < deviceCount; i++)
         {
             Pump pump;
             pump.pin = i + 1;
@@ -593,7 +595,7 @@ inline void ModuleSetupService::fillModuleStructure()
             currentNode.subtype = "socket";
             log("SETUP: Socket subtype detected");
 
-            for (int i = 0; i < 2; i++)
+            for (int i = 0; i < deviceCount; i++)
             {
                 Relay relay;
                 relay.pin = i + 1;
@@ -613,7 +615,7 @@ inline void ModuleSetupService::fillModuleStructure()
             currentNode.subtype = "drycontact";
             log("SETUP: Dry contact subtype detected");
 
-            for (int i = 0; i < 4; i++)
+            for (int i = 0; i < deviceCount; i++)
             {
                 Relay relay;
                 relay.pin = i + 1;

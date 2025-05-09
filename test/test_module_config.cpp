@@ -9,14 +9,12 @@
 #include "Mock/Infrastructure/Logging/MockLogger.h"
 #include "Mock/Infrastructure/Logging/MockDebugSystem.h"
 
-// Global test variables
 static MockLogger g_mockLogger;
 static MockDebugSystem g_mockDebugSystem;
 static MockSettings g_mockSettings;
 static MockNTPTimeAdapter g_mockTimeAdapter;
 static ModuleConfig* g_moduleConfig;
 
-// Test setup and teardown - make these static to avoid conflicts
 static void module_config_setup(void) {
     g_mockLogger.printCalled = false;
     g_mockDebugSystem.featureEnabled = true;
@@ -30,7 +28,6 @@ static void module_config_teardown(void) {
     g_moduleConfig = nullptr;
 }
 
-// Test functions - make these static too
 static void test_default_module_types(void) {
     module_config_setup();
     TEST_ASSERT_EQUAL(MODULE_TYPE_DEVICE, g_moduleConfig->getModuleType());
@@ -40,24 +37,16 @@ static void test_default_module_types(void) {
 
 static void test_default_values(void) {
     module_config_setup();
-    
-    // Test all default constructor values
     TEST_ASSERT_EQUAL(MODULE_TYPE_DEVICE, g_moduleConfig->getModuleType());
     TEST_ASSERT_EQUAL(MODULE_SUBTYPE_RELAY, g_moduleConfig->getModuleSubType());
     TEST_ASSERT_EQUAL(4, g_moduleConfig->getDeviceCount());
     TEST_ASSERT_EQUAL(4, g_moduleConfig->getLedsCount());
-    
     module_config_teardown();
 }
 
 static void test_init_calls_dependencies(void) {
     module_config_setup();
     g_moduleConfig->init();
-    
-    // Verify settings was initialized
-    // TEST_ASSERT_TRUE(g_mockSettings.wasBeginCalled());
-    
-    // Verify time adapter was initialized
     TEST_ASSERT_TRUE(g_mockTimeAdapter.wasSetupCalled());
     TEST_ASSERT_TRUE(g_mockTimeAdapter.wasTimeRestored());
     module_config_teardown();
@@ -72,27 +61,15 @@ static void test_get_settings(void) {
 
 static void test_setters(void) {
     module_config_setup();
-    // Create new instances
     MockLogger newLogger;
     MockSettings newSettings;
     MockNTPTimeAdapter newTimeAdapter;
-    
-    // Set new instances
     g_moduleConfig->setLogger(&newLogger);
     g_moduleConfig->setSettings(&newSettings);
     g_moduleConfig->setTimeAdapter(&newTimeAdapter);
-    
-    // Test initialization with new instances
     g_moduleConfig->init();
-    
-    // Verify new settings was initialized
-    // TEST_ASSERT_TRUE(newSettings.wasBeginCalled());
-    
-    // Verify new time adapter was initialized
     TEST_ASSERT_TRUE(newTimeAdapter.wasSetupCalled());
     TEST_ASSERT_TRUE(newTimeAdapter.wasTimeRestored());
-    
-    // Verify getter returns correct instance
     TEST_ASSERT_EQUAL(&newSettings, g_moduleConfig->getSettings());
     TEST_ASSERT_EQUAL(&newTimeAdapter, g_moduleConfig->getTimeAdapter());
     module_config_teardown();
@@ -100,13 +77,9 @@ static void test_setters(void) {
 
 static void test_led_getters(void) {
     module_config_setup();
-    
-    // Before initialization, LED arrays should be nullptr
     TEST_ASSERT_NULL(g_moduleConfig->getRedLeds());
     TEST_ASSERT_NULL(g_moduleConfig->getGreenLeds());
     TEST_ASSERT_EQUAL(4, g_moduleConfig->getLedsCount());
-    
-    // Initialize module config
     g_moduleConfig->init();
     
     // After initialization, LED arrays should be initialized
@@ -136,7 +109,6 @@ static void test_led_getters(void) {
 }
 
 static void test_all_module_types(void) {
-    // Structure to hold test cases
     struct TestCase {
         int cid0Value;
         int cid1Value;
@@ -165,10 +137,7 @@ static void test_all_module_types(void) {
     uint8_t expectedHydroGreen[3] = {13, 14, 12};
     uint8_t expectedDimmerRed[2] = {42, 41};
     uint8_t expectedDimmerGreen[2] = {40, 39};
-    
-    // Define test cases for all module types
     TestCase testCases[] = {
-        // cid0, cid1, cid2, type, subtype, deviceCount, ledsCount, redLeds, greenLeds
         {0, 0, 0, MODULE_TYPE_DEVICE, MODULE_SUBTYPE_RELAY, 4, 4, expectedRelayRed, expectedRelayGreen},
         {1, 0, 0, MODULE_TYPE_DEVICE, MODULE_SUBTYPE_RELAY, 4, 4, expectedRelayRed, expectedRelayGreen},
         {0, 1, 0, MODULE_TYPE_DEVICE, MODULE_SUBTYPE_SOKET, 2, 2, expectedSktRed, expectedSktGreen},
@@ -176,10 +145,7 @@ static void test_all_module_types(void) {
         {0, 0, 1, MODULE_TYPE_HYDRO, MODULE_SUBTYPE_NONE, 3, 3, expectedHydroRed, expectedHydroGreen},
         {1, 0, 1, MODULE_TYPE_ANALOG_INPUT_DEVICE, MODULE_SUBTYPE_DIMMER, 2, 2, expectedDimmerRed, expectedDimmerGreen}
     };
-    
-    // Run all test cases
     for (const auto& testCase : testCases) {
-        // Set up
         module_config_setup();
         
         // Set mock digital read values for CID pins
@@ -187,27 +153,16 @@ static void test_all_module_types(void) {
         setDigitalReadMockValue(CID_0, testCase.cid0Value);
         setDigitalReadMockValue(CID_1, testCase.cid1Value);
         setDigitalReadMockValue(CID_2, testCase.cid2Value);
-        
-        // Calculate expected code for debugging
         int expectedCode = testCase.cid0Value + testCase.cid1Value * 2 + testCase.cid2Value * 4;
-        
-        // Initialize module which will read the CID pins
         g_moduleConfig->init();
-        
-        // Verify module configuration
         char errorMsg[100];
         snprintf(errorMsg, sizeof(errorMsg), "Failed for code %d", expectedCode);
-        
         TEST_ASSERT_EQUAL_MESSAGE(testCase.expectedModuleType, g_moduleConfig->getModuleType(), errorMsg);
         TEST_ASSERT_EQUAL_MESSAGE(testCase.expectedModuleSubType, g_moduleConfig->getModuleSubType(), errorMsg);
         TEST_ASSERT_EQUAL_MESSAGE(testCase.expectedDeviceCount, g_moduleConfig->getDeviceCount(), errorMsg);
         TEST_ASSERT_EQUAL_MESSAGE(testCase.expectedLedsCount, g_moduleConfig->getLedsCount(), errorMsg);
-        
-        // Verify LED arrays are not null (except for sensor which has special handling)
         TEST_ASSERT_NOT_NULL_MESSAGE(g_moduleConfig->getRedLeds(), errorMsg);
         TEST_ASSERT_NOT_NULL_MESSAGE(g_moduleConfig->getGreenLeds(), errorMsg);
-        
-        // For sensor type, verify single LED value
         if (testCase.expectedModuleType == MODULE_TYPE_SENSOR) {
             TEST_ASSERT_EQUAL_MESSAGE(12, g_moduleConfig->getRedLeds()[0], errorMsg);  // LED_R_Sensor
             TEST_ASSERT_EQUAL_MESSAGE(13, g_moduleConfig->getGreenLeds()[0], errorMsg); // LED_G_Sensor
@@ -226,46 +181,64 @@ static void test_all_module_types(void) {
                 TEST_ASSERT_EQUAL_MESSAGE(testCase.expectedGreenLeds[i], actualGreenLeds[i], pinErrorMsg);
             }
         }
-        
-        // Tear down
         module_config_teardown();
     }
 }
 
-// Update the module mode test function to use correct enum values
 static void test_module_mode(void) {
     module_config_setup();
-    
-    // Test default module mode (ModuleConfig should initialize to a valid default)
     ModuleModeEnum defaultMode = g_moduleConfig->getRequestedModuleMode();
-    
-    // Test setting module mode to USER_CAN_CONFIGURE
     g_moduleConfig->setRequestedModuleMode(ModuleModeEnum::USER_CAN_CONFIGURE);
     TEST_ASSERT_EQUAL(ModuleModeEnum::USER_CAN_CONFIGURE, g_moduleConfig->getRequestedModuleMode());
-    
-    // Test setting module mode to USER_CAN_RE_CONFIGURE
     g_moduleConfig->setRequestedModuleMode(ModuleModeEnum::USER_CAN_RE_CONFIGURE);
     TEST_ASSERT_EQUAL(ModuleModeEnum::USER_CAN_RE_CONFIGURE, g_moduleConfig->getRequestedModuleMode());
-    
-    // Test setting module mode to AP_TEST_MODE
     g_moduleConfig->setRequestedModuleMode(ModuleModeEnum::AP_TEST_MODE);
     TEST_ASSERT_EQUAL(ModuleModeEnum::AP_TEST_MODE, g_moduleConfig->getRequestedModuleMode());
-    
-    // Test setting module mode to CONFIGURED_DONE
     g_moduleConfig->setRequestedModuleMode(ModuleModeEnum::CONFIGURED_DONE);
     TEST_ASSERT_EQUAL(ModuleModeEnum::CONFIGURED_DONE, g_moduleConfig->getRequestedModuleMode());
-    
-    // Test setting module mode to CONFIGURED_NEED_RESTART
     g_moduleConfig->setRequestedModuleMode(ModuleModeEnum::CONFIGURED_NEED_RESTART);
     TEST_ASSERT_EQUAL(ModuleModeEnum::CONFIGURED_NEED_RESTART, g_moduleConfig->getRequestedModuleMode());
-    
     module_config_teardown();
 }
 
-// Main test runner function
+static void test_sensor_pin_count(void) {
+    module_config_setup();
+    TEST_ASSERT_EQUAL(0, g_moduleConfig->getSensorPinCount());
+    setDigitalReadMockValue(CID_0, 1);
+    setDigitalReadMockValue(CID_1, 1);
+    setDigitalReadMockValue(CID_2, 0);
+    g_moduleConfig->init();
+    TEST_ASSERT_EQUAL(MODULE_TYPE_SENSOR, g_moduleConfig->getModuleType());
+    TEST_ASSERT_EQUAL(SENSOR_PIN_COUNT, g_moduleConfig->getSensorPinCount());
+    module_config_teardown();
+    module_config_setup();
+    setDigitalReadMockValue(CID_0, 0);
+    setDigitalReadMockValue(CID_1, 0);
+    setDigitalReadMockValue(CID_2, 1);
+    g_moduleConfig->init();
+    TEST_ASSERT_EQUAL(MODULE_TYPE_HYDRO, g_moduleConfig->getModuleType());
+    TEST_ASSERT_EQUAL(SENSOR_PIN_COUNT, g_moduleConfig->getSensorPinCount());
+    module_config_teardown();
+}
+
+static void test_firmware_version(void) {
+    module_config_setup();
+    const char* firmwareVersion = g_moduleConfig->getFirmwareVersion();
+    TEST_ASSERT_NOT_NULL(firmwareVersion);
+    TEST_ASSERT_TRUE(strlen(firmwareVersion) > 0);
+    TEST_ASSERT_EQUAL_STRING("2.1.1", firmwareVersion);
+    module_config_teardown();
+}
+
+static void test_module_uid(void) {
+    module_config_setup();
+    const char* defaultUid = g_moduleConfig->getModuleUid();
+    TEST_ASSERT_EQUAL_STRING("default_uid", defaultUid);
+    module_config_teardown();
+}
+
 extern "C" int run_module_config_tests(void) {
     printf("\n----- Running ModuleConfig Tests -----\n");
-    
     RUN_TEST(test_default_module_types);
     RUN_TEST(test_default_values);
     RUN_TEST(test_init_calls_dependencies);
@@ -273,9 +246,10 @@ extern "C" int run_module_config_tests(void) {
     RUN_TEST(test_setters);
     RUN_TEST(test_led_getters);
     RUN_TEST(test_all_module_types);
-    RUN_TEST(test_module_mode);  // Add the new test function
-    
+    RUN_TEST(test_module_mode);
+    RUN_TEST(test_sensor_pin_count);
+    RUN_TEST(test_firmware_version);
+    RUN_TEST(test_module_uid);
     printf("\n----- ModuleConfig Tests Complete -----\n");
-    
     return 0;
 }

@@ -19,6 +19,8 @@
 #define LED_DIMMER_SIZE 2
 #define LED_SENSOR_SIZE 1
 
+#define SENSOR_PIN_COUNT 4
+
 class ModuleConfig : public IModuleConfig
 {
 private:
@@ -317,6 +319,16 @@ public:
     
     const char* getFirmwareVersion() const override {
         return FIRMWARE_VERSION;
+    }
+    
+    int getSensorPinCount() const override {
+        // Return SENSOR_PIN_COUNT for sensor and hydro module types
+        if (moduleType == MODULE_TYPE_SENSOR || moduleType == MODULE_TYPE_HYDRO) {
+            return SENSOR_PIN_COUNT;
+        }
+        
+        // For other module types, return 0 since they don't have sensors
+        return 0;
     }
 };
 

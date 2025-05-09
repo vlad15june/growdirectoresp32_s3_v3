@@ -32,6 +32,7 @@ public:
     virtual void setRequestedModuleMode(ModuleModeEnum mode) = 0;
     virtual const char* getModuleUid() const = 0;
     virtual const char* getFirmwareVersion() const = 0;
+    virtual int getSensorPinCount() const = 0;  // New method for sensor pin count
     virtual ~IModuleConfig() = default;
 };
 

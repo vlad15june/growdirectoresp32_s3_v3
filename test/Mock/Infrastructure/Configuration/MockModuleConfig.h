@@ -9,6 +9,8 @@
 #include <map>
 #include <string>
 
+#define SENSOR_PIN_COUNT 4
+
 class MockModuleConfig : public IModuleConfig {
 private:
     int _moduleType;
@@ -22,20 +24,13 @@ private:
     bool _isInitialized;
     bool _isTypeConfigure;
     std::map<std::string, bool> _modifiedFields;
-    
-    // LED related members
     uint8_t* _redLeds;
     uint8_t* _greenLeds;
     uint8_t _ledsCount;
-    
-    // Module mode - updated to use CONFIGURED_DONE as default
     ModuleModeEnum _requestedModuleMode = ModuleModeEnum::CONFIGURED_DONE;
-
-    // Add module UID field
     std::string _moduleUid;
-
-    // Add firmware version field
     std::string _firmwareVersion;
+    int _sensorPinCount;
 
 public:
     MockModuleConfig(ILogger* logger = nullptr, 
@@ -57,13 +52,13 @@ public:
           _greenLeds(nullptr),
           _ledsCount(4),
           _moduleUid("test_module_uid"),
-          _firmwareVersion("2.1.1") { // Initialize with the same firmware version as production code
-        // Initialize LED arrays with default values
+          _firmwareVersion("2.1.1"),
+          _sensorPinCount(SENSOR_PIN_COUNT) { 
         _redLeds = new uint8_t[_ledsCount];
         _greenLeds = new uint8_t[_ledsCount];
         for (int i = 0; i < _ledsCount; i++) {
-            _redLeds[i] = i + 10;    // Example default values
-            _greenLeds[i] = i + 20;  // Example default values
+            _redLeds[i] = i + 10;
+            _greenLeds[i] = i + 20;
         }
     }
     
@@ -142,6 +137,18 @@ public:
         return _firmwareVersion.c_str();
     }
     
+    int getSensorPinCount() const override {
+        if (_moduleType == MODULE_TYPE_SENSOR || _moduleType == MODULE_TYPE_HYDRO) {
+            return _sensorPinCount;
+        }
+        return 0;
+    }
+    
+    void setSensorPinCount(int count) {
+        _sensorPinCount = count;
+        _modifiedFields["sensorPinCount"] = true;
+    }
+
     void setFirmwareVersion(const char* version) {
         if (version != nullptr) {
             _firmwareVersion = version;
@@ -165,7 +172,6 @@ public:
         _modifiedFields["wifiAdapter"] = true;
     }
 
-    // Additional methods for testing
     void setModuleType(int type) {
         _moduleType = type;
         _modifiedFields["moduleType"] = true;
@@ -202,19 +208,16 @@ public:
     }
     
     void setLedsCount(uint8_t count) {
-        // Clean up old arrays
         if (_redLeds) delete[] _redLeds;
         if (_greenLeds) delete[] _greenLeds;
         
-        // Create new arrays
         _ledsCount = count;
         _redLeds = new uint8_t[count];
         _greenLeds = new uint8_t[count];
         
-        // Initialize with default values
         for (int i = 0; i < count; i++) {
-            _redLeds[i] = i + 10;    // Example default values
-            _greenLeds[i] = i + 20;  // Example default values
+            _redLeds[i] = i + 10;
+            _greenLeds[i] = i + 20;
         }
         
         _modifiedFields["ledsCount"] = true;
@@ -270,11 +273,11 @@ public:
         _ledsCount = 4;
         _isInitialized = false;
         _isTypeConfigure = false;
-        _requestedModuleMode = ModuleModeEnum::CONFIGURED_DONE; // Reset mode too
+        _requestedModuleMode = ModuleModeEnum::CONFIGURED_DONE;
         _moduleUid = "test_module_uid";
         _firmwareVersion = "2.1.1";
+        _sensorPinCount = 0;
         
-        // Re-initialize LED arrays with default values
         if (_redLeds) {
             for (int i = 0; i < _ledsCount; i++) {
                 _redLeds[i] = i + 10;
