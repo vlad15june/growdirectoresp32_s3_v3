@@ -102,7 +102,6 @@ ButtonAdapter buttonAdapter(&arduinoAdapter);
 
 WifiAdapter wifiAdapter(wifiMulti);
 
-// Create WiFiManager instance
 WiFiManager wifiManager(&wifiAdapter, &settings, &mqttLogger, &debugSystem);
 
 // Using default NTP server with UTC offset of 0 and daylight offset of 0
@@ -110,7 +109,11 @@ NTPTimeAdapter ntpTimeAdapter(&mqttLogger, &debugSystem, &settings);
 
 ModuleConfig moduleConfig(&mqttLogger, &debugSystem, &settings, &ntpTimeAdapter, &wifiAdapter);
 
-OnChangeModuleModeUseCase moduleModeUseCase(arduinoAdapter, moduleConfig, &mqttLogger, &debugSystem);
+OnChangeModuleModeUseCase moduleModeUseCase(
+    arduinoAdapter, 
+    moduleConfig, 
+    mqttLogger, 
+    debugSystem);
 
 LedUseCases ledUseCases(&ledAdapter, &moduleConfig, &arduinoAdapter, &mqttLogger, &debugSystem);
 
@@ -141,13 +144,15 @@ LoopServiceFactory loopServiceFactory(
 
 ModuleStructure moduleStructure;
 
-// Add OnChangeLocalIpUseCase instance
+RestAPIService restApiService(&moduleConfig, &mqttLogger, &debugSystem, &jsonConverter);
+
 OnChangeLocalIpUseCase onChangeLocalIpUseCase(
-    &wifiAdapter, 
-    &wifiManager, 
-    &moduleStructure, 
-    &mqttLogger, 
-    &debugSystem);
+    wifiAdapter, 
+    wifiManager, 
+    moduleStructure,
+    restApiService,
+    mqttLogger, 
+    debugSystem);
 
 ModuleSetupService moduleSetupService(
     &mqttLogger,
@@ -162,8 +167,6 @@ ModuleSetupService moduleSetupService(
     &loopServiceFactory,
     &mqttManager,
     &moduleStructure);
-
-RestAPIService restApiService(&moduleConfig, &mqttLogger, &debugSystem, &jsonConverter);
 
 void initDependencies()
 {

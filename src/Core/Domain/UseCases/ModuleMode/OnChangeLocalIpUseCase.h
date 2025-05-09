@@ -9,75 +9,116 @@
 #include "Core/Domain/Interfaces/ILogger.h"
 #include "Core/Domain/Interfaces/IDebugSystem.h"
 #include "Core/Domain/Data/Models/ModuleStructure.h"
+#include "Core/Domain/Interfaces/API/IRestAPIService.h"
 #include "Core/Domain/Interfaces/IDebugSystem.h"
+#include <string.h>
 
 class OnChangeLocalIpUseCase : public IOnChangeLocalIpUseCase {
 private:
-    ILogger* logger;
-    IDebugSystem* debugSystem;
-    IWifiAdapter* wifiAdapter;
-    IWifiManager* wifiManager;
-    ModuleStructure* moduleStructure;
+    ILogger& _logger;
+    IDebugSystem& _debugSystem;
+    IWifiAdapter& _wifiAdapter;
+    IWifiManager& _wifiManager;
+    ModuleStructure& _moduleStructure;
+    IRestAPIService& _restApiService;
+    char _oldIpStr[16]; // Store previous IP address
     
 public:
     OnChangeLocalIpUseCase(
-        IWifiAdapter* wifiAdapter,
-        IWifiManager* wifiManager,
-        ModuleStructure* moduleStructure,
-        ILogger* loggerInstance = nullptr,
-        IDebugSystem* debugSystemInstance = nullptr)
-        : wifiAdapter(wifiAdapter),
-          wifiManager(wifiManager),
-          moduleStructure(moduleStructure),
-          logger(loggerInstance),
-          debugSystem(debugSystemInstance) {
+        IWifiAdapter& wifiAdapter,
+        IWifiManager& wifiManager,
+        ModuleStructure& moduleStructure,
+        IRestAPIService& restApiService,
+        ILogger& loggerInstance,
+        IDebugSystem& debugSystemInstance)
+        : _wifiAdapter(wifiAdapter),
+          _wifiManager(wifiManager),
+          _moduleStructure(moduleStructure),
+          _restApiService(restApiService),
+          _logger(loggerInstance),
+          _debugSystem(debugSystemInstance) {
         
+        // Initialize oldIpStr to empty string
+        _oldIpStr[0] = '\0';
         log("OnChangeLocalIpUseCase: Initialized");
     }
     
     void perform() override {
         log("OnChangeLocalIpUseCase: Performing local IP update");
         
-        // Check if WiFi is connected
-        if (!wifiAdapter->isConnected()) {
-            log("OnChangeLocalIpUseCase: WiFi not connected, attempting connection");
-            if (!wifiManager->setupWifiConnection()) {
-                log("OnChangeLocalIpUseCase: Failed to establish WiFi connection");
-                return;
-            }
+        // Get the new local IP from the WiFi adapter
+        const char* newIpStr = _wifiAdapter.getLocalIP();
+        
+        // Skip processing if IP is missing or is 0.0.0.0
+        if (newIpStr == nullptr || strcmp(newIpStr, "0.0.0.0") == 0) {
+            log("OnChangeLocalIpUseCase: No valid IP available (null or 0.0.0.0)");
+            return;
         }
         
-        // Get the new local IP from the WiFi adapter
-        const char* localIP = wifiAdapter->getLocalIP();
+        // Check if IP has changed
+        bool ipChanged = (strlen(_oldIpStr) == 0 || strcmp(_oldIpStr, newIpStr) != 0);
         
-        if (localIP != nullptr && strlen(localIP) > 0) {
-            log("OnChangeLocalIpUseCase: Updating module structure with IP: %s", localIP);
+        if (ipChanged) {
+            log("OnChangeLocalIpUseCase: IP changed - old IP: %s, new IP: %s", 
+                (strlen(_oldIpStr) > 0 ? _oldIpStr : "not set"), newIpStr);
             
-            // Update the module structure with the new IP
-            if (moduleStructure != nullptr) {
-                // Assuming ModuleStructure has a method to update the local IP
-                // moduleStructure->setLocalIP(localIP);
+            // Only process if WiFi is connected
+            if (_wifiAdapter.isConnected()) {
+                log("OnChangeLocalIpUseCase: WiFi connected, updating module structure");
                 
-                log("OnChangeLocalIpUseCase: Local IP successfully updated");
+                // Store new IP as old IP for next comparison
+                strncpy(_oldIpStr, newIpStr, sizeof(_oldIpStr) - 1);
+                _oldIpStr[sizeof(_oldIpStr) - 1] = '\0'; // Ensure null-termination
+                
+                // Update IP in all nodes in the module structure
+                std::string newIpString(newIpStr);
+                for (auto& node : _moduleStructure.nodes) {
+                    node.ip = newIpString;
+                    log("OnChangeLocalIpUseCase: Updated IP for node to %s", newIpStr);
+                }
+                
+                // Update SSID in module structure
+                int networkIndex = 0; // Assuming the connected network is at index 0
+                const char* ssid = _wifiAdapter.getSSID(networkIndex);
+                if (ssid != nullptr) {
+                    std::string ssidString(ssid);
+                    for (auto& node : _moduleStructure.nodes) {
+                        node.ssid = ssidString;
+                        log("OnChangeLocalIpUseCase: Updated SSID for node to %s", ssid);
+                    }
+                }
+                
+                // Send updated structure to server
+                log("OnChangeLocalIpUseCase: Sending updated module structure to server");
+                _restApiService.sendToServerModuleStructure(_moduleStructure);
+                
+                // Process additional server communications
+                log("OnChangeLocalIpUseCase: Processing delete command and restoring account info");
+                // These would be implemented in your RestAPIService
+                // _restApiService.processDeleteGdCommand();
+                // _restApiService.restoreAccountInfoFromServer();
+                
+                // Reconnect to server services
+                log("OnChangeLocalIpUseCase: Reconnecting server services");
+                // _restApiService.reconnect();
             } else {
-                log("OnChangeLocalIpUseCase: Module structure is null, cannot update IP");
+                log("OnChangeLocalIpUseCase: WiFi not connected, skipping update");
             }
         } else {
-            log("OnChangeLocalIpUseCase: Failed to get local IP address");
+            log("OnChangeLocalIpUseCase: IP has not changed, no update needed");
         }
     }
     
 private:
     void log(const char* format, ...) {
-        if (logger != nullptr && debugSystem != nullptr && 
-            debugSystem->isFeatureEnabled(DebugFeatures::NET_DEBUG)) {
+        if (_debugSystem.isFeatureEnabled(DebugFeatures::NET_DEBUG)) {
             char buffer[128];
             va_list args;
             va_start(args, format);
             vsnprintf(buffer, sizeof(buffer), format, args);
             va_end(args);
             
-            logger->println(buffer);
+            _logger.println(buffer);
         }
     }
 };

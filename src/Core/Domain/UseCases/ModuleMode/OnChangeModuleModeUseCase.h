@@ -15,19 +15,20 @@ class OnChangeModuleModeUseCase : public IOnChangeModuleModeUseCase {
 private:
     IArduinoAdapter& _arduinoAdapter;
     IModuleConfig& _moduleConfig;
-    ILogger* logger;
-    IDebugSystem* debugSystem;
+    ILogger& _logger;
+    IDebugSystem& _debugSystem;
     ModuleModeEnum _currentMode;
     
 public:
-    OnChangeModuleModeUseCase(IArduinoAdapter& arduinoAdapter, 
-                      IModuleConfig& moduleConfig,
-                      ILogger* loggerInstance = nullptr,
-                      IDebugSystem* debugSystemInstance = nullptr)
+    OnChangeModuleModeUseCase(
+        IArduinoAdapter& arduinoAdapter, 
+        IModuleConfig& moduleConfig,
+        ILogger& loggerInstance,
+        IDebugSystem& debugSystemInstance)
         : _arduinoAdapter(arduinoAdapter), 
           _moduleConfig(moduleConfig),
-          logger(loggerInstance),
-          debugSystem(debugSystemInstance),
+          _logger(loggerInstance),
+          _debugSystem(debugSystemInstance),
           _currentMode(CONFIGURED_DONE) {
         
         log("OnChangeModuleModeUseCase: Initialized with mode %d", static_cast<int>(_currentMode));
@@ -92,15 +93,14 @@ private:
     }
     
     void log(const char* format, ...) {
-        if (logger != nullptr && debugSystem != nullptr && 
-            debugSystem->isFeatureEnabled(DebugFeatures::MODULE_MODE_DEBUG)) {
+        if (_debugSystem.isFeatureEnabled(DebugFeatures::MODULE_MODE_DEBUG)) {
             char buffer[128];
             va_list args;
             va_start(args, format);
             vsnprintf(buffer, sizeof(buffer), format, args);
             va_end(args);
             
-            logger->println(buffer);
+            _logger.println(buffer);
         }
     }
 };
