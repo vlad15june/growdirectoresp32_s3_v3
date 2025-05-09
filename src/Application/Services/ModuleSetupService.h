@@ -27,6 +27,7 @@ public:
 };
 
 class ModuleSetupServiceTestHelper;
+class FillModuleStructureTestHelper;
 
 class ModuleSetupService : public IModuleSetupService
 {
@@ -66,6 +67,7 @@ private:
 
 public:
     friend class ModuleSetupServiceTestHelper;
+    friend class FillModuleStructureTestHelper;
 
     ModuleSetupService(
         ILogger *logger,
@@ -479,6 +481,7 @@ inline void ModuleSetupService::fillModuleStructure()
 
     std::string macAddress = wifiAdapter ? wifiAdapter->getMACAddress() : "unknown";
     std::string ipAddress = wifiAdapter ? wifiAdapter->getLocalIP() : "0.0.0.0";
+    log("SETUP: MAC Address: %s, IP Address: %s", macAddress.c_str(), ipAddress.c_str());
 
     settings->getSsid(buffer, BUFSIZE);
     std::string ssid = buffer;
