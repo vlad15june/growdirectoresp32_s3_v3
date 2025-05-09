@@ -8,8 +8,8 @@
 #include "Core/Domain/Interfaces/IWifiManager.h"
 #include "Core/Domain/Interfaces/ILogger.h"
 #include "Core/Domain/Interfaces/IDebugSystem.h"
-#include "Core/Domain/Enums/DebugFeatures.h"
-#include "Core/Domain/Entities/ModuleStructure.h"
+#include "Core/Domain/Data/Models/ModuleStructure.h"
+#include "Core/Domain/Interfaces/IDebugSystem.h"
 
 class OnChangeLocalIpUseCase : public IOnChangeLocalIpUseCase {
 private:
@@ -70,7 +70,7 @@ public:
 private:
     void log(const char* format, ...) {
         if (logger != nullptr && debugSystem != nullptr && 
-            debugSystem->isFeatureEnabled(DebugFeatures::NETWORK_DEBUG)) {
+            debugSystem->isFeatureEnabled(DebugFeatures::NET_DEBUG)) {
             char buffer[128];
             va_list args;
             va_start(args, format);
