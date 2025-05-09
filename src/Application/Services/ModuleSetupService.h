@@ -65,6 +65,15 @@ private:
     void setupWifiConnection();
     void fillModuleStructure();
 
+    // New helper methods for fillModuleStructure
+    bool validateModuleStructurePrerequisites();
+    void fillModuleCommonData();
+    void createBaseNodeStructure(Node &node);
+    void fillSensorModuleStructure(Node &node);
+    void fillHydroModuleStructure(Node &node);
+    void fillDeviceModuleStructure(Node &node);
+    void fillAnalogInputDeviceStructure(Node &node);
+
 public:
     friend class ModuleSetupServiceTestHelper;
     friend class FillModuleStructureTestHelper;
@@ -363,14 +372,6 @@ inline bool ModuleSetupService::createAndConfigureAP(const char *ssid, const cha
 {
     wifiAdapter->createAccessPoint(ssid, password, 1, false, 4);
 
-    // WiFi event handlers would go here if needed
-    // WiFi.onEvent(WiFiStationApStart, WiFiEvent_t::ARDUINO_EVENT_WIFI_AP_START);
-    // WiFi.onEvent(WiFiStationApStop, WiFiEvent_t::ARDUINO_EVENT_WIFI_AP_STOP);
-    // WiFi.onEvent(WiFiStationConnected, WiFiEvent_t::ARDUINO_EVENT_WIFI_AP_STACONNECTED);
-    // WiFi.onEvent(WiFiStationDisconnected, WiFiEvent_t::ARDUINO_EVENT_WIFI_AP_STADISCONNECTED);
-    // WiFi.onEvent(WiFiStationIpAssign, WiFiEvent_t::ARDUINO_EVENT_WIFI_AP_STAIPASSIGNED);
-    // WiFi.onEvent(WiFiStationProbeRequest, WiFiEvent_t::ARDUINO_EVENT_WIFI_AP_PROBEREQRECVED);
-
     const char *initialIP = wifiAdapter->getLocalIP();
     log("SETUP: Initial AP IP address: %s", initialIP);
 
@@ -445,46 +446,37 @@ inline void ModuleSetupService::setupMqttConnection()
     }
 }
 
-inline void ModuleSetupService::fillModuleStructure()
+inline bool ModuleSetupService::validateModuleStructurePrerequisites()
 {
     if (!moduleConfig)
     {
         log("SETUP: Error - Module configuration is missing for structure fill");
-        return;
+        return false;
     }
 
     if (!moduleStructure)
     {
         log("SETUP: Error - Module structure is not available");
-        return;
+        return false;
     }
-
-    log("SETUP: Filling module structure with configuration data");
-
-    int moduleType = moduleConfig->getModuleType();
-    int moduleSubType = moduleConfig->getModuleSubType();
-    int deviceCount = moduleConfig->getDeviceCount();
-
-    log("SETUP: Module Type: %d, SubType: %d, DeviceCount: %d",
-        moduleType, moduleSubType, deviceCount);
 
     ISettings *settings = moduleConfig->getSettings();
     if (!settings)
     {
         log("SETUP: Error - Settings not available for structure fill");
-        return;
+        return false;
     }
 
-    moduleStructure->nodes.clear();
+    return true;
+}
 
+inline void ModuleSetupService::fillModuleCommonData()
+{
     char buffer[BUFSIZE];
+    ISettings *settings = moduleConfig->getSettings();
 
     std::string macAddress = wifiAdapter ? wifiAdapter->getMACAddress() : "unknown";
-    std::string ipAddress = wifiAdapter ? wifiAdapter->getLocalIP() : "0.0.0.0";
-    log("SETUP: MAC Address: %s, IP Address: %s", macAddress.c_str(), ipAddress.c_str());
-
-    settings->getSsid(buffer, BUFSIZE);
-    std::string ssid = buffer;
+    log("SETUP: MAC Address: %s", macAddress.c_str());
 
     moduleStructure->growdirectorUid = macAddress;
     moduleStructure->firmware = moduleConfig->getFirmwareVersion();
@@ -503,148 +495,118 @@ inline void ModuleSetupService::fillModuleStructure()
         moduleStructure->latitude = latitude;
         moduleStructure->longitude = longitude;
     }
+}
 
-    Node currentNode;
-    currentNode.type = "director_wifi";
-    currentNode.uid = macAddress;
-    currentNode.ip = ipAddress;
-    currentNode.ssid = ssid;
-    currentNode.firmware = moduleStructure->firmware;
+inline void ModuleSetupService::createBaseNodeStructure(Node &node)
+{
+    char buffer[BUFSIZE];
+    ISettings *settings = moduleConfig->getSettings();
+
+    std::string macAddress = wifiAdapter ? wifiAdapter->getMACAddress() : "unknown";
+    std::string ipAddress = wifiAdapter ? wifiAdapter->getLocalIP() : "0.0.0.0";
+    log("SETUP: IP Address: %s", ipAddress.c_str());
+
+    settings->getSsid(buffer, BUFSIZE);
+    std::string ssid = buffer;
+
+    node.type = "director_wifi";
+    node.uid = macAddress;
+    node.ip = ipAddress;
+    node.ssid = ssid;
+    node.firmware = moduleStructure->firmware;
 
     uint8_t bootTypeVal = settings->getBootType();
     BootTypeEnum bootType = static_cast<BootTypeEnum>(bootTypeVal);
-    currentNode.bootType = getBootTypeName(bootType);
-    log("SETUP: Boot type: %d, name: %s", bootTypeVal, currentNode.bootType.c_str());
+    node.bootType = getBootTypeName(bootType);
+    log("SETUP: Boot type: %d, name: %s", bootTypeVal, node.bootType.c_str());
     settings->setBootType(BOOT_TYPE_POWER_ON);
 
     FileSystemStatusEnum fsStatus = FILE_SYSTEM_STATUS_NONE;
-    currentNode.fileSystem = getFileSystemStatusName(fsStatus);
-    log("SETUP: File system status: %s", currentNode.fileSystem.c_str());
+    node.fileSystem = getFileSystemStatusName(fsStatus);
+    log("SETUP: File system status: %s", node.fileSystem.c_str());
+}
 
-    switch (moduleType)
+inline void ModuleSetupService::fillSensorModuleStructure(Node &node)
+{
+    log("SETUP: Preparing sensor module structure");
+    node.subtype = "sensor";
+
+    std::string macAddress = node.uid;
+    int sensorPinCount = moduleConfig->getSensorPinCount();
+
+    for (int group = 0; group < sensorPinCount; group++)
     {
-    case MODULE_TYPE_SENSOR:
-    {
-        log("SETUP: Preparing sensor module structure");
-        currentNode.subtype = "sensor";
-
-        int sensorPinCount = moduleConfig->getSensorPinCount();
-        for (int group = 0; group < sensorPinCount; group++)
-        {
-            for (int i = 0; i < 3; i++)
-            {
-                Sensor sensor;
-                sensor.pin = sensorPinCount - group;
-                sensor.type = "none";
-
-                char sensorId[20];
-                sprintf(sensorId, ".%02d.%02d", group, i + 1);
-                sensor.uid = macAddress + sensorId;
-
-                currentNode.sensors.push_back(sensor);
-
-                log("SETUP: Added sensor group %d index %d, type: %s, pin: %d, uid: %s",
-                    group, i, sensor.type.c_str(), sensor.pin, sensor.uid.c_str());
-            }
-        }
-        break;
-    }
-
-    case MODULE_TYPE_HYDRO:
-    {
-        log("SETUP: Preparing hydro module structure");
-        currentNode.subtype = "hydro";
-
-        int sensorPinCount = moduleConfig->getSensorPinCount();
-        for (int i = 0; i < sensorPinCount; i++)
+        for (int i = 0; i < 3; i++)
         {
             Sensor sensor;
-            sensor.pin = i + 1;
+            sensor.pin = sensorPinCount - group;
             sensor.type = "none";
 
-            char sensorId[10];
-            sprintf(sensorId, ".%02d", i);
+            char sensorId[20];
+            sprintf(sensorId, ".%02d.%02d", group, i + 1);
             sensor.uid = macAddress + sensorId;
 
-            currentNode.sensors.push_back(sensor);
+            node.sensors.push_back(sensor);
 
-            log("SETUP: Added sensor %d, type: %s, pin: %d, uid: %s",
-                i, sensor.type.c_str(), sensor.pin, sensor.uid.c_str());
+            log("SETUP: Added sensor group %d index %d, type: %s, pin: %d, uid: %s",
+                group, i, sensor.type.c_str(), sensor.pin, sensor.uid.c_str());
         }
+    }
+}
 
-        for (int i = 0; i < deviceCount; i++)
-        {
-            Pump pump;
-            pump.pin = i + 1;
+inline void ModuleSetupService::fillHydroModuleStructure(Node &node)
+{
+    log("SETUP: Preparing hydro module structure");
+    node.subtype = "hydro";
 
-            char pumpId[10];
-            sprintf(pumpId, ".pm.%02d", i);
-            pump.uid = macAddress + pumpId;
+    std::string macAddress = node.uid;
+    int sensorPinCount = moduleConfig->getSensorPinCount();
+    int deviceCount = moduleConfig->getDeviceCount();
 
-            currentNode.pumps.push_back(pump);
+    for (int i = 0; i < sensorPinCount; i++)
+    {
+        Sensor sensor;
+        sensor.pin = i + 1;
+        sensor.type = "none";
 
-            log("SETUP: Added pump %d, pin: %d, uid: %s",
-                i, pump.pin, pump.uid.c_str());
-        }
-        break;
+        char sensorId[10];
+        sprintf(sensorId, ".%02d", i);
+        sensor.uid = macAddress + sensorId;
+
+        node.sensors.push_back(sensor);
+
+        log("SETUP: Added sensor %d, type: %s, pin: %d, uid: %s",
+            i, sensor.type.c_str(), sensor.pin, sensor.uid.c_str());
     }
 
-    case MODULE_TYPE_DEVICE:
+    for (int i = 0; i < deviceCount; i++)
     {
-        log("SETUP: Preparing device module structure");
+        Pump pump;
+        pump.pin = i + 1;
 
-        if (moduleSubType == MODULE_SUBTYPE_SOKET)
-        {
-            currentNode.subtype = "socket";
-            log("SETUP: Socket subtype detected");
+        char pumpId[10];
+        sprintf(pumpId, ".pm.%02d", i);
+        pump.uid = macAddress + pumpId;
 
-            for (int i = 0; i < deviceCount; i++)
-            {
-                Relay relay;
-                relay.pin = i + 1;
+        node.pumps.push_back(pump);
 
-                char relayId[10];
-                sprintf(relayId, ".%02d", i);
-                relay.uid = macAddress + relayId;
-
-                currentNode.relays.push_back(relay);
-
-                log("SETUP: Added socket relay %d, pin: %d, uid: %s",
-                    i, relay.pin, relay.uid.c_str());
-            }
-        }
-        else if (moduleSubType == MODULE_SUBTYPE_RELAY)
-        {
-            currentNode.subtype = "drycontact";
-            log("SETUP: Dry contact subtype detected");
-
-            for (int i = 0; i < deviceCount; i++)
-            {
-                Relay relay;
-                relay.pin = i + 1;
-
-                char relayId[10];
-                sprintf(relayId, ".%02d", i);
-                relay.uid = macAddress + relayId;
-
-                currentNode.relays.push_back(relay);
-
-                log("SETUP: Added dry contact relay %d, pin: %d, uid: %s",
-                    i, relay.pin, relay.uid.c_str());
-            }
-        }
-        else
-        {
-            currentNode.subtype = "unknown";
-            log("SETUP: Unknown device subtype: %d", moduleSubType);
-        }
-        break;
+        log("SETUP: Added pump %d, pin: %d, uid: %s",
+            i, pump.pin, pump.uid.c_str());
     }
+}
 
-    case MODULE_TYPE_ANALOG_INPUT_DEVICE:
+inline void ModuleSetupService::fillDeviceModuleStructure(Node &node)
+{
+    log("SETUP: Preparing device module structure");
+
+    int moduleSubType = moduleConfig->getModuleSubType();
+    int deviceCount = moduleConfig->getDeviceCount();
+    std::string macAddress = node.uid;
+
+    if (moduleSubType == MODULE_SUBTYPE_SOKET)
     {
-        log("SETUP: Preparing analog input device structure");
-        currentNode.subtype = "dimmer";
+        node.subtype = "socket";
+        log("SETUP: Socket subtype detected");
 
         for (int i = 0; i < deviceCount; i++)
         {
@@ -655,13 +617,103 @@ inline void ModuleSetupService::fillModuleStructure()
             sprintf(relayId, ".%02d", i);
             relay.uid = macAddress + relayId;
 
-            currentNode.relays.push_back(relay);
+            node.relays.push_back(relay);
 
-            log("SETUP: Added dimmer %d, pin: %d, uid: %s",
+            log("SETUP: Added socket relay %d, pin: %d, uid: %s",
                 i, relay.pin, relay.uid.c_str());
         }
-        break;
     }
+    else if (moduleSubType == MODULE_SUBTYPE_RELAY)
+    {
+        node.subtype = "drycontact";
+        log("SETUP: Dry contact subtype detected");
+
+        for (int i = 0; i < deviceCount; i++)
+        {
+            Relay relay;
+            relay.pin = i + 1;
+
+            char relayId[10];
+            sprintf(relayId, ".%02d", i);
+            relay.uid = macAddress + relayId;
+
+            node.relays.push_back(relay);
+
+            log("SETUP: Added dry contact relay %d, pin: %d, uid: %s",
+                i, relay.pin, relay.uid.c_str());
+        }
+    }
+    else
+    {
+        node.subtype = "unknown";
+        log("SETUP: Unknown device subtype: %d", moduleSubType);
+    }
+}
+
+inline void ModuleSetupService::fillAnalogInputDeviceStructure(Node &node)
+{
+    log("SETUP: Preparing analog input device structure");
+    node.subtype = "dimmer";
+
+    std::string macAddress = node.uid;
+    int deviceCount = moduleConfig->getDeviceCount();
+
+    for (int i = 0; i < deviceCount; i++)
+    {
+        Relay relay;
+        relay.pin = i + 1;
+
+        char relayId[10];
+        sprintf(relayId, ".%02d", i);
+        relay.uid = macAddress + relayId;
+
+        node.relays.push_back(relay);
+
+        log("SETUP: Added dimmer %d, pin: %d, uid: %s",
+            i, relay.pin, relay.uid.c_str());
+    }
+}
+
+inline void ModuleSetupService::fillModuleStructure()
+{
+    if (!validateModuleStructurePrerequisites())
+    {
+        log("SETUP: Module structure prerequisites validation failed, aborting fillModuleStructure");
+        return;
+    }
+
+    log("SETUP: Filling module structure with configuration data");
+
+    int moduleType = moduleConfig->getModuleType();
+    int moduleSubType = moduleConfig->getModuleSubType();
+    int deviceCount = moduleConfig->getDeviceCount();
+
+    log("SETUP: Module Type: %d, SubType: %d, DeviceCount: %d",
+        moduleType, moduleSubType, deviceCount);
+
+    moduleStructure->nodes.clear();
+    fillModuleCommonData();
+
+    Node currentNode;
+    createBaseNodeStructure(currentNode);
+
+    switch (moduleType)
+    {
+    case MODULE_TYPE_SENSOR:
+        fillSensorModuleStructure(currentNode);
+        break;
+
+    case MODULE_TYPE_HYDRO:
+        fillHydroModuleStructure(currentNode);
+        break;
+
+    case MODULE_TYPE_DEVICE:
+        fillDeviceModuleStructure(currentNode);
+        break;
+
+    case MODULE_TYPE_ANALOG_INPUT_DEVICE:
+        fillAnalogInputDeviceStructure(currentNode);
+        break;
 
     default:
         log("SETUP: Unknown module type for structure fill: %d", moduleType);
