@@ -48,6 +48,7 @@
 #include "Application/Services/DiagnosticService.h"
 #include "Infrastructure/Controllers/MQTT/MqttApiService.h"
 #include "Infrastructure/Controllers/API/HybridAPIService.h"
+#include "Infrastructure/Adapters/SPIFFS/SpiffsAdapter.h"
 
 const char *mqttUser = "GrowDirectorMqtt";
 const char *mqttPassword = "lasdfh329483457sfdjhs92_w";
@@ -185,6 +186,8 @@ LoopServiceFactory loopServiceFactory(
     &onChangeLocalIpUseCase,
     &mqttManager,
     &diagnosticService); // Add DiagnosticService here
+
+SpiffsAdapter spiffsAdapter(&mqttLogger, &debugSystem);
 
 ModuleSetupService moduleSetupService(
     &mqttLogger,

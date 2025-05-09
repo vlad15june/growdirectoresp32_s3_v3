@@ -62,6 +62,7 @@ namespace DebugFeatures {
     constexpr const char* BUTTON_DEBUG = "BUTTON";
     constexpr const char* LED_DEBUG = "LED";
     constexpr const char* UPDATE_FIRMWARE_DEBUG = "UPDATE_FIRMWARE";
+    constexpr const char* SPIFFS_DEBUG = "SPIFFS";
 }
 
 // Debug feature interface

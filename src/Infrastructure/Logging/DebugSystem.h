@@ -65,6 +65,7 @@ private:
         registerFeature(DebugFeatures::MQTT_CALLBACK_DEBUG, "mqtt_callback", false);
         registerFeature(DebugFeatures::BUTTON_DEBUG, "button", false);
         registerFeature(DebugFeatures::LED_DEBUG, "led", false);
+        registerFeature(DebugFeatures::SPIFFS_DEBUG, "spiffs", false);
         registerFeature(DebugFeatures::UPDATE_FIRMWARE_DEBUG, "update_firmware", true);
         registerFeature(DebugFeatures::LOOP_SERVICE_DEBUG, "loop_service", false);
         registerFeature(DebugFeatures::CONFIG_WEB_SERVER, "config_web_server", true);
