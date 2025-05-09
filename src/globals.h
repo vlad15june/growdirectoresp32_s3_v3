@@ -18,6 +18,7 @@
 #include "Core/Domain/UseCases/Led/LedUseCases.h"
 #include "Core/Domain/UseCases/Buttons/ButtonUseCases.h"
 #include "Core/Domain/UseCases/ModuleMode/OnChangeModuleModeUseCase.h"
+#include "Core/Domain/UseCases/ModuleMode/OnChangeLocalIpUseCase.h"
 
 #include "Core/Domain/Data/Models/ModuleStructure.h"
 
@@ -139,6 +140,14 @@ LoopServiceFactory loopServiceFactory(
     &arduinoAdapter);
 
 ModuleStructure moduleStructure;
+
+// Add OnChangeLocalIpUseCase instance
+OnChangeLocalIpUseCase onChangeLocalIpUseCase(
+    &wifiAdapter, 
+    &wifiManager, 
+    &moduleStructure, 
+    &mqttLogger, 
+    &debugSystem);
 
 ModuleSetupService moduleSetupService(
     &mqttLogger,
