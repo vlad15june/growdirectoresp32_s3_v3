@@ -8,6 +8,7 @@
 #include "Mock/Core/Domain/MockLedUseCases.h"
 #include "Mock/Core/Domain/MockButtonUseCases.h"
 #include "Mock/Infrastructure/Wifi/MockWifiAdapter.h"
+#include "Mock/Infrastructure/Wifi/MockWiFiManager.h"
 #include "Mock/Infrastructure/Controllers/WebServices/Launchers/MockWebServerLauncher.h"
 #include "Mock/Infrastructure/Configuration/MockSettings.h"
 #include "Mock/Application/LoopServices/MockLoopServiceFactory.h"
@@ -45,6 +46,7 @@ static MockLedAdapter g_mockLedAdapter;
 static MockLedUseCases g_mockLedUseCases;
 static MockButtonUseCases g_mockButtonUseCases;
 static MockWifiAdapter g_mockWifiAdapter;
+static MockWiFiManager g_mockWiFiManager;
 static MockWebServerLauncher g_mockWebServerLauncher;
 static MockLoopServiceFactory g_mockLoopServiceFactory;
 static MockSettings g_mockSettings;
@@ -71,6 +73,7 @@ static void module_setup_service_setup(void) {
     g_mockLedUseCases.reset();
     g_mockButtonUseCases.reset();
     g_mockWifiAdapter.reset();
+    g_mockWiFiManager.reset();
     g_mockWebServerLauncher.reset();
     g_mockLoopServiceFactory.reset();
     g_mockSettings.reset();
@@ -88,6 +91,7 @@ static void module_setup_service_setup(void) {
         &g_mockLedUseCases,
         &g_mockButtonUseCases,
         &g_mockWifiAdapter,
+        &g_mockWiFiManager,
         &g_mockWebServerLauncher,
         &g_mockLoopServiceFactory,
         &g_mockMqttManager
@@ -171,6 +175,7 @@ static void test_setup_module_without_led_adapter(void) {
         &g_mockLedUseCases,
         &g_mockButtonUseCases,
         &g_mockWifiAdapter,
+        &g_mockWiFiManager,
         &g_mockWebServerLauncher,
         &g_mockLoopServiceFactory,
         &g_mockMqttManager
@@ -198,6 +203,7 @@ static void test_setup_module_without_config(void) {
         &g_mockLedUseCases,
         &g_mockButtonUseCases,
         &g_mockWifiAdapter,
+        &g_mockWiFiManager,
         &g_mockWebServerLauncher,
         &g_mockLoopServiceFactory,
         &g_mockMqttManager
@@ -239,6 +245,7 @@ static void test_setup_module_without_led_use_cases(void) {
         nullptr,
         &g_mockButtonUseCases,
         &g_mockWifiAdapter,
+        &g_mockWiFiManager,
         &g_mockWebServerLauncher,
         &g_mockLoopServiceFactory,
         &g_mockMqttManager
@@ -365,6 +372,7 @@ static void test_setup_module_without_web_server_launcher(void) {
         &g_mockLedUseCases,
         &g_mockButtonUseCases,
         &g_mockWifiAdapter,
+        &g_mockWiFiManager,
         nullptr,
         &g_mockLoopServiceFactory,
         &g_mockMqttManager
@@ -797,6 +805,7 @@ static void test_setup_ap_handles_missing_wifi_adapter() {
         &g_mockLedUseCases,
         &g_mockButtonUseCases,
         nullptr, // No WiFi adapter
+        &g_mockWiFiManager,
         &g_mockWebServerLauncher,
         &g_mockLoopServiceFactory,
         &g_mockMqttManager
@@ -883,6 +892,7 @@ static void test_setup_web_server_handles_null_launcher() {
         &g_mockLedUseCases,
         &g_mockButtonUseCases,
         &g_mockWifiAdapter,
+        &g_mockWiFiManager,
         nullptr  // Pass null web server launcher
     );
     
@@ -935,6 +945,7 @@ static void test_get_loop_service_handles_null_factory() {
         &g_mockLedUseCases,
         &g_mockButtonUseCases,
         &g_mockWifiAdapter,
+        &g_mockWiFiManager,
         &g_mockWebServerLauncher,
         nullptr  // Null factory
     );
@@ -966,6 +977,7 @@ static void test_get_loop_service_handles_null_config() {
         &g_mockLedUseCases,
         &g_mockButtonUseCases,
         &g_mockWifiAdapter,
+        &g_mockWiFiManager,
         &g_mockWebServerLauncher,
         &g_mockLoopServiceFactory
     );
@@ -1073,6 +1085,7 @@ static void test_configure_done_mode_configure_sets_up_mqtt_connection() {
         &g_mockLedUseCases,
         &g_mockButtonUseCases,
         &g_mockWifiAdapter,
+        &g_mockWiFiManager,
         &g_mockWebServerLauncher,
         &g_mockLoopServiceFactory,
         &g_mockMqttManager
@@ -1107,6 +1120,7 @@ static void test_configure_done_mode_configure_handles_mqtt_connection_subscribe
         &g_mockLedUseCases,
         &g_mockButtonUseCases,
         &g_mockWifiAdapter,
+        &g_mockWiFiManager,
         &g_mockWebServerLauncher,
         &g_mockLoopServiceFactory,
         &g_mockMqttManager
@@ -1145,6 +1159,7 @@ static void test_configure_done_mode_configure_handles_missing_mqtt_manager() {
         &g_mockLedUseCases,
         &g_mockButtonUseCases,
         &g_mockWifiAdapter,
+        &g_mockWiFiManager,
         &g_mockWebServerLauncher,
         &g_mockLoopServiceFactory,
         nullptr  // No MQTT manager
@@ -1158,6 +1173,76 @@ static void test_configure_done_mode_configure_handles_missing_mqtt_manager() {
     
     module_setup_service_teardown();
     if (debug_file != nullptr) fprintf(debug_file, "Finished test_configure_done_mode_configure_handles_missing_mqtt_manager\n");
+}
+
+// WiFi Manager Tests
+static void test_configure_done_mode_configure_uses_wifi_manager() {
+    if (debug_file != nullptr) fprintf(debug_file, "Starting test_configure_done_mode_configure_uses_wifi_manager\n");
+    module_setup_service_setup();
+    
+    // Set up mocks for success case
+    g_mockWiFiManager.reset();
+    g_mockWiFiManager.setupWifiConnectionSuccess = true;
+    
+    // Call the method under test
+    ModuleSetupServiceTestHelper::callConfigureDoneModeConfigure(g_moduleSetupService);
+    
+    // Verify WiFi connection was attempted using the WiFiManager
+    TEST_ASSERT_TRUE(g_mockWiFiManager.setupWifiConnectionCalled);
+    
+    module_setup_service_teardown();
+    if (debug_file != nullptr) fprintf(debug_file, "Finished test_configure_done_mode_configure_uses_wifi_manager\n");
+}
+
+static void test_configure_done_mode_configure_handles_wifi_manager_failure() {
+    if (debug_file != nullptr) fprintf(debug_file, "Starting test_configure_done_mode_configure_handles_wifi_manager_failure\n");
+    module_setup_service_setup();
+    
+    // Set up mocks for failure case
+    g_mockWiFiManager.reset();
+    g_mockWiFiManager.setupWifiConnectionSuccess = false;
+    
+    // Call the method under test
+    ModuleSetupServiceTestHelper::callConfigureDoneModeConfigure(g_moduleSetupService);
+    
+    // Verify WiFi connection was attempted but failed
+    TEST_ASSERT_TRUE(g_mockWiFiManager.setupWifiConnectionCalled);
+    
+    // Verify error was logged
+    TEST_ASSERT_TRUE(g_mockLogger.printCalled);
+    
+    module_setup_service_teardown();
+    if (debug_file != nullptr) fprintf(debug_file, "Finished test_configure_done_mode_configure_handles_wifi_manager_failure\n");
+}
+
+static void test_configure_done_mode_configure_handles_missing_wifi_manager() {
+    if (debug_file != nullptr) fprintf(debug_file, "Starting test_configure_done_mode_configure_handles_missing_wifi_manager\n");
+    module_setup_service_setup();
+    
+    // Create a new service without WiFi manager
+    delete g_moduleSetupService;
+    g_moduleSetupService = new ModuleSetupService(
+        &g_mockLogger,
+        &g_mockDebugSystem,
+        &g_mockModuleConfig,
+        &g_mockLedAdapter,
+        &g_mockLedUseCases,
+        &g_mockButtonUseCases,
+        &g_mockWifiAdapter,
+        nullptr,  // No WiFi manager
+        &g_mockWebServerLauncher,
+        &g_mockLoopServiceFactory,
+        &g_mockMqttManager
+    );
+    
+    // Call the method under test
+    ModuleSetupServiceTestHelper::callConfigureDoneModeConfigure(g_moduleSetupService);
+    
+    // Verify error was logged
+    TEST_ASSERT_TRUE(g_mockLogger.printCalled);
+    
+    module_setup_service_teardown();
+    if (debug_file != nullptr) fprintf(debug_file, "Finished test_configure_done_mode_configure_handles_missing_wifi_manager\n");
 }
 
 // Main test runner function
@@ -1200,6 +1285,11 @@ extern "C" int run_module_setup_service_tests(void) {
     RUN_TEST(test_configure_done_mode_configure_sets_up_mqtt_connection);
     RUN_TEST(test_configure_done_mode_configure_handles_mqtt_connection_subscribe_was_not_called);
     RUN_TEST(test_configure_done_mode_configure_handles_missing_mqtt_manager);
+    
+    // Run WiFi Manager tests
+    RUN_TEST(test_configure_done_mode_configure_uses_wifi_manager);
+    RUN_TEST(test_configure_done_mode_configure_handles_wifi_manager_failure);
+    RUN_TEST(test_configure_done_mode_configure_handles_missing_wifi_manager);
     
     if (debug_file != nullptr) fprintf(debug_file, "\n----- ModuleSetupService Tests Complete -----\n");
     

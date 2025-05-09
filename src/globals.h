@@ -31,6 +31,7 @@
 #include "Infrastructure/Adapters/ArduinoAdapter.h"
 #include "Infrastructure/Adapters/Button/ButtonAdapter.h"
 #include "Infrastructure/Adapters/WiFi/WifiAdapter.h"
+#include "Infrastructure/Adapters/WiFi/WiFiManager.h"
 #include "Infrastructure/Controllers/WebServices/ModuleConfigurationWebServer.h"
 #include "Infrastructure/Controllers/WebServices/Launchers/WebServerLauncher.h"
 #include "Infrastructure/Controllers/MQTT/MqttManager.h"
@@ -100,6 +101,9 @@ ButtonAdapter buttonAdapter(&arduinoAdapter);
 
 WifiAdapter wifiAdapter(wifiMulti);
 
+// Create WiFiManager instance
+WiFiManager wifiManager(&wifiAdapter, &settings, &mqttLogger, &debugSystem);
+
 // Using default NTP server with UTC offset of 0 and daylight offset of 0
 NTPTimeAdapter ntpTimeAdapter(&mqttLogger, &debugSystem, &settings);
 
@@ -142,6 +146,7 @@ ModuleSetupService moduleSetupService(
     &ledUseCases,
     &buttonUseCases,
     &wifiAdapter,
+    &wifiManager,
     &webServerLauncher,
     &loopServiceFactory,
     &mqttManager);

@@ -6,6 +6,7 @@
 #include "Core/Domain/Interfaces/IModuleConfig.h"
 #include "Core/Domain/Interfaces/Adapters/ILedAdapter.h"
 #include "Core/Domain/Interfaces/Adapters/IWifiAdapter.h"
+#include "Core/Domain/Interfaces/IWifiManager.h"
 #include "Core/Domain/Interfaces/UseCases/ILedUseCases.h"
 #include "Core/Domain/Interfaces/UseCases/IButtonUseCases.h"
 #include "Core/Domain/Enums/ModuleModeEnum.h"
@@ -35,6 +36,7 @@ private:
     ILedUseCases *ledUseCases;
     IButtonUseCases *buttonUseCases;
     IWifiAdapter *wifiAdapter;
+    IWifiManager *wifiManager;
     IWebServerLauncher *webServerLauncher;
     ILoopServiceFactory *loopServiceFactory;
     IMqttManager *mqttManager;
@@ -75,6 +77,7 @@ public:
         ILedUseCases *ledUseCases = nullptr,
         IButtonUseCases *buttonUseCases = nullptr,
         IWifiAdapter *wifiAdapter = nullptr,
+        IWifiManager *wifiManager = nullptr,
         IWebServerLauncher *webServerLauncher = nullptr,
         ILoopServiceFactory *loopServiceFactory = nullptr,
         IMqttManager *mqttManager = nullptr);
@@ -93,6 +96,7 @@ inline ModuleSetupService::ModuleSetupService(
     ILedUseCases *ledUseCases,
     IButtonUseCases *buttonUseCases,
     IWifiAdapter *wifiAdapter,
+    IWifiManager *wifiManager,
     IWebServerLauncher *webServerLauncher,
     ILoopServiceFactory *loopServiceFactory,
     IMqttManager *mqttManager) : logger(logger),
@@ -102,6 +106,7 @@ inline ModuleSetupService::ModuleSetupService(
                                  ledUseCases(ledUseCases),
                                  buttonUseCases(buttonUseCases),
                                  wifiAdapter(wifiAdapter),
+                                 wifiManager(wifiManager),
                                  webServerLauncher(webServerLauncher),
                                  loopServiceFactory(loopServiceFactory),
                                  mqttManager(mqttManager)
@@ -243,7 +248,7 @@ inline void ModuleSetupService::ConfigureDoneModeConfigure()
 
     setupMqttConnection();
 
-    // fillGrowDirectorStructure();
+    // fillModuleStructureByBaseInfo();
     // udpSetup();
 
     // if (moduleType == MODULE_TYPE_SENSOR)
@@ -442,30 +447,15 @@ inline void ModuleSetupService::setupWebServer()
 }
 
 inline void ModuleSetupService::setupWifiConnection() {
-    if (!wifiAdapter)
+    if (!wifiManager)
     {
-        log("SETUP: Error - WiFi adapter is missing");
+        log("SETUP: Error - WiFi manager is missing");
         return;
     }
-
-    ISettings *settings = moduleConfig->getSettings();
-    if (!settings)
-    {
-        log("SETUP: Error - Settings not available for WiFi connection");
-        return;
-    }
-
-    char ssid[BUFSIZE] = {0};
-    char password[BUFSIZE] = {0};
     
-    settings->getSsid(ssid, BUFSIZE);
-    settings->getPassword(password, BUFSIZE);
-    
-    wifiAdapter->addNetwork(ssid, password);
-    if (wifiAdapter->connectToNetworks())
+    if (wifiManager->setupWifiConnection())
     {
-        const char *activeSsid = wifiAdapter->getSSID(0);
-        log("SETUP: Connected to WiFi network: %s", activeSsid);        
+        log("SETUP: Connected to WiFi network");
     }
     else
     {
