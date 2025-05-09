@@ -269,6 +269,8 @@ public:
                 return;
             }
 
+            //TODO: remove when add WiFiManager, use addWifiToFile then setupWifiConnection
+            // WiFiManager::addWifiNetwork - will store in file and add to wifiMulti.addAP(doc["ssid"], doc["password"]);
             saveWifiCredentials(doc["ssid"], doc["password"]);
             wifiMulti.addAP(doc["ssid"], doc["password"]);
             
