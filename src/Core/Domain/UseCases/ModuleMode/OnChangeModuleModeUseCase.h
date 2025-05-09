@@ -29,7 +29,7 @@ public:
           _moduleConfig(moduleConfig),
           _logger(loggerInstance),
           _debugSystem(debugSystemInstance),
-          _currentMode(CONFIGURED_DONE) {
+          _currentMode(CONFIGURED_NONE) {
         
         log("OnChangeModuleModeUseCase: Initialized with mode %d", static_cast<int>(_currentMode));
     }
