@@ -34,6 +34,9 @@ private:
     // Add module UID field
     std::string _moduleUid;
 
+    // Add firmware version field
+    std::string _firmwareVersion;
+
 public:
     MockModuleConfig(ILogger* logger = nullptr, 
                     IDebugSystem* debugSystem = nullptr, 
@@ -53,7 +56,8 @@ public:
           _redLeds(nullptr),
           _greenLeds(nullptr),
           _ledsCount(4),
-          _moduleUid("test_module_uid") { // Initialize with a default module UID
+          _moduleUid("test_module_uid"),
+          _firmwareVersion("2.1.1") { // Initialize with the same firmware version as production code
         // Initialize LED arrays with default values
         _redLeds = new uint8_t[_ledsCount];
         _greenLeds = new uint8_t[_ledsCount];
@@ -132,6 +136,17 @@ public:
 
     const char* getModuleUid() const override {
         return _moduleUid.c_str();
+    }
+
+    const char* getFirmwareVersion() const override {
+        return _firmwareVersion.c_str();
+    }
+    
+    void setFirmwareVersion(const char* version) {
+        if (version != nullptr) {
+            _firmwareVersion = version;
+            _modifiedFields["firmwareVersion"] = true;
+        }
     }
 
     void setModuleUid(const char* uid) {
@@ -257,6 +272,7 @@ public:
         _isTypeConfigure = false;
         _requestedModuleMode = ModuleModeEnum::CONFIGURED_DONE; // Reset mode too
         _moduleUid = "test_module_uid";
+        _firmwareVersion = "2.1.1";
         
         // Re-initialize LED arrays with default values
         if (_redLeds) {

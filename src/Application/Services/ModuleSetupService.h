@@ -14,6 +14,9 @@
 #include "Application/Interfaces/WebServices/IWebServerLauncher.h"
 #include "Application/Interfaces/LoopServices/ILoopService.h"
 #include "Application/Interfaces/LoopServices/ILoopServiceFactory.h"
+#include "Core/Domain/Data/Models/ModuleStructure.h"
+#include "Core/Domain/Enums/BootTypeEnum.h"
+#include "Core/Domain/Enums/FileSystemStatusEnum.h"
 
 class IModuleSetupService
 {
@@ -23,7 +26,6 @@ public:
     virtual ~IModuleSetupService() = default;
 };
 
-// Forward declaration of the test helper class
 class ModuleSetupServiceTestHelper;
 
 class ModuleSetupService : public IModuleSetupService
@@ -40,6 +42,7 @@ private:
     IWebServerLauncher *webServerLauncher;
     ILoopServiceFactory *loopServiceFactory;
     IMqttManager *mqttManager;
+    ModuleStructure *moduleStructure;
 
     void log(const char *format, ...);
 
@@ -52,21 +55,16 @@ private:
     void clearAllFileLog();
     void clearStoreRules();
     void setupAP();
-
-    // New methods for setupAP refactoring
     bool validateWifiAdapter();
     const char *determineWifiPrefix();
     char *generateSSID(const char *wifiPrefix, const char *macAddress);
     bool createAndConfigureAP(const char *ssid, const char *password);
-
     void setupWebServer();
-
-    // Add method to setup MQTT connection for configured mode
     void setupMqttConnection();
     void setupWifiConnection();
+    void fillModuleStructure();
 
 public:
-    // Declare the test helper as a friend class so it can access private methods
     friend class ModuleSetupServiceTestHelper;
 
     ModuleSetupService(
@@ -80,7 +78,8 @@ public:
         IWifiManager *wifiManager = nullptr,
         IWebServerLauncher *webServerLauncher = nullptr,
         ILoopServiceFactory *loopServiceFactory = nullptr,
-        IMqttManager *mqttManager = nullptr);
+        IMqttManager *mqttManager = nullptr,
+        ModuleStructure *moduleStructure = nullptr);
 
     void setupModule() override;
     std::unique_ptr<ILoopService> getLoopService() override;
@@ -99,17 +98,19 @@ inline ModuleSetupService::ModuleSetupService(
     IWifiManager *wifiManager,
     IWebServerLauncher *webServerLauncher,
     ILoopServiceFactory *loopServiceFactory,
-    IMqttManager *mqttManager) : logger(logger),
-                                 debugSystem(debugSystem),
-                                 moduleConfig(moduleConfig),
-                                 ledAdapter(ledAdapter),
-                                 ledUseCases(ledUseCases),
-                                 buttonUseCases(buttonUseCases),
-                                 wifiAdapter(wifiAdapter),
-                                 wifiManager(wifiManager),
-                                 webServerLauncher(webServerLauncher),
-                                 loopServiceFactory(loopServiceFactory),
-                                 mqttManager(mqttManager)
+    IMqttManager *mqttManager,
+    ModuleStructure *moduleStructure) : logger(logger),
+                                        debugSystem(debugSystem),
+                                        moduleConfig(moduleConfig),
+                                        ledAdapter(ledAdapter),
+                                        ledUseCases(ledUseCases),
+                                        buttonUseCases(buttonUseCases),
+                                        wifiAdapter(wifiAdapter),
+                                        wifiManager(wifiManager),
+                                        webServerLauncher(webServerLauncher),
+                                        loopServiceFactory(loopServiceFactory),
+                                        mqttManager(mqttManager),
+                                        moduleStructure(moduleStructure)
 {
 }
 
@@ -150,7 +151,6 @@ inline bool ModuleSetupService::setupLeds()
     if (!ledAdapter)
         return false;
 
-    // Use module config values for LEDs
     uint8_t *greenLeds = moduleConfig->getGreenLeds();
     uint8_t *redLeds = moduleConfig->getRedLeds();
     uint8_t ledsCount = moduleConfig->getLedsCount();
@@ -189,8 +189,6 @@ inline void ModuleSetupService::handleModuleMode()
         isConfigured != ModuleModeEnum::CONFIGURED_DONE)
     {
         settings->setConfigured(ModuleModeEnum::USER_CAN_CONFIGURE);
-
-        // isConfigured = ModuleModeEnum::CONFIGURED_NEED_RESTART; //NOTE need create in ModuleConfig currentModuleMode
 
         log("SETUP: Updated configuration status to USER_CAN_CONFIGURE, needs restart");
     }
@@ -245,47 +243,20 @@ inline void ModuleSetupService::UserReConfigModeConfigure()
 inline void ModuleSetupService::ConfigureDoneModeConfigure()
 {
     setupWifiConnection();
-
     setupMqttConnection();
 
-    // fillModuleStructureByBaseInfo();
+    fillModuleStructure();
     // udpSetup();
-
-    // if (moduleType == MODULE_TYPE_SENSOR)
-    // {
-    //     setupSensors();
-    // }
-
-    // if (moduleType == MODULE_TYPE_HYDRO)
-    // {
-    //     setupHydroSensors();
-    //     setupHydroPumps();
-    //     syncRulesFromServer("");
-    // }
-
-    // if (moduleType == MODULE_TYPE_DEVICE)
-    // {
-    //     setupDevices();
-    //     syncRulesFromServer("");
-    // }
-
-    // if (moduleType == MODULE_TYPE_ANALOG_INPUT_DEVICE)
-    // {
-    //     setupAnalogInputDevice();
-    //     syncRulesFromServer("");
-    // }
 
     log("SETUP: Module prepared for operation");
 }
 
 inline void ModuleSetupService::clearAllFileLog()
 {
-    // Empty implementation
 }
 
 inline void ModuleSetupService::clearStoreRules()
 {
-    // Empty implementation
 }
 
 inline void ModuleSetupService::setupAP()
@@ -309,7 +280,7 @@ inline void ModuleSetupService::setupAP()
             log("SETUP: WiFi Password: %s", password);
         }
 
-        delete[] ssid; // Free the allocated memory
+        delete[] ssid;
     }
 
     log("SETUP: Access Point setup completed");
@@ -358,26 +329,20 @@ inline const char *ModuleSetupService::determineWifiPrefix()
 
 inline char *ModuleSetupService::generateSSID(const char *wifiPrefix, const char *macAddress)
 {
-    // Generate random part
     char randomPart[10];
     int randomNum = (int)(std::rand() % 1000);
     snprintf(randomPart, sizeof(randomPart), "_%d", randomNum);
 
-    // Calculate the total SSID
     size_t prefixLen = strlen(wifiPrefix);
     size_t macLen = strlen(macAddress);
     size_t randomLen = strlen(randomPart);
 
-    // Ensure the SSID fits in 32 characters
     size_t maxMacLen = 32 - prefixLen - randomLen;
 
-    // Allocate memory for the SSID
-    char *ssid = new char[33]; // Max 32 chars + null terminator
+    char *ssid = new char[33];
 
-    // Copy prefix to SSID
     strcpy(ssid, wifiPrefix);
 
-    // If macAddress is too long, truncate from the start
     if (macLen > maxMacLen)
     {
         strcat(ssid, macAddress + (macLen - maxMacLen));
@@ -387,7 +352,6 @@ inline char *ModuleSetupService::generateSSID(const char *wifiPrefix, const char
         strcat(ssid, macAddress);
     }
 
-    // Add random part
     strcat(ssid, randomPart);
 
     return ssid;
@@ -408,7 +372,6 @@ inline bool ModuleSetupService::createAndConfigureAP(const char *ssid, const cha
     const char *initialIP = wifiAdapter->getLocalIP();
     log("SETUP: Initial AP IP address: %s", initialIP);
 
-    // Set static IP
     const char *AP_LOCAL_IP = "192.168.0.1";
     const char *AP_GATEWAY_IP = "192.168.0.1";
     const char *AP_NETWORK_MASK = "255.255.255.0";
@@ -419,7 +382,6 @@ inline bool ModuleSetupService::createAndConfigureAP(const char *ssid, const cha
         return false;
     }
 
-    // Show the local IP
     const char *staticIP = wifiAdapter->getLocalIP();
     log("SETUP: Final AP IP address: %s", staticIP);
 
@@ -438,7 +400,6 @@ inline void ModuleSetupService::setupWebServer()
     webServerLauncher->launchConfigurationServer();
     log("SETUP: Web server setup completed");
 
-    // Get the server URL if available
     if (wifiAdapter)
     {
         const char *ip = wifiAdapter->getLocalIP();
@@ -446,13 +407,14 @@ inline void ModuleSetupService::setupWebServer()
     }
 }
 
-inline void ModuleSetupService::setupWifiConnection() {
+inline void ModuleSetupService::setupWifiConnection()
+{
     if (!wifiManager)
     {
         log("SETUP: Error - WiFi manager is missing");
         return;
     }
-    
+
     if (wifiManager->setupWifiConnection())
     {
         log("SETUP: Connected to WiFi network");
@@ -471,7 +433,6 @@ inline void ModuleSetupService::setupMqttConnection()
         return;
     }
 
-    // Connect to MQTT broker
     if (mqttManager->connect())
     {
         log("SETUP: Connected to MQTT broker");
@@ -482,23 +443,248 @@ inline void ModuleSetupService::setupMqttConnection()
     }
 }
 
+inline void ModuleSetupService::fillModuleStructure()
+{
+    if (!moduleConfig)
+    {
+        log("SETUP: Error - Module configuration is missing for structure fill");
+        return;
+    }
+
+    if (!moduleStructure)
+    {
+        log("SETUP: Error - Module structure is not available");
+        return;
+    }
+
+    log("SETUP: Filling module structure with configuration data");
+
+    int moduleType = moduleConfig->getModuleType();
+    int moduleSubType = moduleConfig->getModuleSubType();
+    int deviceCount = moduleConfig->getDeviceCount();
+
+    log("SETUP: Module Type: %d, SubType: %d, DeviceCount: %d",
+        moduleType, moduleSubType, deviceCount);
+
+    ISettings *settings = moduleConfig->getSettings();
+    if (!settings)
+    {
+        log("SETUP: Error - Settings not available for structure fill");
+        return;
+    }
+
+    moduleStructure->nodes.clear();
+
+    char buffer[BUFSIZE];
+
+    std::string macAddress = wifiAdapter ? wifiAdapter->getMACAddress() : "unknown";
+    std::string ipAddress = wifiAdapter ? wifiAdapter->getLocalIP() : "0.0.0.0";
+
+    settings->getSsid(buffer, BUFSIZE);
+    std::string ssid = buffer;
+
+    moduleStructure->growdirectorUid = macAddress;
+    moduleStructure->firmware = moduleConfig->getFirmwareVersion();
+    log("SETUP: Firmware version: %s", moduleStructure->firmware.c_str());
+
+    settings->getUser(buffer, BUFSIZE);
+    moduleStructure->email = buffer;
+
+    settings->getAccountUid(buffer, BUFSIZE);
+    moduleStructure->accountUid = buffer;
+
+    float latitude = settings->getLatitude();
+    float longitude = settings->getLongitude();
+    if (std::abs(latitude) > 0.001 || std::abs(longitude) > 0.001)
+    {
+        moduleStructure->latitude = latitude;
+        moduleStructure->longitude = longitude;
+    }
+
+    Node currentNode;
+    currentNode.type = "director_wifi";
+    currentNode.uid = macAddress;
+    currentNode.ip = ipAddress;
+    currentNode.ssid = ssid;
+    currentNode.firmware = moduleStructure->firmware;
+
+    uint8_t bootTypeVal = settings->getBootType();
+    BootTypeEnum bootType = static_cast<BootTypeEnum>(bootTypeVal);
+    currentNode.bootType = getBootTypeName(bootType);
+    log("SETUP: Boot type: %d, name: %s", bootTypeVal, currentNode.bootType.c_str());
+    settings->setBootType(BOOT_TYPE_POWER_ON);
+
+    FileSystemStatusEnum fsStatus = FILE_SYSTEM_STATUS_NONE;
+    currentNode.fileSystem = getFileSystemStatusName(fsStatus);
+    log("SETUP: File system status: %s", currentNode.fileSystem.c_str());
+
+    switch (moduleType)
+    {
+    case MODULE_TYPE_SENSOR:
+    {
+        log("SETUP: Preparing sensor module structure");
+        currentNode.subtype = "sensor";
+
+        for (int group = 0; group < 4; group++)
+        {
+            for (int i = 0; i < 3; i++)
+            {
+                Sensor sensor;
+                sensor.pin = 4 - group;
+                sensor.type = "none";
+
+                char sensorId[20];
+                sprintf(sensorId, ".%02d.%02d", group, i + 1);
+                sensor.uid = macAddress + sensorId;
+
+                currentNode.sensors.push_back(sensor);
+
+                log("SETUP: Added sensor group %d index %d, type: %s, pin: %d, uid: %s",
+                    group, i, sensor.type.c_str(), sensor.pin, sensor.uid.c_str());
+            }
+        }
+        break;
+    }
+
+    case MODULE_TYPE_HYDRO:
+    {
+        log("SETUP: Preparing hydro module structure");
+        currentNode.subtype = "hydro";
+
+        for (int i = 0; i < 4; i++)
+        {
+            Sensor sensor;
+            sensor.pin = i + 1;
+            sensor.type = "none";
+
+            char sensorId[10];
+            sprintf(sensorId, ".%02d", i);
+            sensor.uid = macAddress + sensorId;
+
+            currentNode.sensors.push_back(sensor);
+
+            log("SETUP: Added sensor %d, type: %s, pin: %d, uid: %s",
+                i, sensor.type.c_str(), sensor.pin, sensor.uid.c_str());
+        }
+
+        for (int i = 0; i < 3; i++)
+        {
+            Pump pump;
+            pump.pin = i + 1;
+
+            char pumpId[10];
+            sprintf(pumpId, ".pm.%02d", i);
+            pump.uid = macAddress + pumpId;
+
+            currentNode.pumps.push_back(pump);
+
+            log("SETUP: Added pump %d, pin: %d, uid: %s",
+                i, pump.pin, pump.uid.c_str());
+        }
+        break;
+    }
+
+    case MODULE_TYPE_DEVICE:
+    {
+        log("SETUP: Preparing device module structure");
+
+        if (moduleSubType == MODULE_SUBTYPE_SOKET)
+        {
+            currentNode.subtype = "socket";
+            log("SETUP: Socket subtype detected");
+
+            for (int i = 0; i < 2; i++)
+            {
+                Relay relay;
+                relay.pin = i + 1;
+
+                char relayId[10];
+                sprintf(relayId, ".%02d", i);
+                relay.uid = macAddress + relayId;
+
+                currentNode.relays.push_back(relay);
+
+                log("SETUP: Added socket relay %d, pin: %d, uid: %s",
+                    i, relay.pin, relay.uid.c_str());
+            }
+        }
+        else if (moduleSubType == MODULE_SUBTYPE_RELAY)
+        {
+            currentNode.subtype = "drycontact";
+            log("SETUP: Dry contact subtype detected");
+
+            for (int i = 0; i < 4; i++)
+            {
+                Relay relay;
+                relay.pin = i + 1;
+
+                char relayId[10];
+                sprintf(relayId, ".%02d", i);
+                relay.uid = macAddress + relayId;
+
+                currentNode.relays.push_back(relay);
+
+                log("SETUP: Added dry contact relay %d, pin: %d, uid: %s",
+                    i, relay.pin, relay.uid.c_str());
+            }
+        }
+        else
+        {
+            currentNode.subtype = "unknown";
+            log("SETUP: Unknown device subtype: %d", moduleSubType);
+        }
+        break;
+    }
+
+    case MODULE_TYPE_ANALOG_INPUT_DEVICE:
+    {
+        log("SETUP: Preparing analog input device structure");
+        currentNode.subtype = "dimmer";
+
+        for (int i = 0; i < deviceCount; i++)
+        {
+            Relay relay;
+            relay.pin = i + 1;
+
+            char relayId[10];
+            sprintf(relayId, ".%02d", i);
+            relay.uid = macAddress + relayId;
+
+            currentNode.relays.push_back(relay);
+
+            log("SETUP: Added dimmer %d, pin: %d, uid: %s",
+                i, relay.pin, relay.uid.c_str());
+        }
+        break;
+    }
+
+    default:
+        log("SETUP: Unknown module type for structure fill: %d", moduleType);
+        currentNode.subtype = "unknown";
+        break;
+    }
+
+    moduleStructure->nodes.push_back(currentNode);
+
+    log("SETUP: Module structure filled successfully with %zu nodes, node type: %s, subtype: %s",
+        moduleStructure->nodes.size(),
+        currentNode.type.c_str(),
+        currentNode.subtype.c_str());
+}
+
 inline void ModuleSetupService::setupModule()
 {
-    // Initialize configuration
     if (!initializeModuleConfiguration())
     {
         log("SETUP: Module setup failed - unable to initialize configuration");
         return;
     }
 
-    // Setup LEDs
     if (!setupLeds())
     {
         log("SETUP: LED setup failed");
-        // Continue with setup even if LEDs fail
     }
 
-    // Initial LED indication
     if (ledUseCases)
     {
         ledUseCases->ledOnLoad();
@@ -507,7 +693,6 @@ inline void ModuleSetupService::setupModule()
 
     handleModuleMode();
 
-    // LED off sequence
     if (ledUseCases)
     {
         ledUseCases->ledOffLoad();
@@ -542,7 +727,6 @@ inline std::unique_ptr<ILoopService> ModuleSetupService::getLoopService()
     catch (const std::exception &e)
     {
         log("SETUP: Error creating loop service: %s", e.what());
-        // Fallback to a default service (USER_CAN_CONFIGURE) if creation fails
         return loopServiceFactory->createLoopService(ModuleModeEnum::USER_CAN_CONFIGURE);
     }
 }

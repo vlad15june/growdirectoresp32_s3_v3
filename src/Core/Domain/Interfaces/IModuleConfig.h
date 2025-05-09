@@ -31,6 +31,7 @@ public:
     virtual ModuleModeEnum getRequestedModuleMode() const = 0;
     virtual void setRequestedModuleMode(ModuleModeEnum mode) = 0;
     virtual const char* getModuleUid() const = 0;
+    virtual const char* getFirmwareVersion() const = 0;
     virtual ~IModuleConfig() = default;
 };
 

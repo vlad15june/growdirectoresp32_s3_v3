@@ -31,6 +31,7 @@ private:
     INTPTimeAdapter *timeAdapter;
     IWifiAdapter *wifiAdapter;
     ModuleModeEnum requestedModuleMode;
+    static constexpr const char* FIRMWARE_VERSION = "2.1.1";
         
     // LED arrays
     uint8_t* redLeds;
@@ -135,7 +136,7 @@ public:
           logger(loggerInstance), debugSystem(debugSystemInstance), 
           settings(settingsInstance), timeAdapter(timeAdapterInstance),
           wifiAdapter(wifiAdapterInstance),
-          requestedModuleMode(ModuleModeEnum::USER_CAN_CONFIGURE){}
+          requestedModuleMode(ModuleModeEnum::USER_CAN_CONFIGURE) {}
           
     ~ModuleConfig() {
         if (redLeds != nullptr) {
@@ -313,7 +314,11 @@ public:
         }
         return wifiAdapter->getMACAddress();
     }
-    };
+    
+    const char* getFirmwareVersion() const override {
+        return FIRMWARE_VERSION;
+    }
+};
 
 // Define static members
 uint8_t ModuleConfig::LED_R_SKT[2] = {38, 37};

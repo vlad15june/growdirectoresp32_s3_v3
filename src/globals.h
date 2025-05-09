@@ -138,6 +138,8 @@ LoopServiceFactory loopServiceFactory(
     &moduleConfig,
     &arduinoAdapter);
 
+ModuleStructure moduleStructure;
+
 ModuleSetupService moduleSetupService(
     &mqttLogger,
     &debugSystem,
@@ -149,9 +151,8 @@ ModuleSetupService moduleSetupService(
     &wifiManager,
     &webServerLauncher,
     &loopServiceFactory,
-    &mqttManager);
-
-ModuleStructure moduleStructure;
+    &mqttManager,
+    &moduleStructure);
 
 RestAPIService restApiService(&moduleConfig, &mqttLogger, &debugSystem, &jsonConverter);
 
