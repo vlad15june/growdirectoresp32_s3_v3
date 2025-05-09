@@ -10,6 +10,8 @@ extern "C" int run_loop_service_factory_tests(void);
 extern "C" int run_loop_services_tests(void);
 extern "C" void run_module_structure_tests(void);
 extern "C" void run_fill_module_structure_tests(void);
+extern "C" int run_on_change_local_ip_use_case_tests(void);
+extern "C" int run_on_change_module_mode_use_case_tests(void);
 
 static void setUp_module_config(void) {
     // Setup for each test
@@ -59,6 +61,12 @@ int main(void) {
     
     // Run tests for fillModuleStructure method
     run_fill_module_structure_tests();
+    
+    // Run tests for OnChangeLocalIpUseCase
+    run_on_change_local_ip_use_case_tests();
+    
+    // Run tests for OnChangeModuleModeUseCase
+    run_on_change_module_mode_use_case_tests();
     
     return UNITY_END();
 }

@@ -48,7 +48,7 @@ public:
         
         // Get the new local IP from the WiFi adapter
         const char* newIpStr = _wifiAdapter.getLocalIP();
-        
+
         // Skip processing if IP is missing or is 0.0.0.0
         if (newIpStr == nullptr || strcmp(newIpStr, "0.0.0.0") == 0) {
             log("OnChangeLocalIpUseCase: No valid IP available (null or 0.0.0.0)");

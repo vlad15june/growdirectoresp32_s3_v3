@@ -35,7 +35,8 @@ public:
     }
     
     void loop() override {
-        ModuleModeEnum requestedMode = _moduleConfig.getRequestedModuleMode();
+        ModuleModeEnum requestedMode = _moduleConfig.getRequestedModuleMode();      
+        _currentMode = static_cast<ModuleModeEnum>(_moduleConfig.getSettings()->getIfConfigured()); //TODO: move   _currentMode to _moduleConfig.getCurrentModuleMode();
         
         // Only process if the requested mode is different from current mode
         if (requestedMode != _currentMode) {
