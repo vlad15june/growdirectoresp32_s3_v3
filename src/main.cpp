@@ -17,6 +17,8 @@ void setup()
   
   Serial.begin(115200);
   Serial.println("System initialized.");
+  Serial.print("Free heap: ");
+  Serial.println(ESP.getFreeHeap());
 
   // settings.begin();
   // settings.setConfigured(ModuleModeEnum::USER_CAN_CONFIGURE);

@@ -36,6 +36,12 @@ public:
             service->ConfigureDoneModeConfigure();
         }
     }
+
+    static void callHandleModuleMode(ModuleSetupService* service) {
+        if (service) {
+            service->handleModuleMode();
+        }
+    }
 };
 
 // Global test variables
@@ -1245,6 +1251,50 @@ static void test_configure_done_mode_configure_handles_missing_wifi_manager() {
     if (debug_file != nullptr) fprintf(debug_file, "Finished test_configure_done_mode_configure_handles_missing_wifi_manager\n");
 }
 
+static void test_handle_module_mode_sets_module_modes_correctly() {
+    if (debug_file != nullptr) fprintf(debug_file, "Starting test_handle_module_mode_sets_module_modes_correctly\n");
+    module_setup_service_setup();
+    
+    // Define the module modes to test
+    ModuleModeEnum testModes[] = {
+        ModuleModeEnum::USER_CAN_CONFIGURE,
+        ModuleModeEnum::USER_CAN_RE_CONFIGURE,
+        ModuleModeEnum::AP_TEST_MODE,
+        ModuleModeEnum::CONFIGURED_DONE,
+        ModuleModeEnum::CONFIGURED_NEED_RESTART
+    };
+    
+    for (auto mode : testModes) {
+        // Reset the mocks for each test case
+        g_mockModuleConfig.reset();
+        g_mockSettings.reset();
+        
+        // Set up the mock to return the specific mode
+        g_mockSettings.setConfigured(mode);
+        g_mockModuleConfig.setSettings(&g_mockSettings);
+        
+        if (debug_file != nullptr) fprintf(debug_file, "Testing module mode: %d\n", static_cast<int>(mode));
+        
+        // Call the method under test
+        ModuleSetupServiceTestHelper::callHandleModuleMode(g_moduleSetupService);
+        
+        // Verify requested mode was set correctly
+        TEST_ASSERT_TRUE(g_mockModuleConfig.wasModified("requestedModuleMode"));
+        TEST_ASSERT_EQUAL(static_cast<int>(mode), g_mockModuleConfig.getRequestedModuleMode());
+        
+        if (debug_file != nullptr) fprintf(debug_file, "Requested mode set to: %d\n", g_mockModuleConfig.getRequestedModuleMode());
+        
+        // Verify current mode was set correctly
+        TEST_ASSERT_TRUE(g_mockModuleConfig.wasModified("currentModuleMode"));
+        TEST_ASSERT_EQUAL(static_cast<int>(mode), g_mockModuleConfig.getCurrentModuleMode());
+        
+        if (debug_file != nullptr) fprintf(debug_file, "Current mode set to: %d\n", g_mockModuleConfig.getCurrentModuleMode());
+    }
+    
+    module_setup_service_teardown();
+    if (debug_file != nullptr) fprintf(debug_file, "Finished test_handle_module_mode_sets_module_modes_correctly\n");
+}
+
 // Main test runner function
 extern "C" int run_module_setup_service_tests(void) {
     if (debug_file != nullptr) fprintf(debug_file, "\n----- Running ModuleSetupService Tests -----\n");
@@ -1290,6 +1340,9 @@ extern "C" int run_module_setup_service_tests(void) {
     RUN_TEST(test_configure_done_mode_configure_uses_wifi_manager);
     RUN_TEST(test_configure_done_mode_configure_handles_wifi_manager_failure);
     RUN_TEST(test_configure_done_mode_configure_handles_missing_wifi_manager);
+    
+    // Add the new test
+    RUN_TEST(test_handle_module_mode_sets_module_modes_correctly);
     
     if (debug_file != nullptr) fprintf(debug_file, "\n----- ModuleSetupService Tests Complete -----\n");
     

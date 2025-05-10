@@ -209,6 +209,7 @@ inline void ModuleSetupService::handleModuleMode()
     buttonUseCases->checkButtonPressedWhenOn();
 
     moduleConfig->setRequestedModuleMode(static_cast<ModuleModeEnum>(isConfigured));
+    moduleConfig->setCurrentModuleMode(static_cast<ModuleModeEnum>(isConfigured));
     log("SETUP: Requested module mode set to: %d", isConfigured);
 
     if (isConfigured == ModuleModeEnum::CONFIGURED_NEED_RESTART)
