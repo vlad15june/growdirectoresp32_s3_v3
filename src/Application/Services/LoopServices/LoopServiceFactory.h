@@ -9,10 +9,12 @@
 #include "Core/Domain/Interfaces/UseCases/ILedUseCases.h"
 #include "Core/Domain/Interfaces/UseCases/IButtonUseCases.h"
 #include "Core/Domain/Interfaces/UseCases/IOnChangeModuleModeUseCase.h"
+#include "Core/Domain/Interfaces/UseCases/IOnChangeLocalIpUseCase.h"
 #include "Core/Domain/Interfaces/ILogger.h"
 #include "Core/Domain/Interfaces/IDebugSystem.h"
 #include "Core/Domain/Interfaces/IModuleConfig.h"
 #include "Core/Domain/Interfaces/Adapters/IArduinoAdapter.h"
+#include "Core/Domain/Interfaces/Mqtt/IMqttManager.h"
 #include <stdexcept>
 
 class LoopServiceFactory : public ILoopServiceFactory {
@@ -20,11 +22,13 @@ private:
     ILedUseCases* ledUseCases;
     IButtonUseCases* buttonUseCases;
     IOnChangeModuleModeUseCase* moduleModeUseCase;
+    IOnChangeLocalIpUseCase* onChangeLocalIpUseCase;
     ILogger* logger;
     IDebugSystem* debugSystem;
     IWebServerLooper* webServer;
     IModuleConfig* moduleConfig;
     IArduinoAdapter* arduinoAdapter;
+    IMqttManager* mqttManager;
 
 public:
     LoopServiceFactory(
@@ -35,7 +39,9 @@ public:
         IDebugSystem* debugSystem = nullptr,
         IWebServerLooper* webServer = nullptr,
         IModuleConfig* moduleConfig = nullptr,
-        IArduinoAdapter* arduinoAdapter = nullptr
+        IArduinoAdapter* arduinoAdapter = nullptr,
+        IOnChangeLocalIpUseCase* onChangeLocalIpUseCase = nullptr,
+        IMqttManager* mqttManager = nullptr
     ) : ledUseCases(ledUseCases),
         buttonUseCases(buttonUseCases),
         moduleModeUseCase(moduleModeUseCase),
@@ -43,7 +49,9 @@ public:
         debugSystem(debugSystem),
         webServer(webServer),
         moduleConfig(moduleConfig),
-        arduinoAdapter(arduinoAdapter) {}
+        arduinoAdapter(arduinoAdapter),
+        onChangeLocalIpUseCase(onChangeLocalIpUseCase),
+        mqttManager(mqttManager) {}
     
     ~LoopServiceFactory() override = default;
 
@@ -60,21 +68,40 @@ public:
             case ModuleModeEnum::AP_TEST_MODE:
                 service = std::unique_ptr<LoopServiceBase>(new LoopServiceTestMode());
                 break;
-            case ModuleModeEnum::CONFIGURED_DONE:
-                service = std::unique_ptr<LoopServiceBase>(new LoopServiceConfigureDone());
+            case ModuleModeEnum::CONFIGURED_DONE: {
+                // Create a LoopServiceConfigureDone explicitly, then inject specialized dependencies
+                LoopServiceConfigureDone* configDoneService = new LoopServiceConfigureDone();
+                configDoneService->setOnChangeLocalIpUseCase(onChangeLocalIpUseCase);
+                configDoneService->setMqttManager(mqttManager);
+                
+                // Then assign to the service unique_ptr
+                service = std::unique_ptr<LoopServiceBase>(configDoneService);
                 break;
+            }
             default:
                 throw std::invalid_argument("Unknown module mode");
         }
         
-        // Inject use cases
-        service->setUseCases(ledUseCases, buttonUseCases, moduleModeUseCase);
+        // Inject dependencies using individual setters
+        service->setLedUseCases(ledUseCases);
+        service->setButtonUseCases(buttonUseCases);
+        service->setOnChangeModuleModeUseCase(moduleModeUseCase);
         service->setLogging(logger, debugSystem);
         service->setWebServer(webServer);
         service->setModuleConfig(moduleConfig);
         service->setArduinoAdapter(arduinoAdapter);
         
         return service;
+    }
+    
+    // Setter for OnChangeLocalIpUseCase
+    void setOnChangeLocalIpUseCase(IOnChangeLocalIpUseCase* useCase) {
+        this->onChangeLocalIpUseCase = useCase;
+    }
+    
+    // Setter for MqttManager
+    void setMqttManager(IMqttManager* manager) {
+        this->mqttManager = manager;
     }
 };
 

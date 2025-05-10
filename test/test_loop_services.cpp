@@ -99,7 +99,9 @@ static void test_loop_service_base_functionality(void) {
     LoopServiceConfigureDone service;
     
     // Inject dependencies
-    service.setUseCases(g_mockLedUseCases, g_mockButtonUseCases, g_mockModuleModeUseCase);
+    service.setLedUseCases(g_mockLedUseCases);
+    service.setButtonUseCases(g_mockButtonUseCases);
+    service.setOnChangeModuleModeUseCase(g_mockModuleModeUseCase);
     service.setLogging(g_mockLogger, g_mockDebugSystem);
     service.setWebServer(g_mockWebServer);
     service.setModuleConfig(g_mockModuleConfig);
@@ -127,7 +129,9 @@ static void test_button_long_press_changes_mode(void) {
     LoopServiceConfigureDone service;
     
     // Inject dependencies
-    service.setUseCases(g_mockLedUseCases, g_mockButtonUseCases, g_mockModuleModeUseCase);
+    service.setLedUseCases(g_mockLedUseCases);
+    service.setButtonUseCases(g_mockButtonUseCases);
+    service.setOnChangeModuleModeUseCase(g_mockModuleModeUseCase);
     service.setLogging(g_mockLogger, g_mockDebugSystem);
     service.setWebServer(g_mockWebServer);
     service.setModuleConfig(g_mockModuleConfig);
@@ -153,7 +157,9 @@ static void test_loop_service_can_configure(void) {
     LoopServiceCanConfigure service;
     
     // Inject dependencies
-    service.setUseCases(g_mockLedUseCases, g_mockButtonUseCases, g_mockModuleModeUseCase);
+    service.setLedUseCases(g_mockLedUseCases);
+    service.setButtonUseCases(g_mockButtonUseCases);
+    service.setOnChangeModuleModeUseCase(g_mockModuleModeUseCase);
     service.setLogging(g_mockLogger, g_mockDebugSystem);
     service.setWebServer(g_mockWebServer);
     service.setModuleConfig(g_mockModuleConfig);
@@ -175,7 +181,9 @@ static void test_loop_service_re_configure(void) {
     LoopServiceReConfigure service;
     
     // Inject dependencies
-    service.setUseCases(g_mockLedUseCases, g_mockButtonUseCases, g_mockModuleModeUseCase);
+    service.setLedUseCases(g_mockLedUseCases);
+    service.setButtonUseCases(g_mockButtonUseCases);
+    service.setOnChangeModuleModeUseCase(g_mockModuleModeUseCase);
     service.setLogging(g_mockLogger, g_mockDebugSystem);
     service.setWebServer(g_mockWebServer);
     service.setModuleConfig(g_mockModuleConfig);
@@ -207,7 +215,9 @@ static void test_loop_service_re_configure_timeout_not_reached(void) {
     LoopServiceReConfigure service;
     
     // Inject dependencies
-    service.setUseCases(g_mockLedUseCases, g_mockButtonUseCases, g_mockModuleModeUseCase);
+    service.setLedUseCases(g_mockLedUseCases);
+    service.setButtonUseCases(g_mockButtonUseCases);
+    service.setOnChangeModuleModeUseCase(g_mockModuleModeUseCase);
     service.setLogging(g_mockLogger, g_mockDebugSystem);
     service.setWebServer(g_mockWebServer);
     service.setModuleConfig(g_mockModuleConfig);
@@ -232,7 +242,9 @@ static void test_loop_service_re_configure_timeout_reached(void) {
     LoopServiceReConfigure service;
     
     // Inject dependencies
-    service.setUseCases(g_mockLedUseCases, g_mockButtonUseCases, g_mockModuleModeUseCase);
+    service.setLedUseCases(g_mockLedUseCases);
+    service.setButtonUseCases(g_mockButtonUseCases);
+    service.setOnChangeModuleModeUseCase(g_mockModuleModeUseCase);
     service.setLogging(g_mockLogger, g_mockDebugSystem);
     service.setWebServer(g_mockWebServer);
     service.setModuleConfig(g_mockModuleConfig);
@@ -258,7 +270,9 @@ static void test_loop_service_re_configure_null_arduino_adapter(void) {
     LoopServiceReConfigure service;
     
     // Inject dependencies but NOT the Arduino adapter
-    service.setUseCases(g_mockLedUseCases, g_mockButtonUseCases, g_mockModuleModeUseCase);
+    service.setLedUseCases(g_mockLedUseCases);
+    service.setButtonUseCases(g_mockButtonUseCases);
+    service.setOnChangeModuleModeUseCase(g_mockModuleModeUseCase);
     service.setLogging(g_mockLogger, g_mockDebugSystem);
     service.setWebServer(g_mockWebServer);
     service.setModuleConfig(g_mockModuleConfig);
@@ -280,7 +294,9 @@ static void test_loop_service_test_mode(void) {
     LoopServiceTestMode service;
     
     // Inject dependencies
-    service.setUseCases(g_mockLedUseCases, g_mockButtonUseCases, g_mockModuleModeUseCase);
+    service.setLedUseCases(g_mockLedUseCases);
+    service.setButtonUseCases(g_mockButtonUseCases);
+    service.setOnChangeModuleModeUseCase(g_mockModuleModeUseCase);
     service.setLogging(g_mockLogger, g_mockDebugSystem);
     service.setWebServer(g_mockWebServer);
     service.setModuleConfig(g_mockModuleConfig);
@@ -305,7 +321,9 @@ static void test_loop_service_configure_done(void) {
     LoopServiceConfigureDone service;
     
     // Inject dependencies
-    service.setUseCases(g_mockLedUseCases, g_mockButtonUseCases, g_mockModuleModeUseCase);
+    service.setLedUseCases(g_mockLedUseCases);
+    service.setButtonUseCases(g_mockButtonUseCases);
+    service.setOnChangeModuleModeUseCase(g_mockModuleModeUseCase);
     service.setLogging(g_mockLogger, g_mockDebugSystem);
     service.setWebServer(g_mockWebServer);
     service.setModuleConfig(g_mockModuleConfig);
@@ -330,7 +348,9 @@ static void test_loop_service_configure_done_button_held(void) {
     LoopServiceConfigureDone service;
     
     // Inject dependencies
-    service.setUseCases(g_mockLedUseCases, g_mockButtonUseCases, g_mockModuleModeUseCase);
+    service.setLedUseCases(g_mockLedUseCases);
+    service.setButtonUseCases(g_mockButtonUseCases);
+    service.setOnChangeModuleModeUseCase(g_mockModuleModeUseCase);
     service.setLogging(g_mockLogger, g_mockDebugSystem);
     service.setWebServer(g_mockWebServer);
     service.setModuleConfig(g_mockModuleConfig);
@@ -359,7 +379,9 @@ static void test_multiple_loop_calls(void) {
     LoopServiceCanConfigure service;
     
     // Inject dependencies
-    service.setUseCases(g_mockLedUseCases, g_mockButtonUseCases, g_mockModuleModeUseCase);
+    service.setLedUseCases(g_mockLedUseCases);
+    service.setButtonUseCases(g_mockButtonUseCases);
+    service.setOnChangeModuleModeUseCase(g_mockModuleModeUseCase);
     service.setLogging(g_mockLogger, g_mockDebugSystem);
     service.setWebServer(g_mockWebServer);
     service.setModuleConfig(g_mockModuleConfig);

@@ -132,16 +132,6 @@ WebServerLauncher webServerLauncher(
     &debugSystem,
     moduleConfigurationWebServer);
 
-LoopServiceFactory loopServiceFactory(
-    &ledUseCases,
-    &buttonUseCases,
-    &moduleModeUseCase,
-    &mqttLogger,
-    &debugSystem,
-    &moduleConfigurationWebServer,
-    &moduleConfig,
-    &arduinoAdapter);
-
 ModuleStructure moduleStructure;
 
 RestAPIService restApiService(&moduleConfig, &mqttLogger, &debugSystem, &jsonConverter);
@@ -153,6 +143,18 @@ OnChangeLocalIpUseCase onChangeLocalIpUseCase(
     restApiService,
     mqttLogger, 
     debugSystem);
+
+LoopServiceFactory loopServiceFactory(
+    &ledUseCases,
+    &buttonUseCases,
+    &moduleModeUseCase,
+    &mqttLogger,
+    &debugSystem,
+    &moduleConfigurationWebServer,
+    &moduleConfig,
+    &arduinoAdapter,
+    &onChangeLocalIpUseCase,
+    &mqttManager);  // Add the MqttManager here
 
 ModuleSetupService moduleSetupService(
     &mqttLogger,

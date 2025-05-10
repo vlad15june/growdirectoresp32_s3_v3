@@ -2,13 +2,20 @@
 #define LOOP_SERVICE_CONFIGURE_DONE_H
 
 #include "LoopServiceBase.h"
+#include "Core/Domain/Interfaces/UseCases/IOnChangeLocalIpUseCase.h"
+#include "Core/Domain/Interfaces/Mqtt/IMqttManager.h"
 
 class LoopServiceConfigureDone : public LoopServiceBase {
 private:
-
+    IOnChangeLocalIpUseCase* onChangeLocalIpUseCase;
+    IMqttManager* mqttManager;
 
 public:
-    LoopServiceConfigureDone() : LoopServiceBase() {}
+    LoopServiceConfigureDone() 
+        : LoopServiceBase(), 
+          onChangeLocalIpUseCase(nullptr),
+          mqttManager(nullptr) {}
+    
     ~LoopServiceConfigureDone() override = default;
     
     void executeLoopImplementation() override {
@@ -24,12 +31,27 @@ public:
             }
         }
         
-        // Regular operational checks and activities
-        // This could include sensor monitoring, control logic, etc.
-
-
-        //MqttManager.loop()
-        //OnChangeLocalIpUseCase.prerform()
+        // Check for IP address changes and update as needed
+        if (onChangeLocalIpUseCase) {
+            log("Checking for IP address changes");
+            onChangeLocalIpUseCase->perform();
+        }
+        
+        // Process MQTT messages and maintain connection
+        if (mqttManager) {
+            log("Processing MQTT messages");
+            mqttManager->loop();
+        }
+    }
+    
+    // Setter for the OnChangeLocalIpUseCase
+    virtual void setOnChangeLocalIpUseCase(IOnChangeLocalIpUseCase* useCase) {
+        this->onChangeLocalIpUseCase = useCase;
+    }
+    
+    // Setter for the MqttManager
+    virtual void setMqttManager(IMqttManager* manager) {
+        this->mqttManager = manager;
     }
     
 private:

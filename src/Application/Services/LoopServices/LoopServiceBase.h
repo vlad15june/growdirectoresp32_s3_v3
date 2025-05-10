@@ -85,13 +85,16 @@ public:
     // This is what derived classes will implement
     virtual void executeLoopImplementation() = 0;
     
-    // Method to set required use cases after construction (if needed)
-    virtual void setUseCases(
-        ILedUseCases* ledUC,
-        IButtonUseCases* buttonUC,
-        IOnChangeModuleModeUseCase* modeUC) {
+    // Separate setters for each use case
+    virtual void setLedUseCases(ILedUseCases* ledUC) {
         this->ledUseCases = ledUC;
+    }
+    
+    virtual void setButtonUseCases(IButtonUseCases* buttonUC) {
         this->buttonUseCases = buttonUC;
+    }
+    
+    virtual void setOnChangeModuleModeUseCase(IOnChangeModuleModeUseCase* modeUC) {
         this->onChangeModuleModeUseCase = modeUC;
     }
     
