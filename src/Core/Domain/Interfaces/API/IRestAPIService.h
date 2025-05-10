@@ -6,13 +6,12 @@ class IRestAPIService {
 public:
     virtual ~IRestAPIService() = default;
 
-    // Connection methods
+    virtual bool init() = 0;
+
     virtual bool isModuleOnline() = 0;
     
-    // Structure update methods
     virtual void sendToServerModuleStructure(const ModuleStructure& moduleStructure) = 0;
     
-    // Device and rule state methods
     virtual void sendRuleStateCommand(const char* msg) = 0;
     virtual bool sendByUidRuleStateCommand(const char* uid, const char* msg) = 0;
     virtual void sendFirmwareVersion() = 0;

@@ -10,27 +10,29 @@
 #include "Core/Domain/Interfaces/Adapters/Json/IJsonConverter.h"
 
 // Forward declarations for external dependencies
-const char* firmwareVersion;
+const char *firmwareVersion;
 
-class RestAPIService : public IRestAPIService {
+class RestAPIService : public IRestAPIService
+{
 private:
-    IHttpClientAdapter* _httpClient;
-    IModuleConfig* _moduleConfig;
-    ILogger* _logger;
-    IDebugSystem* _debugSystem;
-    ISettings* _settings;
-    IJsonConverter* _jsonConverter;
-    
+    IHttpClientAdapter *_httpClient;
+    IModuleConfig *_moduleConfig;
+    ILogger *_logger;
+    IDebugSystem *_debugSystem;
+    ISettings *_settings;
+    IJsonConverter *_jsonConverter;
+
     char _serverUrl[BUFSIZE];
     char _token[BUFSIZE];
     char _log_buf[128];
     char _urlBuffer[256]; // Buffer for URL construction
-    
-    void log(const char *format, ...) {
-        if (_logger != nullptr && _debugSystem != nullptr && 
-            (_debugSystem->isFeatureEnabled(DebugFeatures::NET_DEBUG) || 
-             _debugSystem->isFeatureEnabled(DebugFeatures::SETUP_DEBUG))) {
-            char buffer[128];
+
+    void log(const char *format, ...)
+    {
+        if (_logger != nullptr && _debugSystem != nullptr &&
+            (_debugSystem->isFeatureEnabled(DebugFeatures::NET_DEBUG)))
+        {
+            char buffer[2048];
             va_list args;
             va_start(args, format);
             vsnprintf(buffer, sizeof(buffer), format, args);
@@ -41,73 +43,96 @@ private:
     }
 
     // Helper method to create a new HTTP client
-    IHttpClientAdapter* createNewHttpClient() {
+    IHttpClientAdapter *createNewHttpClient()
+    {
         return new HttpClientAdapter();
     }
-    
+
     // Helper to build URL for API endpoints
-    const char* buildUrl(const char* endpoint, const char* moduleUid = nullptr) {
-        if (moduleUid == nullptr && _moduleConfig != nullptr) {
+    const char *buildUrl(const char *endpoint, const char *moduleUid = nullptr)
+    {
+        if (moduleUid == nullptr && _moduleConfig != nullptr)
+        {
             moduleUid = _moduleConfig->getModuleUid();
         }
-        
-        if (moduleUid != nullptr) {
-            snprintf(_urlBuffer, sizeof(_urlBuffer), "%s%s?token=%s&grow_director_uid=%s", 
+
+        if (moduleUid != nullptr)
+        {
+            snprintf(_urlBuffer, sizeof(_urlBuffer), "%s%s?token=%s&grow_director_uid=%s",
                      _serverUrl, endpoint, _token, moduleUid);
-        } else {
-            snprintf(_urlBuffer, sizeof(_urlBuffer), "%s%s?token=%s", 
+        }
+        else
+        {
+            snprintf(_urlBuffer, sizeof(_urlBuffer), "%s%s?token=%s",
                      _serverUrl, endpoint, _token);
         }
-        
+
         return _urlBuffer;
     }
 
 public:
-    RestAPIService(IModuleConfig* moduleConfig, ILogger* logger = nullptr, IDebugSystem* debugSystem = nullptr, IJsonConverter* jsonConverter = nullptr) 
-        : _httpClient(createNewHttpClient()), 
+    RestAPIService(IModuleConfig *moduleConfig, ILogger *logger = nullptr, IDebugSystem *debugSystem = nullptr, IJsonConverter *jsonConverter = nullptr)
+        : _httpClient(createNewHttpClient()),
           _moduleConfig(moduleConfig),
           _logger(logger),
           _debugSystem(debugSystem),
-          _jsonConverter(jsonConverter) {
-        
-        if (_moduleConfig) {
-            _settings = _moduleConfig->getSettings();
-            if (_settings) {
-                _settings->getServerUrl(_serverUrl, BUFSIZE);
-                _settings->getToken(_token, BUFSIZE);
-                log("RestAPIService: Initialized with server URL: %s", _serverUrl);
-            } else {
-                log("RestAPIService: Warning - Settings not available");
-                strcpy(_serverUrl, "");
-                strcpy(_token, "");
-            }
-        } else {
-            log("RestAPIService: Warning - ModuleConfig not provided");
-            _settings = nullptr;
-            strcpy(_serverUrl, "");
-            strcpy(_token, "");
-        }
+          _jsonConverter(jsonConverter)
+    {
     }
 
-    ~RestAPIService() {
-        if (_httpClient != nullptr) {
+    ~RestAPIService()
+    {
+        if (_httpClient != nullptr)
+        {
             _httpClient->end();
             delete _httpClient;
             _httpClient = nullptr;
         }
     }
 
-    bool isModuleOnline() override {
-// if (WiFi.status() != WL_CONNECTED) {
+    bool init() override
+    {
+        if (_moduleConfig)
+        {
+            _settings = _moduleConfig->getSettings();
+            if (_settings)
+            {
+                _settings->getServerUrl(_serverUrl, BUFSIZE);
+                _settings->getToken(_token, BUFSIZE);
+                log("RestAPIService: Initialized with server URL: %s", _serverUrl);
+                return true;
+            }
+            else
+            {
+                log("RestAPIService: Warning - Settings not available");
+                strcpy(_serverUrl, "");
+                strcpy(_token, "");
+                return false;
+            }
+        }
+        else
+        {
+            log("RestAPIService: Warning - ModuleConfig not provided");
+            _settings = nullptr;
+            strcpy(_serverUrl, "");
+            strcpy(_token, "");
+            return false;
+        }
+    }
+
+    bool isModuleOnline() override
+    {
+        // if (WiFi.status() != WL_CONNECTED) {
         //     return false;
         // }
 
-        if (_settings == nullptr) {
+        if (_settings == nullptr)
+        {
             log("NET: isModuleOnline - Settings not available");
             return false;
         }
 
-        const char* url = buildUrl("/api/v1/HardWare/TestConnection", nullptr);
+        const char *url = buildUrl("/api/v1/HardWare/TestConnection", nullptr);
 
         _httpClient->end();
         _httpClient->setTimeout(2000);
@@ -117,41 +142,55 @@ public:
         _httpClient->end();
         _httpClient->setTimeout(30000);
 
-        if (httpResponseCode > 0) {
+        if (httpResponseCode > 0)
+        {
             return true;
-        } else {
+        }
+        else
+        {
             log("PING_ERROR: HTTP Response code: %d\n", httpResponseCode);
             return false;
         }
     }
 
-    void sendToServerModuleStructure(const ModuleStructure& moduleStructure) override {
-        if (_settings == nullptr) {
-            log("NET: sendToServerModuleStructure - Settings not available");
+    void sendToServerModuleStructure(const ModuleStructure &moduleStructure) override
+    {
+        if (init() == false)
+        {
+            log("NET: sendToServerModuleStructure - Initialization failed");
             return;
         }
 
         // Convert module structure to JSON
         std::string structureJson;
-        if (_jsonConverter) {
+        if (_jsonConverter)
+        {
             structureJson = _jsonConverter->moduleStructureToJson(moduleStructure);
-        } else {
+        }
+        else
+        {
             structureJson = "{}";
         }
         log("NET: /api/v1/HardWare/structure -> %s", structureJson.c_str());
 
-        const char* url = buildUrl("/api/v1/HardWare/structure");
+        const char *url = buildUrl("/api/v1/HardWare/structure");
+        // Log the constructed URL before sending
+        log("NET: Using URL for structure upload: %s", url);
 
         // Ensure we have a clean HTTP client
-        if (_httpClient == nullptr) {
+        if (_httpClient == nullptr)
+        {
             _httpClient = createNewHttpClient();
-        } else {
+        }
+        else
+        {
             _httpClient->end();
         }
 
         byte tries = 0;
         int httpResponseCode = 0;
-        while (tries < 3 && httpResponseCode != 200) {
+        while (tries < 3 && httpResponseCode != 200)
+        {
             _httpClient->setTimeout(30000);
             _httpClient->begin(url);
             _httpClient->addHeader("Content-Type", "application/json");
@@ -164,21 +203,24 @@ public:
             tries++;
         }
 
-        if (tries >= 3) {
+        if (tries >= 3)
+        {
             log("NET: Failed to send structure after 3 attempts, restarting...");
             ESP.restart();
         }
     }
 
-    void sendRuleStateCommand(const char* msg) override {
-        if (_moduleConfig == nullptr || _settings == nullptr) {
+    void sendRuleStateCommand(const char *msg) override
+    {
+        if (_moduleConfig == nullptr || _settings == nullptr)
+        {
             log("NET: sendRuleStateCommand - ModuleConfig or Settings not available");
             return;
         }
         log("NET: Rule state command: %s", msg);
 
-        const char* moduleUid = _moduleConfig->getModuleUid();
-        snprintf(_urlBuffer, sizeof(_urlBuffer), "%s/api/v1/HardWare/rules/state?token=%s&grow_director_uid=%s", 
+        const char *moduleUid = _moduleConfig->getModuleUid();
+        snprintf(_urlBuffer, sizeof(_urlBuffer), "%s/api/v1/HardWare/rules/state?token=%s&grow_director_uid=%s",
                  _serverUrl, _token, moduleUid);
 
         _httpClient->end();
@@ -194,19 +236,21 @@ public:
         _httpClient->end();
     }
 
-    bool sendByUidRuleStateCommand(const char* uid, const char* msg) override {
-        if (_moduleConfig == nullptr || _settings == nullptr) {
+    bool sendByUidRuleStateCommand(const char *uid, const char *msg) override
+    {
+        if (_moduleConfig == nullptr || _settings == nullptr)
+        {
             log("NET: sendByUidRuleStateCommand - ModuleConfig or Settings not available");
             return false;
         }
 
         log("NET: --sendByUidRuleStateCommand--");
 
-        const char* moduleUid = _moduleConfig->getModuleUid();
-        snprintf(_urlBuffer, sizeof(_urlBuffer), 
-                "%s/api/v1/HardWare/rules/%s/state?token=%s&grow_director_uid=%s", 
-                _serverUrl, uid, _token, moduleUid);
-        
+        const char *moduleUid = _moduleConfig->getModuleUid();
+        snprintf(_urlBuffer, sizeof(_urlBuffer),
+                 "%s/api/v1/HardWare/rules/%s/state?token=%s&grow_director_uid=%s",
+                 _serverUrl, uid, _token, moduleUid);
+
         _httpClient->setTimeout(30000);
         _httpClient->begin(_urlBuffer);
         _httpClient->addHeader("Content-Type", "application/json");
@@ -221,29 +265,32 @@ public:
         return httpResponseCode == 200;
     }
 
-    void sendFirmwareVersion() override {
-        if (_moduleConfig == nullptr || _settings == nullptr) {
+    void sendFirmwareVersion() override
+    {
+        if (_moduleConfig == nullptr || _settings == nullptr)
+        {
             log("NET: sendFirmwareVersion - ModuleConfig or Settings not available");
             return;
         }
 
         byte tries = 0;
         int httpResponseCode = 0;
-        const char* moduleUid = _moduleConfig->getModuleUid();
-        
+        const char *moduleUid = _moduleConfig->getModuleUid();
+
         // Create the JSON message
         char jsonMsg[256];
-        snprintf(jsonMsg, sizeof(jsonMsg), "{\"version\": \"%s\",\"growdirectorUid\": \"%s\"}", 
+        snprintf(jsonMsg, sizeof(jsonMsg), "{\"version\": \"%s\",\"growdirectorUid\": \"%s\"}",
                  firmwareVersion, moduleUid);
-        
+
         // Build the URL
-        snprintf(_urlBuffer, sizeof(_urlBuffer), 
-                "%s/api/v1/HardWare/firmware?token=%s&grow_director_uid=%s", 
-                _serverUrl, _token, moduleUid);
+        snprintf(_urlBuffer, sizeof(_urlBuffer),
+                 "%s/api/v1/HardWare/firmware?token=%s&grow_director_uid=%s",
+                 _serverUrl, _token, moduleUid);
 
         log("NET: POST %s, body=%s", _urlBuffer, jsonMsg);
 
-        while (tries < 3 && httpResponseCode != 200) {
+        while (tries < 3 && httpResponseCode != 200)
+        {
             _httpClient->setTimeout(30000);
             _httpClient->begin(_urlBuffer);
             _httpClient->addHeader("Content-Type", "application/json");
@@ -254,34 +301,38 @@ public:
 
             _httpClient->end();
             tries++;
-        }        
+        }
     }
 
-    void sendDeviceCommandExecutionResult(const char* msg) override {
-        if (_moduleConfig == nullptr || _settings == nullptr) {
+    void sendDeviceCommandExecutionResult(const char *msg) override
+    {
+        if (_moduleConfig == nullptr || _settings == nullptr)
+        {
             log("NET: sendDeviceCommandExecutionResult - ModuleConfig or Settings not available");
             return;
         }
 
         log("NET: Device command result %s\n", msg);
 
-        if (strlen(msg) < 10) {
+        if (strlen(msg) < 10)
+        {
             log("NET: Device command empty");
             return;
         }
 
-        const char* moduleUid = _moduleConfig->getModuleUid();
-        
+        const char *moduleUid = _moduleConfig->getModuleUid();
+
         // Build the URL
-        snprintf(_urlBuffer, sizeof(_urlBuffer), 
-                "%s/api/v1/HardWare/devices_command?token=%s&grow_director_uid=%s", 
-                _serverUrl, _token, moduleUid);
-        
+        snprintf(_urlBuffer, sizeof(_urlBuffer),
+                 "%s/api/v1/HardWare/devices_command?token=%s&grow_director_uid=%s",
+                 _serverUrl, _token, moduleUid);
+
         log("NET: POST %s", _urlBuffer);
 
         byte tries = 0;
         int httpResponseCode = 0;
-        while (tries < 3 && httpResponseCode != 200) {
+        while (tries < 3 && httpResponseCode != 200)
+        {
             _httpClient->setTimeout(30000);
             _httpClient->begin(_urlBuffer);
             _httpClient->addHeader("Content-Type", "application/json");
@@ -297,31 +348,35 @@ public:
         }
     }
 
-    void sendAnalogInputDeviceCommandExecutionResult(const char* msg) override {
-        if (_moduleConfig == nullptr || _settings == nullptr) {
+    void sendAnalogInputDeviceCommandExecutionResult(const char *msg) override
+    {
+        if (_moduleConfig == nullptr || _settings == nullptr)
+        {
             log("NET: sendAnalogInputDeviceCommandExecutionResult - ModuleConfig or Settings not available");
             return;
         }
 
         log("NET: Device command result %s", msg);
 
-        if (strlen(msg) < 10) {
+        if (strlen(msg) < 10)
+        {
             log("NET: Device command empty");
             return;
         }
 
-        const char* moduleUid = _moduleConfig->getModuleUid();
-        
+        const char *moduleUid = _moduleConfig->getModuleUid();
+
         // Build the URL
-        snprintf(_urlBuffer, sizeof(_urlBuffer), 
-                "%s/api/v1/HardWare/devices_command?token=%s&grow_director_uid=%s", 
-                _serverUrl, _token, moduleUid);
-        
+        snprintf(_urlBuffer, sizeof(_urlBuffer),
+                 "%s/api/v1/HardWare/devices_command?token=%s&grow_director_uid=%s",
+                 _serverUrl, _token, moduleUid);
+
         log("NET: POST %s", _urlBuffer);
 
         byte tries = 0;
         int httpResponseCode = 0;
-        while (tries < 3 && httpResponseCode != 200) {
+        while (tries < 3 && httpResponseCode != 200)
+        {
             _httpClient->setTimeout(30000);
             _httpClient->begin(_urlBuffer);
             _httpClient->addHeader("Content-Type", "application/json");
@@ -332,36 +387,40 @@ public:
 
             // Clean up HTTP client
             _httpClient->end();
-            
+
             delay(200);
             tries++;
         }
     }
 
-    bool sendModuleCommandExecutionResult(const char* msg) override {
-        if (_moduleConfig == nullptr || _settings == nullptr) {
+    bool sendModuleCommandExecutionResult(const char *msg) override
+    {
+        if (_moduleConfig == nullptr || _settings == nullptr)
+        {
             log("NET: sendModuleCommandExecutionResult - ModuleConfig or Settings not available");
             return false;
         }
         log("Module command result %s", msg);
 
-        if (strlen(msg) < 10) {
+        if (strlen(msg) < 10)
+        {
             log("NET: Module command empty");
             return false;
         }
 
-        const char* moduleUid = _moduleConfig->getModuleUid();
-        
+        const char *moduleUid = _moduleConfig->getModuleUid();
+
         // Build the URL
-        snprintf(_urlBuffer, sizeof(_urlBuffer), 
-                "%s/api/v1/HardWare/module_command?token=%s&grow_director_uid=%s", 
-                _serverUrl, _token, moduleUid);
-        
+        snprintf(_urlBuffer, sizeof(_urlBuffer),
+                 "%s/api/v1/HardWare/module_command?token=%s&grow_director_uid=%s",
+                 _serverUrl, _token, moduleUid);
+
         log("NET: POST %s, Body: %s", _urlBuffer, msg);
 
         byte tries = 0;
         int httpResponseCode = 0;
-        while (tries < 3 && httpResponseCode != 200) {
+        while (tries < 3 && httpResponseCode != 200)
+        {
             _httpClient->setTimeout(30000);
             _httpClient->begin(_urlBuffer);
             _httpClient->addHeader("Content-Type", "application/json");
@@ -372,11 +431,12 @@ public:
 
             // Free resources
             _httpClient->end();
-            if (httpResponseCode != 200) {
+            if (httpResponseCode != 200)
+            {
                 delay(1000 * tries);
             }
             tries++;
-        }        
+        }
 
         return httpResponseCode == 200;
     }

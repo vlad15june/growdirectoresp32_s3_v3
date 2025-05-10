@@ -7,7 +7,6 @@
 // Debug feature constants
 namespace DebugFeatures {
     // System debug features
-    constexpr const char* IP_CHNG_DEBUG = "IP_CHNG_DEBUG";
     constexpr const char* IP_CHANGE_DEBUG = "IP_CHANGE_DEBUG";
     constexpr const char* NET_DEBUG = "NET_DEBUG";
     constexpr const char* TIME_DEBUG = "TIME_DEBUG";

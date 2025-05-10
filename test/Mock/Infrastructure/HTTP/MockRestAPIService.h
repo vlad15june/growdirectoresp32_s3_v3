@@ -5,6 +5,7 @@
 
 class MockRestAPIService : public IRestAPIService {
 public:
+    bool initCalled = false;
     bool isModuleOnlineCalled = false;
     bool sendToServerModuleStructureCalled = false;
     bool sendRuleStateCommandCalled = false;
@@ -19,6 +20,7 @@ public:
     const char* lastDeviceCommandResult = nullptr;
     
     void reset() {
+        initCalled = false;
         isModuleOnlineCalled = false;
         sendToServerModuleStructureCalled = false;
         sendRuleStateCommandCalled = false;
@@ -34,6 +36,11 @@ public:
     }
     
     // IRestAPIService interface implementation
+    bool init() override {
+        initCalled = true;
+        return true;
+    }
+    
     bool isModuleOnline() override {
         isModuleOnlineCalled = true;
         return true;

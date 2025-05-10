@@ -31,7 +31,6 @@ private:
     void initializeFeatures()
     {
         // Register all debug features with their default values
-        registerFeature(DebugFeatures::IP_CHNG_DEBUG, "ip_change", true);
         registerFeature(DebugFeatures::IP_CHANGE_DEBUG, "ip_local_change", true);
         registerFeature(DebugFeatures::RULE_SENSOR_OFFLINE_DEBUG, "rule_sensor_offline", true);
         registerFeature(DebugFeatures::REMOTE_SENSOR_RECEIVE_DEBUG, "remote_sensor_receive", false);
@@ -40,7 +39,7 @@ private:
         registerFeature(DebugFeatures::HISTORY_DEBUG, "history", false);
         registerFeature(DebugFeatures::TIME_DEBUG, "time", false);
         registerFeature(DebugFeatures::TIME_SYNC_DEBUG, "time_sync", false);
-        registerFeature(DebugFeatures::NET_DEBUG, "net", false);
+        registerFeature(DebugFeatures::NET_DEBUG, "net", true);
         registerFeature(DebugFeatures::CONTROL_DEBUG, "control", false);
         registerFeature(DebugFeatures::RULE_DEBUG, "rule", false);
         registerFeature(DebugFeatures::RULE_SYNC_DEBUG, "rule_sync", true);

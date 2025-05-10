@@ -44,7 +44,7 @@ public:
     }
     
     void perform() override {
-        log("OnChangeLocalIpUseCase: Performing local IP update");
+        // log("OnChangeLocalIpUseCase: Performing local IP update");
         
         // Get the new local IP from the WiFi adapter
         const char* newIpStr = _wifiAdapter.getLocalIP();
@@ -105,7 +105,7 @@ public:
                 log("OnChangeLocalIpUseCase: WiFi not connected, skipping update");
             }
         } else {
-            log("OnChangeLocalIpUseCase: IP has not changed, no update needed");
+            // log("OnChangeLocalIpUseCase: IP has not changed, no update needed");
         }
     }
     
