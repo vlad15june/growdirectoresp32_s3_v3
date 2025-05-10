@@ -27,7 +27,7 @@ private:
     {
         if (logger != nullptr && debugSystem != nullptr && debugSystem->isFeatureEnabled(DebugFeatures::CONFIG_WEB_SERVER))
         {
-            char buffer[128];
+            char buffer[512];
             va_list args;
             va_start(args, format);
             vsnprintf(buffer, sizeof(buffer), format, args);
@@ -407,6 +407,14 @@ public:
                 doc["ssid"], doc["password"], doc["accountUid"],
                 doc["lat"].as<float>(), doc["lng"].as<float>()
             );
+
+            if (settings != nullptr) {
+                settings->setConfigured(ModuleModeEnum::CONFIGURED_DONE);
+                
+                if (moduleConfig != nullptr) {
+                    moduleConfig->setRequestedModuleMode(ModuleModeEnum::CONFIGURED_NEED_RESTART);
+                }                
+            }
             
             log("ok, send 200");
             server.send(200); });

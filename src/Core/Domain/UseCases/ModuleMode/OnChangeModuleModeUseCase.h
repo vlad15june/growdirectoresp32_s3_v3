@@ -11,96 +11,84 @@
 #include "Core/Domain/Enums/ModuleModeEnum.h"
 #include "Core/Domain/Enums/BootTypeEnum.h"
 
-class OnChangeModuleModeUseCase : public IOnChangeModuleModeUseCase {
+class OnChangeModuleModeUseCase : public IOnChangeModuleModeUseCase
+{
 private:
-    IArduinoAdapter& _arduinoAdapter;
-    IModuleConfig& _moduleConfig;
-    ILogger& _logger;
-    IDebugSystem& _debugSystem;
-    ModuleModeEnum _currentMode;
-    
+    IArduinoAdapter &_arduinoAdapter;
+    IModuleConfig &_moduleConfig;
+    ILogger &_logger;
+    IDebugSystem &_debugSystem;
+
 public:
     OnChangeModuleModeUseCase(
-        IArduinoAdapter& arduinoAdapter, 
-        IModuleConfig& moduleConfig,
-        ILogger& loggerInstance,
-        IDebugSystem& debugSystemInstance)
-        : _arduinoAdapter(arduinoAdapter), 
+        IArduinoAdapter &arduinoAdapter,
+        IModuleConfig &moduleConfig,
+        ILogger &loggerInstance,
+        IDebugSystem &debugSystemInstance)
+        : _arduinoAdapter(arduinoAdapter),
           _moduleConfig(moduleConfig),
           _logger(loggerInstance),
-          _debugSystem(debugSystemInstance),
-          _currentMode(CONFIGURED_NONE) {
-        
-        log("OnChangeModuleModeUseCase: Initialized with mode %d", static_cast<int>(_currentMode));
+          _debugSystem(debugSystemInstance)
+    {
     }
-    
-    void loop() override {
-        ModuleModeEnum requestedMode = _moduleConfig.getRequestedModuleMode();      
-        _currentMode = static_cast<ModuleModeEnum>(_moduleConfig.getSettings()->getIfConfigured()); //TODO: move   _currentMode to _moduleConfig.getCurrentModuleMode();
-        
-        // Only process if the requested mode is different from current mode
-        if (requestedMode != _currentMode) {
-            log("OnChangeModuleModeUseCase: Mode transition from %d to %d", 
-                static_cast<int>(_currentMode), static_cast<int>(requestedMode));
-            
-            // Handle mode transitions
-            switch (requestedMode) {
-                case CONFIGURED_NEED_RESTART:
-                    // For restart mode, we don't save the mode - just restart
-                    log("OnChangeModuleModeUseCase: NEED_RESTART detected - immediate restart without saving mode");
-                    
-                    // Set boot type before restart
-                    _moduleConfig.getSettings()->setBootType(BOOT_TYPE_USER);
-                    log("OnChangeModuleModeUseCase: Set boot type to USER");
-                    
-                    // Delay to ensure settings are saved
-                    _arduinoAdapter.delay(100);
-                    
-                    // Restart immediately
-                    restart();
-                    break;
-                    
-                case USER_CAN_CONFIGURE:
-                case USER_CAN_RE_CONFIGURE:
-                case AP_TEST_MODE:
-                case CONFIGURED_DONE:
-                    // Save the requested mode to settings for other mode changes
-                    _moduleConfig.getSettings()->setConfigured(requestedMode);
-                    log("OnChangeModuleModeUseCase: Saved requested mode %d to settings", 
-                        static_cast<int>(requestedMode));
-                    
-                    // Set boot type before restart
-                    _moduleConfig.getSettings()->setBootType(BOOT_TYPE_USER);
-                    log("OnChangeModuleModeUseCase: Set boot type to USER");
-                    
-                    // Delay to ensure settings are saved
-                    _arduinoAdapter.delay(100);
-                    
-                    // Update current mode and restart for all mode transitions
-                    _currentMode = requestedMode;
-                    log("OnChangeModuleModeUseCase: Mode updated to %d, restarting...", 
-                        static_cast<int>(_currentMode));
-                    restart();
-                    break;
+
+    void loop() override
+    {
+        ModuleModeEnum requestedMode = _moduleConfig.getRequestedModuleMode();
+        ModuleModeEnum currentMode = _moduleConfig.getCurrentModuleMode();
+
+        if (requestedMode != currentMode)
+        {
+            log("OnChangeModuleModeUseCase: Mode transition from %d to %d",
+                static_cast<int>(currentMode), static_cast<int>(requestedMode));
+
+            switch (requestedMode)
+            {
+            case CONFIGURED_NEED_RESTART:
+                log("OnChangeModuleModeUseCase: NEED_RESTART detected - immediate restart without saving mode");
+                _moduleConfig.getSettings()->setBootType(BOOT_TYPE_USER);
+                log("OnChangeModuleModeUseCase: Set boot type to USER");
+                _arduinoAdapter.delay(100);
+                restart();
+                break;
+
+            case USER_CAN_CONFIGURE:
+            case USER_CAN_RE_CONFIGURE:
+            case AP_TEST_MODE:
+            case CONFIGURED_DONE:
+                _moduleConfig.getSettings()->setConfigured(requestedMode);
+                _moduleConfig.setCurrentModuleMode(requestedMode);
+                log("OnChangeModuleModeUseCase: Saved requested mode %d to settings",
+                    static_cast<int>(requestedMode));
+                _moduleConfig.getSettings()->setBootType(BOOT_TYPE_USER);
+                log("OnChangeModuleModeUseCase: Set boot type to USER");
+                _arduinoAdapter.delay(100);
+                log("OnChangeModuleModeUseCase: Mode updated to %d, restarting...",
+                    static_cast<int>(requestedMode));
+                restart();
+                break;
             }
         }
     }
-    
+
 private:
-    void restart() {
-        log("OnChangeModuleModeUseCase: Restarting device...");        
+    void restart()
+    {
+        log("OnChangeModuleModeUseCase: Restarting device...");
         _arduinoAdapter.delay(1000);
         _arduinoAdapter.restart();
     }
-    
-    void log(const char* format, ...) {
-        if (_debugSystem.isFeatureEnabled(DebugFeatures::MODULE_MODE_DEBUG)) {
+
+    void log(const char *format, ...)
+    {
+        if (_debugSystem.isFeatureEnabled(DebugFeatures::MODULE_MODE_DEBUG))
+        {
             char buffer[128];
             va_list args;
             va_start(args, format);
             vsnprintf(buffer, sizeof(buffer), format, args);
             va_end(args);
-            
+
             _logger.println(buffer);
         }
     }

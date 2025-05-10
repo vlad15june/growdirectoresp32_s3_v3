@@ -33,6 +33,7 @@ private:
     INTPTimeAdapter *timeAdapter;
     IWifiAdapter *wifiAdapter;
     ModuleModeEnum requestedModuleMode;
+    ModuleModeEnum currentModuleMode;
     static constexpr const char* FIRMWARE_VERSION = "2.1.1";
         
     // LED arrays
@@ -138,7 +139,8 @@ public:
           logger(loggerInstance), debugSystem(debugSystemInstance), 
           settings(settingsInstance), timeAdapter(timeAdapterInstance),
           wifiAdapter(wifiAdapterInstance),
-          requestedModuleMode(ModuleModeEnum::USER_CAN_CONFIGURE) {}
+          requestedModuleMode(ModuleModeEnum::USER_CAN_CONFIGURE),
+          currentModuleMode(ModuleModeEnum::USER_CAN_CONFIGURE) {}
           
     ~ModuleConfig() {
         if (redLeds != nullptr) {
@@ -305,6 +307,15 @@ public:
     void setRequestedModuleMode(ModuleModeEnum mode) override {
         requestedModuleMode = mode;
         log("MODULE: Module mode set to: %d\n", static_cast<int>(mode));
+    }
+
+    ModuleModeEnum getCurrentModuleMode() const override {
+        return currentModuleMode;
+    }
+    
+    void setCurrentModuleMode(ModuleModeEnum mode) override {
+        currentModuleMode = mode;
+        log("MODULE: Current module mode set to: %d\n", static_cast<int>(mode));
     }
 
     const char* getModuleUid() const override {

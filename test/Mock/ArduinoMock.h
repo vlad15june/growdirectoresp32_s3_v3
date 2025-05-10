@@ -21,6 +21,11 @@ void setDigitalReadMockValue(int pin, int value);
 static std::map<int, int> pinModes;
 static std::map<int, int> pinValues;
 
+inline long	 random(int range)
+{
+    return rand() % range;
+}
+
 inline void setDigitalReadMockValue(int pin, int value) {
     pinValues[pin] = value;
 }

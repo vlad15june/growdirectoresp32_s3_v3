@@ -171,6 +171,8 @@ void test_loop_when_mode_changes_to_configured_done(void) {
         g_mockLogger,
         g_mockDebugSystem);
     
+    g_mockModuleConfig.setCurrentModuleMode(CONFIGURED_DONE);
+    
     // Set the requested mode to USER_CAN_CONFIGURE (different from current)
     g_mockModuleConfig.setRequestedModuleMode(USER_CAN_CONFIGURE);
     

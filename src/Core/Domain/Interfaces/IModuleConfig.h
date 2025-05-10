@@ -30,6 +30,8 @@ public:
     virtual uint8_t getLedsCount() const = 0;
     virtual ModuleModeEnum getRequestedModuleMode() const = 0;
     virtual void setRequestedModuleMode(ModuleModeEnum mode) = 0;
+    virtual ModuleModeEnum getCurrentModuleMode() const = 0;
+    virtual void setCurrentModuleMode(ModuleModeEnum mode) = 0;
     virtual const char* getModuleUid() const = 0;
     virtual const char* getFirmwareVersion() const = 0;
     virtual int getSensorPinCount() const = 0;  // New method for sensor pin count

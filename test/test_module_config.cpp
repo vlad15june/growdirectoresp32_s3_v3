@@ -187,6 +187,8 @@ static void test_all_module_types(void) {
 
 static void test_module_mode(void) {
     module_config_setup();
+    
+    // Test requested module mode
     ModuleModeEnum defaultMode = g_moduleConfig->getRequestedModuleMode();
     g_moduleConfig->setRequestedModuleMode(ModuleModeEnum::USER_CAN_CONFIGURE);
     TEST_ASSERT_EQUAL(ModuleModeEnum::USER_CAN_CONFIGURE, g_moduleConfig->getRequestedModuleMode());
@@ -198,6 +200,20 @@ static void test_module_mode(void) {
     TEST_ASSERT_EQUAL(ModuleModeEnum::CONFIGURED_DONE, g_moduleConfig->getRequestedModuleMode());
     g_moduleConfig->setRequestedModuleMode(ModuleModeEnum::CONFIGURED_NEED_RESTART);
     TEST_ASSERT_EQUAL(ModuleModeEnum::CONFIGURED_NEED_RESTART, g_moduleConfig->getRequestedModuleMode());
+    
+    // Test current module mode
+    ModuleModeEnum defaultCurrentMode = g_moduleConfig->getCurrentModuleMode();
+    g_moduleConfig->setCurrentModuleMode(ModuleModeEnum::USER_CAN_CONFIGURE);
+    TEST_ASSERT_EQUAL(ModuleModeEnum::USER_CAN_CONFIGURE, g_moduleConfig->getCurrentModuleMode());
+    g_moduleConfig->setCurrentModuleMode(ModuleModeEnum::USER_CAN_RE_CONFIGURE);
+    TEST_ASSERT_EQUAL(ModuleModeEnum::USER_CAN_RE_CONFIGURE, g_moduleConfig->getCurrentModuleMode());
+    g_moduleConfig->setCurrentModuleMode(ModuleModeEnum::AP_TEST_MODE);
+    TEST_ASSERT_EQUAL(ModuleModeEnum::AP_TEST_MODE, g_moduleConfig->getCurrentModuleMode());
+    g_moduleConfig->setCurrentModuleMode(ModuleModeEnum::CONFIGURED_DONE);
+    TEST_ASSERT_EQUAL(ModuleModeEnum::CONFIGURED_DONE, g_moduleConfig->getCurrentModuleMode());
+    g_moduleConfig->setCurrentModuleMode(ModuleModeEnum::CONFIGURED_NEED_RESTART);
+    TEST_ASSERT_EQUAL(ModuleModeEnum::CONFIGURED_NEED_RESTART, g_moduleConfig->getCurrentModuleMode());
+    
     module_config_teardown();
 }
 

@@ -28,6 +28,7 @@ private:
     uint8_t* _greenLeds;
     uint8_t _ledsCount;
     ModuleModeEnum _requestedModuleMode = ModuleModeEnum::CONFIGURED_DONE;
+    ModuleModeEnum _currentModuleMode = ModuleModeEnum::CONFIGURED_DONE;
     std::string _moduleUid;
     std::string _firmwareVersion;
     int _sensorPinCount;
@@ -127,6 +128,15 @@ public:
     void setRequestedModuleMode(ModuleModeEnum mode) override {
         _requestedModuleMode = mode;
         _modifiedFields["requestedModuleMode"] = true;
+    }
+
+    ModuleModeEnum getCurrentModuleMode() const override {
+        return _currentModuleMode;
+    }
+    
+    void setCurrentModuleMode(ModuleModeEnum mode) override {
+        _currentModuleMode = mode;
+        _modifiedFields["currentModuleMode"] = true;
     }
 
     const char* getModuleUid() const override {
@@ -274,6 +284,7 @@ public:
         _isInitialized = false;
         _isTypeConfigure = false;
         _requestedModuleMode = ModuleModeEnum::CONFIGURED_DONE;
+        _currentModuleMode = ModuleModeEnum::CONFIGURED_DONE;
         _moduleUid = "test_module_uid";
         _firmwareVersion = "2.1.1";
         _sensorPinCount = 0;

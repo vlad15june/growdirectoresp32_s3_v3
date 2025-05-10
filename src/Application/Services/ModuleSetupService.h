@@ -1,6 +1,8 @@
 #ifndef MODULE_SETUP_SERVICE_H
 #define MODULE_SETUP_SERVICE_H
 
+#include <stdlib.h>
+
 #include "Core/Domain/Interfaces/ILogger.h"
 #include "Core/Domain/Interfaces/IDebugSystem.h"
 #include "Core/Domain/Interfaces/IModuleConfig.h"
@@ -206,6 +208,9 @@ inline void ModuleSetupService::handleModuleMode()
 
     buttonUseCases->checkButtonPressedWhenOn();
 
+    moduleConfig->setRequestedModuleMode(static_cast<ModuleModeEnum>(isConfigured));
+    log("SETUP: Requested module mode set to: %d", isConfigured);
+
     if (isConfigured == ModuleModeEnum::CONFIGURED_NEED_RESTART)
     {
         log("SETUP: Module is in CONFIGURED_NEED_RESTART mode");
@@ -281,6 +286,8 @@ inline void ModuleSetupService::setupAP()
     {
         const char *wifiPrefix = determineWifiPrefix();
         const char *macAddress = wifiAdapter->getMACAddress();
+        log("SETUP: Using WiFi prefix: %s", wifiPrefix);
+        log("SETUP: Device MAC address: %s", macAddress);
 
         char *ssid = generateSSID(wifiPrefix, macAddress);
         log("SETUP: WiFi Name: %s", ssid);
@@ -341,7 +348,8 @@ inline const char *ModuleSetupService::determineWifiPrefix()
 inline char *ModuleSetupService::generateSSID(const char *wifiPrefix, const char *macAddress)
 {
     char randomPart[10];
-    int randomNum = (int)(std::rand() % 1000);
+    int randomNum = (int)(random(1000) % 1000);
+    log("SETUP: Generating random part for SSID: %d", randomNum);
     snprintf(randomPart, sizeof(randomPart), "_%d", randomNum);
 
     size_t prefixLen = strlen(wifiPrefix);
