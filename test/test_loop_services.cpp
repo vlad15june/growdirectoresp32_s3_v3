@@ -15,7 +15,6 @@
 #include "Mock/Infrastructure/MockArduinoAdapter.h"
 #include "Mock/Infrastructure/Mqtt/MockMqttManager.h"
 
-// Mock for the web server
 class MockWebServerLooper : public IWebServerLooper {
 public:
     bool loopCalled = false;
@@ -32,7 +31,6 @@ public:
     }
 };
 
-// Global test variables
 static MockLedUseCases* g_mockLedUseCases;
 static MockButtonUseCases* g_mockButtonUseCases;
 static MockOnChangeModuleModeUseCase* g_mockModuleModeUseCase;
@@ -45,7 +43,6 @@ static MockSettings* g_mockSettings;
 static MockArduinoAdapter* g_mockArduinoAdapter;
 static MockMqttManager* g_mockMqttManager;
 
-// Base setup and teardown
 static void base_setup(void) {
     g_mockLedUseCases = new MockLedUseCases();
     g_mockButtonUseCases = new MockButtonUseCases();
@@ -59,7 +56,6 @@ static void base_setup(void) {
     g_mockArduinoAdapter = new MockArduinoAdapter();
     g_mockMqttManager = new MockMqttManager();
     
-    // Enable debug features for testing
     g_mockDebugSystem->featureEnabled = true;
 }
 
@@ -89,7 +85,6 @@ static void base_teardown(void) {
     g_mockMqttManager = nullptr;
 }
 
-// Helper to reset all mocks
 static void reset_all_mocks(void) {
     g_mockLedUseCases->reset();
     g_mockButtonUseCases->reset();
@@ -103,14 +98,11 @@ static void reset_all_mocks(void) {
     g_mockMqttManager->reset();
 }
 
-// Test the base functionality of loop services
 static void test_loop_service_base_functionality(void) {
     base_setup();
     
-    // Create a test service (using ConfigureDone as an example)
     LoopServiceConfigureDone service;
     
-    // Inject dependencies
     service.setLedUseCases(g_mockLedUseCases);
     service.setButtonUseCases(g_mockButtonUseCases);
     service.setOnChangeModuleModeUseCase(g_mockModuleModeUseCase);
@@ -120,33 +112,22 @@ static void test_loop_service_base_functionality(void) {
     service.setOnChangeLocalIpUseCase(g_mockOnChangeLocalIpUseCase);
     service.setMqttManager(g_mockMqttManager);
     
-    // Execute the loop
     service.loop();
     
-    // Verify that module mode change was checked
     TEST_ASSERT_TRUE(g_mockModuleModeUseCase->loopCalled);
-    
-    // Verify LED updates happened
     TEST_ASSERT_TRUE(g_mockLedUseCases->loopCalled);
-    
-    // Button press checking should have happened
     TEST_ASSERT_TRUE(g_mockButtonUseCases->isButtonPressedWhenOnThenHeldForDurationCalled);
-    
-    // Verify that the IP change use case and MQTT manager were called
     TEST_ASSERT_TRUE(g_mockOnChangeLocalIpUseCase->performCalled);
     TEST_ASSERT_TRUE(g_mockMqttManager->loopCalled);
     
     base_teardown();
 }
 
-// Test button press causing mode change
 static void test_button_long_press_changes_mode(void) {
     base_setup();
     
-    // Create a test service
     LoopServiceConfigureDone service;
     
-    // Inject dependencies
     service.setLedUseCases(g_mockLedUseCases);
     service.setButtonUseCases(g_mockButtonUseCases);
     service.setOnChangeModuleModeUseCase(g_mockModuleModeUseCase);
@@ -156,27 +137,21 @@ static void test_button_long_press_changes_mode(void) {
     service.setOnChangeLocalIpUseCase(g_mockOnChangeLocalIpUseCase);
     service.setMqttManager(g_mockMqttManager);
     
-    // Set up the button use case to report a long press
     g_mockButtonUseCases->buttonPressedThenHeldResult = true;
     
-    // Execute the loop
     service.loop();
     
-    // Verify that the service requested a mode change to TEST mode
     TEST_ASSERT_TRUE(g_mockModuleConfig->wasModified("requestedModuleMode"));
     TEST_ASSERT_EQUAL(ModuleModeEnum::AP_TEST_MODE, g_mockModuleConfig->getRequestedModuleMode());
     
     base_teardown();
 }
 
-// Tests for LoopServiceCanConfigure
 static void test_loop_service_can_configure(void) {
     base_setup();
     
-    // Create the service
     LoopServiceCanConfigure service;
     
-    // Inject dependencies
     service.setLedUseCases(g_mockLedUseCases);
     service.setButtonUseCases(g_mockButtonUseCases);
     service.setOnChangeModuleModeUseCase(g_mockModuleModeUseCase);
@@ -184,23 +159,18 @@ static void test_loop_service_can_configure(void) {
     service.setWebServer(g_mockWebServer);
     service.setModuleConfig(g_mockModuleConfig);
     
-    // Execute the loop
     service.loop();
     
-    // This service should call the web server loop
     TEST_ASSERT_TRUE(g_mockWebServer->loopCalled);
     
     base_teardown();
 }
 
-// Tests for LoopServiceReConfigure
 static void test_loop_service_re_configure(void) {
     base_setup();
     
-    // Create the service
     LoopServiceReConfigure service;
     
-    // Inject dependencies
     service.setLedUseCases(g_mockLedUseCases);
     service.setButtonUseCases(g_mockButtonUseCases);
     service.setOnChangeModuleModeUseCase(g_mockModuleModeUseCase);
@@ -209,32 +179,22 @@ static void test_loop_service_re_configure(void) {
     service.setModuleConfig(g_mockModuleConfig);
     service.setArduinoAdapter(g_mockArduinoAdapter);
     
-    // Set up the button use case
     g_mockButtonUseCases->buttonHeldResult = true;
     
-    // Execute the loop
     service.loop();
     
-    // Verify button held check was called
     TEST_ASSERT_TRUE(g_mockButtonUseCases->isButtonHeldForDurationCalled);
-    
-    // This service should call the web server loop
     TEST_ASSERT_TRUE(g_mockWebServer->loopCalled);
-    
-    // Verify the Arduino adapter's millis was called for time check
     TEST_ASSERT_TRUE(g_mockArduinoAdapter->millisCalled);
     
     base_teardown();
 }
 
-// Test timeout behavior in LoopServiceReConfigure
 static void test_loop_service_re_configure_timeout_not_reached(void) {
     base_setup();
     
-    // Create the service
     LoopServiceReConfigure service;
     
-    // Inject dependencies
     service.setLedUseCases(g_mockLedUseCases);
     service.setButtonUseCases(g_mockButtonUseCases);
     service.setOnChangeModuleModeUseCase(g_mockModuleModeUseCase);
@@ -243,13 +203,10 @@ static void test_loop_service_re_configure_timeout_not_reached(void) {
     service.setModuleConfig(g_mockModuleConfig);
     service.setArduinoAdapter(g_mockArduinoAdapter);
     
-    // Set current time to something small (< 5 minutes)
     g_mockArduinoAdapter->currentMillis = 100000; // 100 seconds
     
-    // Execute the loop
     service.loop();
     
-    // Verify mode was not changed
     TEST_ASSERT_FALSE(g_mockModuleConfig->wasModified("requestedModuleMode"));
     
     base_teardown();
@@ -258,10 +215,8 @@ static void test_loop_service_re_configure_timeout_not_reached(void) {
 static void test_loop_service_re_configure_timeout_reached(void) {
     base_setup();
     
-    // Create the service
     LoopServiceReConfigure service;
     
-    // Inject dependencies
     service.setLedUseCases(g_mockLedUseCases);
     service.setButtonUseCases(g_mockButtonUseCases);
     service.setOnChangeModuleModeUseCase(g_mockModuleModeUseCase);
@@ -270,13 +225,10 @@ static void test_loop_service_re_configure_timeout_reached(void) {
     service.setModuleConfig(g_mockModuleConfig);
     service.setArduinoAdapter(g_mockArduinoAdapter);
     
-    // Set current time to > 5 minutes (300,000 ms)
     g_mockArduinoAdapter->currentMillis = 600000; // 10 minutes
     
-    // Execute the loop
     service.loop();
     
-    // Verify mode was changed to CONFIGURED_DONE
     TEST_ASSERT_TRUE(g_mockModuleConfig->wasModified("requestedModuleMode"));
     TEST_ASSERT_EQUAL(ModuleModeEnum::CONFIGURED_DONE, g_mockModuleConfig->getRequestedModuleMode());
     
@@ -286,10 +238,8 @@ static void test_loop_service_re_configure_timeout_reached(void) {
 static void test_loop_service_re_configure_null_arduino_adapter(void) {
     base_setup();
     
-    // Create the service
     LoopServiceReConfigure service;
     
-    // Inject dependencies but NOT the Arduino adapter
     service.setLedUseCases(g_mockLedUseCases);
     service.setButtonUseCases(g_mockButtonUseCases);
     service.setOnChangeModuleModeUseCase(g_mockModuleModeUseCase);
@@ -297,23 +247,18 @@ static void test_loop_service_re_configure_null_arduino_adapter(void) {
     service.setWebServer(g_mockWebServer);
     service.setModuleConfig(g_mockModuleConfig);
     
-    // Execute the loop (should not crash)
     service.loop();
     
-    // Verify mode was not changed
     TEST_ASSERT_FALSE(g_mockModuleConfig->wasModified("requestedModuleMode"));
     
     base_teardown();
 }
 
-// Tests for LoopServiceTestMode
 static void test_loop_service_test_mode(void) {
     base_setup();
     
-    // Create the service
     LoopServiceTestMode service;
     
-    // Inject dependencies
     service.setLedUseCases(g_mockLedUseCases);
     service.setButtonUseCases(g_mockButtonUseCases);
     service.setOnChangeModuleModeUseCase(g_mockModuleModeUseCase);
@@ -321,26 +266,20 @@ static void test_loop_service_test_mode(void) {
     service.setWebServer(g_mockWebServer);
     service.setModuleConfig(g_mockModuleConfig);
     
-    // Set up for button press test
     g_mockButtonUseCases->buttonPressedResult = true;
     
-    // Execute the loop
     service.loop();
     
-    // Verify button press check was called
     TEST_ASSERT_TRUE(g_mockButtonUseCases->isButtonPressedWhenOnCalled);
     
     base_teardown();
 }
 
-// Tests for LoopServiceConfigureDone
 static void test_loop_service_configure_done(void) {
     base_setup();
     
-    // Create the service
     LoopServiceConfigureDone service;
     
-    // Inject dependencies
     service.setLedUseCases(g_mockLedUseCases);
     service.setButtonUseCases(g_mockButtonUseCases);
     service.setOnChangeModuleModeUseCase(g_mockModuleModeUseCase);
@@ -350,118 +289,72 @@ static void test_loop_service_configure_done(void) {
     service.setOnChangeLocalIpUseCase(g_mockOnChangeLocalIpUseCase);
     service.setMqttManager(g_mockMqttManager);
     
-    // Set up for button long press test
     g_mockButtonUseCases->buttonHeldResult = true;
     
-    // Execute the loop
     service.loop();
     
-    // Verify button long press check was called
-    TEST_ASSERT_TRUE(g_mockButtonUseCases->isButtonHeldForDurationCalled);
-    
-    base_teardown();
-}
-
-// Test for LoopServiceConfigureDone button held functionality
-static void test_loop_service_configure_done_button_held(void) {
-    base_setup();
-    
-    // Create the service
-    LoopServiceConfigureDone service;
-    
-    // Inject dependencies
-    service.setLedUseCases(g_mockLedUseCases);
-    service.setButtonUseCases(g_mockButtonUseCases);
-    service.setOnChangeModuleModeUseCase(g_mockModuleModeUseCase);
-    service.setLogging(g_mockLogger, g_mockDebugSystem);
-    service.setWebServer(g_mockWebServer);
-    service.setModuleConfig(g_mockModuleConfig);
-    service.setOnChangeLocalIpUseCase(g_mockOnChangeLocalIpUseCase);
-    service.setMqttManager(g_mockMqttManager);
-    
-    // Set up for button long press test - button is held
-    g_mockButtonUseCases->buttonHeldResult = true;
-    
-    // Execute the loop
-    service.loop();
-    
-    // Verify button held check was called
-    TEST_ASSERT_TRUE(g_mockButtonUseCases->isButtonHeldForDurationCalled);
-    
-    // Verify that the service requested a mode change to RE_CONFIGURE mode
-    TEST_ASSERT_TRUE(g_mockModuleConfig->wasModified("requestedModuleMode"));
-    TEST_ASSERT_EQUAL(ModuleModeEnum::USER_CAN_RE_CONFIGURE, g_mockModuleConfig->getRequestedModuleMode());
-    
-    base_teardown();
-}
-
-// Test for LoopServiceConfigureDone with all dependencies including new ones
-static void test_loop_service_configure_done_with_all_dependencies(void) {
-    base_setup();
-    
-    // Create the service
-    LoopServiceConfigureDone service;
-    
-    // Inject all dependencies including the new ones
-    service.setLedUseCases(g_mockLedUseCases);
-    service.setButtonUseCases(g_mockButtonUseCases);
-    service.setOnChangeModuleModeUseCase(g_mockModuleModeUseCase);
-    service.setLogging(g_mockLogger, g_mockDebugSystem);
-    service.setWebServer(g_mockWebServer);
-    service.setModuleConfig(g_mockModuleConfig);
-    service.setOnChangeLocalIpUseCase(g_mockOnChangeLocalIpUseCase);
-    service.setMqttManager(g_mockMqttManager);
-    
-    // Execute the loop
-    service.loop();
-    
-    // Standard verifications
     TEST_ASSERT_TRUE(g_mockModuleModeUseCase->loopCalled);
     TEST_ASSERT_TRUE(g_mockLedUseCases->loopCalled);
-    
-    // Verify that the IP change use case and MQTT manager were called
+    TEST_ASSERT_TRUE(g_mockButtonUseCases->isButtonHeldForDurationCalled);
+    TEST_ASSERT_TRUE(g_mockModuleConfig->wasModified("requestedModuleMode"));
+    TEST_ASSERT_EQUAL(ModuleModeEnum::USER_CAN_RE_CONFIGURE, g_mockModuleConfig->getRequestedModuleMode());
     TEST_ASSERT_TRUE(g_mockOnChangeLocalIpUseCase->performCalled);
     TEST_ASSERT_TRUE(g_mockMqttManager->loopCalled);
     
     base_teardown();
 }
 
-// Test missing dependencies for robustness
+static void test_loop_service_configure_done_button_held(void) {
+    base_setup();
+    
+    LoopServiceConfigureDone service;
+    
+    service.setLedUseCases(g_mockLedUseCases);
+    service.setButtonUseCases(g_mockButtonUseCases);
+    service.setOnChangeModuleModeUseCase(g_mockModuleModeUseCase);
+    service.setLogging(g_mockLogger, g_mockDebugSystem);
+    service.setWebServer(g_mockWebServer);
+    service.setModuleConfig(g_mockModuleConfig);
+    service.setOnChangeLocalIpUseCase(g_mockOnChangeLocalIpUseCase);
+    service.setMqttManager(g_mockMqttManager);
+    
+    g_mockButtonUseCases->buttonHeldResult = true;
+    
+    service.loop();
+    
+    TEST_ASSERT_TRUE(g_mockButtonUseCases->isButtonHeldForDurationCalled);
+    TEST_ASSERT_TRUE(g_mockModuleConfig->wasModified("requestedModuleMode"));
+    TEST_ASSERT_EQUAL(ModuleModeEnum::USER_CAN_RE_CONFIGURE, g_mockModuleConfig->getRequestedModuleMode());
+    
+    base_teardown();
+}
+
 static void test_loop_service_configure_done_null_dependencies(void) {
     base_setup();
     
-    // Create the service with minimal dependencies
     LoopServiceConfigureDone service;
     
-    // Only inject the basic dependencies, omitting the new ones
     service.setLedUseCases(g_mockLedUseCases);
     service.setButtonUseCases(g_mockButtonUseCases);
     service.setOnChangeModuleModeUseCase(g_mockModuleModeUseCase);
     service.setLogging(g_mockLogger, g_mockDebugSystem);
     service.setModuleConfig(g_mockModuleConfig);
     
-    // Execute the loop - should not crash with null dependencies
     service.loop();
     
-    // Verify normal operations still occurred
     TEST_ASSERT_TRUE(g_mockLedUseCases->loopCalled);
     TEST_ASSERT_TRUE(g_mockModuleModeUseCase->loopCalled);
-    
-    // The new dependencies weren't set, so they shouldn't have been called
     TEST_ASSERT_FALSE(g_mockOnChangeLocalIpUseCase->performCalled);
     TEST_ASSERT_FALSE(g_mockMqttManager->loopCalled);
     
     base_teardown();
 }
 
-// Test multiple loops to check incremental behavior
 static void test_multiple_loop_calls(void) {
     base_setup();
     
-    // Create the service
     LoopServiceCanConfigure service;
     
-    // Inject dependencies
     service.setLedUseCases(g_mockLedUseCases);
     service.setButtonUseCases(g_mockButtonUseCases);
     service.setOnChangeModuleModeUseCase(g_mockModuleModeUseCase);
@@ -469,12 +362,10 @@ static void test_multiple_loop_calls(void) {
     service.setWebServer(g_mockWebServer);
     service.setModuleConfig(g_mockModuleConfig);
     
-    // Call loop multiple times
     for (int i = 0; i < 5; i++) {
         service.loop();
     }
     
-    // Verify appropriate call counts
     TEST_ASSERT_EQUAL(5, g_mockModuleModeUseCase->loopCallCount);
     TEST_ASSERT_EQUAL(5, g_mockLedUseCases->loopCount);
     TEST_ASSERT_EQUAL(5, g_mockWebServer->loopCallCount);
@@ -482,7 +373,6 @@ static void test_multiple_loop_calls(void) {
     base_teardown();
 }
 
-// Main test runner function
 extern "C" int run_loop_services_tests(void) {
     printf("\n----- Running Loop Services Tests -----\n");
     
@@ -496,7 +386,6 @@ extern "C" int run_loop_services_tests(void) {
     RUN_TEST(test_loop_service_test_mode);
     RUN_TEST(test_loop_service_configure_done);
     RUN_TEST(test_loop_service_configure_done_button_held);
-    RUN_TEST(test_loop_service_configure_done_with_all_dependencies);
     RUN_TEST(test_loop_service_configure_done_null_dependencies);
     RUN_TEST(test_multiple_loop_calls);
     
