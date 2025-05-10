@@ -2,6 +2,7 @@
 #define MOCK_MQTT_MANAGER_H
 
 #include "Core/Domain/Interfaces/Mqtt/IMqttManager.h"
+#include <string>
 
 class MockMqttManager : public IMqttManager {
 public:
