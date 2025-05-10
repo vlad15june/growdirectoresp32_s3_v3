@@ -13,111 +13,122 @@
 #include "Core/Domain/Interfaces/IDebugSystem.h"
 #include <string.h>
 
-class OnChangeLocalIpUseCase : public IOnChangeLocalIpUseCase {
+class OnChangeLocalIpUseCase : public IOnChangeLocalIpUseCase
+{
 private:
-    ILogger& _logger;
-    IDebugSystem& _debugSystem;
-    IWifiAdapter& _wifiAdapter;
-    IWifiManager& _wifiManager;
-    ModuleStructure& _moduleStructure;
-    IRestAPIService& _restApiService;
+    ILogger &_logger;
+    IDebugSystem &_debugSystem;
+    IWifiAdapter &_wifiAdapter;
+    IWifiManager &_wifiManager;
+    ModuleStructure &_moduleStructure;
+    IRestAPIService &_restApiService;
     char _oldIpStr[16]; // Store previous IP address
-    
+
 public:
     OnChangeLocalIpUseCase(
-        IWifiAdapter& wifiAdapter,
-        IWifiManager& wifiManager,
-        ModuleStructure& moduleStructure,
-        IRestAPIService& restApiService,
-        ILogger& loggerInstance,
-        IDebugSystem& debugSystemInstance)
+        IWifiAdapter &wifiAdapter,
+        IWifiManager &wifiManager,
+        ModuleStructure &moduleStructure,
+        IRestAPIService &restApiService,
+        ILogger &loggerInstance,
+        IDebugSystem &debugSystemInstance)
         : _wifiAdapter(wifiAdapter),
           _wifiManager(wifiManager),
           _moduleStructure(moduleStructure),
           _restApiService(restApiService),
           _logger(loggerInstance),
-          _debugSystem(debugSystemInstance) {
-        
+          _debugSystem(debugSystemInstance)
+    {
+
         // Initialize oldIpStr to empty string
         _oldIpStr[0] = '\0';
         log("OnChangeLocalIpUseCase: Initialized");
     }
-    
-    void perform() override {
+
+    void perform() override
+    {
         // log("OnChangeLocalIpUseCase: Performing local IP update");
-        
+
         // Get the new local IP from the WiFi adapter
-        const char* newIpStr = _wifiAdapter.getLocalIP();
+        const char *newIpStr = _wifiAdapter.getLocalIP();
 
         // Skip processing if IP is missing or is 0.0.0.0
-        if (newIpStr == nullptr || strcmp(newIpStr, "0.0.0.0") == 0) {
+        if (newIpStr == nullptr || strcmp(newIpStr, "0.0.0.0") == 0)
+        {
             log("OnChangeLocalIpUseCase: No valid IP available (null or 0.0.0.0)");
             return;
         }
-        
+
         // Check if IP has changed
         bool ipChanged = (strlen(_oldIpStr) == 0 || strcmp(_oldIpStr, newIpStr) != 0);
-        
-        if (ipChanged) {
-            log("OnChangeLocalIpUseCase: IP changed - old IP: %s, new IP: %s", 
+
+        if (ipChanged)
+        {
+            log("OnChangeLocalIpUseCase: IP changed - old IP: %s, new IP: %s",
                 (strlen(_oldIpStr) > 0 ? _oldIpStr : "not set"), newIpStr);
-            
+
             // Only process if WiFi is connected
-            if (_wifiAdapter.isConnected()) {
+            if (_wifiAdapter.isConnected())
+            {
                 log("OnChangeLocalIpUseCase: WiFi connected, updating module structure");
-                
+
                 // Store new IP as old IP for next comparison
                 strncpy(_oldIpStr, newIpStr, sizeof(_oldIpStr) - 1);
                 _oldIpStr[sizeof(_oldIpStr) - 1] = '\0'; // Ensure null-termination
-                
+
                 // Update IP in all nodes in the module structure
                 std::string newIpString(newIpStr);
-                for (auto& node : _moduleStructure.nodes) {
+                for (auto &node : _moduleStructure.nodes)
+                {
                     node.ip = newIpString;
                     log("OnChangeLocalIpUseCase: Updated IP for node to %s", newIpStr);
                 }
-                
+
                 // Update SSID in module structure
                 int networkIndex = 0; // Assuming the connected network is at index 0
-                const char* ssid = _wifiAdapter.getSSID(networkIndex);
-                if (ssid != nullptr) {
+                const char *ssid = _wifiAdapter.getSSID(networkIndex);
+                if (ssid != nullptr)
+                {
                     std::string ssidString(ssid);
-                    for (auto& node : _moduleStructure.nodes) {
+                    for (auto &node : _moduleStructure.nodes)
+                    {
                         node.ssid = ssidString;
                         log("OnChangeLocalIpUseCase: Updated SSID for node to %s", ssid);
                     }
                 }
-                
+
                 // Send updated structure to server
                 log("OnChangeLocalIpUseCase: Sending updated module structure to server");
                 _restApiService.sendToServerModuleStructure(_moduleStructure);
-                
+
                 // Process additional server communications
                 log("OnChangeLocalIpUseCase: Processing delete command and restoring account info");
                 // These would be implemented in your RestAPIService
                 // _restApiService.processDeleteGdCommand();
                 // _restApiService.restoreAccountInfoFromServer();
-                
-                // Reconnect to server services
-                log("OnChangeLocalIpUseCase: Reconnecting server services");
-                // _restApiService.reconnect();
-            } else {
+            }
+            else
+            {
                 log("OnChangeLocalIpUseCase: WiFi not connected, skipping update");
             }
-        } else {
+        }
+        else
+        {
             // log("OnChangeLocalIpUseCase: IP has not changed, no update needed");
         }
     }
-    
+
 private:
-    void log(const char* format, ...) {
-        if (_debugSystem.isFeatureEnabled(DebugFeatures::IP_CHANGE_DEBUG)) {
+    void log(const char *format, ...)
+    {
+        if (_debugSystem.isFeatureEnabled(DebugFeatures::IP_CHANGE_DEBUG))
+        {
             char buffer[128];
             va_list args;
             va_start(args, format);
             vsnprintf(buffer, sizeof(buffer), format, args);
             va_end(args);
-            
+
             _logger.println(buffer);
         }
     }

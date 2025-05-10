@@ -60,7 +60,7 @@ private:
         registerFeature(DebugFeatures::FILE_LOG_DEBUG, "file_log", false);
         registerFeature(DebugFeatures::FILE_DEBUG, "file", false);
         registerFeature(DebugFeatures::DIAGNOSTIC_DEBUG, "diagnostic", false);
-        registerFeature(DebugFeatures::MQTT_DEBUG, "mqtt", false);
+        registerFeature(DebugFeatures::MQTT_DEBUG, "mqtt", true);
         registerFeature(DebugFeatures::MQTT_COMMAND_DEBUG, "mqtt_command", true);
         registerFeature(DebugFeatures::MQTT_CALLBACK_DEBUG, "mqtt_callback", false);
         registerFeature(DebugFeatures::BUTTON_DEBUG, "button", false);

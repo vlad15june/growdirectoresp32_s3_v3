@@ -66,7 +66,12 @@ private:
     
     // Reconnect to MQTT broker
     bool reconnect() {
-        if (millis() - _lastReconnectAttempt < _reconnectInterval) {
+        // Log the last reconnect attempt time and reconnect interval
+        log("Last reconnect attempt: %lu ms ago, Reconnect interval: %u ms, _lastReconnectAttempt: %lu ms", 
+            millis() - _lastReconnectAttempt, _reconnectInterval, _lastReconnectAttempt);
+            
+        if (millis() - _lastReconnectAttempt < _reconnectInterval || _lastReconnectAttempt == 0) {
+            log("Reconnect attempt too soon, waiting...");
             return false;
         }
         
