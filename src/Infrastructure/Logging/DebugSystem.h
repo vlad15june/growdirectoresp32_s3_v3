@@ -32,6 +32,7 @@ private:
     {
         // Register all debug features with their default values
         registerFeature(DebugFeatures::IP_CHNG_DEBUG, "ip_change", true);
+        registerFeature(DebugFeatures::IP_CHANGE_DEBUG, "ip_local_change", true);
         registerFeature(DebugFeatures::RULE_SENSOR_OFFLINE_DEBUG, "rule_sensor_offline", true);
         registerFeature(DebugFeatures::REMOTE_SENSOR_RECEIVE_DEBUG, "remote_sensor_receive", false);
         registerFeature(DebugFeatures::UDP_RECEIVE_DEBUG, "udp_receive", false);

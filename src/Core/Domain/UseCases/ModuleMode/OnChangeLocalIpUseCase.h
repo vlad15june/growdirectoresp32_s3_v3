@@ -111,7 +111,7 @@ public:
     
 private:
     void log(const char* format, ...) {
-        if (_debugSystem.isFeatureEnabled(DebugFeatures::NET_DEBUG)) {
+        if (_debugSystem.isFeatureEnabled(DebugFeatures::IP_CHANGE_DEBUG)) {
             char buffer[128];
             va_list args;
             va_start(args, format);
