@@ -15,6 +15,7 @@
 #include "Core/Domain/Interfaces/IModuleConfig.h"
 #include "Core/Domain/Interfaces/Adapters/IArduinoAdapter.h"
 #include "Core/Domain/Interfaces/Mqtt/IMqttManager.h"
+#include "Application/Interfaces/IDiagnosticService.h"
 #include <stdexcept>
 
 class LoopServiceFactory : public ILoopServiceFactory {
@@ -29,6 +30,7 @@ private:
     IModuleConfig* moduleConfig;
     IArduinoAdapter* arduinoAdapter;
     IMqttManager* mqttManager;
+    IDiagnosticService* diagnosticService;
 
 public:
     LoopServiceFactory(
@@ -41,7 +43,8 @@ public:
         IModuleConfig* moduleConfig = nullptr,
         IArduinoAdapter* arduinoAdapter = nullptr,
         IOnChangeLocalIpUseCase* onChangeLocalIpUseCase = nullptr,
-        IMqttManager* mqttManager = nullptr
+        IMqttManager* mqttManager = nullptr,
+        IDiagnosticService* diagnosticService = nullptr
     ) : ledUseCases(ledUseCases),
         buttonUseCases(buttonUseCases),
         moduleModeUseCase(moduleModeUseCase),
@@ -51,7 +54,8 @@ public:
         moduleConfig(moduleConfig),
         arduinoAdapter(arduinoAdapter),
         onChangeLocalIpUseCase(onChangeLocalIpUseCase),
-        mqttManager(mqttManager) {}
+        mqttManager(mqttManager),
+        diagnosticService(diagnosticService) {}
     
     ~LoopServiceFactory() override = default;
 
@@ -73,6 +77,7 @@ public:
                 LoopServiceConfigureDone* configDoneService = new LoopServiceConfigureDone();
                 configDoneService->setOnChangeLocalIpUseCase(onChangeLocalIpUseCase);
                 configDoneService->setMqttManager(mqttManager);
+                configDoneService->setDiagnosticService(diagnosticService);
                 
                 // Then assign to the service unique_ptr
                 service = std::unique_ptr<LoopServiceBase>(configDoneService);
@@ -102,6 +107,11 @@ public:
     // Setter for MqttManager
     void setMqttManager(IMqttManager* manager) {
         this->mqttManager = manager;
+    }
+
+    // Setter for DiagnosticService
+    void setDiagnosticService(IDiagnosticService* service) {
+        this->diagnosticService = service;
     }
 };
 

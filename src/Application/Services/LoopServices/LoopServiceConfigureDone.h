@@ -4,17 +4,24 @@
 #include "LoopServiceBase.h"
 #include "Core/Domain/Interfaces/UseCases/IOnChangeLocalIpUseCase.h"
 #include "Core/Domain/Interfaces/Mqtt/IMqttManager.h"
+#include "Application/Interfaces/IDiagnosticService.h"
 
 class LoopServiceConfigureDone : public LoopServiceBase {
 private:
     IOnChangeLocalIpUseCase* onChangeLocalIpUseCase;
     IMqttManager* mqttManager;
+    IDiagnosticService* diagnosticService;
+    
+    // Diagnostic timer variables
+    unsigned long lastDiagnosticTime = 0;
+    const unsigned long DIAGNOSTIC_INTERVAL = 5 * 60 * 1000; // 5 minutes in milliseconds
 
 public:
     LoopServiceConfigureDone() 
         : LoopServiceBase(), 
           onChangeLocalIpUseCase(nullptr),
-          mqttManager(nullptr) {}
+          mqttManager(nullptr),
+          diagnosticService(nullptr) {}
     
     ~LoopServiceConfigureDone() override = default;
     
@@ -42,6 +49,16 @@ public:
             log("Processing MQTT messages");
             mqttManager->loop();
         }
+        
+        // Run diagnostic service at regular intervals
+        if (diagnosticService && arduinoAdapter) {
+            unsigned long currentTime = arduinoAdapter->millis();
+            if (currentTime - lastDiagnosticTime >= DIAGNOSTIC_INTERVAL) {
+                log("Running diagnostic service");
+                diagnosticService->performAndSend();
+                lastDiagnosticTime = currentTime;
+            }
+        }
     }
     
     // Setter for the OnChangeLocalIpUseCase
@@ -54,21 +71,9 @@ public:
         this->mqttManager = manager;
     }
     
-private:
-    void performStatusCheck() {
-        log("Performing regular status check...");
-        
-        // Example status indicators
-        if (ledUseCases) {
-            // Brief LED flash to indicate normal operation
-            ledUseCases->ledBlinkGreen2Times();
-        }
-        
-        // Could check:
-        // - Connection status
-        // - Device health
-        // - Sensor readings
-        // - etc.
+    // Setter for the DiagnosticService
+    virtual void setDiagnosticService(IDiagnosticService* service) {
+        this->diagnosticService = service;
     }
 };
 

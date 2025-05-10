@@ -165,7 +165,8 @@ LoopServiceFactory loopServiceFactory(
     &moduleConfig,
     &arduinoAdapter,
     &onChangeLocalIpUseCase,
-    &mqttManager);  // Add the MqttManager here
+    &mqttManager,
+    &diagnosticService);  // Add DiagnosticService here
 
 ModuleSetupService moduleSetupService(
     &mqttLogger,

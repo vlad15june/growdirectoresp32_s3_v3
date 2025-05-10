@@ -10,21 +10,25 @@
 #include "Mock/Infrastructure/MockArduinoAdapter.h"
 #include "Mock/Core/Domain/MockOnChangeLocalIpUseCase.h"
 #include "Mock/Infrastructure/Mqtt/MockMqttManager.h"
+#include "Mock/Application/MockDiagnosticService.h"
 
 static LoopServiceFactory* g_loopServiceFactory;
 static MockArduinoAdapter* g_mockArduinoAdapter;
 static MockOnChangeLocalIpUseCase* g_mockOnChangeLocalIpUseCase;
 static MockMqttManager* g_mockMqttManager;
+static MockDiagnosticService* g_mockDiagnosticService;
 
 static void loop_service_factory_setup(void) {
     g_mockArduinoAdapter = new MockArduinoAdapter();
     g_mockOnChangeLocalIpUseCase = new MockOnChangeLocalIpUseCase();
     g_mockMqttManager = new MockMqttManager();
+    g_mockDiagnosticService = new MockDiagnosticService();
     
     g_loopServiceFactory = new LoopServiceFactory(
         nullptr, nullptr, nullptr, nullptr, nullptr, 
         nullptr, nullptr, g_mockArduinoAdapter,
-        g_mockOnChangeLocalIpUseCase, g_mockMqttManager);
+        g_mockOnChangeLocalIpUseCase, g_mockMqttManager,
+        g_mockDiagnosticService);
 }
 
 static void loop_service_factory_teardown(void) {
@@ -32,11 +36,13 @@ static void loop_service_factory_teardown(void) {
     delete g_mockArduinoAdapter;
     delete g_mockOnChangeLocalIpUseCase;
     delete g_mockMqttManager;
+    delete g_mockDiagnosticService;
     
     g_loopServiceFactory = nullptr;
     g_mockArduinoAdapter = nullptr;
     g_mockOnChangeLocalIpUseCase = nullptr;
     g_mockMqttManager = nullptr;
+    g_mockDiagnosticService = nullptr;
 }
 
 template <typename ExpectedType>
@@ -86,6 +92,15 @@ static void test_create_configure_done_service(void) {
     TEST_ASSERT_TRUE(g_mockOnChangeLocalIpUseCase->performCalled);
     TEST_ASSERT_TRUE(g_mockMqttManager->loopCalled);
     
+    // Mock current time to trigger diagnostic service
+    g_mockArduinoAdapter->currentMillis = 5 * 60 * 1000 + 1; // Just beyond the diagnostic interval
+    
+    // Run the loop again to trigger the diagnostic check
+    service->loop();
+    
+    // Verify that the diagnostic service was called
+    TEST_ASSERT_TRUE(g_mockDiagnosticService->performAndSendCalled);
+    
     loop_service_factory_teardown();
 }
 
@@ -128,9 +143,11 @@ static void test_dependency_setters(void) {
     
     MockOnChangeLocalIpUseCase newIpUseCase;
     MockMqttManager newMqttManager;
+    MockDiagnosticService newDiagnosticService;
     
     g_loopServiceFactory->setOnChangeLocalIpUseCase(&newIpUseCase);
     g_loopServiceFactory->setMqttManager(&newMqttManager);
+    g_loopServiceFactory->setDiagnosticService(&newDiagnosticService);
     
     auto service = g_loopServiceFactory->createLoopService(ModuleModeEnum::CONFIGURED_DONE);
     
@@ -138,8 +155,49 @@ static void test_dependency_setters(void) {
     
     TEST_ASSERT_FALSE(g_mockOnChangeLocalIpUseCase->performCalled);
     TEST_ASSERT_FALSE(g_mockMqttManager->loopCalled);
+    TEST_ASSERT_FALSE(g_mockDiagnosticService->performAndSendCalled);
     TEST_ASSERT_TRUE(newIpUseCase.performCalled);
     TEST_ASSERT_TRUE(newMqttManager.loopCalled);
+    
+    // Mock current time to trigger diagnostic service
+    g_mockArduinoAdapter->currentMillis = 5 * 60 * 1000 + 1; // Just beyond the diagnostic interval
+    
+    // Run the loop again
+    service->loop();
+    
+    // Verify that the new diagnostic service was called
+    TEST_ASSERT_TRUE(newDiagnosticService.performAndSendCalled);
+    
+    loop_service_factory_teardown();
+}
+
+static void test_diagnostic_timer_logic(void) {
+    loop_service_factory_setup();
+    
+    auto service = g_loopServiceFactory->createLoopService(ModuleModeEnum::CONFIGURED_DONE);
+    
+    // Initial time - diagnostic service should not be called
+    g_mockArduinoAdapter->currentMillis = 0;
+    service->loop();
+    TEST_ASSERT_FALSE(g_mockDiagnosticService->performAndSendCalled);
+    
+    // Time still under threshold - should not be called
+    g_mockArduinoAdapter->currentMillis = 5 * 60 * 1000 - 1; // Just under the diagnostic interval
+    service->loop();
+    TEST_ASSERT_FALSE(g_mockDiagnosticService->performAndSendCalled);
+    
+    // Time at threshold - should be called now
+    g_mockArduinoAdapter->currentMillis = 5 * 60 * 1000; 
+    service->loop();
+    TEST_ASSERT_TRUE(g_mockDiagnosticService->performAndSendCalled);
+    
+    // Reset the mock
+    g_mockDiagnosticService->reset();
+    
+    // Another interval passes - should be called again
+    g_mockArduinoAdapter->currentMillis = 10 * 60 * 1000;
+    service->loop();
+    TEST_ASSERT_TRUE(g_mockDiagnosticService->performAndSendCalled);
     
     loop_service_factory_teardown();
 }
@@ -154,6 +212,7 @@ extern "C" int run_loop_service_factory_tests(void) {
     RUN_TEST(test_invalid_mode_throws_exception);
     RUN_TEST(test_arduino_adapter_injected);
     RUN_TEST(test_dependency_setters);
+    RUN_TEST(test_diagnostic_timer_logic);
     
     printf("\n----- LoopServiceFactory Tests Complete -----\n");
     
