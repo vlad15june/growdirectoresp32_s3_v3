@@ -3,6 +3,7 @@
 
 #include "Core/Domain/Interfaces/Adapters/Json/IJsonConverter.h"
 #include "Core/Domain/Data/Models/ModuleStructure.h"
+#include "Application/DTOs/DiagnosticDto.h"
 #include <string>
 #include <sstream>
 #include <algorithm>
@@ -262,6 +263,36 @@ public:
         }
         oss << "]";
         oss << "}";
+        return oss.str();
+    }
+
+    std::string diagnosticToJson(const DiagnosticDto& diagnosticData) override
+    {
+        std::ostringstream oss;
+        oss << "{";
+        oss << "\"rssi\":" << diagnosticData.rssi;
+        oss << ",\"uid\":\"" << diagnosticData.uid << "\"";
+        oss << ",\"email\":\"" << diagnosticData.email << "\"";
+        
+        if (!diagnosticData.accountUid.empty())
+            oss << ",\"accountUid\":\"" << diagnosticData.accountUid << "\"";
+        
+        oss << ",\"timestamp\":\"" << diagnosticData.timestamp << "\"";
+        oss << ",\"uptimeMs\":" << diagnosticData.uptimeMs;
+        oss << ",\"networkFails\":" << diagnosticData.networkFails;
+        oss << ",\"apiSendFails\":" << diagnosticData.apiSendFails;
+        oss << ",\"apiStatus\":\"" << diagnosticData.apiStatus << "\"";
+        oss << ",\"mqttStatus\":\"" << diagnosticData.mqttStatus << "\"";
+        oss << ",\"mqttFails\":" << diagnosticData.mqttFails;
+        oss << ",\"apiSendFailRatio\":" << diagnosticData.apiSendFailRatio;
+        oss << ",\"firmware\":\"" << diagnosticData.firmware << "\"";
+        oss << ",\"freeHeap\":" << diagnosticData.freeHeap;
+        oss << ",\"minFreeHeap\":" << diagnosticData.minFreeHeap;
+        oss << ",\"heapSize\":" << diagnosticData.heapSize;
+        oss << ",\"maxAllocHeap\":" << diagnosticData.maxAllocHeap;
+        oss << ",\"failsInHour\":" << diagnosticData.failsInHour;
+        oss << "}";
+        
         return oss.str();
     }
 };

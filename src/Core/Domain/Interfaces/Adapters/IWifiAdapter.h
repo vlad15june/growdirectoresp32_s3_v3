@@ -15,7 +15,7 @@ public:
     virtual bool connect(const char* ssid, const char* password, unsigned long timeout = 20000) = 0;
     virtual bool disconnect() = 0;
     virtual bool isConnected() = 0;
-
+    
     // Multi-network functionality
     virtual bool addNetwork(const char* ssid, const char* password) = 0;
     virtual bool connectToNetworks(unsigned long timeout = 20000) = 0;
@@ -24,7 +24,7 @@ public:
     // Network information
     virtual const char* getLocalIP() = 0;
     virtual const char* getMACAddress() = 0;
-    virtual int getRSSI() = 0; // Signal strength
+    virtual int getRSSI() = 0;
     
     // WiFi scanning
     virtual int scanNetworks() = 0;

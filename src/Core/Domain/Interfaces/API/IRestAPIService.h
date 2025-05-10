@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Core/Domain/Data/Models/ModuleStructure.h"
+#include "Application/DTOs/DiagnosticDto.h"
 
 class IRestAPIService {
 public:
@@ -18,4 +19,11 @@ public:
     virtual void sendDeviceCommandExecutionResult(const char* msg) = 0;
     virtual void sendAnalogInputDeviceCommandExecutionResult(const char* msg) = 0;
     virtual bool sendModuleCommandExecutionResult(const char* msg) = 0;
+    
+    /**
+     * @brief Sends diagnostic data to the server
+     * @param diagnosticData The diagnostic data to send
+     * @return true if the data was sent successfully, false otherwise
+     */
+    virtual bool sendDiagnosticData(const DiagnosticDto& diagnosticData) = 0;
 };

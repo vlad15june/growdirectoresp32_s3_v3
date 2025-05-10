@@ -3,6 +3,7 @@
         "cstdarg": "cpp",
         "fstream": "cpp",
         "sstream": "cpp",
-        "iosfwd": "cpp"
+        "iosfwd": "cpp",
+        "algorithm": "cpp"
     }
 }

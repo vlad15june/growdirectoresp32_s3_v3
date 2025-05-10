@@ -20,12 +20,22 @@ public:
     bool restartCalled = false;
     bool millisCalled = false;
     
+    bool getFreeHeapCalled = false;
+    bool getMinFreeHeapCalled = false;
+    bool getHeapSizeCalled = false;
+    bool getMaxAllocHeapCalled = false;
+    
     int delayCount = 0;
     int delayMicrosecondsCount = 0;
     unsigned long lastDelayMs = 0;
     unsigned long lastDelayUs = 0;
     unsigned long currentTime = 0;
     unsigned long currentMillis = 0;
+    
+    uint32_t freeHeapValue = 0;
+    uint32_t minFreeHeapValue = 0;
+    uint32_t heapSizeValue = 0;
+    uint32_t maxAllocHeapValue = 0;
     
     // Store pin mode settings
     std::map<uint8_t, uint8_t> pinModes;
@@ -130,6 +140,27 @@ public:
         // For testing, we just set a flag
     }
     
+    // Memory information
+    uint32_t getFreeHeap() override {
+        getFreeHeapCalled = true;
+        return freeHeapValue;
+    }
+    
+    uint32_t getMinFreeHeap() override {
+        getMinFreeHeapCalled = true;
+        return minFreeHeapValue;
+    }
+    
+    uint32_t getHeapSize() override {
+        getHeapSizeCalled = true;
+        return heapSizeValue;
+    }
+    
+    uint32_t getMaxAllocHeap() override {
+        getMaxAllocHeapCalled = true;
+        return maxAllocHeapValue;
+    }
+    
     // Additional methods for testing
     
     // Set a digital input value to be returned by digitalRead
@@ -140,6 +171,23 @@ public:
     // Set an analog input value to be returned by analogRead
     void setAnalogInputValue(uint8_t pin, int value) {
         analogInputs[pin] = value;
+    }
+    
+    // Additional methods for setting memory values
+    void setFreeHeap(uint32_t value) {
+        freeHeapValue = value;
+    }
+    
+    void setMinFreeHeap(uint32_t value) {
+        minFreeHeapValue = value;
+    }
+    
+    void setHeapSize(uint32_t value) {
+        heapSizeValue = value;
+    }
+    
+    void setMaxAllocHeap(uint32_t value) {
+        maxAllocHeapValue = value;
     }
     
     // Get the current pin mode
@@ -169,12 +217,22 @@ public:
         restartCalled = false;
         millisCalled = false;
         
+        getFreeHeapCalled = false;
+        getMinFreeHeapCalled = false;
+        getHeapSizeCalled = false;
+        getMaxAllocHeapCalled = false;
+        
         delayCount = 0;
         delayMicrosecondsCount = 0;
         lastDelayMs = 0;
         lastDelayUs = 0;
         currentTime = 0;
         currentMillis = 0;
+        
+        freeHeapValue = 0;
+        minFreeHeapValue = 0;
+        heapSizeValue = 0;
+        maxAllocHeapValue = 0;
         
         pinModes.clear();
         digitalOutputs.clear();

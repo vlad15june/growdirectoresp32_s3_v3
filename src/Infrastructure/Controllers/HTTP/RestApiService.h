@@ -8,9 +8,7 @@
 #include "Infrastructure/Adapters/Http/IHttpClientAdapter.h"
 #include "Infrastructure/Adapters/Http/HttpClientAdapter.h"
 #include "Core/Domain/Interfaces/Adapters/Json/IJsonConverter.h"
-
-// Forward declarations for external dependencies
-const char *firmwareVersion;
+#include "Application/DTOs/DiagnosticDto.h"
 
 class RestAPIService : public IRestAPIService
 {
@@ -25,7 +23,7 @@ private:
     char _serverUrl[BUFSIZE];
     char _token[BUFSIZE];
     char _log_buf[128];
-    char _urlBuffer[256]; // Buffer for URL construction
+    char _urlBuffer[256];
 
     void log(const char *format, ...)
     {
@@ -42,13 +40,11 @@ private:
         }
     }
 
-    // Helper method to create a new HTTP client
     IHttpClientAdapter *createNewHttpClient()
     {
         return new HttpClientAdapter();
     }
 
-    // Helper to build URL for API endpoints
     const char *buildUrl(const char *endpoint, const char *moduleUid = nullptr)
     {
         if (moduleUid == nullptr && _moduleConfig != nullptr)
@@ -122,10 +118,6 @@ public:
 
     bool isModuleOnline() override
     {
-        // if (WiFi.status() != WL_CONNECTED) {
-        //     return false;
-        // }
-
         if (_settings == nullptr)
         {
             log("NET: isModuleOnline - Settings not available");
@@ -161,7 +153,6 @@ public:
             return;
         }
 
-        // Convert module structure to JSON
         std::string structureJson;
         if (_jsonConverter)
         {
@@ -174,10 +165,8 @@ public:
         log("NET: /api/v1/HardWare/structure -> %s", structureJson.c_str());
 
         const char *url = buildUrl("/api/v1/HardWare/structure");
-        // Log the constructed URL before sending
         log("NET: Using URL for structure upload: %s", url);
 
-        // Ensure we have a clean HTTP client
         if (_httpClient == nullptr)
         {
             _httpClient = createNewHttpClient();
@@ -232,7 +221,6 @@ public:
 
         log("NET: HTTP response %d", httpResponseCode);
 
-        // Clean up HTTP client
         _httpClient->end();
     }
 
@@ -259,7 +247,6 @@ public:
 
         log("NET: HTTP response %d", httpResponseCode);
 
-        // Clean up HTTP client
         _httpClient->end();
 
         return httpResponseCode == 200;
@@ -276,13 +263,12 @@ public:
         byte tries = 0;
         int httpResponseCode = 0;
         const char *moduleUid = _moduleConfig->getModuleUid();
+        const char *firmwareVersion = _moduleConfig->getFirmwareVersion();
 
-        // Create the JSON message
         char jsonMsg[256];
         snprintf(jsonMsg, sizeof(jsonMsg), "{\"version\": \"%s\",\"growdirectorUid\": \"%s\"}",
                  firmwareVersion, moduleUid);
 
-        // Build the URL
         snprintf(_urlBuffer, sizeof(_urlBuffer),
                  "%s/api/v1/HardWare/firmware?token=%s&grow_director_uid=%s",
                  _serverUrl, _token, moduleUid);
@@ -322,7 +308,6 @@ public:
 
         const char *moduleUid = _moduleConfig->getModuleUid();
 
-        // Build the URL
         snprintf(_urlBuffer, sizeof(_urlBuffer),
                  "%s/api/v1/HardWare/devices_command?token=%s&grow_director_uid=%s",
                  _serverUrl, _token, moduleUid);
@@ -341,7 +326,6 @@ public:
 
             log("NET: HTTP response %d, try = %d", httpResponseCode, tries);
 
-            // Clean up HTTP client
             _httpClient->end();
             delay(200);
             tries++;
@@ -366,7 +350,6 @@ public:
 
         const char *moduleUid = _moduleConfig->getModuleUid();
 
-        // Build the URL
         snprintf(_urlBuffer, sizeof(_urlBuffer),
                  "%s/api/v1/HardWare/devices_command?token=%s&grow_director_uid=%s",
                  _serverUrl, _token, moduleUid);
@@ -385,7 +368,6 @@ public:
 
             log("NET: HTTP response %d, try = %d", httpResponseCode, tries);
 
-            // Clean up HTTP client
             _httpClient->end();
 
             delay(200);
@@ -410,7 +392,6 @@ public:
 
         const char *moduleUid = _moduleConfig->getModuleUid();
 
-        // Build the URL
         snprintf(_urlBuffer, sizeof(_urlBuffer),
                  "%s/api/v1/HardWare/module_command?token=%s&grow_director_uid=%s",
                  _serverUrl, _token, moduleUid);
@@ -429,11 +410,55 @@ public:
 
             log("NET: HTTP response %d, try = %d", httpResponseCode, tries);
 
-            // Free resources
             _httpClient->end();
             if (httpResponseCode != 200)
             {
                 delay(1000 * tries);
+            }
+            tries++;
+        }
+
+        return httpResponseCode == 200;
+    }
+
+    bool sendDiagnosticData(const DiagnosticDto& diagnosticData) override {
+        if (_jsonConverter == nullptr) {
+            log("NET: sendDiagnosticData - JSON converter not available");
+            return false;
+        }
+
+        if (_settings == nullptr || _moduleConfig == nullptr) {
+            log("NET: sendDiagnosticData - Settings or ModuleConfig not available");
+            return false;
+        }
+
+        if (!isModuleOnline()) {
+            log("NET: sendDiagnosticData - Module is offline");
+            return false;
+        }
+
+        std::string diagnosticJson = _jsonConverter->diagnosticToJson(diagnosticData);
+        log("NET: /api/v1/HardWare/diagnostic -> %s", diagnosticJson.c_str());
+
+        const char* moduleUid = _moduleConfig->getModuleUid();
+        snprintf(_urlBuffer, sizeof(_urlBuffer), 
+                "%s/api/v1/HardWare/diagnostic?token=%s&grow_director_uid=%s",
+                _serverUrl, _token, moduleUid);
+
+        byte tries = 0;
+        int httpResponseCode = 0;
+        while (tries < 3 && httpResponseCode != 200) {
+            _httpClient->setTimeout(30000);
+            _httpClient->begin(_urlBuffer);
+            _httpClient->addHeader("Content-Type", "application/json");
+
+            httpResponseCode = _httpClient->POST(diagnosticJson.c_str());
+            
+            log("NET: /api/v1/HardWare/diagnostic -> response %d, try = %d", httpResponseCode, tries);
+            
+            _httpClient->end();
+            if (httpResponseCode != 200) {
+                delay(200);
             }
             tries++;
         }

@@ -14,10 +14,13 @@ public:
     bool sendDeviceCommandExecutionResultCalled = false;
     bool sendAnalogInputDeviceCommandExecutionResultCalled = false;
     bool sendModuleCommandExecutionResultCalled = false;
+    bool sendDiagnosticDataCalled = false;
     
     const ModuleStructure* lastModuleStructure = nullptr;
     const char* lastRuleStateCommand = nullptr;
     const char* lastDeviceCommandResult = nullptr;
+    DiagnosticDto lastDiagnosticData;
+    bool sendDiagnosticDataReturnValue = true;
     
     void reset() {
         initCalled = false;
@@ -29,6 +32,8 @@ public:
         sendDeviceCommandExecutionResultCalled = false;
         sendAnalogInputDeviceCommandExecutionResultCalled = false;
         sendModuleCommandExecutionResultCalled = false;
+        sendDiagnosticDataCalled = false;
+        sendDiagnosticDataReturnValue = true;
         
         lastModuleStructure = nullptr;
         lastRuleStateCommand = nullptr;
@@ -80,6 +85,12 @@ public:
         sendModuleCommandExecutionResultCalled = true;
         lastDeviceCommandResult = msg;
         return true;
+    }
+    
+    bool sendDiagnosticData(const DiagnosticDto& diagnosticData) override {
+        sendDiagnosticDataCalled = true;
+        lastDiagnosticData = diagnosticData;
+        return sendDiagnosticDataReturnValue;
     }
 };
 

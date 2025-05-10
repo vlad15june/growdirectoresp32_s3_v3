@@ -38,6 +38,12 @@ public:
     
     // System control
     virtual void restart() = 0;
+    
+    // Memory information
+    virtual uint32_t getFreeHeap() = 0;
+    virtual uint32_t getMinFreeHeap() = 0;
+    virtual uint32_t getHeapSize() = 0;
+    virtual uint32_t getMaxAllocHeap() = 0;
 };
 
 #endif // I_ARDUINO_ADAPTER_H

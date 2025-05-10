@@ -45,7 +45,7 @@
 #include "Infrastructure/Controllers/HTTP/RestApiService.h"
 #include "Infrastructure/Adapters/Json/JsonConverter.h"
 #include "Infrastructure/Adapters/Json/ArduinoJsonConverter.h"
-
+#include "Application/Services/DiagnosticService.h"
 
 const char *mqttUser = "GrowDirectorMqtt";
 const char *mqttPassword = "lasdfh329483457sfdjhs92_w";
@@ -135,6 +135,17 @@ WebServerLauncher webServerLauncher(
 ModuleStructure moduleStructure;
 
 RestAPIService restApiService(&moduleConfig, &mqttLogger, &debugSystem, &jsonConverter);
+
+// Create the diagnostic service
+DiagnosticService diagnosticService(
+    &restApiService,
+    &moduleConfig,
+    mqttLogger,
+    debugSystem,
+    &jsonConverter,
+    &wifiAdapter,
+    &ntpTimeAdapter,
+    &arduinoAdapter);
 
 OnChangeLocalIpUseCase onChangeLocalIpUseCase(
     wifiAdapter, 

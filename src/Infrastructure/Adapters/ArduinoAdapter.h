@@ -92,6 +92,23 @@ public:
         // For ESP32
         ESP.restart();
     }
+    
+    // Memory information
+    uint32_t getFreeHeap() override {
+        return ESP.getFreeHeap();
+    }
+    
+    uint32_t getMinFreeHeap() override {
+        return ESP.getMinFreeHeap();
+    }
+    
+    uint32_t getHeapSize() override {
+        return ESP.getHeapSize();
+    }
+    
+    uint32_t getMaxAllocHeap() override {
+        return ESP.getMaxAllocHeap();
+    }
 };
 
 #endif // ARDUINO_ADAPTER_H

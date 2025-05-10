@@ -115,4 +115,35 @@ public:
         serializeJson(doc, output);
         return output;
     }
+
+    std::string diagnosticToJson(const DiagnosticDto& diagnosticData) override {
+        DynamicJsonDocument doc(2048);
+        
+        doc["rssi"] = diagnosticData.rssi;
+        doc["uid"] = diagnosticData.uid;
+        doc["email"] = diagnosticData.email;
+        
+        if (!diagnosticData.accountUid.empty()) {
+            doc["accountUid"] = diagnosticData.accountUid;
+        }
+        
+        doc["timestamp"] = diagnosticData.timestamp;
+        doc["uptimeMs"] = diagnosticData.uptimeMs;
+        doc["networkFails"] = diagnosticData.networkFails;
+        doc["apiSendFails"] = diagnosticData.apiSendFails;
+        doc["apiStatus"] = diagnosticData.apiStatus;
+        doc["mqttStatus"] = diagnosticData.mqttStatus;
+        doc["mqttFails"] = diagnosticData.mqttFails;
+        doc["apiSendFailRatio"] = diagnosticData.apiSendFailRatio;
+        doc["firmware"] = diagnosticData.firmware;
+        doc["freeHeap"] = diagnosticData.freeHeap;
+        doc["minFreeHeap"] = diagnosticData.minFreeHeap;
+        doc["heapSize"] = diagnosticData.heapSize;
+        doc["maxAllocHeap"] = diagnosticData.maxAllocHeap;
+        doc["failsInHour"] = diagnosticData.failsInHour;
+        
+        std::string output;
+        serializeJson(doc, output);
+        return output;
+    }
 };

@@ -3,6 +3,7 @@
 
 #include <string>
 #include "Core/Domain/Data/Models/ModuleStructure.h"
+#include "Application/DTOs/DiagnosticDto.h"
 
 class IJsonConverter {
 public:
@@ -20,6 +21,13 @@ public:
      * @return JSON string representation of the ModuleStructure
      */
     virtual std::string moduleStructureToJson(const ModuleStructure& moduleStructure) = 0;
+    
+    /**
+     * @brief Convert DiagnosticDto to JSON string
+     * @param diagnosticData DiagnosticDto object to convert
+     * @return JSON string representation of the diagnostic data
+     */
+    virtual std::string diagnosticToJson(const DiagnosticDto& diagnosticData) = 0;
     
     virtual ~IJsonConverter() = default;
 };
