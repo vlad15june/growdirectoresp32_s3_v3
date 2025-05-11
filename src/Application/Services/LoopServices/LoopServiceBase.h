@@ -50,7 +50,7 @@ protected:
             vsnprintf(buffer, sizeof(buffer), format, args);
             va_end(args);
             
-            logger->println(buffer);
+            logger->println(DebugFeatures::LOOP_SERVICE_DEBUG, buffer);
         }
     }
 

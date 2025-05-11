@@ -182,12 +182,12 @@ static void test_diagnostic_timer_logic(void) {
     TEST_ASSERT_FALSE(g_mockDiagnosticService->performAndSendCalled);
     
     // Time still under threshold - should not be called
-    g_mockArduinoAdapter->currentMillis = 5 * 60 * 1000 - 1; // Just under the diagnostic interval
+    g_mockArduinoAdapter->currentMillis = 30 * 1000 - 1;
     service->loop();
     TEST_ASSERT_FALSE(g_mockDiagnosticService->performAndSendCalled);
     
     // Time at threshold - should be called now
-    g_mockArduinoAdapter->currentMillis = 5 * 60 * 1000; 
+    g_mockArduinoAdapter->currentMillis = 30 * 1000; 
     service->loop();
     TEST_ASSERT_TRUE(g_mockDiagnosticService->performAndSendCalled);
     
@@ -195,7 +195,7 @@ static void test_diagnostic_timer_logic(void) {
     g_mockDiagnosticService->reset();
     
     // Another interval passes - should be called again
-    g_mockArduinoAdapter->currentMillis = 10 * 60 * 1000;
+    g_mockArduinoAdapter->currentMillis = 2 * 30 * 1000;
     service->loop();
     TEST_ASSERT_TRUE(g_mockDiagnosticService->performAndSendCalled);
     

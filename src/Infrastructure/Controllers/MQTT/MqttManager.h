@@ -64,40 +64,12 @@ private:
         }
     }
     
-    // Reconnect to MQTT broker
-    bool reconnect() {
-        // Log the last reconnect attempt time and reconnect interval
-        log("Last reconnect attempt: %lu ms ago, Reconnect interval: %u ms, _lastReconnectAttempt: %lu ms", 
-            millis() - _lastReconnectAttempt, _reconnectInterval, _lastReconnectAttempt);
-            
-        if (millis() - _lastReconnectAttempt < _reconnectInterval || _lastReconnectAttempt == 0) {
-            log("Reconnect attempt too soon, waiting...");
+    bool reconnect() {            
+        if (millis() - _lastReconnectAttempt < _reconnectInterval) {
             return false;
         }
         
-        _lastReconnectAttempt = millis();
-        
-        log("Attempting MQTT connection...");
-        
-        bool connected = false;
-        if (_username != nullptr && _password != nullptr) {
-            connected = _mqttClient.connect(_clientId, _username, _password, nullptr, 0, _cleanSession, nullptr);
-        } else {
-            connected = _mqttClient.connect(_clientId);
-        }
-        
-        if (connected) {
-            log("MQTT connected");
-            
-            // Resubscribe to topics if needed
-            // Implementation depends on how you want to handle topic subscriptions
-        } else {
-            char failReason[64];
-            snprintf(failReason, sizeof(failReason), "Failed, rc=%d", _mqttClient.state());
-            log("%s", failReason);
-        }
-        
-        return connected;
+        return connect();
     }
     
     // Static callback that will be passed to PubSubClient
@@ -156,7 +128,29 @@ public:
             return true;
         }
         
-        return reconnect();
+        _lastReconnectAttempt = millis();
+        
+        log("Attempting MQTT connection...");
+        
+        bool connected = false;
+        if (_username != nullptr && _password != nullptr) {
+            connected = _mqttClient.connect(_clientId, _username, _password, nullptr, 0, _cleanSession, nullptr);
+        } else {
+            connected = _mqttClient.connect(_clientId);
+        }
+        
+        if (connected) {
+            log("MQTT connected");
+            
+            // Resubscribe to topics if needed
+            // Implementation depends on how you want to handle topic subscriptions
+        } else {
+            char failReason[64];
+            snprintf(failReason, sizeof(failReason), "Failed, rc=%d", _mqttClient.state());
+            log("%s", failReason);
+        }
+        
+        return connected;
     }
     
     void disconnect() override {

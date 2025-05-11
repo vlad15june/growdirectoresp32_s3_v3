@@ -14,7 +14,7 @@ private:
     
     // Diagnostic timer variables
     unsigned long lastDiagnosticTime = 0;
-    const unsigned long DIAGNOSTIC_INTERVAL = 5 * 60 * 1000; // 5 minutes in milliseconds
+    const unsigned long DIAGNOSTIC_INTERVAL = 30 * 1000; // 30 sec in milliseconds
 
 public:
     LoopServiceConfigureDone() 
