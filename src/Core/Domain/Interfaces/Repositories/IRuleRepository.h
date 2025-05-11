@@ -4,9 +4,13 @@
 #include "IRepository.h"
 #include "Core/Domain/Data/Entities/Rule.h"
 #include "Core/Domain/Enums/RuleEnums.h"
+#include <vector>
+#include <string>
 
 class IRuleRepository : public IRepository<Rule> {
 public:
+    virtual ~IRuleRepository() = default;
+
     /**
      * @brief Get rules by their type
      * @param type Type of rules to fetch
@@ -62,7 +66,14 @@ public:
      * @param reason Optional reason for the mode change
      * @return true if operation was successful, false otherwise
      */
-    virtual bool updateRuleMode(const char* uid, RuleMode mode, const char* reason = "") = 0;
+    virtual bool updateRuleMode(const char* uid, RuleMode mode, const char* reason = nullptr) = 0;
+
+    /**
+     * @brief Synchronize rules with cloud/server
+     * @param rules Vector of rules to sync
+     * @return Number of successfully synchronized rules
+     */
+    virtual int synchronizeRules(const std::vector<Rule>& rules) = 0;
 };
 
 #endif // I_RULE_REPOSITORY_H

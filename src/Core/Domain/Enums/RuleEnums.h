@@ -18,5 +18,6 @@ enum class RuleMode {
 enum class RuleState {
     SYNCHRONIZED,
     UNSYNCHRONIZED,
-    PENDING
+    PENDING,
+    DELETING
 };
