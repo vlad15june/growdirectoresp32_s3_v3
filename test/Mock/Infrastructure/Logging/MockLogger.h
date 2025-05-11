@@ -11,6 +11,7 @@ public:
     std::string lastMessage;
     std::ofstream logFile;
     std::string logFilePath = "mock_logger.log";
+    std::string moduleUid;
     
     MockLogger() {
         logFile.open(logFilePath, std::ios::out | std::ios::app);
@@ -33,6 +34,15 @@ public:
     void reset() {
         printCalled = false;
         lastMessage.clear();
+    }
+    
+    // Implementation of setModuleUid
+    void setModuleUid(const char* moduleUid) override {
+        this->moduleUid = moduleUid ? moduleUid : "";
+        if (logFile.is_open()) {
+            logFile << "Module UID set to: " << this->moduleUid << std::endl;
+            logFile.flush();
+        }
     }
     
     // Simple implementations that just set flags

@@ -137,7 +137,7 @@ inline void ModuleSetupService::log(const char *format, ...)
         vsnprintf(buffer, sizeof(buffer), format, args);
         va_end(args);
 
-        logger->println(buffer);
+        logger->println(DebugFeatures::SETUP_DEBUG, buffer);
     }
 }
 
@@ -484,10 +484,7 @@ inline void ModuleSetupService::fillModuleCommonData()
     char buffer[BUFSIZE];
     ISettings *settings = moduleConfig->getSettings();
 
-    std::string macAddress = wifiAdapter ? wifiAdapter->getMACAddress() : "unknown";
-    log("SETUP: MAC Address: %s", macAddress.c_str());
-
-    moduleStructure->growdirectorUid = macAddress;
+    moduleStructure->growdirectorUid = moduleConfig->getModuleUid();
     moduleStructure->firmware = moduleConfig->getFirmwareVersion();
     log("SETUP: Firmware version: %s", moduleStructure->firmware.c_str());
 
@@ -511,7 +508,6 @@ inline void ModuleSetupService::createBaseNodeStructure(Node &node)
     char buffer[BUFSIZE];
     ISettings *settings = moduleConfig->getSettings();
 
-    std::string macAddress = wifiAdapter ? wifiAdapter->getMACAddress() : "unknown";
     std::string ipAddress = wifiAdapter ? wifiAdapter->getLocalIP() : "0.0.0.0";
     log("SETUP: IP Address: %s", ipAddress.c_str());
 
@@ -519,7 +515,7 @@ inline void ModuleSetupService::createBaseNodeStructure(Node &node)
     std::string ssid = buffer;
 
     node.type = "director_wifi";
-    node.uid = macAddress;
+    node.uid = moduleConfig->getModuleUid();
     node.ip = ipAddress;
     node.ssid = ssid;
     node.firmware = moduleStructure->firmware;

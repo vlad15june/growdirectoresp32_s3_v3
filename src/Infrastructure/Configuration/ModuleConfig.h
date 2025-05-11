@@ -182,6 +182,8 @@ public:
         {
             log("SETUP: Warning - Time adapter instance is null, skipping initialization\n");
         }
+
+        logger->setModuleUid(getModuleUid());
     }
 
     void configureModuleType() override

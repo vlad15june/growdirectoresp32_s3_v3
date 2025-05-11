@@ -41,6 +41,9 @@ public:
     // Structured logging (JSON)
     virtual void logJson(const char* feature, const char* action, const char* details) = 0;
     virtual void logJson(const char* topic, const char* feature, const char* action, const char* details) = 0;
+    
+    // Set module UID
+    virtual void setModuleUid(const char* moduleUid) = 0;
 };
 
 // Default implementation

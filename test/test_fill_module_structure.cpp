@@ -44,6 +44,7 @@ static void fill_module_structure_setup() {
     // Set up the mock settings for module config
     g_testModuleConfig.setSettings(&g_testSettings);
     g_testModuleConfig.setWifiAdapter(&g_testWifiAdapter);
+    g_testModuleConfig.setModuleUid("AA:BB:CC:DD:EE:FF");
     
     // Set reasonable defaults for tests
     g_testWifiAdapter.setMACAddress("AA:BB:CC:DD:EE:FF");
@@ -335,13 +336,14 @@ static void test_fill_module_structure_with_location_data() {
 
 static void test_fill_module_structure_without_wifi_adapter() {
     fill_module_structure_setup();
+    g_testModuleConfig.setModuleUid("default_uid"); //emulate null wifiadapter
     
     FillModuleStructureTestHelper::setWifiAdapter(g_testModuleSetupService, nullptr);
     
     // Call the method under test
     FillModuleStructureTestHelper::callFillModuleStructure(g_testModuleSetupService);
     
-    TEST_ASSERT_EQUAL_STRING("unknown", g_testModuleStructure.growdirectorUid.c_str());
+    TEST_ASSERT_EQUAL_STRING("default_uid", g_testModuleStructure.growdirectorUid.c_str());
 
     // Verify fallback values were used
     TEST_ASSERT_FALSE(g_testModuleStructure.nodes.empty());
@@ -349,7 +351,7 @@ static void test_fill_module_structure_without_wifi_adapter() {
         const Node& node = g_testModuleStructure.nodes[0];
         
         // Should use default values
-        TEST_ASSERT_EQUAL_STRING("unknown", node.uid.c_str());
+        TEST_ASSERT_EQUAL_STRING("default_uid", node.uid.c_str());
         TEST_ASSERT_EQUAL_STRING("0.0.0.0", node.ip.c_str());
     }
     

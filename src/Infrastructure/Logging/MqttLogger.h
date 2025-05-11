@@ -16,6 +16,7 @@ private:
     String _deviceId;
     String _userEmail;
     String _accountUid;
+    String _moduleUid;
     
     // Buffer for formatting messages
     char _buffer[512];
@@ -43,6 +44,14 @@ private:
         }
     }
 
+    // Helper method to get the topic with module UID if available
+    String getTopicWithModuleUid(const String& baseTopic) const {
+        if (_moduleUid.length() > 0) {
+            return baseTopic + "/" + _moduleUid;
+        }
+        return baseTopic;
+    }
+
 public:
     // Constructor
     MqttLogger(PubSubClient& mqttClient, const char* defaultTopic, MqttLoggerMode mode = MqttLoggerMode::MqttAndSerial) 
@@ -51,7 +60,8 @@ public:
           _mode(mode),
           _deviceId(""),
           _userEmail(""),
-          _accountUid("") {
+          _accountUid(""),
+          _moduleUid("") {
     }
     
     // Set user information for structured logs
@@ -69,6 +79,13 @@ public:
         }
     }
     
+    // Set module UID
+    void setModuleUid(const char* moduleUid) override {
+        if (moduleUid && strlen(moduleUid) > 0) {
+            _moduleUid = moduleUid;
+        }
+    }
+    
     // Set logger mode
     void setMode(MqttLoggerMode mode) {
         _mode = mode;
@@ -77,7 +94,8 @@ public:
     // Base printing methods for default topic
     void print(const char* message) override {
         if (shouldLogToMqtt()) {
-            _mqttClient.publish(_defaultTopic.c_str(), message);
+            String topic = getTopicWithModuleUid(_defaultTopic);
+            _mqttClient.publish(topic.c_str(), message);
         }
         
         if (shouldLogToSerial()) {
@@ -87,7 +105,8 @@ public:
     
     void println(const char* message) override {
         if (shouldLogToMqtt()) {
-            _mqttClient.publish(_defaultTopic.c_str(), message);
+            String topic = getTopicWithModuleUid(_defaultTopic);
+            _mqttClient.publish(topic.c_str(), message);
         }
         
         if (shouldLogToSerial()) {
@@ -102,7 +121,8 @@ public:
         va_end(args);
         
         if (shouldLogToMqtt()) {
-            _mqttClient.publish(_defaultTopic.c_str(), _buffer);
+            String topic = getTopicWithModuleUid(_defaultTopic);
+            _mqttClient.publish(topic.c_str(), _buffer);
         }
         
         if (shouldLogToSerial()) {
@@ -112,7 +132,8 @@ public:
     
     // Methods for specific topic
     void print(const char* topic, const char* message) override {
-        String fullTopic = _defaultTopic + "/" + topic;
+        String baseTopic = _defaultTopic + "/" + topic;
+        String fullTopic = getTopicWithModuleUid(baseTopic);
         
         if (shouldLogToMqtt()) {
             _mqttClient.publish(fullTopic.c_str(), message);
@@ -124,7 +145,8 @@ public:
     }
     
     void println(const char* topic, const char* message) override {
-        String fullTopic = _defaultTopic + "/" + topic;
+        String baseTopic = _defaultTopic + "/" + topic;
+        String fullTopic = getTopicWithModuleUid(baseTopic);
         
         if (shouldLogToMqtt()) {
             _mqttClient.publish(fullTopic.c_str(), message);
@@ -141,7 +163,8 @@ public:
         vsnprintf(_buffer, sizeof(_buffer), format, args);
         va_end(args);
         
-        String fullTopic = _defaultTopic + "/" + topic;
+        String baseTopic = _defaultTopic + "/" + topic;
+        String fullTopic = getTopicWithModuleUid(baseTopic);
         
         if (shouldLogToMqtt()) {
             _mqttClient.publish(fullTopic.c_str(), _buffer);
@@ -157,7 +180,8 @@ public:
         snprintf(_buffer, sizeof(_buffer), "[%s] %s", logLevelToString(level), message);
         
         if (shouldLogToMqtt()) {
-            _mqttClient.publish(_defaultTopic.c_str(), _buffer);
+            String topic = getTopicWithModuleUid(_defaultTopic);
+            _mqttClient.publish(topic.c_str(), _buffer);
         }
         
         if (shouldLogToSerial()) {
@@ -167,7 +191,9 @@ public:
     
     void log(LogLevel level, const char* topic, const char* message) override {
         snprintf(_buffer, sizeof(_buffer), "[%s] %s", logLevelToString(level), message);
-        String fullTopic = _defaultTopic + "/" + topic;
+        
+        String baseTopic = _defaultTopic + "/" + topic;
+        String fullTopic = getTopicWithModuleUid(baseTopic);
         
         if (shouldLogToMqtt()) {
             _mqttClient.publish(fullTopic.c_str(), _buffer);
@@ -181,11 +207,12 @@ public:
     // Structured JSON logging
     void logJson(const char* feature, const char* action, const char* details) override {
         snprintf(_buffer, sizeof(_buffer), 
-                 "{\"log_level\":\"info\",\"uid\":\"%s\",\"email\":\"%s\",\"accountUid\":\"%s\",\"feature\":\"%s\",\"action\":\"%s\",\"details\":%s}",
-                 _deviceId.c_str(), _userEmail.c_str(), _accountUid.c_str(), feature, action, details);
+                 "{\"log_level\":\"info\",\"uid\":\"%s\",\"email\":\"%s\",\"accountUid\":\"%s\",\"moduleUid\":\"%s\",\"feature\":\"%s\",\"action\":\"%s\",\"details\":%s}",
+                 _deviceId.c_str(), _userEmail.c_str(), _accountUid.c_str(), _moduleUid.c_str(), feature, action, details);
         
         if (shouldLogToMqtt()) {
-            _mqttClient.publish(_defaultTopic.c_str(), _buffer);
+            String topic = getTopicWithModuleUid(_defaultTopic);
+            _mqttClient.publish(topic.c_str(), _buffer);
         }
         
         if (shouldLogToSerial()) {
@@ -195,10 +222,11 @@ public:
     
     void logJson(const char* topic, const char* feature, const char* action, const char* details) override {
         snprintf(_buffer, sizeof(_buffer), 
-                 "{\"log_level\":\"info\",\"uid\":\"%s\",\"email\":\"%s\",\"accountUid\":\"%s\",\"feature\":\"%s\",\"action\":\"%s\",\"details\":%s}",
-                 _deviceId.c_str(), _userEmail.c_str(), _accountUid.c_str(), feature, action, details);
+                 "{\"log_level\":\"info\",\"uid\":\"%s\",\"email\":\"%s\",\"accountUid\":\"%s\",\"moduleUid\":\"%s\",\"feature\":\"%s\",\"action\":\"%s\",\"details\":%s}",
+                 _deviceId.c_str(), _userEmail.c_str(), _accountUid.c_str(), _moduleUid.c_str(), feature, action, details);
         
-        String fullTopic = _defaultTopic + "/" + topic;
+        String baseTopic = _defaultTopic + "/" + topic;
+        String fullTopic = getTopicWithModuleUid(baseTopic);
         
         if (shouldLogToMqtt()) {
             _mqttClient.publish(fullTopic.c_str(), _buffer);
@@ -212,11 +240,12 @@ public:
     // Additional method for JSON logging with log level
     void logJson(LogLevel level, const char* feature, const char* action, const char* details) {
         snprintf(_buffer, sizeof(_buffer), 
-                 "{\"log_level\":\"%s\",\"uid\":\"%s\",\"email\":\"%s\",\"accountUid\":\"%s\",\"feature\":\"%s\",\"action\":\"%s\",\"details\":%s}",
-                 logLevelToString(level), _deviceId.c_str(), _userEmail.c_str(), _accountUid.c_str(), feature, action, details);
+                 "{\"log_level\":\"%s\",\"uid\":\"%s\",\"email\":\"%s\",\"accountUid\":\"%s\",\"moduleUid\":\"%s\",\"feature\":\"%s\",\"action\":\"%s\",\"details\":%s}",
+                 logLevelToString(level), _deviceId.c_str(), _userEmail.c_str(), _accountUid.c_str(), _moduleUid.c_str(), feature, action, details);
         
         if (shouldLogToMqtt()) {
-            _mqttClient.publish(_defaultTopic.c_str(), _buffer);
+            String topic = getTopicWithModuleUid(_defaultTopic);
+            _mqttClient.publish(topic.c_str(), _buffer);
         }
         
         if (shouldLogToSerial()) {
