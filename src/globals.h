@@ -46,6 +46,8 @@
 #include "Infrastructure/Adapters/Json/JsonConverter.h"
 #include "Infrastructure/Adapters/Json/ArduinoJsonConverter.h"
 #include "Application/Services/DiagnosticService.h"
+#include "Infrastructure/Controllers/MQTT/MqttApiService.h"
+#include "Infrastructure/Controllers/API/HybridAPIService.h"
 
 const char *mqttUser = "GrowDirectorMqtt";
 const char *mqttPassword = "lasdfh329483457sfdjhs92_w";
@@ -62,9 +64,9 @@ WiFiMulti wifiMulti;
 
 void mqttCallback(char *topic, byte *payload, unsigned int length)
 {
-  // This will be replaced by the MqttManager callback
-  Serial.print("Message received on topic: ");
-  Serial.println(topic);
+    // This will be replaced by the MqttManager callback
+    Serial.print("Message received on topic: ");
+    Serial.println(topic);
 }
 
 // Initialize WiFi and MQTT clients
@@ -110,9 +112,9 @@ NTPTimeAdapter ntpTimeAdapter(&mqttLogger, &debugSystem, &settings);
 ModuleConfig moduleConfig(&mqttLogger, &debugSystem, &settings, &ntpTimeAdapter, &wifiAdapter);
 
 OnChangeModuleModeUseCase moduleModeUseCase(
-    arduinoAdapter, 
-    moduleConfig, 
-    mqttLogger, 
+    arduinoAdapter,
+    moduleConfig,
+    mqttLogger,
     debugSystem);
 
 LedUseCases ledUseCases(&ledAdapter, &moduleConfig, &arduinoAdapter, &mqttLogger, &debugSystem);
@@ -136,7 +138,21 @@ ModuleStructure moduleStructure;
 
 RestAPIService restApiService(&moduleConfig, &mqttLogger, &debugSystem, &jsonConverter);
 
-// Create the diagnostic service
+MqttApiService mqttApiService(
+    &mqttManager,
+    &moduleConfig,
+    &jsonConverter,
+    &mqttLogger,
+    &debugSystem);
+
+HybridAPIService hybridApiService(
+    &restApiService,
+    &mqttApiService,
+    &moduleConfig,
+    &mqttLogger,
+    &debugSystem,
+    ApiPriority::BOTH);
+
 DiagnosticService diagnosticService(
     &restApiService,
     &moduleConfig,
@@ -148,11 +164,11 @@ DiagnosticService diagnosticService(
     &arduinoAdapter);
 
 OnChangeLocalIpUseCase onChangeLocalIpUseCase(
-    wifiAdapter, 
-    wifiManager, 
+    wifiAdapter,
+    wifiManager,
     moduleStructure,
     restApiService,
-    mqttLogger, 
+    mqttLogger,
     debugSystem);
 
 LoopServiceFactory loopServiceFactory(
@@ -166,7 +182,7 @@ LoopServiceFactory loopServiceFactory(
     &arduinoAdapter,
     &onChangeLocalIpUseCase,
     &mqttManager,
-    &diagnosticService);  // Add DiagnosticService here
+    &diagnosticService); // Add DiagnosticService here
 
 ModuleSetupService moduleSetupService(
     &mqttLogger,
@@ -184,6 +200,6 @@ ModuleSetupService moduleSetupService(
 
 void initDependencies()
 {
-  topicHandlerFactory.setModuleConfig(&moduleConfig);
+    topicHandlerFactory.setModuleConfig(&moduleConfig);
 }
 #endif // GLOBALS_H
