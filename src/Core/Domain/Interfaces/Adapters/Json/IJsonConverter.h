@@ -2,8 +2,10 @@
 #define I_JSON_CONVERTER_H
 
 #include <string>
+#include <vector>
 #include "Core/Domain/Data/Models/ModuleStructure.h"
 #include "Application/DTOs/DiagnosticDto.h"
+#include "Core/Domain/Data/Entities/Rule.h"
 
 class IJsonConverter {
 public:
@@ -21,6 +23,36 @@ public:
      * @return JSON string representation of the ModuleStructure
      */
     virtual std::string moduleStructureToJson(const ModuleStructure& moduleStructure) = 0;
+
+    /**
+     * @brief Convert JSON string to Rule object
+     * @param jsonStr JSON string to parse
+     * @param rule Rule object to populate
+     * @return true if parsing was successful, false otherwise
+     */
+    virtual bool ruleFromJson(const std::string& jsonStr, Rule& rule) = 0;
+
+    /**
+     * @brief Convert Rule object to JSON string
+     * @param rule Rule object to convert
+     * @return JSON string representation of the Rule
+     */
+    virtual std::string ruleToJson(const Rule& rule) = 0;
+
+    /**
+     * @brief Convert JSON string to array of Rule objects
+     * @param jsonStr JSON string to parse
+     * @param rules Vector of Rule objects to populate
+     * @return true if parsing was successful, false otherwise
+     */
+    virtual bool rulesFromJson(const std::string& jsonStr, std::vector<Rule>& rules) = 0;
+
+    /**
+     * @brief Convert array of Rule objects to JSON string
+     * @param rules Vector of Rule objects to convert
+     * @return JSON string representation of the array of Rules
+     */
+    virtual std::string rulesToJson(const std::vector<Rule>& rules) = 0;
     
     /**
      * @brief Convert DiagnosticDto to JSON string
