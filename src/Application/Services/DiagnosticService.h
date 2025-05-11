@@ -10,6 +10,12 @@
 #include "Core/Domain/Interfaces/Adapters/IArduinoAdapter.h"
 #include "Infrastructure/Adapters/Time/INTPTimeAdapter.h"
 
+// Replace defines with enum
+enum DiagnosticsNetworkState {
+    DIAGNOSTICS_NETWORK_STATE_OK = 0,
+    DIAGNOSTICS_NETWORK_STATE_ERROR = 1
+};
+
 class DiagnosticService : public IDiagnosticService
 {
 private:
@@ -22,21 +28,16 @@ private:
     INTPTimeAdapter *_timeAdapter;
     IArduinoAdapter *_arduinoAdapter;
 
-    // Diagnostic counters
-    int _networkFails;
-    int _apiSendFails;
     int _mqttFails;
-    float _apiSendFailRatio;
-    int _countOffline;
-    int _maxCountOffline;
+    static const int _maxCountOffline = 5;
     bool _mqttConnected;
+    int _networkFails = 0;  // Track network failures
+    DiagnosticsNetworkState _lastNetworkState = DIAGNOSTICS_NETWORK_STATE_OK;  // Track network state using enum
 
-    // Array to keep track of failures for calculating failsInHour
     static const int MAX_FAILS_HISTORY = 60; // Store last 60 minutes
     unsigned long _failsHistory[MAX_FAILS_HISTORY];
     int _failsHistoryIndex;
 
-    // Calculate failures in the last hour
     unsigned long calculateFailsInHour()
     {
         unsigned long totalFails = 0;
@@ -70,6 +71,18 @@ private:
         _logger.println(DebugFeatures::DIAGNOSTIC_DEBUG, buffer);
     }
 
+    // Write board state to a file when network state changes
+    void writeBoardStateToFile()
+    {
+        log("DIAG: Network state changed to %s, writing board state to file",
+            _lastNetworkState == DIAGNOSTICS_NETWORK_STATE_OK ? "OK" : "ERROR");
+
+        // TODO: Implement file writing logic or use a file adapter
+        // This would depend on the specific implementation for your system
+
+        log("DIAG: Board state recorded");
+    }
+
 public:
     DiagnosticService(
         IRestAPIService *restApiService,
@@ -87,32 +100,19 @@ public:
                                                      _wifiAdapter(wifiAdapter),
                                                      _timeAdapter(timeAdapter),
                                                      _arduinoAdapter(arduinoAdapter),
-                                                     _networkFails(0),
-                                                     _apiSendFails(0),
                                                      _mqttFails(0),
-                                                     _apiSendFailRatio(0),
-                                                     _countOffline(0),
-                                                     _maxCountOffline(5),
                                                      _mqttConnected(false),
                                                      _failsHistoryIndex(0)
     {
-        // Initialize fails history
         for (int i = 0; i < MAX_FAILS_HISTORY; i++)
         {
             _failsHistory[i] = 0;
         }
     }
 
-    // Diagnostic counter setters
-    void setNetworkFails(int fails) { _networkFails = fails; }
-    void setApiSendFails(int fails) { _apiSendFails = fails; }
     void setMqttFails(int fails) { _mqttFails = fails; }
-    void setApiSendFailRatio(float ratio) { _apiSendFailRatio = ratio; }
-    void setCountOffline(int count) { _countOffline = count; }
-    void setMaxCountOffline(int max) { _maxCountOffline = max; }
     void setMqttConnected(bool connected) { _mqttConnected = connected; }
 
-    // Record a new failure for hourly calculation
     void recordFailure()
     {
         if (_arduinoAdapter)
@@ -126,7 +126,36 @@ public:
     {
         DiagnosticDto diagnosticData;
 
-        // Fill the DTO with diagnostic information
+        // Check network state - WiFi and MQTT connection
+        bool wifiConnected = false;
+        if (_wifiAdapter != nullptr)
+        {
+            wifiConnected = _wifiAdapter->isConnected();
+        }
+
+        // Check and update network state
+        if (!_mqttConnected || !wifiConnected)
+        {
+            if (_lastNetworkState == DIAGNOSTICS_NETWORK_STATE_OK)
+            {
+                _lastNetworkState = DIAGNOSTICS_NETWORK_STATE_ERROR;
+                writeBoardStateToFile(); // when switching ok to not ok or vice versa
+                _networkFails++;
+
+                log("DIAG: Network state changed to ERROR. Total network fails: %d", _networkFails);
+            }
+        }
+        else
+        {
+            if (_lastNetworkState == DIAGNOSTICS_NETWORK_STATE_ERROR)
+            {
+                _lastNetworkState = DIAGNOSTICS_NETWORK_STATE_OK;
+                writeBoardStateToFile(); // when switching ok to not ok or vice versa
+
+                log("DIAG: Network state changed to OK");
+            }
+        }
+
         if (_wifiAdapter != nullptr)
         {
             diagnosticData.rssi = _wifiAdapter->getRSSI();
@@ -151,7 +180,6 @@ public:
             }
         }
 
-        // Use time adapter for timestamp if available
         if (_timeAdapter != nullptr)
         {
             diagnosticData.timestamp = _timeAdapter->getFormattedTime();
@@ -161,7 +189,6 @@ public:
             diagnosticData.timestamp = "Unknown time";
         }
 
-        // Use Arduino adapter for system metrics
         if (_arduinoAdapter)
         {
             diagnosticData.uptimeMs = _arduinoAdapter->millis();
@@ -179,14 +206,14 @@ public:
             diagnosticData.maxAllocHeap = 0;
         }
 
-        diagnosticData.networkFails = _networkFails;
-        diagnosticData.apiSendFails = _apiSendFails;
-        diagnosticData.apiStatus = (_countOffline > _maxCountOffline) ? "disconnected" : "connected";
+        diagnosticData.networkFails = _networkFails; // Use the tracked network fails count
+        diagnosticData.apiSendFails = _restApiService ? _restApiService->getApiSendFails() : 0;
+        const int countOffline = _restApiService ? _restApiService->getCountOffline() : 0;
+        diagnosticData.apiStatus = (countOffline > _maxCountOffline) ? "disconnected" : "connected";
         diagnosticData.mqttStatus = _mqttConnected ? "connected" : "disconnected";
         diagnosticData.mqttFails = _mqttFails;
-        diagnosticData.apiSendFailRatio = _apiSendFailRatio;
+        diagnosticData.apiSendFailRatio = _restApiService ? _restApiService->getApiSendFailRatio() : 0.0f;
 
-        // Use firmware version from module config instead of global variable
         if (_moduleConfig != nullptr)
         {
             diagnosticData.firmware = _moduleConfig->getFirmwareVersion();

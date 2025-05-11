@@ -22,6 +22,12 @@ public:
     DiagnosticDto lastDiagnosticData;
     bool sendDiagnosticDataReturnValue = true;
     
+    // Network diagnostic counters
+    int networkFails = 0;
+    int apiSendFails = 0;
+    float apiSendFailRatio = 0.0f;
+    int countOffline = 0;
+    
     void reset() {
         initCalled = false;
         isModuleOnlineCalled = false;
@@ -38,6 +44,11 @@ public:
         lastModuleStructure = nullptr;
         lastRuleStateCommand = nullptr;
         lastDeviceCommandResult = nullptr;
+        
+        networkFails = 0;
+        apiSendFails = 0;
+        apiSendFailRatio = 0.0f;
+        countOffline = 0;
     }
     
     // IRestAPIService interface implementation
@@ -92,6 +103,15 @@ public:
         lastDiagnosticData = diagnosticData;
         return sendDiagnosticDataReturnValue;
     }
+    
+    int getApiSendFails() const override { return apiSendFails; }
+    void resetApiSendFails() override { apiSendFails = 0; }
+    
+    float getApiSendFailRatio() const override { return apiSendFailRatio; }
+    void resetApiSendFailRatio() override { apiSendFailRatio = 0.0f; }
+    
+    int getCountOffline() const override { return countOffline; }
+    void resetCountOffline() override { countOffline = 0; }
 };
 
 #endif // MOCK_REST_API_SERVICE_H

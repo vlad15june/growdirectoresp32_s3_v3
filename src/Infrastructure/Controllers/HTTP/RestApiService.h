@@ -24,6 +24,11 @@ private:
     char _token[BUFSIZE];
     char _log_buf[128];
     char _urlBuffer[256];
+    
+    // Network diagnostic counters - moved from DiagnosticService
+    int _apiSendFails;
+    float _apiSendFailRatio;
+    int _countOffline;
 
     void log(const char *format, ...)
     {
@@ -66,13 +71,34 @@ private:
         return _urlBuffer;
     }
 
+    // Helper method to track API failures
+    void trackApiSendFailure() {
+        _apiSendFails++;
+        _apiSendFailRatio++;
+        _countOffline++;
+        log("NET: API send failure tracked - Fails: %d, Ratio: %.2f, Offline Count: %d", 
+            _apiSendFails, _apiSendFailRatio, _countOffline);
+    }
+    
+    // Helper method to track API successes
+    void trackApiSendSuccess() {
+        if (_apiSendFailRatio > 0) {
+            _apiSendFailRatio--;
+        }
+        _countOffline = 0;
+        log("NET: API send success tracked - Ratio: %.2f, Offline Count reset", _apiSendFailRatio);
+    }
+
 public:
     RestAPIService(IModuleConfig *moduleConfig, ILogger *logger = nullptr, IDebugSystem *debugSystem = nullptr, IJsonConverter *jsonConverter = nullptr)
         : _httpClient(createNewHttpClient()),
           _moduleConfig(moduleConfig),
           _logger(logger),
           _debugSystem(debugSystem),
-          _jsonConverter(jsonConverter)
+          _jsonConverter(jsonConverter),
+          _apiSendFails(0),
+          _apiSendFailRatio(0),
+          _countOffline(0)
     {
     }
 
@@ -192,10 +218,16 @@ public:
             tries++;
         }
 
-        if (tries >= 3)
-        {
-            log("NET: Failed to send structure after 3 attempts, restarting...");
-            ESP.restart();
+        if (httpResponseCode == 200) {
+            trackApiSendSuccess();
+        } else {
+            trackApiSendFailure();
+            
+            if (tries >= 3)
+            {
+                log("NET: Failed to send structure after 3 attempts, restarting...");
+                ESP.restart();
+            }
         }
     }
 
@@ -222,6 +254,12 @@ public:
         log("NET: HTTP response %d", httpResponseCode);
 
         _httpClient->end();
+        
+        if (httpResponseCode == 200) {
+            trackApiSendSuccess();
+        } else {
+            trackApiSendFailure();
+        }
     }
 
     bool sendByUidRuleStateCommand(const char *uid, const char *msg) override
@@ -249,7 +287,13 @@ public:
 
         _httpClient->end();
 
-        return httpResponseCode == 200;
+        if (httpResponseCode == 200) {
+            trackApiSendSuccess();
+            return true;
+        } else {
+            trackApiSendFailure();
+            return false;
+        }
     }
 
     void sendFirmwareVersion() override
@@ -287,6 +331,12 @@ public:
 
             _httpClient->end();
             tries++;
+        }
+        
+        if (httpResponseCode == 200) {
+            trackApiSendSuccess();
+        } else {
+            trackApiSendFailure();
         }
     }
 
@@ -330,6 +380,12 @@ public:
             delay(200);
             tries++;
         }
+        
+        if (httpResponseCode == 200) {
+            trackApiSendSuccess();
+        } else {
+            trackApiSendFailure();
+        }
     }
 
     void sendAnalogInputDeviceCommandExecutionResult(const char *msg) override
@@ -372,6 +428,12 @@ public:
 
             delay(200);
             tries++;
+        }
+        
+        if (httpResponseCode == 200) {
+            trackApiSendSuccess();
+        } else {
+            trackApiSendFailure();
         }
     }
 
@@ -418,7 +480,13 @@ public:
             tries++;
         }
 
-        return httpResponseCode == 200;
+        if (httpResponseCode == 200) {
+            trackApiSendSuccess();
+            return true;
+        } else {
+            trackApiSendFailure();
+            return false;
+        }
     }
 
     bool sendDiagnosticData(const DiagnosticDto& diagnosticData) override {
@@ -463,6 +531,22 @@ public:
             tries++;
         }
 
-        return httpResponseCode == 200;
+        if (httpResponseCode == 200) {
+            trackApiSendSuccess();
+            return true;
+        } else {
+            trackApiSendFailure();
+            return false;
+        }
     }
+    
+    // Implementations of network diagnostic counter methods
+    int getApiSendFails() const override { return _apiSendFails; }
+    void resetApiSendFails() override { _apiSendFails = 0; }
+    
+    float getApiSendFailRatio() const override { return _apiSendFailRatio; }
+    void resetApiSendFailRatio() override { _apiSendFailRatio = 0.0f; }
+    
+    int getCountOffline() const override { return _countOffline; }
+    void resetCountOffline() override { _countOffline = 0; }
 };

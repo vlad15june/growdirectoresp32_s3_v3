@@ -26,4 +26,14 @@ public:
      * @return true if the data was sent successfully, false otherwise
      */
     virtual bool sendDiagnosticData(const DiagnosticDto& diagnosticData) = 0;
+    
+    // Network diagnostic counter methods - getters and reset methods only
+    virtual int getApiSendFails() const = 0;
+    virtual void resetApiSendFails() = 0;
+    
+    virtual float getApiSendFailRatio() const = 0;
+    virtual void resetApiSendFailRatio() = 0;
+    
+    virtual int getCountOffline() const = 0;
+    virtual void resetCountOffline() = 0;
 };
