@@ -25,6 +25,7 @@ private:
     bool _cleanSession;
     uint32_t _lastReconnectAttempt;
     uint16_t _reconnectInterval;
+    int _mqttFails; // Track MQTT connection failures
     
     // Static instance pointer for callback access
     static MqttManager* _instance;
@@ -69,7 +70,13 @@ private:
             return false;
         }
         
-        return connect();
+        bool connected = connect();
+        if (!connected) {
+            _mqttFails++; // Increment failures counter on reconnect failure
+            log("MQTT reconnect failed, total failures: %d", _mqttFails);
+        }
+        
+        return connected;
     }
     
     // Static callback that will be passed to PubSubClient
@@ -102,7 +109,8 @@ public:
         _password(password),
         _cleanSession(cleanSession),
         _lastReconnectAttempt(0),
-        _reconnectInterval(5000) {
+        _reconnectInterval(5000),
+        _mqttFails(0) {
             
         // Set this instance as the static instance
         _instance = this;
@@ -145,8 +153,9 @@ public:
             // Resubscribe to topics if needed
             // Implementation depends on how you want to handle topic subscriptions
         } else {
+            _mqttFails++; // Increment failures counter on connection failure
             char failReason[64];
-            snprintf(failReason, sizeof(failReason), "Failed, rc=%d", _mqttClient.state());
+            snprintf(failReason, sizeof(failReason), "Failed, rc=%d, total failures: %d", _mqttClient.state(), _mqttFails);
             log("%s", failReason);
         }
         
@@ -214,7 +223,7 @@ public:
         if (_mqttClient.connected()) {
             _mqttClient.loop();
         } else {
-            connect();
+            reconnect();
         }
     }
     
@@ -237,6 +246,16 @@ public:
         if (_messageProcessor != nullptr) {
             setupMqttTopicHandlers();
         }
+    }
+    
+    // Implementation of MQTT failures counter methods
+    int getMqttFails() const override {
+        return _mqttFails;
+    }
+    
+    void resetMqttFails() override {
+        _mqttFails = 0;
+        log("MQTT failures counter reset");
     }
 };
 

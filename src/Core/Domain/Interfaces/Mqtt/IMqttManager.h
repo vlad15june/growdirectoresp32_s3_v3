@@ -31,6 +31,12 @@ public:
 
     // Set message processor
     virtual void setMessageProcessor(IMessageProcessor *processor) = 0;
+    
+    // Get number of MQTT connection failures
+    virtual int getMqttFails() const = 0;
+    
+    // Reset MQTT failures counter
+    virtual void resetMqttFails() = 0;
 };
 
 #endif // I_MQTT_MANAGER_H

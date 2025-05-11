@@ -8,6 +8,7 @@
 #include "Core/Domain/Interfaces/Adapters/Json/IJsonConverter.h"
 #include "Core/Domain/Interfaces/Adapters/IWifiAdapter.h"
 #include "Core/Domain/Interfaces/Adapters/IArduinoAdapter.h"
+#include "Core/Domain/Interfaces/Mqtt/IMqttManager.h"
 #include "Infrastructure/Adapters/Time/INTPTimeAdapter.h"
 
 // Replace defines with enum
@@ -27,8 +28,8 @@ private:
     IWifiAdapter *_wifiAdapter;
     INTPTimeAdapter *_timeAdapter;
     IArduinoAdapter *_arduinoAdapter;
+    IMqttManager *_mqttManager;
 
-    int _mqttFails;
     static const int _maxCountOffline = 5;
     bool _mqttConnected;
     int _networkFails = 0;  // Track network failures
@@ -92,25 +93,31 @@ public:
         IJsonConverter *jsonConverter = nullptr,
         IWifiAdapter *wifiAdapter = nullptr,
         INTPTimeAdapter *timeAdapter = nullptr,
-        IArduinoAdapter *arduinoAdapter = nullptr) : _restApiService(restApiService),
-                                                     _moduleConfig(moduleConfig),
-                                                     _logger(logger),
-                                                     _debugSystem(debugSystem),
-                                                     _jsonConverter(jsonConverter),
-                                                     _wifiAdapter(wifiAdapter),
-                                                     _timeAdapter(timeAdapter),
-                                                     _arduinoAdapter(arduinoAdapter),
-                                                     _mqttFails(0),
-                                                     _mqttConnected(false),
-                                                     _failsHistoryIndex(0)
+        IArduinoAdapter *arduinoAdapter = nullptr,
+        IMqttManager *mqttManager = nullptr) : _restApiService(restApiService),
+                                               _moduleConfig(moduleConfig),
+                                               _logger(logger),
+                                               _debugSystem(debugSystem),
+                                               _jsonConverter(jsonConverter),
+                                               _wifiAdapter(wifiAdapter),
+                                               _timeAdapter(timeAdapter),
+                                               _arduinoAdapter(arduinoAdapter),
+                                               _mqttManager(mqttManager),
+                                               _mqttConnected(false),
+                                               _failsHistoryIndex(0)
     {
         for (int i = 0; i < MAX_FAILS_HISTORY; i++)
         {
             _failsHistory[i] = 0;
         }
+
+        // Initialize MQTT connection status if manager is available
+        if (_mqttManager != nullptr)
+        {
+            _mqttConnected = _mqttManager->isConnected();
+        }
     }
 
-    void setMqttFails(int fails) { _mqttFails = fails; }
     void setMqttConnected(bool connected) { _mqttConnected = connected; }
 
     void recordFailure()
@@ -131,6 +138,12 @@ public:
         if (_wifiAdapter != nullptr)
         {
             wifiConnected = _wifiAdapter->isConnected();
+        }
+
+        // Update MQTT connection status if manager is available
+        if (_mqttManager != nullptr)
+        {
+            _mqttConnected = _mqttManager->isConnected();
         }
 
         // Check and update network state
@@ -210,8 +223,13 @@ public:
         diagnosticData.apiSendFails = _restApiService ? _restApiService->getApiSendFails() : 0;
         const int countOffline = _restApiService ? _restApiService->getCountOffline() : 0;
         diagnosticData.apiStatus = (countOffline > _maxCountOffline) ? "disconnected" : "connected";
-        diagnosticData.mqttStatus = _mqttConnected ? "connected" : "disconnected";
-        diagnosticData.mqttFails = _mqttFails;
+
+        // Use the actual MQTT connection status directly from the manager
+        diagnosticData.mqttStatus = (_mqttManager && _mqttManager->isConnected()) ? "connected" : "disconnected";
+
+        // Get MQTT failures from the manager instead of using local variable
+        diagnosticData.mqttFails = _mqttManager ? _mqttManager->getMqttFails() : 0;
+
         diagnosticData.apiSendFailRatio = _restApiService ? _restApiService->getApiSendFailRatio() : 0.0f;
 
         if (_moduleConfig != nullptr)

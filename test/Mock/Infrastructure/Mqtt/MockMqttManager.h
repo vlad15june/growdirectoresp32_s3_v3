@@ -23,6 +23,10 @@ public:
     int loopCallCount = 0;
     bool setMessageProcessorCalled = false;
     int setMessageProcessorCallCount = 0;
+    bool getMqttFailsCalled = false;
+    int getMqttFailsCallCount = 0;
+    bool resetMqttFailsCalled = false;
+    int resetMqttFailsCallCount = 0;
     
     // Store last call parameters
     std::string lastSubscribeTopic;
@@ -37,6 +41,7 @@ public:
     bool subscribeReturnValue = true;
     bool unsubscribeReturnValue = true;
     bool publishReturnValue = true;
+    int mqttFailsReturnValue = 0;
     
     // Implement interface methods
     bool connect() override {
@@ -105,6 +110,19 @@ public:
         lastMessageProcessor = processor;
     }
     
+    // Implementation of MQTT failures counter methods
+    int getMqttFails() const override {
+        const_cast<MockMqttManager*>(this)->getMqttFailsCalled = true;
+        const_cast<MockMqttManager*>(this)->getMqttFailsCallCount++;
+        return mqttFailsReturnValue;
+    }
+    
+    void resetMqttFails() override {
+        resetMqttFailsCalled = true;
+        resetMqttFailsCallCount++;
+        mqttFailsReturnValue = 0;
+    }
+    
     // Reset for test setup
     void reset() {
         connectCalled = false;
@@ -123,6 +141,10 @@ public:
         loopCallCount = 0;
         setMessageProcessorCalled = false;
         setMessageProcessorCallCount = 0;
+        getMqttFailsCalled = false;
+        getMqttFailsCallCount = 0;
+        resetMqttFailsCalled = false;
+        resetMqttFailsCallCount = 0;
         
         lastSubscribeTopic = "";
         lastUnsubscribeTopic = "";
@@ -135,6 +157,7 @@ public:
         subscribeReturnValue = true;
         unsubscribeReturnValue = true;
         publishReturnValue = true;
+        mqttFailsReturnValue = 0;
     }
     
     // Constructor
