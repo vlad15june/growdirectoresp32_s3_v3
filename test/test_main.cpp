@@ -13,6 +13,7 @@ extern "C" void run_fill_module_structure_tests(void);
 extern "C" int run_on_change_local_ip_use_case_tests(void);
 extern "C" int run_on_change_module_mode_use_case_tests(void);
 extern "C" int run_diagnostic_service_tests(void);
+extern "C" int run_hybrid_api_service_tests(void);
 
 static void setUp_module_config(void) {
     // Setup for each test
@@ -71,6 +72,9 @@ int main(void) {
     
     // Run tests for DiagnosticService
     run_diagnostic_service_tests();
+    
+    // Run tests for HybridAPIService
+    run_hybrid_api_service_tests();
     
     return UNITY_END();
 }

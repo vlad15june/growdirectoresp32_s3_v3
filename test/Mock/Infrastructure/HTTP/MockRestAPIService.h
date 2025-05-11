@@ -16,13 +16,14 @@ public:
     bool sendModuleCommandExecutionResultCalled = false;
     bool sendDiagnosticDataCalled = false;
     
+    bool isModuleOnlineReturnValue = true;
+    
     const ModuleStructure* lastModuleStructure = nullptr;
     const char* lastRuleStateCommand = nullptr;
     const char* lastDeviceCommandResult = nullptr;
     DiagnosticDto lastDiagnosticData;
     bool sendDiagnosticDataReturnValue = true;
     
-    // Network diagnostic counters
     int networkFails = 0;
     int apiSendFails = 0;
     float apiSendFailRatio = 0.0f;
@@ -40,6 +41,7 @@ public:
         sendModuleCommandExecutionResultCalled = false;
         sendDiagnosticDataCalled = false;
         sendDiagnosticDataReturnValue = true;
+        isModuleOnlineReturnValue = true;
         
         lastModuleStructure = nullptr;
         lastRuleStateCommand = nullptr;
@@ -51,7 +53,6 @@ public:
         countOffline = 0;
     }
     
-    // IRestAPIService interface implementation
     bool init() override {
         initCalled = true;
         return true;
@@ -59,7 +60,7 @@ public:
     
     bool isModuleOnline() override {
         isModuleOnlineCalled = true;
-        return true;
+        return isModuleOnlineReturnValue;
     }
     
     void sendToServerModuleStructure(const ModuleStructure& moduleStructure) override {
