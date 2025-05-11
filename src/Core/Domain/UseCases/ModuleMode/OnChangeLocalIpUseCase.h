@@ -9,7 +9,7 @@
 #include "Core/Domain/Interfaces/ILogger.h"
 #include "Core/Domain/Interfaces/IDebugSystem.h"
 #include "Core/Domain/Data/Models/ModuleStructure.h"
-#include "Core/Domain/Interfaces/API/IRestAPIService.h"
+#include "Core/Domain/Interfaces/API/IHybridAPIService.h"
 #include "Core/Domain/Interfaces/IDebugSystem.h"
 #include <string.h>
 
@@ -21,7 +21,7 @@ private:
     IWifiAdapter &_wifiAdapter;
     IWifiManager &_wifiManager;
     ModuleStructure &_moduleStructure;
-    IRestAPIService &_restApiService;
+    IHybridAPIService &_apiService;
     char _oldIpStr[16]; // Store previous IP address
 
 public:
@@ -29,13 +29,13 @@ public:
         IWifiAdapter &wifiAdapter,
         IWifiManager &wifiManager,
         ModuleStructure &moduleStructure,
-        IRestAPIService &restApiService,
+        IHybridAPIService &apiService,
         ILogger &loggerInstance,
         IDebugSystem &debugSystemInstance)
         : _wifiAdapter(wifiAdapter),
           _wifiManager(wifiManager),
           _moduleStructure(moduleStructure),
-          _restApiService(restApiService),
+          _apiService(apiService),
           _logger(loggerInstance),
           _debugSystem(debugSystemInstance)
     {
@@ -97,15 +97,15 @@ public:
                     }
                 }
 
-                // Send updated structure to server
+                // Send updated structure to server using the hybrid API service
                 log("OnChangeLocalIpUseCase: Sending updated module structure to server");
-                _restApiService.sendToServerModuleStructure(_moduleStructure);
+                _apiService.sendToServerModuleStructure(_moduleStructure);
 
                 // Process additional server communications
                 log("OnChangeLocalIpUseCase: Processing delete command and restoring account info");
-                // These would be implemented in your RestAPIService
-                // _restApiService.processDeleteGdCommand();
-                // _restApiService.restoreAccountInfoFromServer();
+                // These would be implemented in your HybridAPIService
+                // _apiService.processDeleteGdCommand();
+                // _apiService.restoreAccountInfoFromServer();
             }
             else
             {

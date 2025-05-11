@@ -4,7 +4,7 @@
 #include "Mock/Infrastructure/Logging/MockDebugSystem.h"
 #include "Mock/Infrastructure/WiFi/MockWifiAdapter.h"
 #include "Mock/Infrastructure/Wifi/MockWiFiManager.h"
-#include "Mock/Infrastructure/HTTP/MockRestAPIService.h"
+#include "Mock/Infrastructure/Api/MockHybridAPIService.h"
 #include "Core/Domain/Data/Models/ModuleStructure.h"
 
 // Global test variables
@@ -12,7 +12,7 @@ static MockLogger g_mockLogger;
 static MockDebugSystem g_mockDebugSystem;
 static MockWifiAdapter g_mockWifiAdapter;
 static MockWiFiManager g_mockWifiManager;
-static MockRestAPIService g_mockRestAPIService;
+static MockHybridAPIService g_mockApiService;
 static ModuleStructure g_moduleStructure;
 static OnChangeLocalIpUseCase* g_onChangeLocalIpUseCase;
 
@@ -22,7 +22,7 @@ void on_change_local_ip_use_case_setup(void) {
     g_mockDebugSystem.reset();
     g_mockWifiAdapter.reset();
     g_mockWifiManager.reset();
-    g_mockRestAPIService.reset();
+    g_mockApiService.reset();
     
     // Enable network debugging for log messages
     g_mockDebugSystem.featureEnabled = true;
@@ -46,7 +46,7 @@ void on_change_local_ip_use_case_setup(void) {
         g_mockWifiAdapter, 
         g_mockWifiManager, 
         g_moduleStructure, 
-        g_mockRestAPIService, 
+        g_mockApiService, 
         g_mockLogger, 
         g_mockDebugSystem);
 }
@@ -66,8 +66,8 @@ void test_perform_when_ip_is_zero_ip(void) {
     // Execute the use case
     g_onChangeLocalIpUseCase->perform();
     
-    // Verify no operations were performed on module structure or REST API
-    TEST_ASSERT_FALSE(g_mockRestAPIService.sendToServerModuleStructureCalled);
+    // Verify no operations were performed on module structure or Hybrid API
+    TEST_ASSERT_FALSE(g_mockApiService.sendToServerModuleStructureCalled);
     TEST_ASSERT_EQUAL_STRING("old_ip", g_moduleStructure.nodes[0].ip.c_str());
     
     on_change_local_ip_use_case_teardown();
@@ -83,8 +83,8 @@ void test_perform_when_wifi_not_connected(void) {
     // Execute the use case
     g_onChangeLocalIpUseCase->perform();
     
-    // Verify no operations were performed on module structure or REST API
-    TEST_ASSERT_FALSE(g_mockRestAPIService.sendToServerModuleStructureCalled);
+    // Verify no operations were performed on module structure or Hybrid API
+    TEST_ASSERT_FALSE(g_mockApiService.sendToServerModuleStructureCalled);
     TEST_ASSERT_EQUAL_STRING("old_ip", g_moduleStructure.nodes[0].ip.c_str());
     
     on_change_local_ip_use_case_teardown();
@@ -99,13 +99,13 @@ void test_perform_with_same_ip_no_change(void) {
     g_onChangeLocalIpUseCase->perform();
     
     // Reset the mock to check if it gets called again
-    g_mockRestAPIService.reset();
+    g_mockApiService.reset();
     
     // Call again with the same IP
     g_onChangeLocalIpUseCase->perform();
     
     // Verify no operations were performed as the IP hasn't changed
-    TEST_ASSERT_FALSE(g_mockRestAPIService.sendToServerModuleStructureCalled);
+    TEST_ASSERT_FALSE(g_mockApiService.sendToServerModuleStructureCalled);
     
     on_change_local_ip_use_case_teardown();
 }
@@ -124,9 +124,9 @@ void test_perform_with_new_ip_updates_structure(void) {
     TEST_ASSERT_EQUAL_STRING("192.168.1.100", g_moduleStructure.nodes[0].ip.c_str());
     TEST_ASSERT_EQUAL_STRING("TestSSID", g_moduleStructure.nodes[0].ssid.c_str());
     
-    // Verify REST API was called to send updated structure
-    TEST_ASSERT_TRUE(g_mockRestAPIService.sendToServerModuleStructureCalled);
-    TEST_ASSERT_EQUAL(&g_moduleStructure, g_mockRestAPIService.lastModuleStructure);
+    // Verify HybridAPIService was called to send updated structure
+    TEST_ASSERT_TRUE(g_mockApiService.sendToServerModuleStructureCalled);
+    TEST_ASSERT_EQUAL(&g_moduleStructure, g_mockApiService.lastModuleStructure);
     
     on_change_local_ip_use_case_teardown();
 }
@@ -140,7 +140,7 @@ void test_perform_with_changing_ip(void) {
     g_onChangeLocalIpUseCase->perform();
     
     // Reset the mock to check if it gets called again
-    g_mockRestAPIService.reset();
+    g_mockApiService.reset();
     
     // Now change the IP
     g_mockWifiAdapter.setLocalIP("192.168.1.101");
@@ -149,8 +149,8 @@ void test_perform_with_changing_ip(void) {
     // Verify module structure was updated with new IP
     TEST_ASSERT_EQUAL_STRING("192.168.1.101", g_moduleStructure.nodes[0].ip.c_str());
     
-    // Verify REST API was called to send updated structure
-    TEST_ASSERT_TRUE(g_mockRestAPIService.sendToServerModuleStructureCalled);
+    // Verify HybridAPIService was called to send updated structure
+    TEST_ASSERT_TRUE(g_mockApiService.sendToServerModuleStructureCalled);
     
     on_change_local_ip_use_case_teardown();
 }

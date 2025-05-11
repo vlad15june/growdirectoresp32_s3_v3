@@ -167,7 +167,7 @@ OnChangeLocalIpUseCase onChangeLocalIpUseCase(
     wifiAdapter,
     wifiManager,
     moduleStructure,
-    restApiService,
+    hybridApiService,
     mqttLogger,
     debugSystem);
 
