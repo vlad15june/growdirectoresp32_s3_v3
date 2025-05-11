@@ -18,8 +18,8 @@ private:
     IJsonConverter* _jsonConverter;
     
     // Topic format strings
-    static constexpr const char* MODULE_STRUCTURE_TOPIC = "growdirector/%s/structure";
-    static constexpr const char* DIAGNOSTIC_TOPIC = "growdirector/%s/diagnostic";
+    static constexpr const char* MODULE_STRUCTURE_TOPIC = "hardware/structure/%s";
+    static constexpr const char* DIAGNOSTIC_TOPIC = "hardware/diagnostic/%s";
     
     char _topicBuffer[128];
     

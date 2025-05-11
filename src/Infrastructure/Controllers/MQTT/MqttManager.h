@@ -112,20 +112,18 @@ public:
         _reconnectInterval(5000),
         _mqttFails(0) {
             
-        // Set this instance as the static instance
         _instance = this;
         
-        // Set callback function
         _mqttClient.setCallback(mqttCallback);
         
-        // Setup topic handlers if message processor and factory are provided
         if (_messageProcessor != nullptr && _topicHandlerFactory != nullptr) {
             setupMqttTopicHandlers();
         }
+
+        _mqttClient.setBufferSize(2048);
     }
     
     ~MqttManager() override {
-        // Clear the static instance if this object is being destroyed
         if (_instance == this) {
             _instance = nullptr;
         }

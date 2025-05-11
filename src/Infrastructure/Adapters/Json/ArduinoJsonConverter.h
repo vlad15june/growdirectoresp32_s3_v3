@@ -88,26 +88,32 @@ public:
             nodeObj["ssid"] = node.ssid;
             nodeObj["ip"] = node.ip;
 
-            JsonArray sensorsArr = nodeObj.createNestedArray("sensors");
-            for (const auto& sensor : node.sensors) {
-                JsonObject sensorObj = sensorsArr.createNestedObject();
-                sensorObj["uid"] = sensor.uid;
-                sensorObj["type"] = sensor.type;
-                sensorObj["pin"] = sensor.pin;
+            if (!node.sensors.empty()) {
+                JsonArray sensorsArr = nodeObj.createNestedArray("sensors");
+                for (const auto& sensor : node.sensors) {
+                    JsonObject sensorObj = sensorsArr.createNestedObject();
+                    sensorObj["uid"] = sensor.uid;
+                    sensorObj["type"] = sensor.type;
+                    sensorObj["pin"] = sensor.pin;
+                }
             }
 
-            JsonArray relaysArr = nodeObj.createNestedArray("relays");
-            for (const auto& relay : node.relays) {
-                JsonObject relayObj = relaysArr.createNestedObject();
-                relayObj["uid"] = relay.uid;
-                relayObj["pin"] = relay.pin;
+            if (!node.relays.empty()) {
+                JsonArray relaysArr = nodeObj.createNestedArray("relays");
+                for (const auto& relay : node.relays) {
+                    JsonObject relayObj = relaysArr.createNestedObject();
+                    relayObj["uid"] = relay.uid;
+                    relayObj["pin"] = relay.pin;
+                }
             }
 
-            JsonArray pumpsArr = nodeObj.createNestedArray("pumps");
-            for (const auto& pump : node.pumps) {
-                JsonObject pumpObj = pumpsArr.createNestedObject();
-                pumpObj["uid"] = pump.uid;
-                pumpObj["pin"] = pump.pin;
+            if (!node.pumps.empty()) {
+                JsonArray pumpsArr = nodeObj.createNestedArray("pumps");
+                for (const auto& pump : node.pumps) {
+                    JsonObject pumpObj = pumpsArr.createNestedObject();
+                    pumpObj["uid"] = pump.uid;
+                    pumpObj["pin"] = pump.pin;
+                }
             }
         }
 
