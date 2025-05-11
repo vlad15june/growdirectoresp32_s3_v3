@@ -2,6 +2,7 @@
 
 #include "Application/Interfaces/IDiagnosticService.h"
 #include "Core/Domain/Interfaces/API/IRestAPIService.h"
+#include "Core/Domain/Interfaces/API/IHybridAPIService.h"
 #include "Core/Domain/Interfaces/IModuleConfig.h"
 #include "Core/Domain/Interfaces/ILogger.h"
 #include "Core/Domain/Interfaces/IDebugSystem.h"
@@ -21,6 +22,7 @@ class DiagnosticService : public IDiagnosticService
 {
 private:
     IRestAPIService *_restApiService;
+    IHybridAPIService *_hybridApiService; // Added hybrid API service
     IModuleConfig *_moduleConfig;
     ILogger &_logger;
     IDebugSystem &_debugSystem;
@@ -94,17 +96,20 @@ public:
         IWifiAdapter *wifiAdapter = nullptr,
         INTPTimeAdapter *timeAdapter = nullptr,
         IArduinoAdapter *arduinoAdapter = nullptr,
-        IMqttManager *mqttManager = nullptr) : _restApiService(restApiService),
-                                               _moduleConfig(moduleConfig),
-                                               _logger(logger),
-                                               _debugSystem(debugSystem),
-                                               _jsonConverter(jsonConverter),
-                                               _wifiAdapter(wifiAdapter),
-                                               _timeAdapter(timeAdapter),
-                                               _arduinoAdapter(arduinoAdapter),
-                                               _mqttManager(mqttManager),
-                                               _mqttConnected(false),
-                                               _failsHistoryIndex(0)
+        IMqttManager *mqttManager = nullptr,
+        IHybridAPIService *hybridApiService = nullptr) // Added hybrid API service parameter
+        : _restApiService(restApiService),
+          _hybridApiService(hybridApiService),
+          _moduleConfig(moduleConfig),
+          _logger(logger),
+          _debugSystem(debugSystem),
+          _jsonConverter(jsonConverter),
+          _wifiAdapter(wifiAdapter),
+          _timeAdapter(timeAdapter),
+          _arduinoAdapter(arduinoAdapter),
+          _mqttManager(mqttManager),
+          _mqttConnected(false),
+          _failsHistoryIndex(0)
     {
         for (int i = 0; i < MAX_FAILS_HISTORY; i++)
         {
@@ -219,8 +224,10 @@ public:
             diagnosticData.maxAllocHeap = 0;
         }
 
-        diagnosticData.networkFails = _networkFails; // Use the tracked network fails count
+        diagnosticData.networkFails = _networkFails;
         diagnosticData.apiSendFails = _restApiService ? _restApiService->getApiSendFails() : 0;
+
+        // Use REST API for API status determination
         const int countOffline = _restApiService ? _restApiService->getCountOffline() : 0;
         diagnosticData.apiStatus = (countOffline > _maxCountOffline) ? "disconnected" : "connected";
 
@@ -259,13 +266,20 @@ public:
 
         DiagnosticDto diagnosticData = perform();
 
-        if (_restApiService != nullptr)
+        // First try to send data using hybrid API if available
+        if (_hybridApiService != nullptr)
         {
-            log("DIAG: Sending diagnostic data to server");
+            log("DIAG: Sending diagnostic data via Hybrid API");
+            return _hybridApiService->sendDiagnosticData(diagnosticData);
+        }
+        // Fall back to REST API if hybrid is not available
+        else if (_restApiService != nullptr)
+        {
+            log("DIAG: Sending diagnostic data via REST API");
             return _restApiService->sendDiagnosticData(diagnosticData);
         }
 
-        log("DIAG: REST API service not available");
+        log("DIAG: No API service available");
         return false;
     }
 };

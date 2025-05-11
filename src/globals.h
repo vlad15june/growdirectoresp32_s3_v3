@@ -161,7 +161,9 @@ DiagnosticService diagnosticService(
     &jsonConverter,
     &wifiAdapter,
     &ntpTimeAdapter,
-    &arduinoAdapter);
+    &arduinoAdapter,
+    &mqttManager,
+    &hybridApiService);  // Added hybrid API service
 
 OnChangeLocalIpUseCase onChangeLocalIpUseCase(
     wifiAdapter,

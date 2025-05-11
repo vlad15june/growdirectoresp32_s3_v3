@@ -24,8 +24,7 @@ static MockWifiAdapter g_mockWifiAdapter;
 static MockArduinoAdapter g_mockArduinoAdapter;
 static MockMqttManager g_mockMqttManager;
 static JsonConverter g_jsonConverter;
-static DiagnosticService* g_restDiagnosticService;
-static DiagnosticService* g_hybridDiagnosticService;
+static DiagnosticService* g_diagnosticService;
 
 // Test setup and teardown functions
 void diagnostic_service_setup(void) {
@@ -72,11 +71,11 @@ void diagnostic_service_setup(void) {
     g_mockMqttManager.isConnectedReturnValue = true;
     g_mockMqttManager.mqttFailsReturnValue = 5;
     
-    // Configure REST API service
-    g_mockRestApi.sendDiagnosticDataReturnValue = true;
+    // Configure Hybrid API service
+    g_mockHybridApi.sendDiagnosticDataReturnValue = true;
     
-    // Create diagnostic services with different API services
-    g_restDiagnosticService = new DiagnosticService(
+    // Create diagnostic service with both REST and Hybrid APIs
+    g_diagnosticService = new DiagnosticService(
         &g_mockRestApi,
         &g_mockModuleConfig,
         g_mockLogger,
@@ -85,27 +84,14 @@ void diagnostic_service_setup(void) {
         &g_mockWifiAdapter,
         &g_mockTimeAdapter,
         &g_mockArduinoAdapter,
-        &g_mockMqttManager
-    );
-    
-    g_hybridDiagnosticService = new DiagnosticService(
-        &g_mockRestApi, // Using REST API for now, diagnostic service expects REST API
-        &g_mockModuleConfig,
-        g_mockLogger,
-        g_mockDebugSystem,
-        &g_jsonConverter,
-        &g_mockWifiAdapter,
-        &g_mockTimeAdapter,
-        &g_mockArduinoAdapter,
-        &g_mockMqttManager
+        &g_mockMqttManager,
+        &g_mockHybridApi
     );
 }
 
 void diagnostic_service_teardown(void) {
-    delete g_restDiagnosticService;
-    delete g_hybridDiagnosticService;
-    g_restDiagnosticService = nullptr;
-    g_hybridDiagnosticService = nullptr;
+    delete g_diagnosticService;
+    g_diagnosticService = nullptr;
 }
 
 // Test cases
@@ -113,7 +99,7 @@ void test_perform_collects_correct_diagnostic_data(void) {
     diagnostic_service_setup();
     
     // Perform diagnostics
-    DiagnosticDto diagnosticData = g_restDiagnosticService->perform();
+    DiagnosticDto diagnosticData = g_diagnosticService->perform();
     
     // Verify data was collected correctly
     TEST_ASSERT_EQUAL_INT(-65, diagnosticData.rssi);
@@ -144,10 +130,11 @@ void test_perform_handles_offline_state(void) {
     // Set offline state
     g_mockWifiAdapter.setConnected(false);
     g_mockMqttManager.isConnectedReturnValue = false;
-    g_mockRestApi.countOffline = 10; // > _maxCountOffline to trigger offline state
+    g_mockHybridApi.isModuleOnlineReturnValue = false;
+    g_mockRestApi.countOffline = 10;
     
     // Perform diagnostics
-    DiagnosticDto diagnosticData = g_restDiagnosticService->perform();
+    DiagnosticDto diagnosticData = g_diagnosticService->perform();
     
     // Verify offline state is detected
     TEST_ASSERT_EQUAL_STRING("disconnected", diagnosticData.apiStatus.c_str());
@@ -157,21 +144,23 @@ void test_perform_handles_offline_state(void) {
     diagnostic_service_teardown();
 }
 
-void test_perform_and_send_uses_rest_api(void) {
+void test_perform_and_send_uses_hybrid_api(void) {
     diagnostic_service_setup();
     
     // Reset any previously collected diagnostics
     g_mockRestApi.reset();
+    g_mockHybridApi.reset();
     
     // Perform and send diagnostics
-    bool result = g_restDiagnosticService->performAndSend();
+    bool result = g_diagnosticService->performAndSend();
     
-    // Verify REST API was called correctly
+    // Verify Hybrid API was called correctly
     TEST_ASSERT_TRUE(result);
-    TEST_ASSERT_TRUE(g_mockRestApi.sendDiagnosticDataCalled);
+    TEST_ASSERT_TRUE(g_mockHybridApi.sendDiagnosticDataCalled);
+    TEST_ASSERT_FALSE(g_mockRestApi.sendDiagnosticDataCalled); // REST API should not be called
     
     // Check that diagnostic data was sent with correct values
-    DiagnosticDto sentData = g_mockRestApi.lastDiagnosticData;
+    DiagnosticDto sentData = g_mockHybridApi.lastDiagnosticData;
     TEST_ASSERT_EQUAL_INT(-65, sentData.rssi);
     TEST_ASSERT_EQUAL_STRING("test-module-uid-1234", sentData.uid.c_str());
     TEST_ASSERT_EQUAL_STRING("test@example.com", sentData.email.c_str());
@@ -180,18 +169,51 @@ void test_perform_and_send_uses_rest_api(void) {
     diagnostic_service_teardown();
 }
 
+void test_perform_and_send_falls_back_to_rest_api(void) {
+    diagnostic_service_setup();
+    
+    // Create a diagnostic service with only REST API
+    delete g_diagnosticService;
+    g_diagnosticService = new DiagnosticService(
+        &g_mockRestApi,
+        &g_mockModuleConfig,
+        g_mockLogger,
+        g_mockDebugSystem,
+        &g_jsonConverter,
+        &g_mockWifiAdapter,
+        &g_mockTimeAdapter,
+        &g_mockArduinoAdapter,
+        &g_mockMqttManager,
+        nullptr // No Hybrid API
+    );
+    
+    // Reset mocks
+    g_mockRestApi.reset();
+    g_mockHybridApi.reset();
+    
+    // Perform and send diagnostics
+    bool result = g_diagnosticService->performAndSend();
+    
+    // Verify REST API was called and Hybrid API was not
+    TEST_ASSERT_TRUE(result);
+    TEST_ASSERT_TRUE(g_mockRestApi.sendDiagnosticDataCalled);
+    TEST_ASSERT_FALSE(g_mockHybridApi.sendDiagnosticDataCalled);
+    
+    diagnostic_service_teardown();
+}
+
 void test_perform_and_send_handles_failure(void) {
     diagnostic_service_setup();
     
     // Force send to fail
-    g_mockRestApi.sendDiagnosticDataReturnValue = false;
+    g_mockHybridApi.sendDiagnosticDataReturnValue = false;
     
     // Perform and send diagnostics
-    bool result = g_restDiagnosticService->performAndSend();
+    bool result = g_diagnosticService->performAndSend();
     
     // Verify result
     TEST_ASSERT_FALSE(result);
-    TEST_ASSERT_TRUE(g_mockRestApi.sendDiagnosticDataCalled);
+    TEST_ASSERT_TRUE(g_mockHybridApi.sendDiagnosticDataCalled);
     
     diagnostic_service_teardown();
 }
@@ -201,11 +223,11 @@ void test_perform_records_failures(void) {
     
     // Record some failures
     for (int i = 0; i < 3; i++) {
-        g_restDiagnosticService->recordFailure();
+        g_diagnosticService->recordFailure();
     }
     
     // Perform diagnostics
-    DiagnosticDto diagnosticData = g_restDiagnosticService->perform();
+    DiagnosticDto diagnosticData = g_diagnosticService->perform();
     
     // Verify failures were recorded
     TEST_ASSERT_EQUAL_UINT32(3, diagnosticData.failsInHour);
@@ -219,7 +241,8 @@ extern "C" int run_diagnostic_service_tests(void) {
     
     RUN_TEST(test_perform_collects_correct_diagnostic_data);
     RUN_TEST(test_perform_handles_offline_state);
-    RUN_TEST(test_perform_and_send_uses_rest_api);
+    RUN_TEST(test_perform_and_send_uses_hybrid_api);
+    RUN_TEST(test_perform_and_send_falls_back_to_rest_api);
     RUN_TEST(test_perform_and_send_handles_failure);
     RUN_TEST(test_perform_records_failures);
     
