@@ -3,80 +3,31 @@
 #include <algorithm>
 
 DeviceService::DeviceService(IModuleConfig* moduleConfig, 
-                            ModuleStructure* moduleStructure, 
+                            ModuleStructure* moduleStructure,
+                            IDeviceModel* deviceModel,
                             INTPTimeAdapter* timeAdapter,
                             IArduinoAdapter* arduinoAdapter) 
     : moduleConfig(moduleConfig), 
       moduleStructure(moduleStructure),
+      deviceModel(deviceModel),
       timeAdapter(timeAdapter),
       arduinoAdapter(arduinoAdapter) {
-    // Initialize containers
-    devices.reserve(moduleConfig->getDeviceCount());
 }
 
 DeviceService::~DeviceService() {
-    // Clean up allocated devices
-    for (auto device : devices) {
-        delete device;
-    }
-    devices.clear();
+    // DeviceModel handles device cleanup
 }
 
 bool DeviceService::init() {
-    initDevices();
-    return true;
-}
-
-void DeviceService::initDevices() {
-    // Clear any existing devices
-    for (auto device : devices) {
-        delete device;
-    }
-    devices.clear();
-    
-    // Initialize devices based on module type
-    int moduleType = moduleConfig->getModuleType();
-    int moduleSubType = moduleConfig->getModuleSubType();
-    
-    if (moduleType == MODULE_TYPE_DEVICE) {
-        // For relay/digital output devices
-        auto relays = moduleStructure->getAllRelays();
-        for (auto relay : relays) {
-            DeviceDigitalOut* device = new DeviceDigitalOut();
-            device->deviceUid = relay->uid.c_str();
-            device->state = DEVICE_STATE_OFF;
-            device->isError = false;
-            device->deviceType = DEVICE_TYPE_DIGITAL;  // Set device type
-            // Initialize other properties
-            devices.push_back(device);
-        }
-    }
-    else if (moduleType == MODULE_TYPE_ANALOG_INPUT_DEVICE) {
-        // For analog output devices
-        auto pumps = moduleStructure->getAllPumps();
-        for (auto pump : pumps) {
-            DeviceAnalogOut* device = new DeviceAnalogOut();
-            device->deviceUid = pump->uid.c_str();
-            device->state = DEVICE_STATE_OFF;
-            device->isError = false;
-            device->deviceType = DEVICE_TYPE_ANALOG;  // Set device type
-            // Initialize other properties
-            devices.push_back(device);
-        }
-    }
+    return deviceModel->init();
 }
 
 Device* DeviceService::getDeviceByUid(const char* deviceUid) {
-    for (auto device : devices) {
-        if (strcmp(device->deviceUid, deviceUid) == 0) {
-            return device;
-        }
-    }
-    return nullptr;
+    return deviceModel->getDeviceByUid(deviceUid);
 }
 
 std::vector<Device*> DeviceService::getAllDevices() {
-    return devices;
+    return deviceModel->getAllDevices();
 }
 
 bool DeviceService::updateDeviceState(const char* deviceUid, DeviceStateEnum state) {
@@ -135,6 +86,7 @@ UpdateDto DeviceService::createUpdateDto() {
     updateDto.email = email;
     
     // Create device DTOs
+    auto devices = deviceModel->getAllDevices();
     for (auto device : devices) {
         DeviceDto deviceDto = createDeviceDto(device);
         updateDto.devices.push_back(deviceDto);
@@ -233,6 +185,7 @@ bool DeviceService::isDeviceOn(const char* deviceUid) {
 
 void DeviceService::processDevices() {
     uint32_t currentMillis = arduinoAdapter->millis();
+    auto devices = deviceModel->getAllDevices();
     
     for (auto device : devices) {
         // Check if device needs to switch back
@@ -282,6 +235,8 @@ void DeviceService::processDevices() {
 }
 
 void DeviceService::updateDeviceSensorValues() {
+    auto devices = deviceModel->getAllDevices();
+    
     for (auto device : devices) {
         if (device->sensorUid == nullptr || strlen(device->sensorUid) == 0) {
             continue;

@@ -21,6 +21,8 @@
 #include "Core/Domain/UseCases/ModuleMode/OnChangeLocalIpUseCase.h"
 
 #include "Core/Domain/Data/Models/ModuleStructure.h"
+#include "Core/Domain/Data/Models/IDeviceModel.h"
+#include "Core/Domain/Data/Models/DeviceModel.h"
 
 #include "Infrastructure/Adapters/eepromAdapter.h"
 #include "Infrastructure/Logging/MqttLogger.h"
@@ -49,6 +51,8 @@
 #include "Infrastructure/Controllers/MQTT/MqttApiService.h"
 #include "Infrastructure/Controllers/API/HybridAPIService.h"
 #include "Infrastructure/Adapters/SPIFFS/SpiffsAdapter.h"
+#include "Application/Services/Devices/IDeviceService.h"
+#include "Application/Services/Devices/DeviceService.h"
 
 const char *mqttUser = "GrowDirectorMqtt";
 const char *mqttPassword = "lasdfh329483457sfdjhs92_w";
@@ -189,6 +193,15 @@ LoopServiceFactory loopServiceFactory(
 
 SpiffsAdapter spiffsAdapter(&mqttLogger, &debugSystem);
 
+DeviceModel deviceModel(&moduleConfig, &moduleStructure);
+
+DeviceService deviceService(
+    &moduleConfig,
+    &moduleStructure,
+    &deviceModel,
+    &ntpTimeAdapter,
+    &arduinoAdapter);
+
 ModuleSetupService moduleSetupService(
     &mqttLogger,
     &debugSystem,
@@ -206,5 +219,9 @@ ModuleSetupService moduleSetupService(
 void initDependencies()
 {
     topicHandlerFactory.setModuleConfig(&moduleConfig);
+    
+    // Initialize device model and service
+    deviceModel.init();
+    deviceService.init();
 }
 #endif // GLOBALS_H

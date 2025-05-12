@@ -5,6 +5,7 @@
 #include "Application/DTOs/UpdateDto.h"
 #include "Core/Domain/Data/Models/ModuleStructure.h"
 #include "Core/Domain/Enums/DeviceStateEnum.h"
+#include "Core/Domain/Data/Models/IDeviceModel.h"
 
 /**
  * @brief Interface for device management services
