@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Core/Domain/Interfaces/Adapters/Json/IJsonConverter.h"
+#include "Application/DTOs/UpdateDto.h"
 #include <ArduinoJson.h>
 
 class ArduinoJsonConverter : public IJsonConverter {
@@ -493,6 +494,99 @@ public:
             rulesArr.add(serialized(ruleToJson(rule)));
         }
 
+        std::string output;
+        serializeJson(doc, output);
+        return output;
+    }
+    
+    std::string updateToJson(const UpdateDto& updateData) override {
+        DynamicJsonDocument doc(8192);
+        
+        doc["GrowdirectorUid"] = updateData.growdirectorUid;
+        doc["email"] = updateData.email;
+        
+        if (!updateData.accountUid.empty()) {
+            doc["accountUid"] = updateData.accountUid;
+        }
+        
+        doc["time"] = updateData.time;
+        doc["millis"] = updateData.millis;
+        
+        JsonArray devicesArr = doc.createNestedArray("devices");
+        for (const auto& device : updateData.devices) {
+            JsonObject deviceObj = devicesArr.createNestedObject();
+            deviceObj["uid"] = device.uid;
+            
+            if (!device.switchedAt.empty()) {
+                deviceObj["switchedAt"] = device.switchedAt;
+            }
+            
+            deviceObj["state"] = device.state;
+            deviceObj["state_hw"] = device.state_hw;
+            deviceObj["isAuto"] = device.isAuto;
+            deviceObj["isManual"] = device.isManual;
+            
+            if (!device.ruleUid.empty()) {
+                deviceObj["ruleUid"] = device.ruleUid;
+                deviceObj["ruleType"] = device.ruleType;
+            }
+            
+            if (device.isAuto) {
+                deviceObj["isRuleTurnOnDevice"] = device.isRuleTurnOnDevice;
+                
+                if (!device.isRuleTurnOnDevice && device.state != "delay_on") {
+                    deviceObj["ruleSensorStopAt"] = device.ruleSensorStopAt;
+                    deviceObj["ruleSensorValueStop"] = device.ruleSensorValueStop;
+                    deviceObj["ruleStopReason"] = device.ruleStopReason;
+                }
+                
+                if (!device.ruleSensorStartAt.empty()) {
+                    deviceObj["ruleSensorStartAt"] = device.ruleSensorStartAt;
+                }
+                
+                deviceObj["ruleVersion"] = device.ruleVersion;
+                
+                if (device.ruleType == "ph" || device.ruleType == "ec" || 
+                    device.ruleType == "sensor" || device.ruleType == "step") {
+                    deviceObj["sensorUid"] = device.sensorUid;
+                    deviceObj["sensorValueLow"] = device.sensorValueLow;
+                    deviceObj["sensorValueHigh"] = device.sensorValueHigh;
+                    deviceObj["sensorValue"] = device.sensorValue;
+                    deviceObj["ruleSensorValueStart"] = device.ruleSensorValueStart;
+                    
+                    if (device.ruleType == "sensor" && device.timeToSetPoint > 0) {
+                        deviceObj["timeToSetPoint"] = device.timeToSetPoint;
+                    }
+                    
+                    if ((device.ruleType == "ph" || device.ruleType == "ec" || 
+                         device.ruleType == "step") && device.cyclesToSetPoint > 0) {
+                        deviceObj["cyclesToSetPoint"] = device.cyclesToSetPoint;
+                        deviceObj["currentCycle"] = device.currentCycle;
+                    }
+                }
+                
+                if (device.ruleType == "schedule") {
+                    deviceObj["ruleScheduleStartAt"] = device.ruleScheduleStartAt;
+                    deviceObj["ruleScheduleDuration"] = device.ruleScheduleDuration;
+                    deviceObj["secondsToSwitchBack"] = device.secondsToSwitchBack;
+                    deviceObj["secondsEnabledFor"] = device.secondsEnabledFor;
+                }
+                
+                if (device.ruleType == "ph" || device.ruleType == "ec" || 
+                    device.ruleType == "step" || device.ruleType == "loop") {
+                    deviceObj["secondsToSwitchBack"] = device.secondsToSwitchBack;
+                    deviceObj["secondsDisabledFor"] = device.secondsDisabledFor;
+                    deviceObj["secondsEnabledFor"] = device.secondsEnabledFor;
+                }
+            }
+            
+            if (device.isManual) {
+                deviceObj["commandId"] = device.commandId;
+                deviceObj["secondsToSwitchBack"] = device.secondsToSwitchBack;
+                deviceObj["secondsEnabledFor"] = device.secondsEnabledFor;
+            }
+        }
+        
         std::string output;
         serializeJson(doc, output);
         return output;

@@ -61,6 +61,13 @@ public:
      */
     virtual std::string diagnosticToJson(const DiagnosticDto& diagnosticData) = 0;
     
+    /**
+     * @brief Convert UpdateDto to JSON string
+     * @param updateData UpdateDto object to convert
+     * @return JSON string representation of the update data
+     */
+    virtual std::string updateToJson(const UpdateDto& updateData) = 0;
+    
     virtual ~IJsonConverter() = default;
 };
 

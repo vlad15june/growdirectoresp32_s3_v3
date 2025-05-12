@@ -4,6 +4,7 @@
 #include "Core/Domain/Interfaces/Adapters/Json/IJsonConverter.h"
 #include "Core/Domain/Data/Models/ModuleStructure.h"
 #include "Application/DTOs/DiagnosticDto.h"
+#include "Application/DTOs/UpdateDto.h"
 #include <string>
 #include <sstream>
 #include <algorithm>
@@ -17,25 +18,13 @@ static std::string extractValue(const std::string &src, const std::string &key)
     auto colon = src.find(':', keyPos);
     if (colon == std::string::npos)
         return "";
-    
-    // Skip spaces after colon
-    size_t valueStart = colon + 1;
-    while (valueStart < src.size() && std::isspace(src[valueStart]))
-        ++valueStart;
-
-    if (valueStart < src.size() && src[valueStart] == '"') {
-        auto start = valueStart;
-        auto end = src.find_first_of("\"", start + 1);
-        if (end == std::string::npos)
-            return "";
-        return src.substr(start + 1, end - start - 1);
-    }
-
-    if (src.substr(valueStart, 4) == "null") {
+    auto start = src.find_first_of("\"", colon + 1);
+    if (start == std::string::npos)
         return "";
-    }
-
-    return "";
+    auto end = src.find_first_of("\"", start + 1);
+    if (end == std::string::npos)
+        return "";
+    return src.substr(start + 1, end - start - 1);
 }
 
 // Helper function to extract array section
@@ -95,36 +84,11 @@ static int extractIntValue(const std::string &src, const std::string &key)
     auto colon = src.find(':', keyPos);
     if (colon == std::string::npos)
         return 0;
-
-    // Skip spaces after colon
-    size_t valueStart = colon + 1;
-    while (valueStart < src.size() && std::isspace(src[valueStart]))
-        ++valueStart;
-
-    if (valueStart + 4 <= src.size() && src.substr(valueStart, 4) == "null") {
+    auto start = src.find_first_of("0123456789-", colon + 1);
+    if (start == std::string::npos)
         return 0;
-    }
-
-    auto start = valueStart;
-    if (start < src.size() && src[start] == '-') {
-        ++start; // Skip the minus sign
-    }
-
-    if (start >= src.size() || !std::isdigit(src[start])) {
-        return 0;
-    }
-
-    auto end = src.find_first_not_of("0123456789", start);
-    if (end == std::string::npos) {
-        end = src.size();
-    }
-
-    try {
-        std::string numStr = src.substr(valueStart, end - valueStart);
-        return std::stoi(numStr);
-    } catch (const std::exception& e) {
-        return 0;
-    }
+    auto end = src.find_first_not_of("0123456789-", start);
+    return std::stoi(src.substr(start, end - start));
 }
 
 // Helper function to extract double value
@@ -624,6 +588,101 @@ public:
             if (i + 1 < rules.size()) oss << ",";
         }
         oss << "]";
+        return oss.str();
+    }
+
+    std::string updateToJson(const UpdateDto& updateData) override
+    {
+        std::ostringstream oss;
+        oss << "{";
+        oss << "\"GrowdirectorUid\":\"" << updateData.growdirectorUid << "\"";
+        oss << ",\"email\":\"" << updateData.email << "\"";
+        
+        if (!updateData.accountUid.empty())
+            oss << ",\"accountUid\":\"" << updateData.accountUid << "\"";
+        
+        oss << ",\"time\":\"" << updateData.time << "\"";
+        oss << ",\"millis\":" << updateData.millis;
+        
+        oss << ",\"devices\":[";
+        for (size_t i = 0; i < updateData.devices.size(); ++i) {
+            const auto& device = updateData.devices[i];
+            oss << "{";
+            oss << "\"uid\":\"" << device.uid << "\"";
+            
+            if (!device.switchedAt.empty())
+                oss << ",\"switchedAt\":\"" << device.switchedAt << "\"";
+            
+            oss << ",\"state\":\"" << device.state << "\"";
+            oss << ",\"state_hw\":\"" << device.state_hw << "\"";
+            oss << ",\"isAuto\":" << (device.isAuto ? "true" : "false");
+            oss << ",\"isManual\":" << (device.isManual ? "true" : "false");
+            
+            if (!device.ruleUid.empty()) {
+                oss << ",\"ruleUid\":\"" << device.ruleUid << "\"";
+                oss << ",\"ruleType\":\"" << device.ruleType << "\"";
+            }
+            
+            if (device.isAuto) {
+                oss << ",\"isRuleTurnOnDevice\":" << (device.isRuleTurnOnDevice ? "true" : "false");
+                
+                if (!device.isRuleTurnOnDevice && device.state != "delay_on") {
+                    oss << ",\"ruleSensorStopAt\":\"" << device.ruleSensorStopAt << "\"";
+                    oss << ",\"ruleSensorValueStop\":" << device.ruleSensorValueStop;
+                    oss << ",\"ruleStopReason\":\"" << device.ruleStopReason << "\"";
+                }
+                
+                if (!device.ruleSensorStartAt.empty())
+                    oss << ",\"ruleSensorStartAt\":\"" << device.ruleSensorStartAt << "\"";
+                
+                oss << ",\"ruleVersion\":" << device.ruleVersion;
+                
+                if (device.ruleType == "ph" || device.ruleType == "ec" || 
+                    device.ruleType == "sensor" || device.ruleType == "step") {
+                    oss << ",\"sensorUid\":\"" << device.sensorUid << "\"";
+                    oss << ",\"sensorValueLow\":" << device.sensorValueLow;
+                    oss << ",\"sensorValueHigh\":" << device.sensorValueHigh;
+                    oss << ",\"sensorValue\":" << device.sensorValue;
+                    oss << ",\"ruleSensorValueStart\":" << device.ruleSensorValueStart;
+                    
+                    if (device.ruleType == "sensor" && device.timeToSetPoint > 0)
+                        oss << ",\"timeToSetPoint\":" << device.timeToSetPoint;
+                    
+                    if ((device.ruleType == "ph" || device.ruleType == "ec" || 
+                         device.ruleType == "step") && device.cyclesToSetPoint > 0) {
+                        oss << ",\"cyclesToSetPoint\":" << device.cyclesToSetPoint;
+                        oss << ",\"currentCycle\":" << device.currentCycle;
+                    }
+                }
+                
+                if (device.ruleType == "schedule") {
+                    oss << ",\"ruleScheduleStartAt\":\"" << device.ruleScheduleStartAt << "\"";
+                    oss << ",\"ruleScheduleDuration\":" << device.ruleScheduleDuration;
+                    oss << ",\"secondsToSwitchBack\":" << device.secondsToSwitchBack;
+                    oss << ",\"secondsEnabledFor\":" << device.secondsEnabledFor;
+                }
+                
+                if (device.ruleType == "ph" || device.ruleType == "ec" || 
+                    device.ruleType == "step" || device.ruleType == "loop") {
+                    oss << ",\"secondsToSwitchBack\":" << device.secondsToSwitchBack;
+                    oss << ",\"secondsDisabledFor\":" << device.secondsDisabledFor;
+                    oss << ",\"secondsEnabledFor\":" << device.secondsEnabledFor;
+                }
+            }
+            
+            if (device.isManual) {
+                oss << ",\"commandId\":\"" << device.commandId << "\"";
+                oss << ",\"secondsToSwitchBack\":" << device.secondsToSwitchBack;
+                oss << ",\"secondsEnabledFor\":" << device.secondsEnabledFor;
+            }
+            
+            oss << "}";
+            if (i + 1 < updateData.devices.size())
+                oss << ",";
+        }
+        oss << "]";
+        oss << "}";
+        
         return oss.str();
     }
 };
