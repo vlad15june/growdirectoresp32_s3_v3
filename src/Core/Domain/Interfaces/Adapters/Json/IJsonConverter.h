@@ -6,6 +6,7 @@
 #include "Core/Domain/Data/Models/ModuleStructure.h"
 #include "Application/DTOs/DiagnosticDto.h"
 #include "Core/Domain/Data/Entities/Rule.h"
+#include "Application/DTOs/UpdateDto.h"
 
 class IJsonConverter {
 public:
@@ -71,4 +72,4 @@ public:
     virtual ~IJsonConverter() = default;
 };
 
-#endif // I_MODULE_STRUCTURE_JSON_H
+#endif // I_JSON_CONVERTER_H

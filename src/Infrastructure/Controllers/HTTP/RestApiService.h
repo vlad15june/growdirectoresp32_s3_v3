@@ -540,6 +540,52 @@ public:
         }
     }
     
+    bool sendModuleUpdateData(const UpdateDto& updateData) override {
+        if (_jsonConverter == nullptr) {
+            log("NET: sendModuleUpdateData - JSON converter not available");
+            return false;
+        }
+
+        if (_settings == nullptr || _moduleConfig == nullptr) {
+            log("NET: sendModuleUpdateData - Settings or ModuleConfig not available");
+            return false;
+        }
+
+        std::string updateJson = _jsonConverter->updateToJson(updateData);
+        log("NET: /api/v1/HardWare/update -> %s", updateJson.c_str());
+
+        const char* moduleUid = _moduleConfig->getModuleUid();
+        snprintf(_urlBuffer, sizeof(_urlBuffer), 
+                "%s/api/v1/HardWare/update?token=%s&grow_director_uid=%s",
+                _serverUrl, _token, moduleUid);
+
+        byte tries = 0;
+        int httpResponseCode = 0;
+        while (tries < 3 && httpResponseCode != 200) {
+            _httpClient->setTimeout(30000);
+            _httpClient->begin(_urlBuffer);
+            _httpClient->addHeader("Content-Type", "application/json");
+
+            httpResponseCode = _httpClient->POST(updateJson.c_str());
+            
+            log("NET: /api/v1/HardWare/update -> response %d, try = %d", httpResponseCode, tries);
+            
+            _httpClient->end();
+            if (httpResponseCode != 200) {
+                delay(200);
+            }
+            tries++;
+        }
+
+        if (httpResponseCode == 200) {
+            trackApiSendSuccess();
+            return true;
+        } else {
+            trackApiSendFailure();
+            return false;
+        }
+    }
+
     // Implementations of network diagnostic counter methods
     int getApiSendFails() const override { return _apiSendFails; }
     void resetApiSendFails() override { _apiSendFails = 0; }

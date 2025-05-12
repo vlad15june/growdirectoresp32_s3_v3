@@ -2,6 +2,7 @@
 
 #include "Core/Domain/Data/Models/ModuleStructure.h"
 #include "Application/DTOs/DiagnosticDto.h"
+#include "Application/DTOs/UpdateDto.h"
 
 class IRestAPIService {
 public:
@@ -26,6 +27,13 @@ public:
      * @return true if the data was sent successfully, false otherwise
      */
     virtual bool sendDiagnosticData(const DiagnosticDto& diagnosticData) = 0;
+    
+    /**
+     * @brief Sends module update data to the server
+     * @param updateData The update data to send
+     * @return true if the data was sent successfully, false otherwise
+     */
+    virtual bool sendModuleUpdateData(const UpdateDto& updateData) = 0;
     
     // Network diagnostic counter methods - getters and reset methods only
     virtual int getApiSendFails() const = 0;

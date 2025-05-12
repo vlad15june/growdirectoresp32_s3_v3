@@ -108,6 +108,14 @@ public:
     virtual bool sendDiagnosticData(const DiagnosticDto& diagnosticData, ApiPriority priority = ApiPriority::UNDEFINED) = 0;
     
     /**
+     * @brief Send module update data to the server
+     * @param updateData The update data to send
+     * @param priority Optional API priority to use for this call (overrides default)
+     * @return true if the operation was successful, false otherwise
+     */
+    virtual bool sendModuleUpdateData(const UpdateDto& updateData, ApiPriority priority = ApiPriority::UNDEFINED) = 0;
+    
+    /**
      * Get statistics about API usage and performance
      */
     virtual int getRestApiSendFails() const = 0;

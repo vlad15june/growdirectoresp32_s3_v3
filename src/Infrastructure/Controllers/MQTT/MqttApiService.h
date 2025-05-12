@@ -8,6 +8,7 @@
 #include "Core/Domain/Interfaces/IDebugSystem.h"
 #include "Core/Domain/Interfaces/Adapters/Json/IJsonConverter.h"
 #include "Application/DTOs/DiagnosticDto.h"
+#include "Application/DTOs/UpdateDto.h"
 
 class MqttApiService : public IMqttApiService {
 private:
@@ -20,6 +21,7 @@ private:
     // Topic format strings
     static constexpr const char* MODULE_STRUCTURE_TOPIC = "hardware/structure/%s";
     static constexpr const char* DIAGNOSTIC_TOPIC = "hardware/diagnostic/%s";
+    static constexpr const char* UPDATE_TOPIC = "hardware/update/%s";
     
     char _topicBuffer[128];
     
@@ -115,6 +117,33 @@ public:
         
         if (!_mqttManager->publish(topic, diagnosticJson.c_str())) {
             log("MQTT: Failed to publish diagnostic data");
+            return false;
+        }
+        
+        return true;
+    }
+    
+    bool sendModuleUpdateData(const UpdateDto& updateData) override {
+        if (_mqttManager == nullptr || !_mqttManager->isConnected()) {
+            log("MQTT: sendModuleUpdateData - MQTT Manager not available or not connected");
+            return false;
+        }
+        
+        if (_jsonConverter == nullptr) {
+            log("MQTT: sendModuleUpdateData - JSON converter not available");
+            return false;
+        }
+        
+        const char* topic = formatTopic(UPDATE_TOPIC);
+        if (topic == nullptr) {
+            return false;
+        }
+        
+        std::string updateJson = _jsonConverter->updateToJson(updateData);
+        log("MQTT: Publishing update data to topic: %s", topic);
+        
+        if (!_mqttManager->publish(topic, updateJson.c_str())) {
+            log("MQTT: Failed to publish update data");
             return false;
         }
         

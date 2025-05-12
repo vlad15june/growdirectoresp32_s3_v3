@@ -8,6 +8,7 @@
 #include "Core/Domain/Interfaces/IDebugSystem.h"
 #include "Core/Domain/Interfaces/IModuleConfig.h"
 #include "Application/DTOs/DiagnosticDto.h"
+#include "Application/DTOs/UpdateDto.h"
 
 /**
  * Implementation of hybrid API service that can use both REST and MQTT APIs
@@ -336,6 +337,102 @@ public:
                 
                 if (_mqttApiService != nullptr) {
                     mqttSuccess = _mqttApiService->sendDiagnosticData(diagnosticData);
+                    if (!mqttSuccess) {
+                        trackApiSendFailure(false);
+                    }
+                }
+                
+                success = restSuccess || mqttSuccess;
+                break;
+        }
+        
+        return success;
+    }
+    
+    bool sendModuleUpdateData(const UpdateDto& updateData, ApiPriority priority = ApiPriority::UNDEFINED) override {
+        // Use provided priority or fall back to instance priority if UNDEFINED is used
+        ApiPriority effectivePriority = (priority == ApiPriority::UNDEFINED) ? _apiPriority : priority;
+        bool success = false;
+        
+        switch (effectivePriority) {
+            case ApiPriority::REST_ONLY:
+                if (_restApiService != nullptr) {
+                    success = _restApiService->sendModuleUpdateData(updateData);
+                    if (!success) {
+                        trackApiSendFailure(true);
+                    }
+                } else {
+                    log("HYBRID API: REST_ONLY mode but REST API is not available");
+                }
+                break;
+                
+            case ApiPriority::MQTT_ONLY:
+                if (_mqttApiService != nullptr) {
+                    success = _mqttApiService->sendModuleUpdateData(updateData);
+                    if (!success) {
+                        trackApiSendFailure(false);
+                    }
+                } else {
+                    log("HYBRID API: MQTT_ONLY mode but MQTT API is not available");
+                }
+                break;
+                
+            case ApiPriority::REST_PREFERRED:
+                if (_restApiService != nullptr) {
+                    success = _restApiService->sendModuleUpdateData(updateData);
+                    if (!success) {
+                        trackApiSendFailure(true);
+                        if (_mqttApiService != nullptr) {
+                            log("HYBRID API: REST failed, trying MQTT for update data");
+                            success = _mqttApiService->sendModuleUpdateData(updateData);
+                            if (!success) {
+                                trackApiSendFailure(false);
+                            }
+                        }
+                    }
+                } else if (_mqttApiService != nullptr) {
+                    success = _mqttApiService->sendModuleUpdateData(updateData);
+                    if (!success) {
+                        trackApiSendFailure(false);
+                    }
+                }
+                break;
+                
+            case ApiPriority::MQTT_PREFERRED:
+                if (_mqttApiService != nullptr) {
+                    success = _mqttApiService->sendModuleUpdateData(updateData);
+                    if (!success) {
+                        trackApiSendFailure(false);
+                        if (_restApiService != nullptr) {
+                            log("HYBRID API: MQTT failed, trying REST for update data");
+                            success = _restApiService->sendModuleUpdateData(updateData);
+                            if (!success) {
+                                trackApiSendFailure(true);
+                            }
+                        }
+                    }
+                } else if (_restApiService != nullptr) {
+                    success = _restApiService->sendModuleUpdateData(updateData);
+                    if (!success) {
+                        trackApiSendFailure(true);
+                    }
+                }
+                break;
+                
+            case ApiPriority::BOTH:
+                // Try to send via both APIs and succeed if at least one works
+                bool restSuccess = false;
+                bool mqttSuccess = false;
+                
+                if (_restApiService != nullptr) {
+                    restSuccess = _restApiService->sendModuleUpdateData(updateData);
+                    if (!restSuccess) {
+                        trackApiSendFailure(true);
+                    }
+                }
+                
+                if (_mqttApiService != nullptr) {
+                    mqttSuccess = _mqttApiService->sendModuleUpdateData(updateData);
                     if (!mqttSuccess) {
                         trackApiSendFailure(false);
                     }

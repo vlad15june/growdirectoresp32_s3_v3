@@ -15,6 +15,7 @@ public:
     bool sendAnalogInputDeviceCommandExecutionResultCalled = false;
     bool sendModuleCommandExecutionResultCalled = false;
     bool sendDiagnosticDataCalled = false;
+    bool sendModuleUpdateDataCalled = false;
     
     bool isModuleOnlineReturnValue = true;
     
@@ -22,7 +23,9 @@ public:
     const char* lastRuleStateCommand = nullptr;
     const char* lastDeviceCommandResult = nullptr;
     DiagnosticDto lastDiagnosticData;
+    UpdateDto lastUpdateData;
     bool sendDiagnosticDataReturnValue = true;
+    bool sendModuleUpdateDataReturnValue = true;
     
     int networkFails = 0;
     int apiSendFails = 0;
@@ -40,7 +43,9 @@ public:
         sendAnalogInputDeviceCommandExecutionResultCalled = false;
         sendModuleCommandExecutionResultCalled = false;
         sendDiagnosticDataCalled = false;
+        sendModuleUpdateDataCalled = false;
         sendDiagnosticDataReturnValue = true;
+        sendModuleUpdateDataReturnValue = true;
         isModuleOnlineReturnValue = true;
         
         lastModuleStructure = nullptr;
@@ -103,6 +108,12 @@ public:
         sendDiagnosticDataCalled = true;
         lastDiagnosticData = diagnosticData;
         return sendDiagnosticDataReturnValue;
+    }
+    
+    bool sendModuleUpdateData(const UpdateDto& updateData) override {
+        sendModuleUpdateDataCalled = true;
+        lastUpdateData = updateData;
+        return sendModuleUpdateDataReturnValue;
     }
     
     int getApiSendFails() const override { return apiSendFails; }

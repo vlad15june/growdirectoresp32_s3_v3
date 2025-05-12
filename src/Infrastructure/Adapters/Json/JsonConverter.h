@@ -687,4 +687,4 @@ public:
     }
 };
 
-#endif // MODULE_STRUCTURE_JSON_H
+#endif // JSON_CONVERTER_H

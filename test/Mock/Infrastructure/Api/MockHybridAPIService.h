@@ -17,6 +17,7 @@ public:
     bool sendAnalogInputDeviceCommandExecutionResultCalled = false;
     bool sendModuleCommandExecutionResultCalled = false;
     bool sendDiagnosticDataCalled = false;
+    bool sendModuleUpdateDataCalled = false;
     bool resetApiStatisticsCalled = false;
     
     // Return values
@@ -30,6 +31,7 @@ public:
     bool sendAnalogInputDeviceCommandExecutionResultReturnValue = true;
     bool sendModuleCommandExecutionResultReturnValue = true;
     bool sendDiagnosticDataReturnValue = true;
+    bool sendModuleUpdateDataReturnValue = true;
     
     // Parameter storage
     ApiPriority currentApiPriority = ApiPriority::REST_PREFERRED;
@@ -43,7 +45,9 @@ public:
     const char* lastAnalogInputDeviceCommandResult = nullptr;
     const char* lastModuleCommandResult = nullptr;
     DiagnosticDto lastDiagnosticData;
+    UpdateDto lastUpdateData;
     ApiPriority lastDiagnosticDataPriority = ApiPriority::UNDEFINED;
+    ApiPriority lastUpdateDataPriority = ApiPriority::UNDEFINED;
     
     // Statistics
     int restApiSendFailsValue = 0;
@@ -62,6 +66,7 @@ public:
         sendAnalogInputDeviceCommandExecutionResultCalled = false;
         sendModuleCommandExecutionResultCalled = false;
         sendDiagnosticDataCalled = false;
+        sendModuleUpdateDataCalled = false;
         resetApiStatisticsCalled = false;
         
         initReturnValue = true;
@@ -74,6 +79,7 @@ public:
         sendAnalogInputDeviceCommandExecutionResultReturnValue = true;
         sendModuleCommandExecutionResultReturnValue = true;
         sendDiagnosticDataReturnValue = true;
+        sendModuleUpdateDataReturnValue = true;
         
         currentApiPriority = ApiPriority::REST_PREFERRED;
         lastSetApiPriority = ApiPriority::UNDEFINED;
@@ -86,6 +92,7 @@ public:
         lastAnalogInputDeviceCommandResult = nullptr;
         lastModuleCommandResult = nullptr;
         lastDiagnosticDataPriority = ApiPriority::UNDEFINED;
+        lastUpdateDataPriority = ApiPriority::UNDEFINED;
         
         restApiSendFailsValue = 0;
         mqttApiSendFailsValue = 0;
@@ -161,6 +168,13 @@ public:
         lastDiagnosticData = diagnosticData;
         lastDiagnosticDataPriority = priority;
         return sendDiagnosticDataReturnValue;
+    }
+    
+    bool sendModuleUpdateData(const UpdateDto& updateData, ApiPriority priority = ApiPriority::UNDEFINED) override {
+        sendModuleUpdateDataCalled = true;
+        lastUpdateData = updateData;
+        lastUpdateDataPriority = priority;
+        return sendModuleUpdateDataReturnValue;
     }
     
     int getRestApiSendFails() const override {
