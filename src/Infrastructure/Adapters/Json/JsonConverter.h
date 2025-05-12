@@ -9,7 +9,6 @@
 #include <sstream>
 #include <algorithm>
 
-// Helper function to extract value between two delimiters
 static std::string extractValue(const std::string &src, const std::string &key)
 {
     auto keyPos = src.find("\"" + key + "\"");
@@ -18,13 +17,25 @@ static std::string extractValue(const std::string &src, const std::string &key)
     auto colon = src.find(':', keyPos);
     if (colon == std::string::npos)
         return "";
-    auto start = src.find_first_of("\"", colon + 1);
-    if (start == std::string::npos)
+    
+    // Skip spaces after colon
+    size_t valueStart = colon + 1;
+    while (valueStart < src.size() && std::isspace(src[valueStart]))
+        ++valueStart;
+
+    if (valueStart < src.size() && src[valueStart] == '"') {
+        auto start = valueStart;
+        auto end = src.find_first_of("\"", start + 1);
+        if (end == std::string::npos)
+            return "";
+        return src.substr(start + 1, end - start - 1);
+    }
+
+    if (src.substr(valueStart, 4) == "null") {
         return "";
-    auto end = src.find_first_of("\"", start + 1);
-    if (end == std::string::npos)
-        return "";
-    return src.substr(start + 1, end - start - 1);
+    }
+
+    return "";
 }
 
 // Helper function to extract array section
@@ -84,11 +95,36 @@ static int extractIntValue(const std::string &src, const std::string &key)
     auto colon = src.find(':', keyPos);
     if (colon == std::string::npos)
         return 0;
-    auto start = src.find_first_of("0123456789-", colon + 1);
-    if (start == std::string::npos)
+
+    // Skip spaces after colon
+    size_t valueStart = colon + 1;
+    while (valueStart < src.size() && std::isspace(src[valueStart]))
+        ++valueStart;
+
+    if (valueStart + 4 <= src.size() && src.substr(valueStart, 4) == "null") {
         return 0;
-    auto end = src.find_first_not_of("0123456789-", start);
-    return std::stoi(src.substr(start, end - start));
+    }
+
+    auto start = valueStart;
+    if (start < src.size() && src[start] == '-') {
+        ++start; // Skip the minus sign
+    }
+
+    if (start >= src.size() || !std::isdigit(src[start])) {
+        return 0;
+    }
+
+    auto end = src.find_first_not_of("0123456789", start);
+    if (end == std::string::npos) {
+        end = src.size();
+    }
+
+    try {
+        std::string numStr = src.substr(valueStart, end - valueStart);
+        return std::stoi(numStr);
+    } catch (const std::exception& e) {
+        return 0;
+    }
 }
 
 // Helper function to extract double value
