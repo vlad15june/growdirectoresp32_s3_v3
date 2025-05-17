@@ -3,7 +3,7 @@
 
 #include <vector>
 #include <string>
-#include <optional>
+#include "Core/Utils/Optional.h"
 
 template<typename T>
 class IRepository {
@@ -13,7 +13,7 @@ public:
      * @param uid Unique identifier of the entity
      * @return Entity if found, nullopt otherwise
      */
-    virtual std::optional<T> get(const char* uid) = 0;
+    virtual Utils::Optional<T> get(const char* uid) = 0;
 
     /**
      * @brief Get all entities

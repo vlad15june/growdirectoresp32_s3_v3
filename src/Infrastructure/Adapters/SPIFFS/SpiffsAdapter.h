@@ -44,38 +44,63 @@ public:
         }
     }
 
-    String readSPIFFSstr(String filePath) override {
+    String readSPIFFSstr(const char* filePath) override {
         File file = SPIFFS.open(filePath, "r");
         if (!file) {
-            log("Failed to open file for reading: %s", filePath.c_str());
+            log("Failed to open file for reading: %s", filePath);
             return "";
         }
         String content = file.readString();
         file.close();
-        log("Read file: %s, length: %d", filePath.c_str(), content.length());
+        log("Read file: %s, length: %d", filePath, content.length());
         return content;
     }
 
-    void RemoveFile(String filePath) override {
+    void RemoveFile(const char* filePath) override {
         if (SPIFFS.exists(filePath)) {
             if (SPIFFS.remove(filePath)) {
-                log("File removed: %s", filePath.c_str());
+                log("File removed: %s", filePath);
             } else {
-                log("Failed to remove file: %s", filePath.c_str());
+                log("Failed to remove file: %s", filePath);
             }
         } else {
-            log("File does not exist: %s", filePath.c_str());
+            log("File does not exist: %s", filePath);
         }
     }
 
-    void RewriteToFile(String filePath, String body) override {
+    void RewriteToFile(const char* filePath, const char* body) override {
         File file = SPIFFS.open(filePath, "w");
         if (!file) {
-            log("Failed to open file for writing: %s", filePath.c_str());
+            log("Failed to open file for writing: %s", filePath);
             return;
         }
         size_t written = file.print(body);
         file.close();
-        log("Wrote %d bytes to file: %s", written, filePath.c_str());
+        log("Wrote %d bytes to file: %s", written, filePath);
+    }
+
+    bool directoryExists(const char* path) override {
+        File dir = SPIFFS.open(path);
+        if (!dir) {
+            log("Directory does not exist: %s", path);
+            return false;
+        }
+        if (!dir.isDirectory()) {
+            dir.close();
+            log("Path exists but is not a directory: %s", path);
+            return false;
+        }
+        dir.close();
+        log("Directory exists: %s", path);
+        return true;
+    }
+
+    bool createDirectory(const char* path) override {
+        if (SPIFFS.mkdir(path)) {
+            log("Directory created: %s", path);
+            return true;
+        }
+        log("Failed to create directory: %s", path);
+        return false;
     }
 };

@@ -59,7 +59,7 @@ public:
     }
     
     bool launchTestServer() override {
-        
+        return false; // Not implemented
     }
         
 };

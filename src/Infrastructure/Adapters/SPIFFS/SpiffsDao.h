@@ -6,6 +6,7 @@
 #include <string>
 #include <vector>
 #include <stdexcept>
+#include <algorithm>
 
 template <typename T>
 class SpiffsDao : public ISpiffsDao<T> {
@@ -24,62 +25,72 @@ protected:
     virtual std::string entitiesToJson(const std::vector<T>& entities) = 0;
     virtual bool jsonToEntities(const std::string& jsonStr, std::vector<T>& entities) = 0;
 
+    void initialize() {
+        std::string basePath = getBasePath();
+        if (!spiffsAdapter->directoryExists(basePath.c_str())) {
+            spiffsAdapter->createDirectory(basePath.c_str());
+        }
+        filePath = basePath + "/" + getFileName();
+    }
+
 public:
     SpiffsDao(ISpiffsAdapter* spiffsAdapter, IJsonConverter* jsonConverter)
         : spiffsAdapter(spiffsAdapter), jsonConverter(jsonConverter) {
         if (!spiffsAdapter || !jsonConverter) {
             throw std::invalid_argument("Adapters cannot be null");
         }
-
-        std::string basePath = getBasePath();
-        if (!spiffsAdapter->directoryExists(basePath.c_str())) {
-            spiffsAdapter->createDirectory(basePath.c_str());
-        }
-
-        filePath = basePath + "/" + getFileName();
     }
 
     virtual ~SpiffsDao() = default;
 
-    bool save(const T& entity, const std::string& id) override {
+    bool save(const T& entity, const std::string& uid) override {
+        if (filePath.empty()) initialize();
         std::vector<T> entities;
         getAll(entities);
-        auto it = std::find_if(entities.begin(), entities.end(), [&id](const T& e) { return e.id == id; });
+        auto it = std::find_if(entities.begin(), entities.end(), [&uid](const T& e) { return e.uid == uid; });
         if (it != entities.end()) {
             *it = entity;
         } else {
             entities.push_back(entity);
         }
-
         return saveAll(entities);
     }
 
-    bool getById(const std::string& id, T& entity) override {
+    bool getById(const std::string& uid, T& entity) override {
+        if (filePath.empty()) initialize();
         std::vector<T> entities;
         if (!getAll(entities)) return false;
-        auto it = std::find_if(entities.begin(), entities.end(), [&id](const T& e) { return e.id == id; });
+        auto it = std::find_if(entities.begin(), entities.end(), [&uid](const T& e) { return e.uid == uid; });
         if (it == entities.end()) return false;
         entity = *it;
         return true;
     }
 
-    bool remove(const std::string& id) override {
+    bool remove(const std::string& uid) override {
+        if (filePath.empty()) initialize();
         std::vector<T> entities;
         if (!getAll(entities)) return false;
-        auto it = std::find_if(entities.begin(), entities.end(), [&id](const T& e) { return e.id == id; });
+        auto it = std::find_if(entities.begin(), entities.end(), [&uid](const T& e) { return e.uid == uid; });
         if (it == entities.end()) return false;
         entities.erase(it);
         return saveAll(entities);
     }
 
     bool saveAll(const std::vector<T>& entities) override {
+        if (filePath.empty()) initialize();
         std::string jsonStr = entitiesToJson(entities);
-        return spiffsAdapter->RewriteToFile(filePath.c_str(), jsonStr.c_str());
+        spiffsAdapter->RewriteToFile(filePath.c_str(), jsonStr.c_str());
+        return true;
     }
 
     bool getAll(std::vector<T>& entities) override {
+        if (filePath.empty()) initialize();
         String content = spiffsAdapter->readSPIFFSstr(filePath.c_str());
         if (content.length() == 0) return false;
         return jsonToEntities(content.c_str(), entities);
     }
 };
+
+// Force explicit template instantiation for Rule
+#include "Core/Domain/Data/Entities/Rule.h"
+template class SpiffsDao<Rule>;

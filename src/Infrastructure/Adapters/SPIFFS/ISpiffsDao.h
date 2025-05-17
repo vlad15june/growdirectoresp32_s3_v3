@@ -15,25 +15,25 @@ public:
     /**
      * @brief Save an entity to SPIFFS
      * @param entity The entity to save
-     * @param id Unique identifier for the entity
+     * @param uid Unique identifier for the entity
      * @return true if the operation was successful, false otherwise
      */
-    virtual bool save(const T& entity, const std::string& id) = 0;
+    virtual bool save(const T& entity, const std::string& uid) = 0;
 
     /**
      * @brief Get an entity by its ID
-     * @param id The ID of the entity to retrieve
+     * @param uid The ID of the entity to retrieve
      * @param entity Reference to an entity object to populate
      * @return true if the entity was found, false otherwise
      */
-    virtual bool getById(const std::string& id, T& entity) = 0;
+    virtual bool getById(const std::string& uid, T& entity) = 0;
 
     /**
      * @brief Remove an entity from SPIFFS storage
-     * @param id The ID of the entity to remove
+     * @param uid The ID of the entity to remove
      * @return true if the entity was removed, false otherwise
      */
-    virtual bool remove(const std::string& id) = 0;
+    virtual bool remove(const std::string& uid) = 0;
 
     /**
      * @brief Save multiple entities to SPIFFS

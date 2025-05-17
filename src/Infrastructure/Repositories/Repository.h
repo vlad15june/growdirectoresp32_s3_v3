@@ -4,7 +4,6 @@
 #include "Infrastructure/Adapters/SPIFFS/ISpiffsDao.h"
 #include <string>
 #include <vector>
-#include <optional>
 #include <memory>
 
 /**
@@ -32,13 +31,13 @@ public:
      * @param uid Unique identifier of the entity
      * @return Entity if found, nullopt otherwise
      */
-    std::optional<T> get(const char* uid) override {
-        if (!uid) return std::nullopt;
+    Utils::Optional<T> get(const char* uid) override {
+        if (!uid) return Utils::nullopt<T>();
         T entity;
         if (dao->getById(uid, entity)) {
-            return entity;
+            return Utils::Optional<T>(entity);
         }
-        return std::nullopt;
+        return Utils::nullopt<T>();
     }
 
     /**

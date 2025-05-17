@@ -51,6 +51,8 @@
 #include "Infrastructure/Controllers/MQTT/MqttApiService.h"
 #include "Infrastructure/Controllers/API/HybridAPIService.h"
 #include "Infrastructure/Adapters/SPIFFS/SpiffsAdapter.h"
+#include "Infrastructure/Adapters/SPIFFS/SpiffsRuleDao.h"
+#include "Infrastructure/Repositories/RuleRepository.h"
 #include "Application/Services/Devices/IDeviceService.h"
 #include "Application/Services/Devices/DeviceService.h"
 
@@ -192,6 +194,9 @@ LoopServiceFactory loopServiceFactory(
     &diagnosticService); // Add DiagnosticService here
 
 SpiffsAdapter spiffsAdapter(&mqttLogger, &debugSystem);
+
+SpiffsRuleDao ruleDao(&spiffsAdapter, &jsonConverter);
+RuleRepository ruleRepository(&ruleDao);
 
 DeviceModel deviceModel(&moduleConfig, &moduleStructure);
 

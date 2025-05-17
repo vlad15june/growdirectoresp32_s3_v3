@@ -1,3 +1,6 @@
+#ifndef RULE_ENUMS_H
+#define RULE_ENUMS_H
+
 enum class RuleType {
     STEP,
     SENSOR,
@@ -21,3 +24,5 @@ enum class RuleState {
     PENDING,
     DELETING
 };
+
+#endif // RULE_ENUMS_H

@@ -58,10 +58,32 @@ public:
      * @param jsonConverter JSON converter for serialization/deserialization
      */
     SpiffsRuleDao(ISpiffsAdapter* spiffsAdapter, IJsonConverter* jsonConverter)
-        : SpiffsDao<Rule>(spiffsAdapter, jsonConverter) {}
+        : SpiffsDao<Rule>(spiffsAdapter, jsonConverter) {
+        initialize(); // Initialize after object creation
+    }
+
+    // Implementation of ISpiffsDao methods - needed to resolve ambiguity
+    bool save(const Rule& entity, const std::string& uid) override {
+        return SpiffsDao<Rule>::save(entity, uid);
+    }
+
+    bool getById(const std::string& uid, Rule& entity) override {
+        return SpiffsDao<Rule>::getById(uid, entity);
+    }
+
+    bool remove(const std::string& uid) override {
+        return SpiffsDao<Rule>::remove(uid);
+    }
+
+    bool saveAll(const std::vector<Rule>& entities) override {
+        return SpiffsDao<Rule>::saveAll(entities);
+    }
+
+    bool getAll(std::vector<Rule>& entities) override {
+        return SpiffsDao<Rule>::getAll(entities);
+    }
 
     // Implementation of ISpiffsRuleDao methods
-
     bool saveRule(const Rule& rule) override {
         if (rule.uid.empty()) return false;
         return SpiffsDao<Rule>::save(rule, rule.uid);

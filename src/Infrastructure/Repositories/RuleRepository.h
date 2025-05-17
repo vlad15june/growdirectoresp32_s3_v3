@@ -30,6 +30,39 @@ public:
         }
     }
 
+    // IRepository<Rule> implementations 
+    Utils::Optional<Rule> get(const char* uid) override {
+        return Repository<Rule>::get(uid);
+    }
+
+    std::vector<Rule> getAll() override {
+        return Repository<Rule>::getAll();
+    }
+
+    bool save(const Rule& entity) override {
+        return Repository<Rule>::save(entity);
+    }
+
+    int saveAll(const std::vector<Rule>& entities) override {
+        return Repository<Rule>::saveAll(entities);
+    }
+
+    bool remove(const char* uid) override {
+        return Repository<Rule>::remove(uid);
+    }
+
+    int removeAll() override {
+        return Repository<Rule>::removeAll();
+    }
+
+    int count() override {
+        return Repository<Rule>::count();
+    }
+
+    bool exists(const char* uid) override {
+        return Repository<Rule>::exists(uid);
+    }
+
     /**
      * @brief Get rules for a specific device
      * @param deviceUid Device unique identifier
@@ -52,6 +85,64 @@ public:
         std::vector<Rule> rules;
         ruleDao->getRulesByType(type, rules);
         return rules;
+    }
+
+    /**
+     * @brief Get rules by sensor UID
+     * @param sensorUid Sensor unique identifier
+     * @return Vector of rules associated with the sensor
+     */
+    std::vector<Rule> getRulesBySensorUid(const char* sensorUid) override {
+        if (!sensorUid) return {};
+
+        // Get all rules and filter by sensor UID
+        std::vector<Rule> allRules = Repository<Rule>::getAll();
+        std::vector<Rule> sensorRules;
+
+        for (const auto& rule : allRules) {
+            if (rule.sensorUid == sensorUid) {
+                sensorRules.push_back(rule);
+            }
+        }
+
+        return sensorRules;
+    }
+
+    /**
+     * @brief Get active rules by type
+     * @param type Rule type to filter by
+     * @return Vector of active rules of the specified type
+     */
+    std::vector<Rule> getActiveRulesByType(RuleType type) override {
+        std::vector<Rule> activeRules = getActiveRules();
+        std::vector<Rule> typedRules;
+
+        for (const auto& rule : activeRules) {
+            if (rule.ruleType == type) {
+                typedRules.push_back(rule);
+            }
+        }
+
+        return typedRules;
+    }
+
+    /**
+     * @brief Get rules that need synchronization
+     * @return Vector of rules that are not synchronized
+     */
+    std::vector<Rule> getRulesNeedingSynchronization() override {
+        // Get all rules first
+        std::vector<Rule> allRules = Repository<Rule>::getAll();
+        std::vector<Rule> unsyncedRules;
+        
+        // Filter rules that need synchronization
+        for (const auto& rule : allRules) {
+            if (rule.state != RuleState::SYNCHRONIZED) {
+                unsyncedRules.push_back(rule);
+            }
+        }
+        
+        return unsyncedRules;
     }
 
     /**
