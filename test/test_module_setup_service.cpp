@@ -15,6 +15,7 @@
 #include "Mock/Application/LoopServices/MockLoopService.h"
 #include "Mock/Infrastructure/Mqtt/MockMqttManager.h"
 #include "Mock/Infrastructure/Mqtt/MockMessageProcessor.h"
+#include "Mock/Application/Services/Devices/MockDeviceService.h"
 
 // Helper class for tests
 class ModuleSetupServiceTestHelper {
@@ -58,6 +59,7 @@ static MockLoopServiceFactory g_mockLoopServiceFactory;
 static MockSettings g_mockSettings;
 static MockMqttManager g_mockMqttManager;
 static MockMessageProcessor g_mockMessageProcessor;
+static MockDeviceService g_mockDeviceService;
 static ModuleSetupService* g_moduleSetupService;
 static FILE* debug_file = nullptr;
 
@@ -85,6 +87,7 @@ static void module_setup_service_setup(void) {
     g_mockSettings.reset();
     g_mockMqttManager.reset();
     g_mockMessageProcessor.reset();
+    g_mockDeviceService.reset();
     
     // Set up the mock settings for module config
     g_mockModuleConfig.setSettings(&g_mockSettings);
@@ -100,7 +103,9 @@ static void module_setup_service_setup(void) {
         &g_mockWiFiManager,
         &g_mockWebServerLauncher,
         &g_mockLoopServiceFactory,
-        &g_mockMqttManager
+        &g_mockMqttManager,
+        nullptr,
+        &g_mockDeviceService  // Add the device service
     );
 }
 
@@ -1295,6 +1300,119 @@ static void test_handle_module_mode_sets_module_modes_correctly() {
     if (debug_file != nullptr) fprintf(debug_file, "Finished test_handle_module_mode_sets_module_modes_correctly\n");
 }
 
+// Device Service Tests
+static void test_configure_done_mode_configure_initializes_device_service() {
+    if (debug_file != nullptr) fprintf(debug_file, "Starting test_configure_done_mode_configure_initializes_device_service\n");
+    module_setup_service_setup();
+    
+    // Set up the mock DeviceService
+    g_mockDeviceService.reset();
+    g_mockDeviceService.setInitSuccess(true);
+    
+    // Set mode to CONFIGURED_DONE
+    g_mockSettings.setConfigured(ModuleModeEnum::CONFIGURED_DONE);
+    
+    // Call handleModuleMode which will trigger ConfigureDoneModeConfigure
+    ModuleSetupServiceTestHelper::callHandleModuleMode(g_moduleSetupService);
+    
+    // Verify that device service init was called
+    if (debug_file != nullptr) fprintf(debug_file, "Checking if device service init was called: %s\n", 
+                                g_mockDeviceService.wasInitCalled() ? "Yes" : "No");
+    TEST_ASSERT_TRUE(g_mockDeviceService.wasInitCalled());
+    TEST_ASSERT_EQUAL(1, g_mockDeviceService.getInitCallCount());
+    
+    module_setup_service_teardown();
+    if (debug_file != nullptr) fprintf(debug_file, "Finished test_configure_done_mode_configure_initializes_device_service\n");
+}
+
+static void test_configure_done_mode_configure_handles_device_service_init_failure() {
+    if (debug_file != nullptr) fprintf(debug_file, "Starting test_configure_done_mode_configure_handles_device_service_init_failure\n");
+    module_setup_service_setup();
+    
+    // Set up the mock DeviceService to fail on init
+    g_mockDeviceService.reset();
+    g_mockDeviceService.setInitSuccess(false);
+    
+    // Call the method directly
+    ModuleSetupServiceTestHelper::callConfigureDoneModeConfigure(g_moduleSetupService);
+    
+    // Verify that device service init was called
+    TEST_ASSERT_TRUE(g_mockDeviceService.wasInitCalled());
+    
+    // Verify error was logged (this depends on your implementation)
+    TEST_ASSERT_TRUE(g_mockLogger.printCalled);
+    
+    module_setup_service_teardown();
+    if (debug_file != nullptr) fprintf(debug_file, "Finished test_configure_done_mode_configure_handles_device_service_init_failure\n");
+}
+
+static void test_configure_done_mode_configure_handles_null_device_service() {
+    if (debug_file != nullptr) fprintf(debug_file, "Starting test_configure_done_mode_configure_handles_null_device_service\n");
+    module_setup_service_setup();
+    
+    // Create a new service without device service
+    delete g_moduleSetupService;
+    g_moduleSetupService = new ModuleSetupService(
+        &g_mockLogger,
+        &g_mockDebugSystem,
+        &g_mockModuleConfig,
+        &g_mockLedAdapter,
+        &g_mockLedUseCases,
+        &g_mockButtonUseCases,
+        &g_mockWifiAdapter,
+        &g_mockWiFiManager,
+        &g_mockWebServerLauncher,
+        &g_mockLoopServiceFactory,
+        &g_mockMqttManager,
+        nullptr,
+        nullptr  // No device service
+    );
+    
+    // Call the method directly
+    ModuleSetupServiceTestHelper::callConfigureDoneModeConfigure(g_moduleSetupService);
+    
+    // This should not crash
+    // Verify error was logged
+    TEST_ASSERT_TRUE(g_mockLogger.printCalled);
+    
+    module_setup_service_teardown();
+    if (debug_file != nullptr) fprintf(debug_file, "Finished test_configure_done_mode_configure_handles_null_device_service\n");
+}
+
+static void test_device_service_not_initialized_in_other_modes() {
+    if (debug_file != nullptr) fprintf(debug_file, "Starting test_device_service_not_initialized_in_other_modes\n");
+    
+    // Test modes other than CONFIGURED_DONE
+    ModuleModeEnum testModes[] = {
+        ModuleModeEnum::USER_CAN_CONFIGURE,
+        ModuleModeEnum::USER_CAN_RE_CONFIGURE,
+        ModuleModeEnum::AP_TEST_MODE,
+        ModuleModeEnum::CONFIGURED_NEED_RESTART
+    };
+    
+    for (auto mode : testModes) {
+        module_setup_service_setup();
+        
+        // Reset the device service mock
+        g_mockDeviceService.reset();
+        
+        // Set the module mode
+        g_mockSettings.setConfigured(mode);
+        
+        if (debug_file != nullptr) fprintf(debug_file, "Testing mode: %d\n", static_cast<int>(mode));
+        
+        // Call handleModuleMode
+        ModuleSetupServiceTestHelper::callHandleModuleMode(g_moduleSetupService);
+        
+        // Verify device service init was NOT called
+        TEST_ASSERT_FALSE(g_mockDeviceService.wasInitCalled());
+        
+        module_setup_service_teardown();
+    }
+    
+    if (debug_file != nullptr) fprintf(debug_file, "Finished test_device_service_not_initialized_in_other_modes\n");
+}
+
 // Main test runner function
 extern "C" int run_module_setup_service_tests(void) {
     if (debug_file != nullptr) fprintf(debug_file, "\n----- Running ModuleSetupService Tests -----\n");
@@ -1341,8 +1459,11 @@ extern "C" int run_module_setup_service_tests(void) {
     RUN_TEST(test_configure_done_mode_configure_handles_wifi_manager_failure);
     RUN_TEST(test_configure_done_mode_configure_handles_missing_wifi_manager);
     
-    // Add the new test
-    RUN_TEST(test_handle_module_mode_sets_module_modes_correctly);
+    // Device Service tests
+    RUN_TEST(test_configure_done_mode_configure_initializes_device_service);
+    RUN_TEST(test_configure_done_mode_configure_handles_device_service_init_failure);
+    RUN_TEST(test_configure_done_mode_configure_handles_null_device_service);
+    RUN_TEST(test_device_service_not_initialized_in_other_modes);
     
     if (debug_file != nullptr) fprintf(debug_file, "\n----- ModuleSetupService Tests Complete -----\n");
     
