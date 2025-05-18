@@ -19,6 +19,7 @@
 #include "Core/Domain/Data/Models/ModuleStructure.h"
 #include "Core/Domain/Enums/BootTypeEnum.h"
 #include "Core/Domain/Enums/FileSystemStatusEnum.h"
+#include "Application/Services/Devices/IDeviceService.h"
 
 class IModuleSetupService
 {
@@ -46,6 +47,7 @@ private:
     ILoopServiceFactory *loopServiceFactory;
     IMqttManager *mqttManager;
     ModuleStructure *moduleStructure;
+    IDeviceService *deviceService;
 
     void log(const char *format, ...);
 
@@ -92,7 +94,8 @@ public:
         IWebServerLauncher *webServerLauncher = nullptr,
         ILoopServiceFactory *loopServiceFactory = nullptr,
         IMqttManager *mqttManager = nullptr,
-        ModuleStructure *moduleStructure = nullptr);
+        ModuleStructure *moduleStructure = nullptr,
+        IDeviceService *deviceService = nullptr);
 
     void setupModule() override;
     std::unique_ptr<ILoopService> getLoopService() override;
@@ -112,18 +115,20 @@ inline ModuleSetupService::ModuleSetupService(
     IWebServerLauncher *webServerLauncher,
     ILoopServiceFactory *loopServiceFactory,
     IMqttManager *mqttManager,
-    ModuleStructure *moduleStructure) : logger(logger),
-                                        debugSystem(debugSystem),
-                                        moduleConfig(moduleConfig),
-                                        ledAdapter(ledAdapter),
-                                        ledUseCases(ledUseCases),
-                                        buttonUseCases(buttonUseCases),
-                                        wifiAdapter(wifiAdapter),
-                                        wifiManager(wifiManager),
-                                        webServerLauncher(webServerLauncher),
-                                        loopServiceFactory(loopServiceFactory),
-                                        mqttManager(mqttManager),
-                                        moduleStructure(moduleStructure)
+    ModuleStructure *moduleStructure,
+    IDeviceService *deviceService) : logger(logger),
+                                    debugSystem(debugSystem),
+                                    moduleConfig(moduleConfig),
+                                    ledAdapter(ledAdapter),
+                                    ledUseCases(ledUseCases),
+                                    buttonUseCases(buttonUseCases),
+                                    wifiAdapter(wifiAdapter),
+                                    wifiManager(wifiManager),
+                                    webServerLauncher(webServerLauncher),
+                                    loopServiceFactory(loopServiceFactory),
+                                    mqttManager(mqttManager),
+                                    moduleStructure(moduleStructure),
+                                    deviceService(deviceService)
 {
 }
 
@@ -264,6 +269,16 @@ inline void ModuleSetupService::ConfigureDoneModeConfigure()
 
     fillModuleStructure();
     // udpSetup();
+
+    if (deviceService)
+    {
+        deviceService->init();
+        log("SETUP: Device service initialized");
+    }
+    else
+    {
+        log("SETUP: Device service not available");
+    }
 
     log("SETUP: Module prepared for operation");
 }

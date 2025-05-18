@@ -170,7 +170,7 @@ DiagnosticService diagnosticService(
     &ntpTimeAdapter,
     &arduinoAdapter,
     &mqttManager,
-    &hybridApiService);  // Added hybrid API service
+    &hybridApiService);
 
 OnChangeLocalIpUseCase onChangeLocalIpUseCase(
     wifiAdapter,
@@ -191,7 +191,7 @@ LoopServiceFactory loopServiceFactory(
     &arduinoAdapter,
     &onChangeLocalIpUseCase,
     &mqttManager,
-    &diagnosticService); // Add DiagnosticService here
+    &diagnosticService);
 
 SpiffsAdapter spiffsAdapter(&mqttLogger, &debugSystem);
 
@@ -219,14 +219,11 @@ ModuleSetupService moduleSetupService(
     &webServerLauncher,
     &loopServiceFactory,
     &mqttManager,
-    &moduleStructure);
+    &moduleStructure,
+    &deviceService);
 
 void initDependencies()
 {
     topicHandlerFactory.setModuleConfig(&moduleConfig);
-    
-    // Initialize device model and service
-    deviceModel.init();
-    deviceService.init();
 }
 #endif // GLOBALS_H
