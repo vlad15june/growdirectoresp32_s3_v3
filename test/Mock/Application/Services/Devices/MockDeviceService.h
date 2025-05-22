@@ -8,6 +8,9 @@ private:
     bool initCalled = false;
     bool initSuccess = true;
     int initCallCount = 0;
+    
+    bool loopCalled = false;
+    int loopCallCount = 0;
 
 public:
     MockDeviceService() = default;
@@ -19,6 +22,12 @@ public:
         initCalled = true;
         initCallCount++;
         return initSuccess;
+    }
+    
+    // Implement the required loop method
+    void loop() override {
+        loopCalled = true;
+        loopCallCount++;
     }
     
     // Helper methods for testing
@@ -34,10 +43,20 @@ public:
         return initCallCount;
     }
     
+    bool wasLoopCalled() const {
+        return loopCalled;
+    }
+    
+    int getLoopCallCount() const {
+        return loopCallCount;
+    }
+    
     void reset() {
         initCalled = false;
         initSuccess = true;
         initCallCount = 0;
+        loopCalled = false;
+        loopCallCount = 0;
     }
 };
 

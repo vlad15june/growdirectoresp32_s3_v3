@@ -11,6 +11,8 @@
 #include "Application/DTOs/UpdateDto.h"
 #include "Infrastructure/Adapters/Time/INTPTimeAdapter.h"
 #include "Core/Domain/Interfaces/Adapters/IArduinoAdapter.h"
+#include "Core/Domain/Interfaces/UseCases/DeviceControl/IProcessDeviceStateUseCase.h"
+#include "Core/Domain/Interfaces/UseCases/DeviceControl/IProcessDeviceStateUseCaseFactory.h"
 
 /**
  * @brief Implementation of the device service that manages devices
@@ -21,11 +23,13 @@ private:
     ModuleStructure* moduleStructure;
     IDeviceModel* deviceModel;
     
-    // Time adapter for time operations
     INTPTimeAdapter* timeAdapter;
     
-    // Arduino adapter for platform-specific operations
     IArduinoAdapter* arduinoAdapter;
+    
+    IProcessDeviceStateUseCaseFactory* deviceStateUseCaseFactory;
+    
+    IProcessDeviceStateUseCase* processDeviceStateUseCase;
 
 public:
     /**
@@ -35,18 +39,17 @@ public:
      * @param deviceModel Model for device management
      * @param timeAdapter Adapter for time operations
      * @param arduinoAdapter Adapter for Arduino operations
+     * @param deviceStateUseCaseFactory Factory for creating device state processors
      */
     DeviceService(IModuleConfig* moduleConfig, 
                   ModuleStructure* moduleStructure,
                   IDeviceModel* deviceModel,
                   INTPTimeAdapter* timeAdapter,
-                  IArduinoAdapter* arduinoAdapter);
-    
-    /**
-     * @brief Destructor for DeviceService
-     */
+                  IArduinoAdapter* arduinoAdapter,
+                  IProcessDeviceStateUseCaseFactory* deviceStateUseCaseFactory);
+
     ~DeviceService();
     
-    // Implementation of IDeviceService methods
     bool init() override;
+    void loop() override;
 };

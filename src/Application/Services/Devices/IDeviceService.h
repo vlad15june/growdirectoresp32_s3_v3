@@ -14,10 +14,8 @@ class IDeviceService {
 public:
     virtual ~IDeviceService() = default;
     
-    // Initialization
     virtual bool init() = 0;
+    virtual void loop() = 0;
 
-    //loop
-    
     //call back for mqtt
 };

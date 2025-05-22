@@ -19,6 +19,7 @@
 #include "Core/Domain/UseCases/Buttons/ButtonUseCases.h"
 #include "Core/Domain/UseCases/ModuleMode/OnChangeModuleModeUseCase.h"
 #include "Core/Domain/UseCases/ModuleMode/OnChangeLocalIpUseCase.h"
+#include "Core/Domain/UseCases/DeviceControl/ProcessDeviceStateUseCaseFactory.h"
 
 #include "Core/Domain/Data/Models/ModuleStructure.h"
 #include "Core/Domain/Data/Models/IDeviceModel.h"
@@ -200,12 +201,15 @@ RuleRepository ruleRepository(&ruleDao);
 
 DeviceModel deviceModel(&moduleConfig, &moduleStructure);
 
+ProcessDeviceStateUseCaseFactory deviceStateUseCaseFactory;
+
 DeviceService deviceService(
     &moduleConfig,
     &moduleStructure,
     &deviceModel,
     &ntpTimeAdapter,
-    &arduinoAdapter);
+    &arduinoAdapter,
+    &deviceStateUseCaseFactory);
 
 ModuleSetupService moduleSetupService(
     &mqttLogger,
