@@ -26,9 +26,6 @@ private:
     
     // Arduino adapter for platform-specific operations
     IArduinoAdapter* arduinoAdapter;
-    
-    // Helper methods
-    DeviceDto createDeviceDto(Device* device);
 
 public:
     /**
@@ -52,14 +49,4 @@ public:
     
     // Implementation of IDeviceService methods
     bool init() override;
-    Device* getDeviceByUid(const char* deviceUid) override;
-    std::vector<Device*> getAllDevices() override;
-    bool updateDeviceState(const char* deviceUid, DeviceStateEnum state) override;
-    bool setDeviceValue(const char* deviceUid, float value) override;
-    UpdateDto createUpdateDto() override;
-    bool turnOnDevice(const char* deviceUid) override;
-    bool turnOffDevice(const char* deviceUid) override;
-    bool isDeviceOn(const char* deviceUid) override;
-    void processDevices() override;
-    void updateDeviceSensorValues() override;
 };

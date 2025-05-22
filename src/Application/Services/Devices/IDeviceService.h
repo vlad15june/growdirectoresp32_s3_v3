@@ -16,22 +16,8 @@ public:
     
     // Initialization
     virtual bool init() = 0;
+
+    //loop
     
-    // Device management
-    virtual Device* getDeviceByUid(const char* deviceUid) = 0;
-    virtual std::vector<Device*> getAllDevices() = 0;
-    virtual bool updateDeviceState(const char* deviceUid, DeviceStateEnum state) = 0;
-    virtual bool setDeviceValue(const char* deviceUid, float value) = 0;
-    
-    // Status generation
-    virtual UpdateDto createUpdateDto() = 0;
-    
-    // Device control
-    virtual bool turnOnDevice(const char* deviceUid) = 0;
-    virtual bool turnOffDevice(const char* deviceUid) = 0;
-    virtual bool isDeviceOn(const char* deviceUid) = 0;
-    
-    // Service routine
-    virtual void processDevices() = 0;
-    virtual void updateDeviceSensorValues() = 0;
+    //call back for mqtt
 };
