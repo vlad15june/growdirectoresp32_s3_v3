@@ -13,6 +13,8 @@ enum DeviceStateEnum {
     DEVICE_STATE_STEP_ON,
     DEVICE_STATE_STEP_WAITING
 };
+//DEVICE_STATE_OFF_BY_RULE -> DEVICE_STATE_OFF
+//
 
 // Utility function to get string representation of device state
 inline const char* getDeviceStateName(DeviceStateEnum deviceState) {

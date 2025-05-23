@@ -201,7 +201,12 @@ RuleRepository ruleRepository(&ruleDao);
 
 DeviceModel deviceModel(&moduleConfig, &moduleStructure);
 
-ProcessDeviceStateUseCaseFactory deviceStateUseCaseFactory;
+ProcessDeviceStateUseCaseFactory deviceStateUseCaseFactory(
+    &mqttLogger,
+    &debugSystem,
+    &moduleConfig,
+    &arduinoAdapter,
+    &deviceModel);
 
 DeviceService deviceService(
     &moduleConfig,

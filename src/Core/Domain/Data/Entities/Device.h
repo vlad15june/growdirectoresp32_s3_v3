@@ -4,6 +4,7 @@
 #include <string>
 #include "Core/Domain/Enums/DeviceStateEnum.h"
 #include "Core/Domain/Enums/DeviceTypeEnum.h"
+#include "Core/Domain/Enums/DirectionEnum.h"
 
 // Base Device class
 class Device {
@@ -29,7 +30,7 @@ public:
     float valueTarget;                         // Target value
     float valueLow;                            // Lower threshold
     float valueHigth;                          // Upper threshold
-    const char* direction;                     // Direction (up/down)
+    DirectionEnum direction;                   // Direction (up/down) - now using enum
     bool range;                                // Range flag
     
     const char* ruleUid;                       // Associated rule UID

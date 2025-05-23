@@ -46,4 +46,9 @@ void DeviceService::loop() {
     if (processDeviceStateUseCase) {
         processDeviceStateUseCase->loop();
     }
+
+    // if (needSendToServer) {
+    //     sendDataToServer();
+    //     needSendToServer = false;
+    // }
 }
