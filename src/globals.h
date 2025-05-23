@@ -214,7 +214,10 @@ DeviceService deviceService(
     &deviceModel,
     &ntpTimeAdapter,
     &arduinoAdapter,
-    &deviceStateUseCaseFactory);
+    &deviceStateUseCaseFactory,
+    &hybridApiService,
+    &mqttLogger,
+    &debugSystem);
 
 ModuleSetupService moduleSetupService(
     &mqttLogger,

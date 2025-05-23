@@ -8,14 +8,21 @@ DeviceService::DeviceService(IModuleConfig* moduleConfig,
                             IDeviceModel* deviceModel,
                             INTPTimeAdapter* timeAdapter,
                             IArduinoAdapter* arduinoAdapter,
-                            IProcessDeviceStateUseCaseFactory* deviceStateUseCaseFactory) 
+                            IProcessDeviceStateUseCaseFactory* deviceStateUseCaseFactory,
+                            IHybridAPIService* hybridApiService,
+                            ILogger* logger,
+                            IDebugSystem* debugSystem) 
     : moduleConfig(moduleConfig), 
       moduleStructure(moduleStructure),
       deviceModel(deviceModel),
       timeAdapter(timeAdapter),
       arduinoAdapter(arduinoAdapter),
       deviceStateUseCaseFactory(deviceStateUseCaseFactory),
-      processDeviceStateUseCase(nullptr) {
+      processDeviceStateUseCase(nullptr),
+      hybridApiService(hybridApiService),
+      logger(logger),
+      debugSystem(debugSystem),
+      lastDeviceUpdateTime(0) {
 }
 
 DeviceService::~DeviceService() {
@@ -26,8 +33,10 @@ DeviceService::~DeviceService() {
 }
 
 bool DeviceService::init() {
+    log("DeviceService: Initializing");
     bool result = deviceModel->init();
     if (!result) {
+        log("DeviceService: Failed to initialize device model");
         return false;
     }
     
@@ -39,6 +48,9 @@ bool DeviceService::init() {
     int moduleType = moduleConfig->getModuleType();
     processDeviceStateUseCase = deviceStateUseCaseFactory->create(moduleType);
     
+    lastDeviceUpdateTime = arduinoAdapter->millis();
+    
+    log("DeviceService: Initialization %s", processDeviceStateUseCase ? "successful" : "failed");
     return processDeviceStateUseCase != nullptr;
 }
 
@@ -47,8 +59,172 @@ void DeviceService::loop() {
         processDeviceStateUseCase->loop();
     }
 
-    // if (needSendToServer) {
-    //     sendDataToServer();
-    //     needSendToServer = false;
-    // }
+    unsigned long currentTime = arduinoAdapter->millis();
+    if (hybridApiService && (currentTime - lastDeviceUpdateTime >= DEVICE_UPDATE_INTERVAL)) {
+        log("DeviceService: Sending device update to server");
+        UpdateDto updateDto = createDeviceUpdateDto();
+        
+        hybridApiService->sendModuleUpdateData(updateDto);
+                
+        lastDeviceUpdateTime = currentTime;
+    }
+}
+
+UpdateDto DeviceService::createDeviceUpdateDto() {
+    UpdateDto dto;
+    
+    dto.growdirectorUid = moduleConfig->getModuleUid();
+    dto.time = timeAdapter->getFormattedTime();
+    dto.millis = arduinoAdapter->millis();
+    
+    ISettings* settings = moduleConfig->getSettings();
+    if (settings) {
+        char accountUidBuffer[256];
+        settings->getAccountUid(accountUidBuffer);
+        dto.accountUid = accountUidBuffer;
+        
+        char userEmailBuffer[256];
+        settings->getUser(userEmailBuffer);
+        dto.email = userEmailBuffer;
+    }
+    
+    auto devices = deviceModel->getAllDevices();
+    for (auto device : devices) {
+        DeviceDto deviceDto;
+        
+        deviceDto.uid = device->deviceUid;
+        deviceDto.state = getDeviceStateName(device->state);
+        deviceDto.switchedAt = device->switchedAt ? device->switchedAt : "";
+        
+        bool isOn = false;
+        if (device->state == DEVICE_STATE_ON || 
+            device->state == DEVICE_STATE_STEP_ON) {
+            isOn = true;
+        }
+        deviceDto.state_hw = isOn ? "on" : "off";
+        
+        deviceDto.isAuto = device->isAuto;
+        deviceDto.isManual = device->isManual;
+        
+        uint32_t secondsToSwitchBack = 0;
+        uint32_t secondsEnabledFor = 0;
+        
+        if (isOn && device->needToSwitchBack) {
+            unsigned long currentDuration = arduinoAdapter->millis() - device->timeOn;
+            if (currentDuration < device->durationOn) {
+                secondsToSwitchBack = (device->durationOn - currentDuration) / 1000;
+            }
+            secondsEnabledFor = device->durationOn / 1000;
+        }
+        
+        if (device->workByRule) {
+            if (device->ruleUid) {
+                deviceDto.ruleUid = device->ruleUid;
+                
+                switch (device->ruleType) {
+                    case RuleType::STEP:
+                        deviceDto.ruleType = "step";
+                        break;
+                    case RuleType::SENSOR:
+                        deviceDto.ruleType = "sensor";
+                        break;
+                    case RuleType::SCHEDULE:
+                        deviceDto.ruleType = "schedule";
+                        break;
+                    case RuleType::EC:
+                        deviceDto.ruleType = "EC";
+                        break;
+                    case RuleType::PH:
+                        deviceDto.ruleType = "pH";
+                        break;
+                    case RuleType::LOOP:
+                        deviceDto.ruleType = "loop";
+                        break;
+                    default:
+                        deviceDto.ruleType = "";
+                        break;
+                }
+            }
+            
+            if (device->deviceType == DEVICE_TYPE_DIGITAL) {
+                DeviceDigitalOut* digitalDevice = static_cast<DeviceDigitalOut*>(device);
+                deviceDto.isRuleTurnOnDevice = digitalDevice->isRuleTurnOnDevice;
+                
+                if (device->state != DEVICE_STATE_DELAY_ON && !digitalDevice->isRuleTurnOnDevice) {
+                    if (device->ruleSensorStopAt) {
+                        deviceDto.ruleSensorStopAt = device->ruleSensorStopAt;
+                    }
+                    deviceDto.ruleSensorValueStop = device->ruleSensorValueStop;
+                    deviceDto.ruleStopReason = device->ruleStopReason ? device->ruleStopReason : "";
+                }
+                
+                if (device->ruleSensorStartAt) {
+                    deviceDto.ruleSensorStartAt = device->ruleSensorStartAt;
+                }
+                
+                deviceDto.ruleVersion = device->ruleVersion;
+                
+                if (device->ruleType == RuleType::PH || 
+                    device->ruleType == RuleType::EC || 
+                    device->ruleType == RuleType::SENSOR || 
+                    device->ruleType == RuleType::STEP) {
+                    
+                    if (device->sensorUid) {
+                        deviceDto.sensorUid = device->sensorUid;
+                    }
+                    deviceDto.sensorValueLow = device->sensorValueLow;
+                    deviceDto.sensorValueHigh = device->sensorValueHigh;
+                    deviceDto.sensorValue = device->sensorValue;
+                    deviceDto.ruleSensorValueStart = device->ruleSensorValueStart;
+                    
+                    if (device->ruleType == RuleType::SENSOR) {
+                        if (digitalDevice->timeToSetPoint > 0) {
+                            deviceDto.timeToSetPoint = digitalDevice->timeToSetPoint;
+                        }
+                    }
+                    
+                    if (device->ruleType == RuleType::PH || 
+                        device->ruleType == RuleType::EC || 
+                        device->ruleType == RuleType::STEP) {
+                        
+                        if (digitalDevice->cyclesToSetPoint > 0) {
+                            deviceDto.cyclesToSetPoint = digitalDevice->cyclesToSetPoint;
+                            deviceDto.currentCycle = digitalDevice->currentCycle;
+                        }
+                    }
+                }
+                
+                if (device->ruleType == RuleType::SCHEDULE) {
+                    deviceDto.ruleScheduleStartAt = device->ruleScheduleStartAt ? device->ruleScheduleStartAt : "";
+                    deviceDto.ruleScheduleDuration = device->ruleScheduleDuration;
+                    deviceDto.secondsToSwitchBack = secondsToSwitchBack;
+                    deviceDto.secondsEnabledFor = secondsEnabledFor;
+                }
+                
+                if (device->ruleType == RuleType::PH || 
+                    device->ruleType == RuleType::EC || 
+                    device->ruleType == RuleType::STEP || 
+                    device->ruleType == RuleType::LOOP) {
+                    
+                    deviceDto.secondsToSwitchBack = secondsToSwitchBack;
+                    deviceDto.secondsDisabledFor = device->mixTime / 1000;
+                    deviceDto.secondsEnabledFor = secondsEnabledFor;
+                }
+            }
+        }
+        
+        if (device->workManual) {
+            deviceDto.commandId = std::to_string(device->commandId);
+            deviceDto.secondsToSwitchBack = secondsToSwitchBack;
+            deviceDto.secondsEnabledFor = secondsEnabledFor;
+        }
+        
+        if (device->deviceType == DEVICE_TYPE_ANALOG) {
+            DeviceAnalogOut* analogDevice = static_cast<DeviceAnalogOut*>(device);
+        }
+        
+        dto.devices.push_back(deviceDto);
+    }
+    
+    return dto;
 }

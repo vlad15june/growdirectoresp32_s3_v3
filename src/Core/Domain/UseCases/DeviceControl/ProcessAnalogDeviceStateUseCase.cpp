@@ -63,7 +63,7 @@ void ProcessAnalogDeviceStateUseCase::setAnalogInputDeviceState(DeviceAnalogOut 
     int analogPin = 0;     // This should come from the device configuration
     bool pinValue = false; // Current pin state
 
-    if (device->direction == DIRECTION_UP)
+    if (device->direction == RuleDirection::UP)
     {
         if (device->state == DEVICE_STATE_ON)
         {
