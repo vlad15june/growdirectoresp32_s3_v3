@@ -16,6 +16,7 @@
 #include "Core/Domain/Interfaces/Adapters/IArduinoAdapter.h"
 #include "Core/Domain/Interfaces/Mqtt/IMqttManager.h"
 #include "Application/Interfaces/IDiagnosticService.h"
+#include "Application/Services/Devices/IDeviceService.h"
 #include <stdexcept>
 
 class LoopServiceFactory : public ILoopServiceFactory {
@@ -31,6 +32,7 @@ private:
     IArduinoAdapter* arduinoAdapter;
     IMqttManager* mqttManager;
     IDiagnosticService* diagnosticService;
+    IDeviceService* deviceService;
 
 public:
     LoopServiceFactory(
@@ -44,7 +46,8 @@ public:
         IArduinoAdapter* arduinoAdapter = nullptr,
         IOnChangeLocalIpUseCase* onChangeLocalIpUseCase = nullptr,
         IMqttManager* mqttManager = nullptr,
-        IDiagnosticService* diagnosticService = nullptr
+        IDiagnosticService* diagnosticService = nullptr,
+        IDeviceService* deviceService = nullptr
     ) : ledUseCases(ledUseCases),
         buttonUseCases(buttonUseCases),
         moduleModeUseCase(moduleModeUseCase),
@@ -55,7 +58,8 @@ public:
         arduinoAdapter(arduinoAdapter),
         onChangeLocalIpUseCase(onChangeLocalIpUseCase),
         mqttManager(mqttManager),
-        diagnosticService(diagnosticService) {}
+        diagnosticService(diagnosticService),
+        deviceService(deviceService) {}
     
     ~LoopServiceFactory() override = default;
 
@@ -78,6 +82,7 @@ public:
                 configDoneService->setOnChangeLocalIpUseCase(onChangeLocalIpUseCase);
                 configDoneService->setMqttManager(mqttManager);
                 configDoneService->setDiagnosticService(diagnosticService);
+                configDoneService->setDeviceService(deviceService);
                 
                 // Then assign to the service unique_ptr
                 service = std::unique_ptr<LoopServiceBase>(configDoneService);
@@ -112,6 +117,11 @@ public:
     // Setter for DiagnosticService
     void setDiagnosticService(IDiagnosticService* service) {
         this->diagnosticService = service;
+    }
+
+    // Setter for DeviceService
+    void setDeviceService(IDeviceService* service) {
+        this->deviceService = service;
     }
 };
 

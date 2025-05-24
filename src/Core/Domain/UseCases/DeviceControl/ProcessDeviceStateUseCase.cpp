@@ -22,7 +22,6 @@ ProcessDeviceStateUseCase::ProcessDeviceStateUseCase(
 
 void ProcessDeviceStateUseCase::loop()
 {
-    // Process all devices
     controlDeviceState();
 }
 

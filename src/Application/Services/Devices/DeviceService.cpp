@@ -55,6 +55,10 @@ bool DeviceService::init() {
 }
 
 void DeviceService::loop() {
+    if (deviceModel->getAllDevices().empty()) {
+        return;
+    }
+    
     if (processDeviceStateUseCase) {
         processDeviceStateUseCase->loop();
     }

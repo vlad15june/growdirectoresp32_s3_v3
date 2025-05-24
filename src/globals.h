@@ -181,19 +181,6 @@ OnChangeLocalIpUseCase onChangeLocalIpUseCase(
     mqttLogger,
     debugSystem);
 
-LoopServiceFactory loopServiceFactory(
-    &ledUseCases,
-    &buttonUseCases,
-    &moduleModeUseCase,
-    &mqttLogger,
-    &debugSystem,
-    &moduleConfigurationWebServer,
-    &moduleConfig,
-    &arduinoAdapter,
-    &onChangeLocalIpUseCase,
-    &mqttManager,
-    &diagnosticService);
-
 SpiffsAdapter spiffsAdapter(&mqttLogger, &debugSystem);
 
 SpiffsRuleDao ruleDao(&spiffsAdapter, &jsonConverter);
@@ -218,6 +205,20 @@ DeviceService deviceService(
     &hybridApiService,
     &mqttLogger,
     &debugSystem);
+
+LoopServiceFactory loopServiceFactory(
+    &ledUseCases,
+    &buttonUseCases,
+    &moduleModeUseCase,
+    &mqttLogger,
+    &debugSystem,
+    &moduleConfigurationWebServer,
+    &moduleConfig,
+    &arduinoAdapter,
+    &onChangeLocalIpUseCase,
+    &mqttManager,
+    &diagnosticService,
+    &deviceService);
 
 ModuleSetupService moduleSetupService(
     &mqttLogger,
