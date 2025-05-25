@@ -40,7 +40,7 @@ private:
             vsnprintf(buffer, sizeof(buffer), format, args);
             va_end(args);
 
-            logger->println("led", buffer);
+            logger->println(DebugFeatures::LED_DEBUG, buffer);
         }
     }
 

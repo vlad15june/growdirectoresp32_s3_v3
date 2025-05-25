@@ -24,7 +24,7 @@ private:
             vsnprintf(buffer, sizeof(buffer), format, args);
             va_end(args);
             
-            logger->println(buffer);
+            logger->println(DebugFeatures::SETUP_DEBUG, buffer);
         }
     }
 
@@ -40,20 +40,17 @@ public:
     }
     
     bool launchConfigurationServer() override {
-        log("SETUP: Launching configuration web server...");
+        log("Launching configuration web server...");
         
         try {
             configServer.setupWebServer();
 
             configServer.launchServer();
             
-            log("SETUP: Configuration web server launched successfully");
+            log("Configuration web server launched successfully");
             return true;
         } catch (const std::exception& e) {
-            if (logger != nullptr) {
-                logger->println("Error launching configuration server: ");
-                logger->println(e.what());
-            }
+            log("Error launching configuration server: %s", e.what());
             return false;
         }
     }

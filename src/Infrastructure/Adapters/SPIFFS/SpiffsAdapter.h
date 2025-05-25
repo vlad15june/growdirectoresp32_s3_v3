@@ -32,7 +32,7 @@ public:
             va_start(args, format);
             vsnprintf(buffer, sizeof(buffer), format, args);
             va_end(args);
-            logger->println("spiffs", buffer);
+            logger->println(DebugFeatures::SPIFFS_DEBUG, buffer);
         }
     }
 

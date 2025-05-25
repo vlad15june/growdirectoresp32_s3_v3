@@ -33,7 +33,7 @@ private:
             vsnprintf(buffer, sizeof(buffer), format, args);
             va_end(args);
 
-            logger->println(buffer);
+            logger->println(DebugFeatures::CONFIG_WEB_SERVER, buffer);
         }
     }
 

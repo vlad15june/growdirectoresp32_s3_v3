@@ -29,7 +29,7 @@ inline void LedUseCases::log(const char *format, ...)
         vsnprintf(buffer, sizeof(buffer), format, args);
         va_end(args);
 
-        logger->println(buffer);
+        logger->println(DebugFeatures::LED_DEBUG, buffer);
     }
 }
 
