@@ -119,13 +119,17 @@ NTPTimeAdapter ntpTimeAdapter(&mqttLogger, &debugSystem, &settings);
 
 ModuleConfig moduleConfig(&mqttLogger, &debugSystem, &settings, &ntpTimeAdapter, &wifiAdapter);
 
+ModuleStructure moduleStructure;
+
+DeviceModel deviceModel(&moduleConfig, &moduleStructure);
+
 OnChangeModuleModeUseCase moduleModeUseCase(
     arduinoAdapter,
     moduleConfig,
     mqttLogger,
     debugSystem);
 
-LedUseCases ledUseCases(&ledAdapter, &moduleConfig, &arduinoAdapter, &mqttLogger, &debugSystem);
+LedUseCases ledUseCases(&ledAdapter, &moduleConfig, &arduinoAdapter, &mqttLogger, &debugSystem, &deviceModel);
 
 ButtonUseCases buttonUseCases(&buttonAdapter, &mqttLogger, &debugSystem, 0);
 
@@ -141,8 +145,6 @@ WebServerLauncher webServerLauncher(
     &mqttLogger,
     &debugSystem,
     moduleConfigurationWebServer);
-
-ModuleStructure moduleStructure;
 
 RestAPIService restApiService(&moduleConfig, &mqttLogger, &debugSystem, &jsonConverter);
 
@@ -185,8 +187,6 @@ SpiffsAdapter spiffsAdapter(&mqttLogger, &debugSystem);
 
 SpiffsRuleDao ruleDao(&spiffsAdapter, &jsonConverter);
 RuleRepository ruleRepository(&ruleDao);
-
-DeviceModel deviceModel(&moduleConfig, &moduleStructure);
 
 ProcessDeviceStateUseCaseFactory deviceStateUseCaseFactory(
     &mqttLogger,

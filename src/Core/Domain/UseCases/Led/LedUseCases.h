@@ -8,6 +8,7 @@
 #include "Core/Domain/Interfaces/ILogger.h"
 #include "Core/Domain/Interfaces/IDebugSystem.h"
 #include "Core/Domain/Enums/ModuleModeEnum.h"
+#include "Core/Domain/Data/Models/IDeviceModel.h"
 #include <stdarg.h>
 
 // Use case class for LED behaviors and patterns
@@ -18,6 +19,7 @@ private:
     IArduinoAdapter* arduinoAdapter;
     ILogger* logger;
     IDebugSystem* debugSystem;
+    IDeviceModel* deviceModel;
 
     // LED timing constants (in milliseconds)
     static const unsigned long BLINK_FAST_ON_TIME = 500;     // 0.5 seconds on
@@ -34,7 +36,8 @@ private:
 public:
     // Constructor
     LedUseCases(ILedAdapter* adapter, IModuleConfig* moduleConfig, IArduinoAdapter* arduinoAdapter,
-                ILogger* loggerInstance = nullptr, IDebugSystem* debugSystemInstance = nullptr);
+                ILogger* loggerInstance = nullptr, IDebugSystem* debugSystemInstance = nullptr,
+                IDeviceModel* deviceModel = nullptr);
     
     // Destructor
     ~LedUseCases() override;
