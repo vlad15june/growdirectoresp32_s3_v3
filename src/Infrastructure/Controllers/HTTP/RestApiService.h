@@ -171,12 +171,12 @@ public:
         }
     }
 
-    void sendToServerModuleStructure(const ModuleStructure &moduleStructure) override
+    bool sendToServerModuleStructure(const ModuleStructure &moduleStructure) override
     {
         if (init() == false)
         {
             log("NET: sendToServerModuleStructure - Initialization failed");
-            return;
+            return false;
         }
 
         std::string structureJson;
@@ -220,23 +220,19 @@ public:
 
         if (httpResponseCode == 200) {
             trackApiSendSuccess();
+            return true;
         } else {
             trackApiSendFailure();
-            
-            if (tries >= 3)
-            {
-                log("NET: Failed to send structure after 3 attempts, restarting...");
-                ESP.restart();
-            }
+            return false;
         }
     }
 
-    void sendRuleStateCommand(const char *msg) override
+    bool sendRuleStateCommand(const char *msg) override
     {
         if (_moduleConfig == nullptr || _settings == nullptr)
         {
             log("NET: sendRuleStateCommand - ModuleConfig or Settings not available");
-            return;
+            return false;
         }
         log("NET: Rule state command: %s", msg);
 
@@ -257,8 +253,10 @@ public:
         
         if (httpResponseCode == 200) {
             trackApiSendSuccess();
+            return true;
         } else {
             trackApiSendFailure();
+            return false;
         }
     }
 
@@ -296,12 +294,12 @@ public:
         }
     }
 
-    void sendFirmwareVersion() override
+    bool sendFirmwareVersion() override
     {
         if (_moduleConfig == nullptr || _settings == nullptr)
         {
             log("NET: sendFirmwareVersion - ModuleConfig or Settings not available");
-            return;
+            return false;
         }
 
         byte tries = 0;
@@ -335,17 +333,19 @@ public:
         
         if (httpResponseCode == 200) {
             trackApiSendSuccess();
+            return true;
         } else {
             trackApiSendFailure();
+            return false;
         }
     }
 
-    void sendDeviceCommandExecutionResult(const char *msg) override
+    bool sendDeviceCommandExecutionResult(const char *msg) override
     {
         if (_moduleConfig == nullptr || _settings == nullptr)
         {
             log("NET: sendDeviceCommandExecutionResult - ModuleConfig or Settings not available");
-            return;
+            return false;
         }
 
         log("NET: Device command result %s\n", msg);
@@ -353,7 +353,7 @@ public:
         if (strlen(msg) < 10)
         {
             log("NET: Device command empty");
-            return;
+            return false;
         }
 
         const char *moduleUid = _moduleConfig->getModuleUid();
@@ -383,17 +383,19 @@ public:
         
         if (httpResponseCode == 200) {
             trackApiSendSuccess();
+            return true;
         } else {
             trackApiSendFailure();
+            return false;
         }
     }
 
-    void sendAnalogInputDeviceCommandExecutionResult(const char *msg) override
+    bool sendAnalogInputDeviceCommandExecutionResult(const char *msg) override
     {
         if (_moduleConfig == nullptr || _settings == nullptr)
         {
             log("NET: sendAnalogInputDeviceCommandExecutionResult - ModuleConfig or Settings not available");
-            return;
+            return false;
         }
 
         log("NET: Device command result %s", msg);
@@ -401,7 +403,7 @@ public:
         if (strlen(msg) < 10)
         {
             log("NET: Device command empty");
-            return;
+            return false;
         }
 
         const char *moduleUid = _moduleConfig->getModuleUid();
@@ -432,8 +434,10 @@ public:
         
         if (httpResponseCode == 200) {
             trackApiSendSuccess();
+            return true;
         } else {
             trackApiSendFailure();
+            return false;
         }
     }
 

@@ -132,51 +132,114 @@ void test_send_to_server_module_structure_with_different_priorities() {
     g_mockRestApi.reset();
     g_mockMqttApi.reset();
     g_hybridApiService->setApiPriority(ApiPriority::REST_ONLY);
+    g_mockRestApi.sendToServerModuleStructureReturnValue = true;
     bool result = g_hybridApiService->sendToServerModuleStructure(g_moduleStructure);
     TEST_ASSERT_TRUE(result);
     TEST_ASSERT_TRUE(g_mockRestApi.sendToServerModuleStructureCalled);
     TEST_ASSERT_FALSE(g_mockMqttApi.sendToServerModuleStructureCalled);
-    
+
+    g_mockRestApi.reset();
+    g_mockMqttApi.reset();
+    g_hybridApiService->setApiPriority(ApiPriority::REST_ONLY);
+    g_mockRestApi.sendToServerModuleStructureReturnValue = false;
+    result = g_hybridApiService->sendToServerModuleStructure(g_moduleStructure);
+    TEST_ASSERT_FALSE(result);
+
     g_mockRestApi.reset();
     g_mockMqttApi.reset();
     g_hybridApiService->setApiPriority(ApiPriority::MQTT_ONLY);
+    g_mockMqttApi.sendToServerModuleStructureReturnValue = true;
     result = g_hybridApiService->sendToServerModuleStructure(g_moduleStructure);
     TEST_ASSERT_TRUE(result);
     TEST_ASSERT_FALSE(g_mockRestApi.sendToServerModuleStructureCalled);
     TEST_ASSERT_TRUE(g_mockMqttApi.sendToServerModuleStructureCalled);
-    
+
+    g_mockRestApi.reset();
+    g_mockMqttApi.reset();
+    g_hybridApiService->setApiPriority(ApiPriority::MQTT_ONLY);
+    g_mockMqttApi.sendToServerModuleStructureReturnValue = false;
+    result = g_hybridApiService->sendToServerModuleStructure(g_moduleStructure);
+    TEST_ASSERT_FALSE(result);
+
     g_mockRestApi.reset();
     g_mockMqttApi.reset();
     g_hybridApiService->setApiPriority(ApiPriority::REST_PREFERRED);
+    g_mockRestApi.sendToServerModuleStructureReturnValue = true;
     result = g_hybridApiService->sendToServerModuleStructure(g_moduleStructure);
     TEST_ASSERT_TRUE(result);
     TEST_ASSERT_TRUE(g_mockRestApi.sendToServerModuleStructureCalled);
     TEST_ASSERT_FALSE(g_mockMqttApi.sendToServerModuleStructureCalled);
-    
+
     g_mockRestApi.reset();
     g_mockMqttApi.reset();
-    g_hybridApiService->setApiPriority(ApiPriority::MQTT_PREFERRED);
-    result = g_hybridApiService->sendToServerModuleStructure(g_moduleStructure);
-    TEST_ASSERT_TRUE(result);
-    TEST_ASSERT_FALSE(g_mockRestApi.sendToServerModuleStructureCalled);
-    TEST_ASSERT_TRUE(g_mockMqttApi.sendToServerModuleStructureCalled);
-    
-    g_mockRestApi.reset();
-    g_mockMqttApi.reset();
-    g_hybridApiService->setApiPriority(ApiPriority::BOTH);
+    g_hybridApiService->setApiPriority(ApiPriority::REST_PREFERRED);
+    g_mockRestApi.sendToServerModuleStructureReturnValue = false;
+    g_mockMqttApi.sendToServerModuleStructureReturnValue = true;
     result = g_hybridApiService->sendToServerModuleStructure(g_moduleStructure);
     TEST_ASSERT_TRUE(result);
     TEST_ASSERT_TRUE(g_mockRestApi.sendToServerModuleStructureCalled);
     TEST_ASSERT_TRUE(g_mockMqttApi.sendToServerModuleStructureCalled);
-    
+
+    g_mockRestApi.reset();
+    g_mockMqttApi.reset();
+    g_hybridApiService->setApiPriority(ApiPriority::REST_PREFERRED);
+    g_mockRestApi.sendToServerModuleStructureReturnValue = false;
+    g_mockMqttApi.sendToServerModuleStructureReturnValue = false;
+    result = g_hybridApiService->sendToServerModuleStructure(g_moduleStructure);
+    TEST_ASSERT_FALSE(result);
+
+    g_mockRestApi.reset();
+    g_mockMqttApi.reset();
+    g_hybridApiService->setApiPriority(ApiPriority::MQTT_PREFERRED);
+    g_mockMqttApi.sendToServerModuleStructureReturnValue = true;
+    result = g_hybridApiService->sendToServerModuleStructure(g_moduleStructure);
+    TEST_ASSERT_TRUE(result);
+    TEST_ASSERT_FALSE(g_mockRestApi.sendToServerModuleStructureCalled);
+    TEST_ASSERT_TRUE(g_mockMqttApi.sendToServerModuleStructureCalled);
+
+    g_mockRestApi.reset();
+    g_mockMqttApi.reset();
+    g_hybridApiService->setApiPriority(ApiPriority::MQTT_PREFERRED);
+    g_mockMqttApi.sendToServerModuleStructureReturnValue = false;
+    g_mockRestApi.sendToServerModuleStructureReturnValue = true;
+    result = g_hybridApiService->sendToServerModuleStructure(g_moduleStructure);
+    TEST_ASSERT_TRUE(result);
+    TEST_ASSERT_TRUE(g_mockRestApi.sendToServerModuleStructureCalled);
+    TEST_ASSERT_TRUE(g_mockMqttApi.sendToServerModuleStructureCalled);
+
+    g_mockRestApi.reset();
+    g_mockMqttApi.reset();
+    g_hybridApiService->setApiPriority(ApiPriority::MQTT_PREFERRED);
+    g_mockMqttApi.sendToServerModuleStructureReturnValue = false;
+    g_mockRestApi.sendToServerModuleStructureReturnValue = false;
+    result = g_hybridApiService->sendToServerModuleStructure(g_moduleStructure);
+    TEST_ASSERT_FALSE(result);
+
+    g_mockRestApi.reset();
+    g_mockMqttApi.reset();
+    g_hybridApiService->setApiPriority(ApiPriority::BOTH);
+    g_mockRestApi.sendToServerModuleStructureReturnValue = true;
+    g_mockMqttApi.sendToServerModuleStructureReturnValue = true;
+    result = g_hybridApiService->sendToServerModuleStructure(g_moduleStructure);
+    TEST_ASSERT_TRUE(result);
+
+    g_mockRestApi.reset();
+    g_mockMqttApi.reset();
+    g_hybridApiService->setApiPriority(ApiPriority::BOTH);
+    g_mockRestApi.sendToServerModuleStructureReturnValue = false;
+    g_mockMqttApi.sendToServerModuleStructureReturnValue = false;
+    result = g_hybridApiService->sendToServerModuleStructure(g_moduleStructure);
+    TEST_ASSERT_FALSE(result);
+
     g_mockRestApi.reset();
     g_mockMqttApi.reset();
     g_hybridApiService->setApiPriority(ApiPriority::REST_ONLY);
+    g_mockMqttApi.sendToServerModuleStructureReturnValue = true;
     result = g_hybridApiService->sendToServerModuleStructure(g_moduleStructure, ApiPriority::MQTT_ONLY);
     TEST_ASSERT_TRUE(result);
     TEST_ASSERT_FALSE(g_mockRestApi.sendToServerModuleStructureCalled);
     TEST_ASSERT_TRUE(g_mockMqttApi.sendToServerModuleStructureCalled);
-    
+
     hybrid_api_service_teardown();
 }
 
@@ -303,38 +366,68 @@ void test_failure_tracking() {
 
 void test_rest_only_methods() {
     hybrid_api_service_setup();
-    
+
     g_mockRestApi.reset();
+    g_mockRestApi.sendRuleStateCommandReturnValue = true;
     bool result = g_hybridApiService->sendRuleStateCommand("test-rule-state");
     TEST_ASSERT_TRUE(result);
     TEST_ASSERT_TRUE(g_mockRestApi.sendRuleStateCommandCalled);
     TEST_ASSERT_EQUAL_STRING("test-rule-state", g_mockRestApi.lastRuleStateCommand);
-    
+
+    g_mockRestApi.reset();
+    g_mockRestApi.sendRuleStateCommandReturnValue = false;
+    result = g_hybridApiService->sendRuleStateCommand("test-rule-state");
+    TEST_ASSERT_FALSE(result);
+
     g_mockRestApi.reset();
     result = g_hybridApiService->sendByUidRuleStateCommand("test-uid", "test-rule-state");
     TEST_ASSERT_TRUE(result);
     TEST_ASSERT_TRUE(g_mockRestApi.sendByUidRuleStateCommandCalled);
-    
+
     g_mockRestApi.reset();
+    g_mockRestApi.sendFirmwareVersionReturnValue = true;
     result = g_hybridApiService->sendFirmwareVersion();
     TEST_ASSERT_TRUE(result);
     TEST_ASSERT_TRUE(g_mockRestApi.sendFirmwareVersionCalled);
-    
+
     g_mockRestApi.reset();
+    g_mockRestApi.sendFirmwareVersionReturnValue = false;
+    result = g_hybridApiService->sendFirmwareVersion();
+    TEST_ASSERT_FALSE(result);
+
+    g_mockRestApi.reset();
+    g_mockRestApi.sendDeviceCommandExecutionResultReturnValue = true;
     result = g_hybridApiService->sendDeviceCommandExecutionResult("test-command");
     TEST_ASSERT_TRUE(result);
     TEST_ASSERT_TRUE(g_mockRestApi.sendDeviceCommandExecutionResultCalled);
-    
+
     g_mockRestApi.reset();
+    g_mockRestApi.sendDeviceCommandExecutionResultReturnValue = false;
+    result = g_hybridApiService->sendDeviceCommandExecutionResult("test-command");
+    TEST_ASSERT_FALSE(result);
+
+    g_mockRestApi.reset();
+    g_mockRestApi.sendAnalogInputDeviceCommandExecutionResultReturnValue = true;
     result = g_hybridApiService->sendAnalogInputDeviceCommandExecutionResult("test-command");
     TEST_ASSERT_TRUE(result);
     TEST_ASSERT_TRUE(g_mockRestApi.sendAnalogInputDeviceCommandExecutionResultCalled);
-    
+
     g_mockRestApi.reset();
+    g_mockRestApi.sendAnalogInputDeviceCommandExecutionResultReturnValue = false;
+    result = g_hybridApiService->sendAnalogInputDeviceCommandExecutionResult("test-command");
+    TEST_ASSERT_FALSE(result);
+
+    g_mockRestApi.reset();
+    g_mockRestApi.sendModuleCommandExecutionResultReturnValue = true;
     result = g_hybridApiService->sendModuleCommandExecutionResult("test-command");
     TEST_ASSERT_TRUE(result);
     TEST_ASSERT_TRUE(g_mockRestApi.sendModuleCommandExecutionResultCalled);
-    
+
+    g_mockRestApi.reset();
+    g_mockRestApi.sendModuleCommandExecutionResultReturnValue = false;
+    result = g_hybridApiService->sendModuleCommandExecutionResult("test-command");
+    TEST_ASSERT_FALSE(result);
+
     hybrid_api_service_teardown();
 }
 

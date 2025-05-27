@@ -11,6 +11,7 @@
 #include "Core/Domain/Data/Models/ModuleStructure.h"
 #include "Core/Domain/Interfaces/API/IHybridAPIService.h"
 #include "Core/Domain/Interfaces/IDebugSystem.h"
+#include "Core/Domain/Interfaces/IModuleConfig.h"
 #include <string.h>
 
 class OnChangeLocalIpUseCase : public IOnChangeLocalIpUseCase
@@ -22,6 +23,7 @@ private:
     IWifiManager &_wifiManager;
     ModuleStructure &_moduleStructure;
     IHybridAPIService &_apiService;
+    IModuleConfig &_moduleConfig;
     char _oldIpStr[16]; // Store previous IP address
 
 public:
@@ -30,12 +32,14 @@ public:
         IWifiManager &wifiManager,
         ModuleStructure &moduleStructure,
         IHybridAPIService &apiService,
+        IModuleConfig &moduleConfig,
         ILogger &loggerInstance,
         IDebugSystem &debugSystemInstance)
         : _wifiAdapter(wifiAdapter),
           _wifiManager(wifiManager),
           _moduleStructure(moduleStructure),
           _apiService(apiService),
+          _moduleConfig(moduleConfig),
           _logger(loggerInstance),
           _debugSystem(debugSystemInstance)
     {
@@ -97,9 +101,12 @@ public:
                     }
                 }
 
-                // Send updated structure to server using the hybrid API service
                 log("OnChangeLocalIpUseCase: Sending updated module structure to server");
-                _apiService.sendToServerModuleStructure(_moduleStructure);
+                bool sendSuccess = _apiService.sendToServerModuleStructure(_moduleStructure);
+                if (!sendSuccess) {
+                    log("NET: Failed to send structure after 3 attempts, restarting...");
+                    _moduleConfig.setRequestedModuleMode(ModuleModeEnum::CONFIGURED_NEED_RESTART);
+                }
 
                 // Process additional server communications
                 log("OnChangeLocalIpUseCase: Processing delete command and restoring account info");

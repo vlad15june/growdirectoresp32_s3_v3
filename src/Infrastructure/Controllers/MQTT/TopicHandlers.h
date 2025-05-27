@@ -17,7 +17,7 @@ protected:
 
     void log(const char *format, ...)
     {
-        if (_logger != nullptr && _debugSystem != nullptr && _debugSystem->isFeatureEnabled(DebugFeatures::MQTT_DEBUG))
+        if (_logger != nullptr && _debugSystem != nullptr && _debugSystem->isFeatureEnabled(DebugFeatures::MQTT_COMMAND_DEBUG))
         {
             char buffer[128];
             va_list args;

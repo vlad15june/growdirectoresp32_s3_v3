@@ -6,6 +6,7 @@
 #include "Mock/Infrastructure/Wifi/MockWiFiManager.h"
 #include "Mock/Infrastructure/Api/MockHybridAPIService.h"
 #include "Core/Domain/Data/Models/ModuleStructure.h"
+#include "Mock/Infrastructure/Configuration/MockModuleConfig.h"
 
 // Global test variables
 static MockLogger g_mockLogger;
@@ -13,6 +14,7 @@ static MockDebugSystem g_mockDebugSystem;
 static MockWifiAdapter g_mockWifiAdapter;
 static MockWiFiManager g_mockWifiManager;
 static MockHybridAPIService g_mockApiService;
+static MockModuleConfig g_mockModuleConfig;
 static ModuleStructure g_moduleStructure;
 static OnChangeLocalIpUseCase* g_onChangeLocalIpUseCase;
 
@@ -23,6 +25,7 @@ void on_change_local_ip_use_case_setup(void) {
     g_mockWifiAdapter.reset();
     g_mockWifiManager.reset();
     g_mockApiService.reset();
+    g_mockModuleConfig.reset();
     
     // Enable network debugging for log messages
     g_mockDebugSystem.featureEnabled = true;
@@ -47,6 +50,7 @@ void on_change_local_ip_use_case_setup(void) {
         g_mockWifiManager, 
         g_moduleStructure, 
         g_mockApiService, 
+        g_mockModuleConfig,
         g_mockLogger, 
         g_mockDebugSystem);
 }
@@ -155,6 +159,31 @@ void test_perform_with_changing_ip(void) {
     on_change_local_ip_use_case_teardown();
 }
 
+void test_perform_send_structure_failure_triggers_restart(void) {
+    on_change_local_ip_use_case_setup();
+
+    // Set a valid IP and connected WiFi
+    g_mockWifiAdapter.setLocalIP("192.168.1.200");
+    g_mockWifiAdapter.setConnected(true);
+
+    // Simulate HybridAPIService send failure
+    g_mockApiService.sendModuleStructureReturnValue = false;
+
+    // Ensure requestedModuleMode is not CONFIGURED_NEED_RESTART before
+    g_mockModuleConfig.setRequestedModuleMode(ModuleModeEnum::CONFIGURED_DONE);
+
+    // Execute the use case
+    g_onChangeLocalIpUseCase->perform();
+
+    // Should have attempted to send structure
+    TEST_ASSERT_TRUE(g_mockApiService.sendToServerModuleStructureCalled);
+
+    // Should have set requestedModuleMode to CONFIGURED_NEED_RESTART
+    TEST_ASSERT_EQUAL(ModuleModeEnum::CONFIGURED_NEED_RESTART, g_mockModuleConfig.getRequestedModuleMode());
+
+    on_change_local_ip_use_case_teardown();
+}
+
 // Main test runner function
 extern "C" int run_on_change_local_ip_use_case_tests(void) {
     UNITY_BEGIN();
@@ -164,6 +193,7 @@ extern "C" int run_on_change_local_ip_use_case_tests(void) {
     RUN_TEST(test_perform_with_same_ip_no_change);
     RUN_TEST(test_perform_with_new_ip_updates_structure);
     RUN_TEST(test_perform_with_changing_ip);
+    RUN_TEST(test_perform_send_structure_failure_triggers_restart);
     
     return UNITY_END();
 }

@@ -180,6 +180,7 @@ OnChangeLocalIpUseCase onChangeLocalIpUseCase(
     wifiManager,
     moduleStructure,
     hybridApiService,
+    moduleConfig,
     mqttLogger,
     debugSystem);
 

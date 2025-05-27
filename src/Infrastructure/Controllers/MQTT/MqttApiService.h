@@ -72,20 +72,20 @@ public:
     
     ~MqttApiService() override = default;
     
-    void sendToServerModuleStructure(const ModuleStructure& moduleStructure) override {
+    bool sendToServerModuleStructure(const ModuleStructure& moduleStructure) override {
         if (_mqttManager == nullptr || !_mqttManager->isConnected()) {
             log("MQTT: sendToServerModuleStructure - MQTT Manager not available or not connected");
-            return;
+            return false;
         }
         
         if (_jsonConverter == nullptr) {
             log("MQTT: sendToServerModuleStructure - JSON converter not available");
-            return;
+            return false;
         }
         
         const char* topic = formatTopic(MODULE_STRUCTURE_TOPIC);
         if (topic == nullptr) {
-            return;
+            return false;
         }
         
         std::string structureJson = _jsonConverter->moduleStructureToJson(moduleStructure);
@@ -93,7 +93,9 @@ public:
         
         if (!_mqttManager->publish(topic, structureJson.c_str())) {
             log("MQTT: Failed to publish module structure");
+            return false;
         }
+        return true;
     }
     
     bool sendDiagnosticData(const DiagnosticDto& diagnosticData) override {

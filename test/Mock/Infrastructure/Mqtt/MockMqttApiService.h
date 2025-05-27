@@ -18,6 +18,7 @@ public:
     bool isModuleOnlineReturnValue = true;
     bool sendDiagnosticDataReturnValue = true;
     bool sendModuleUpdateDataReturnValue = true;
+    bool sendToServerModuleStructureReturnValue = true;
     
     void reset() {
         isModuleOnlineCalled = false;
@@ -28,6 +29,7 @@ public:
         isModuleOnlineReturnValue = true;
         sendDiagnosticDataReturnValue = true;
         sendModuleUpdateDataReturnValue = true;
+        sendToServerModuleStructureReturnValue = true;
     }
     
     // IMqttApiService interface implementation
@@ -36,9 +38,10 @@ public:
         return isModuleOnlineReturnValue;
     }
     
-    void sendToServerModuleStructure(const ModuleStructure& moduleStructure) override {
+    bool sendToServerModuleStructure(const ModuleStructure& moduleStructure) override {
         sendToServerModuleStructureCalled = true;
         lastModuleStructure = &moduleStructure;
+        return sendToServerModuleStructureReturnValue;
     }
     
     bool sendDiagnosticData(const DiagnosticDto& diagnosticData) override {

@@ -2,6 +2,7 @@
 
 #include "Core/Domain/Data/Models/ModuleStructure.h"
 #include "Application/DTOs/DiagnosticDto.h"
+#include "Application/DTOs/UpdateDto.h"
 
 class IMqttApiService {
 public:
@@ -9,7 +10,7 @@ public:
 
     virtual bool isModuleOnline() = 0;
 
-    virtual void sendToServerModuleStructure(const ModuleStructure& moduleStructure) = 0;
+    virtual bool sendToServerModuleStructure(const ModuleStructure& moduleStructure) = 0;
 
     virtual bool sendDiagnosticData(const DiagnosticDto& diagnosticData) = 0;
 

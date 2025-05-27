@@ -18,6 +18,12 @@ public:
     bool sendModuleUpdateDataCalled = false;
     
     bool isModuleOnlineReturnValue = true;
+    bool sendToServerModuleStructureReturnValue = true;
+    bool sendRuleStateCommandReturnValue = true;
+    bool sendFirmwareVersionReturnValue = true;
+    bool sendDeviceCommandExecutionResultReturnValue = true;
+    bool sendAnalogInputDeviceCommandExecutionResultReturnValue = true;
+    bool sendModuleCommandExecutionResultReturnValue = true;
     
     const ModuleStructure* lastModuleStructure = nullptr;
     const char* lastRuleStateCommand = nullptr;
@@ -47,6 +53,12 @@ public:
         sendDiagnosticDataReturnValue = true;
         sendModuleUpdateDataReturnValue = true;
         isModuleOnlineReturnValue = true;
+        sendToServerModuleStructureReturnValue = true;
+        sendRuleStateCommandReturnValue = true;
+        sendFirmwareVersionReturnValue = true;
+        sendDeviceCommandExecutionResultReturnValue = true;
+        sendAnalogInputDeviceCommandExecutionResultReturnValue = true;
+        sendModuleCommandExecutionResultReturnValue = true;
         
         lastModuleStructure = nullptr;
         lastRuleStateCommand = nullptr;
@@ -68,14 +80,16 @@ public:
         return isModuleOnlineReturnValue;
     }
     
-    void sendToServerModuleStructure(const ModuleStructure& moduleStructure) override {
+    bool sendToServerModuleStructure(const ModuleStructure& moduleStructure) override {
         sendToServerModuleStructureCalled = true;
         lastModuleStructure = &moduleStructure;
+        return sendToServerModuleStructureReturnValue;
     }
     
-    void sendRuleStateCommand(const char* msg) override {
+    bool sendRuleStateCommand(const char* msg) override {
         sendRuleStateCommandCalled = true;
         lastRuleStateCommand = msg;
+        return sendRuleStateCommandReturnValue;
     }
     
     bool sendByUidRuleStateCommand(const char* uid, const char* msg) override {
@@ -84,24 +98,27 @@ public:
         return true;
     }
     
-    void sendFirmwareVersion() override {
+    bool sendFirmwareVersion() override {
         sendFirmwareVersionCalled = true;
+        return sendFirmwareVersionReturnValue;
     }
     
-    void sendDeviceCommandExecutionResult(const char* msg) override {
+    bool sendDeviceCommandExecutionResult(const char* msg) override {
         sendDeviceCommandExecutionResultCalled = true;
         lastDeviceCommandResult = msg;
+        return sendDeviceCommandExecutionResultReturnValue;
     }
     
-    void sendAnalogInputDeviceCommandExecutionResult(const char* msg) override {
+    bool sendAnalogInputDeviceCommandExecutionResult(const char* msg) override {
         sendAnalogInputDeviceCommandExecutionResultCalled = true;
         lastDeviceCommandResult = msg;
+        return sendAnalogInputDeviceCommandExecutionResultReturnValue;
     }
     
     bool sendModuleCommandExecutionResult(const char* msg) override {
         sendModuleCommandExecutionResultCalled = true;
         lastDeviceCommandResult = msg;
-        return true;
+        return sendModuleCommandExecutionResultReturnValue;
     }
     
     bool sendDiagnosticData(const DiagnosticDto& diagnosticData) override {
