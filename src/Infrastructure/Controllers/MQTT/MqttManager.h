@@ -91,7 +91,7 @@ public:
 
         _mqttClient.setCallback(mqttCallback);
 
-        _mqttClient.setBufferSize(2048);
+        _mqttClient.setBufferSize(4096);
     }
 
     ~MqttManager() override
@@ -135,7 +135,8 @@ public:
         // Now we can access the instance through the static pointer
         if (_instance && _instance->_messageProcessor)
         {
-            _instance->log("Received message on topic: %s", topic);
+            // NOTE: Not use mqtt logger here to avoid corrupting the MQTT data
+            // _instance->log("Received message on topic: %s", topic);
             _instance->_messageProcessor->processMessage(topic, payload, length);
         }
     }

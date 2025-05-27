@@ -19,7 +19,7 @@ protected:
     {
         if (_logger != nullptr && _debugSystem != nullptr && _debugSystem->isFeatureEnabled(DebugFeatures::MQTT_COMMAND_DEBUG))
         {
-            char buffer[128];
+            char buffer[1024];
             va_list args;
             va_start(args, format);
             vsnprintf(buffer, sizeof(buffer), format, args);
@@ -32,6 +32,8 @@ protected:
     // Helper method to check if topic matches pattern
     bool topicMatches(const char *topic, const char *pattern)
     {
+        log("Checking if topic '%s' matches pattern '%s'", topic, pattern);
+
         // Simple wildcard matching implementation
         // This is a basic implementation - you might want to improve it for more complex cases
 

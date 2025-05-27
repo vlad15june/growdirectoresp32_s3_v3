@@ -23,7 +23,7 @@ private:
     {
         if (_logger != nullptr && _debugSystem != nullptr && _debugSystem->isFeatureEnabled(DebugFeatures::MQTT_DEBUG))
         {
-            char buffer[128];
+            char buffer[1024];
             va_list args;
             va_start(args, format);
             vsnprintf(buffer, sizeof(buffer), format, args);
@@ -45,23 +45,26 @@ public:
 
     void processMessage(const char *topic, const uint8_t *payload, unsigned int length) override
     {
-        log("Processing message from topic: %s", topic);
-
         // Convert payload to a null-terminated string for logging
-        char *payloadStr = new char[length + 1];
+        uint8_t *payloadStr = (uint8_t *)malloc(length + 1);
         memcpy(payloadStr, payload, length);
         payloadStr[length] = '\0';
 
+        // Copy topic to new memory for safe handling
+        char *topicStr = (char *)malloc(strlen(topic) + 1);
+        strcpy(topicStr, topic);
+
+        log("Processing message from topic: %s, length=%d", topicStr, length);
         log("Payload: %s", payloadStr);
 
         // Find a handler for this topic
-        ITopicHandler *handler = findHandlerForTopic(topic);
+        ITopicHandler *handler = findHandlerForTopic(topicStr);
 
         if (handler != nullptr)
         {
             try
             {
-                handler->handleMessage(topic, payload, length);
+                handler->handleMessage(topicStr, payloadStr, length);
             }
             catch (const std::exception &e)
             {
@@ -70,10 +73,10 @@ public:
         }
         else
         {
-            log("No handler found for topic: %s", topic);
+            log("No handler found for topic: %s", topicStr);
         }
 
-        delete[] payloadStr;
+        free(payloadStr);
     }
 
     void addTopicHandler(ITopicHandler *handler) override

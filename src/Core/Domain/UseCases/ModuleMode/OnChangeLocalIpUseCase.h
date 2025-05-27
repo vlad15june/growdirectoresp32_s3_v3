@@ -136,7 +136,7 @@ private:
             vsnprintf(buffer, sizeof(buffer), format, args);
             va_end(args);
 
-            _logger.println(buffer);
+            _logger.println(DebugFeatures::IP_CHANGE_DEBUG, buffer);
         }
     }
 };
