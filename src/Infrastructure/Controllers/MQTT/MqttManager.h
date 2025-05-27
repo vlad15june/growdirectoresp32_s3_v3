@@ -46,34 +46,6 @@ private:
         }
     }
 
-    // Setup topic handlers
-    void setupMqttTopicHandlers()
-    {
-        if (_messageProcessor != nullptr && _topicHandlerFactory != nullptr)
-        {
-            log("Setting up MQTT topic handlers");
-            auto handlers = _topicHandlerFactory->createHandlers();
-            for (auto *handler : handlers)
-            {
-                // Add the handler to the message processor
-                _messageProcessor->addTopicHandler(handler);
-
-                // TODO: Check if need subscribe to the topic for this handler. Add flag to the handler
-                // Subscribe to the handler's topic pattern
-                const char *topicPattern = handler->getTopicPattern();
-                if (subscribe(topicPattern))
-                {
-                    log("Subscribed to topic pattern: %s", topicPattern);
-                }
-                else
-                {
-                    log("Failed to subscribe to topic pattern: %s", topicPattern);
-                }
-            }
-            log("MQTT topic handlers setup completed");
-        }
-    }
-
     bool reconnect()
     {
         if (millis() - _lastReconnectAttempt < _reconnectInterval)
@@ -89,17 +61,6 @@ private:
         }
 
         return connected;
-    }
-
-    // Static callback that will be passed to PubSubClient
-    static void mqttCallback(char *topic, byte *payload, unsigned int length)
-    {
-        // Now we can access the instance through the static pointer
-        if (_instance && _instance->_messageProcessor)
-        {
-            _instance->log("Received message on topic: %s", topic);
-            _instance->_messageProcessor->processMessage(topic, payload, length);
-        }
     }
 
 public:
@@ -130,11 +91,6 @@ public:
 
         _mqttClient.setCallback(mqttCallback);
 
-        if (_messageProcessor != nullptr && _topicHandlerFactory != nullptr)
-        {
-            setupMqttTopicHandlers();
-        }
-
         _mqttClient.setBufferSize(2048);
     }
 
@@ -143,6 +99,44 @@ public:
         if (_instance == this)
         {
             _instance = nullptr;
+        }
+    }
+
+    void setupMqttTopicHandlers() override
+    {
+        if (_messageProcessor != nullptr && _topicHandlerFactory != nullptr)
+        {
+            log("Setting up MQTT topic handlers");
+            auto handlers = _topicHandlerFactory->createHandlers();
+            for (auto *handler : handlers)
+            {
+                // Add the handler to the message processor
+                _messageProcessor->addTopicHandler(handler);
+
+                // TODO: Check if need subscribe to the topic for this handler. Add flag to the handler
+                // Subscribe to the handler's topic pattern
+                const char *topicPattern = handler->getTopicPattern();
+                if (subscribe(topicPattern))
+                {
+                    log("Subscribed to topic pattern: %s", topicPattern);
+                }
+                else
+                {
+                    log("Failed to subscribe to topic pattern: %s", topicPattern);
+                }
+            }
+            log("MQTT topic handlers setup completed");
+        }
+    }
+
+    // Static callback that will be passed to PubSubClient
+    static void mqttCallback(char *topic, byte *payload, unsigned int length)
+    {
+        // Now we can access the instance through the static pointer
+        if (_instance && _instance->_messageProcessor)
+        {
+            _instance->log("Received message on topic: %s", topic);
+            _instance->_messageProcessor->processMessage(topic, payload, length);
         }
     }
 

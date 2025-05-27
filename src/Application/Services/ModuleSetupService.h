@@ -463,6 +463,8 @@ inline void ModuleSetupService::setupMqttConnection()
     if (mqttManager->connect())
     {
         log("SETUP: Connected to MQTT broker");
+
+        mqttManager->setupMqttTopicHandlers();
     }
     else
     {

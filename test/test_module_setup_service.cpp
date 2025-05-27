@@ -1413,6 +1413,84 @@ static void test_device_service_not_initialized_in_other_modes() {
     if (debug_file != nullptr) fprintf(debug_file, "Finished test_device_service_not_initialized_in_other_modes\n");
 }
 
+static void test_configure_done_mode_configure_sets_up_mqtt_topic_handlers_on_successful_connection() {
+    if (debug_file != nullptr) fprintf(debug_file, "Starting test_configure_done_mode_configure_sets_up_mqtt_topic_handlers_on_successful_connection\n");
+    module_setup_service_setup();
+    
+    // Recreate service with MQTT manager
+    delete g_moduleSetupService;
+    g_moduleSetupService = new ModuleSetupService(
+        &g_mockLogger,
+        &g_mockDebugSystem,
+        &g_mockModuleConfig,
+        &g_mockLedAdapter,
+        &g_mockLedUseCases,
+        &g_mockButtonUseCases,
+        &g_mockWifiAdapter,
+        &g_mockWiFiManager,
+        &g_mockWebServerLauncher,
+        &g_mockLoopServiceFactory,
+        &g_mockMqttManager
+    );
+    
+    // Set up mocks for successful connection
+    g_mockMqttManager.reset();
+    g_mockMqttManager.connectReturnValue = true;
+    
+    // Call the method under test
+    ModuleSetupServiceTestHelper::callConfigureDoneModeConfigure(g_moduleSetupService);
+    
+    // Verify MQTT connection was attempted and successful
+    TEST_ASSERT_TRUE(g_mockMqttManager.connectCalled);
+    TEST_ASSERT_EQUAL(1, g_mockMqttManager.connectCallCount);
+    
+    // Verify that setupMqttTopicHandlers was called after successful connection
+    TEST_ASSERT_TRUE(g_mockMqttManager.setupMqttTopicHandlersCalled);
+    TEST_ASSERT_EQUAL(1, g_mockMqttManager.setupMqttTopicHandlersCallCount);
+    
+    module_setup_service_teardown();
+    if (debug_file != nullptr) fprintf(debug_file, "Finished test_configure_done_mode_configure_sets_up_mqtt_topic_handlers_on_successful_connection\n");
+}
+
+static void test_configure_done_mode_configure_do_not_sets_up_mqtt_topic_handlers_on_unsuccessful_connection() {
+    if (debug_file != nullptr) fprintf(debug_file, "Starting test_configure_done_mode_configure_do_not_sets_up_mqtt_topic_handlers_on_unsuccessful_connection\n");
+    module_setup_service_setup();
+    
+    // Recreate service with MQTT manager
+    delete g_moduleSetupService;
+    g_moduleSetupService = new ModuleSetupService(
+        &g_mockLogger,
+        &g_mockDebugSystem,
+        &g_mockModuleConfig,
+        &g_mockLedAdapter,
+        &g_mockLedUseCases,
+        &g_mockButtonUseCases,
+        &g_mockWifiAdapter,
+        &g_mockWiFiManager,
+        &g_mockWebServerLauncher,
+        &g_mockLoopServiceFactory,
+        &g_mockMqttManager
+    );
+    
+    // Set up mocks for failed connection
+    g_mockMqttManager.reset();
+    g_mockMqttManager.connectReturnValue = false;
+    
+    // Call the method under test
+    ModuleSetupServiceTestHelper::callConfigureDoneModeConfigure(g_moduleSetupService);
+    
+    // Verify MQTT connection was attempted but failed
+    TEST_ASSERT_TRUE(g_mockMqttManager.connectCalled);
+    TEST_ASSERT_EQUAL(1, g_mockMqttManager.connectCallCount);
+    
+    // Verify that setupMqttTopicHandlers was NOT called since connection failed
+    TEST_ASSERT_FALSE(g_mockMqttManager.setupMqttTopicHandlersCalled);
+    TEST_ASSERT_EQUAL(0, g_mockMqttManager.setupMqttTopicHandlersCallCount);
+    
+    module_setup_service_teardown();
+    if (debug_file != nullptr) fprintf(debug_file, "Finished test_configure_done_mode_configure_do_not_sets_up_mqtt_topic_handlers_on_unsuccessful_connection\n");
+}
+
 // Main test runner function
 extern "C" int run_module_setup_service_tests(void) {
     if (debug_file != nullptr) fprintf(debug_file, "\n----- Running ModuleSetupService Tests -----\n");
@@ -1452,6 +1530,8 @@ extern "C" int run_module_setup_service_tests(void) {
     
     RUN_TEST(test_configure_done_mode_configure_sets_up_mqtt_connection);
     RUN_TEST(test_configure_done_mode_configure_handles_mqtt_connection_subscribe_was_not_called);
+    RUN_TEST(test_configure_done_mode_configure_sets_up_mqtt_topic_handlers_on_successful_connection);
+    RUN_TEST(test_configure_done_mode_configure_do_not_sets_up_mqtt_topic_handlers_on_unsuccessful_connection);
     RUN_TEST(test_configure_done_mode_configure_handles_missing_mqtt_manager);
     
     // Run WiFi Manager tests

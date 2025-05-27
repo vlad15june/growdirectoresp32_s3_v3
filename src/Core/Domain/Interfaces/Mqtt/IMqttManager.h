@@ -31,6 +31,9 @@ public:
 
     // Set message processor
     virtual void setMessageProcessor(IMessageProcessor *processor) = 0;
+
+    // Setup MQTT topic handlers
+    virtual void setupMqttTopicHandlers() = 0;
     
     // Get number of MQTT connection failures
     virtual int getMqttFails() const = 0;

@@ -27,6 +27,8 @@ public:
     int getMqttFailsCallCount = 0;
     bool resetMqttFailsCalled = false;
     int resetMqttFailsCallCount = 0;
+    bool setupMqttTopicHandlersCalled = false;
+    int setupMqttTopicHandlersCallCount = 0;
     
     // Store last call parameters
     std::string lastSubscribeTopic;
@@ -110,6 +112,11 @@ public:
         lastMessageProcessor = processor;
     }
     
+    void setupMqttTopicHandlers() override {
+        setupMqttTopicHandlersCalled = true;
+        setupMqttTopicHandlersCallCount++;
+    }
+
     // Implementation of MQTT failures counter methods
     int getMqttFails() const override {
         const_cast<MockMqttManager*>(this)->getMqttFailsCalled = true;
@@ -145,6 +152,8 @@ public:
         getMqttFailsCallCount = 0;
         resetMqttFailsCalled = false;
         resetMqttFailsCallCount = 0;
+        setupMqttTopicHandlersCalled = false;
+        setupMqttTopicHandlersCallCount = 0;
         
         lastSubscribeTopic = "";
         lastUnsubscribeTopic = "";
