@@ -3,6 +3,7 @@
 
 #include "Core/Domain/Interfaces/API/IMqttApiService.h"
 #include "Application/DTOs/UpdateDto.h"
+#include "Application/DTOs/DeviceCommandUpdateDto.h"
 
 
 class MockMqttApiService : public IMqttApiService {
@@ -11,25 +12,30 @@ public:
     bool sendToServerModuleStructureCalled = false;
     bool sendDiagnosticDataCalled = false;
     bool sendModuleUpdateDataCalled = false;
+    bool sendDeviceCommandExecutionResultCalled = false;
     
     const ModuleStructure* lastModuleStructure = nullptr;
     DiagnosticDto lastDiagnosticData;
     UpdateDto lastUpdateData;
+    DeviceCommandUpdateDto lastDeviceCommandUpdate;
     bool isModuleOnlineReturnValue = true;
     bool sendDiagnosticDataReturnValue = true;
     bool sendModuleUpdateDataReturnValue = true;
     bool sendToServerModuleStructureReturnValue = true;
+    bool sendDeviceCommandExecutionResultReturnValue = true;
     
     void reset() {
         isModuleOnlineCalled = false;
         sendToServerModuleStructureCalled = false;
         sendDiagnosticDataCalled = false;
         sendModuleUpdateDataCalled = false;
+        sendDeviceCommandExecutionResultCalled = false;
         lastModuleStructure = nullptr;
         isModuleOnlineReturnValue = true;
         sendDiagnosticDataReturnValue = true;
         sendModuleUpdateDataReturnValue = true;
         sendToServerModuleStructureReturnValue = true;
+        sendDeviceCommandExecutionResultReturnValue = true;
     }
     
     // IMqttApiService interface implementation
@@ -54,6 +60,12 @@ public:
         sendModuleUpdateDataCalled = true;
         lastUpdateData = updateData;
         return sendModuleUpdateDataReturnValue;
+    }
+    
+    bool sendDeviceCommandExecutionResult(const DeviceCommandUpdateDto& commandUpdate) override {
+        sendDeviceCommandExecutionResultCalled = true;
+        lastDeviceCommandUpdate = commandUpdate;
+        return sendDeviceCommandExecutionResultReturnValue;
     }
 };
 

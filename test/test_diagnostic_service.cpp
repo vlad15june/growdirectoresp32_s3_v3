@@ -11,6 +11,7 @@
 #include "Mock/Infrastructure/Mqtt/MockMqttManager.h"
 #include "Mock/Infrastructure/Api/MockHybridAPIService.h"
 #include "Infrastructure/Adapters/Json/JsonConverter.h"
+#include "Application/DTOs/DeviceCommandUpdateDto.h"
 
 // Global test variables
 static MockRestAPIService g_mockRestApi;

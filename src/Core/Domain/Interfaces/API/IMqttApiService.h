@@ -3,6 +3,7 @@
 #include "Core/Domain/Data/Models/ModuleStructure.h"
 #include "Application/DTOs/DiagnosticDto.h"
 #include "Application/DTOs/UpdateDto.h"
+#include "Application/DTOs/DeviceCommandUpdateDto.h"
 
 class IMqttApiService {
 public:
@@ -20,4 +21,11 @@ public:
      * @return true if the data was sent successfully, false otherwise
      */
     virtual bool sendModuleUpdateData(const UpdateDto& updateData) = 0;
+
+    /**
+     * @brief Send device command execution result via MQTT
+     * @param commandUpdate The device command update containing the execution result
+     * @return true if the operation was successful, false otherwise
+     */
+    virtual bool sendDeviceCommandExecutionResult(const DeviceCommandUpdateDto& commandUpdate) = 0;
 };

@@ -41,7 +41,7 @@ public:
     const char* lastRuleStateCommand = nullptr;
     const char* lastRuleUid = nullptr;
     const char* lastByUidRuleStateCommand = nullptr;
-    const char* lastDeviceCommandResult = nullptr;
+    DeviceCommandUpdateDto lastDeviceCommandUpdate;
     const char* lastAnalogInputDeviceCommandResult = nullptr;
     const char* lastModuleCommandResult = nullptr;
     DiagnosticDto lastDiagnosticData;
@@ -88,7 +88,6 @@ public:
         lastRuleStateCommand = nullptr;
         lastRuleUid = nullptr;
         lastByUidRuleStateCommand = nullptr;
-        lastDeviceCommandResult = nullptr;
         lastAnalogInputDeviceCommandResult = nullptr;
         lastModuleCommandResult = nullptr;
         lastDiagnosticDataPriority = ApiPriority::UNDEFINED;
@@ -145,9 +144,9 @@ public:
         return sendFirmwareVersionReturnValue;
     }
     
-    bool sendDeviceCommandExecutionResult(const char* msg) override {
+    bool sendDeviceCommandExecutionResult(const DeviceCommandUpdateDto& commandUpdate) override {
         sendDeviceCommandExecutionResultCalled = true;
-        lastDeviceCommandResult = msg;
+        lastDeviceCommandUpdate = commandUpdate;
         return sendDeviceCommandExecutionResultReturnValue;
     }
     

@@ -283,14 +283,103 @@ public:
 
     bool sendDeviceCommandExecutionResult(const DeviceCommandUpdateDto& commandUpdate) override
     {
-        if (_restApiService == nullptr)
+        ApiPriority effectivePriority = _apiPriority;
+        bool success = false;
+
+        switch (effectivePriority)
         {
-            log("HYBRID API: sendDeviceCommandExecutionResult - REST API not available");
-            return false;
+        case ApiPriority::REST_ONLY:
+            if (_restApiService != nullptr)
+            {
+                success = _restApiService->sendDeviceCommandExecutionResult(commandUpdate);
+                if (!success)
+                    trackApiSendFailure(true);
+            }
+            else
+            {
+                log("HYBRID API: REST_ONLY mode but REST API is not available");
+            }
+            break;
+
+        case ApiPriority::MQTT_ONLY:
+            if (_mqttApiService != nullptr)
+            {
+                success = _mqttApiService->sendDeviceCommandExecutionResult(commandUpdate);
+                if (!success)
+                    trackApiSendFailure(false);
+            }
+            else
+            {
+                log("HYBRID API: MQTT_ONLY mode but MQTT API is not available");
+            }
+            break;
+
+        case ApiPriority::REST_PREFERRED:
+            if (_restApiService != nullptr)
+            {
+                success = _restApiService->sendDeviceCommandExecutionResult(commandUpdate);
+                if (!success && _mqttApiService != nullptr)
+                {
+                    trackApiSendFailure(true);
+                    log("HYBRID API: REST failed, trying MQTT for device command result");
+                    success = _mqttApiService->sendDeviceCommandExecutionResult(commandUpdate);
+                    if (!success)
+                        trackApiSendFailure(false);
+                }
+            }
+            else if (_mqttApiService != nullptr)
+            {
+                success = _mqttApiService->sendDeviceCommandExecutionResult(commandUpdate);
+                if (!success)
+                    trackApiSendFailure(false);
+            }
+            break;
+
+        case ApiPriority::MQTT_PREFERRED:
+            if (_mqttApiService != nullptr)
+            {
+                success = _mqttApiService->sendDeviceCommandExecutionResult(commandUpdate);
+                if (!success && _restApiService != nullptr)
+                {
+                    trackApiSendFailure(false);
+                    log("HYBRID API: MQTT failed, trying REST for device command result");
+                    success = _restApiService->sendDeviceCommandExecutionResult(commandUpdate);
+                    if (!success)
+                        trackApiSendFailure(true);
+                }
+            }
+            else if (_restApiService != nullptr)
+            {
+                success = _restApiService->sendDeviceCommandExecutionResult(commandUpdate);
+                if (!success)
+                    trackApiSendFailure(true);
+            }
+            break;
+
+        case ApiPriority::BOTH:
+        {
+            bool restSuccess = false;
+            bool mqttSuccess = false;
+            if (_restApiService != nullptr)
+            {
+                restSuccess = _restApiService->sendDeviceCommandExecutionResult(commandUpdate);
+                if (!restSuccess)
+                    trackApiSendFailure(true);
+            }
+            if (_mqttApiService != nullptr)
+            {
+                mqttSuccess = _mqttApiService->sendDeviceCommandExecutionResult(commandUpdate);
+                if (!mqttSuccess)
+                    trackApiSendFailure(false);
+            }
+            success = restSuccess || mqttSuccess;
+            break;
         }
-        bool success = _restApiService->sendDeviceCommandExecutionResult(commandUpdate);
-        if (!success)
-            trackApiSendFailure(true);
+        default:
+            break;
+        }
+
+        log("HYBRID API: Device command execution result sent - success: %s", success ? "true" : "false");
         return success;
     }
 

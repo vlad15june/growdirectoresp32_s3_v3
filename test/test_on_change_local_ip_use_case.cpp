@@ -7,6 +7,7 @@
 #include "Mock/Infrastructure/Api/MockHybridAPIService.h"
 #include "Core/Domain/Data/Models/ModuleStructure.h"
 #include "Mock/Infrastructure/Configuration/MockModuleConfig.h"
+#include "Application/DTOs/DeviceCommandUpdateDto.h"
 
 // Global test variables
 static MockLogger g_mockLogger;

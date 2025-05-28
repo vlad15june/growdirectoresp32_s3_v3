@@ -2,6 +2,7 @@
 #define MOCK_REST_API_SERVICE_H
 
 #include "Core/Domain/Interfaces/API/IRestAPIService.h"
+#include "Application/DTOs/DeviceCommandUpdateDto.h"
 
 class MockRestAPIService : public IRestAPIService {
 public:
@@ -30,6 +31,7 @@ public:
     const char* lastDeviceCommandResult = nullptr;
     DiagnosticDto lastDiagnosticData;
     UpdateDto lastUpdateData;
+    DeviceCommandUpdateDto lastDeviceCommandUpdate;
     bool sendDiagnosticDataReturnValue = true;
     bool sendModuleUpdateDataReturnValue = true;
     
@@ -103,9 +105,9 @@ public:
         return sendFirmwareVersionReturnValue;
     }
     
-    bool sendDeviceCommandExecutionResult(const char* msg) override {
+    bool sendDeviceCommandExecutionResult(const DeviceCommandUpdateDto& commandUpdate) override {
         sendDeviceCommandExecutionResultCalled = true;
-        lastDeviceCommandResult = msg;
+        lastDeviceCommandUpdate = commandUpdate;
         return sendDeviceCommandExecutionResultReturnValue;
     }
     

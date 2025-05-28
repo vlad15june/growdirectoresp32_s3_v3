@@ -5,6 +5,7 @@
 #include "Mock/Infrastructure/Configuration/MockModuleConfig.h"
 #include "Mock/Infrastructure/Logging/MockLogger.h"
 #include "Mock/Infrastructure/Logging/MockDebugSystem.h"
+#include "Application/DTOs/DeviceCommandUpdateDto.h"
 
 static MockRestAPIService g_mockRestApi;
 static MockMqttApiService g_mockMqttApi;
@@ -14,6 +15,7 @@ static MockDebugSystem g_mockDebugSystem;
 static HybridAPIService* g_hybridApiService;
 static ModuleStructure g_moduleStructure;
 static DiagnosticDto g_diagnosticData;
+static DeviceCommandUpdateDto g_deviceCommandUpdate;
 
 void hybrid_api_service_setup() {
     g_mockRestApi.reset();
@@ -28,6 +30,10 @@ void hybrid_api_service_setup() {
     g_diagnosticData.uid = "test-device-uid";
     g_diagnosticData.rssi = -75;
     g_diagnosticData.firmware = "2.1.1";
+    
+    g_deviceCommandUpdate.uid = "test-device-uid";
+    g_deviceCommandUpdate.status = "completed";
+    g_deviceCommandUpdate.errorMessage = "";
     
     g_mockDebugSystem.registerFeature(DebugFeatures::NET_DEBUG);
     g_mockDebugSystem.registerFeature(DebugFeatures::MQTT_DEBUG);
@@ -397,14 +403,11 @@ void test_rest_only_methods() {
 
     g_mockRestApi.reset();
     g_mockRestApi.sendDeviceCommandExecutionResultReturnValue = true;
-    result = g_hybridApiService->sendDeviceCommandExecutionResult("test-command");
+    result = g_hybridApiService->sendDeviceCommandExecutionResult(g_deviceCommandUpdate);
     TEST_ASSERT_TRUE(result);
     TEST_ASSERT_TRUE(g_mockRestApi.sendDeviceCommandExecutionResultCalled);
-
-    g_mockRestApi.reset();
-    g_mockRestApi.sendDeviceCommandExecutionResultReturnValue = false;
-    result = g_hybridApiService->sendDeviceCommandExecutionResult("test-command");
-    TEST_ASSERT_FALSE(result);
+    TEST_ASSERT_EQUAL_STRING("test-device-uid", g_mockRestApi.lastDeviceCommandUpdate.uid.c_str());
+    TEST_ASSERT_EQUAL_STRING("completed", g_mockRestApi.lastDeviceCommandUpdate.status.c_str());
 
     g_mockRestApi.reset();
     g_mockRestApi.sendAnalogInputDeviceCommandExecutionResultReturnValue = true;
@@ -431,6 +434,104 @@ void test_rest_only_methods() {
     hybrid_api_service_teardown();
 }
 
+void test_device_command_execution_result_with_different_priorities() {
+    hybrid_api_service_setup();
+    
+    // Test with REST_ONLY priority - success case
+    g_mockRestApi.reset();
+    g_mockMqttApi.reset();
+    g_hybridApiService->setApiPriority(ApiPriority::REST_ONLY);
+    g_mockRestApi.sendDeviceCommandExecutionResultReturnValue = true;
+    
+    DeviceCommandUpdateDto successCommand;
+    successCommand.uid = "device-123";
+    successCommand.status = "completed";
+    successCommand.errorMessage = "";
+    
+    bool result = g_hybridApiService->sendDeviceCommandExecutionResult(successCommand);
+    TEST_ASSERT_TRUE(result);
+    TEST_ASSERT_TRUE(g_mockRestApi.sendDeviceCommandExecutionResultCalled);
+    TEST_ASSERT_FALSE(g_mockMqttApi.sendDeviceCommandExecutionResultCalled);
+    TEST_ASSERT_EQUAL_STRING("device-123", g_mockRestApi.lastDeviceCommandUpdate.uid.c_str());
+    TEST_ASSERT_EQUAL_STRING("completed", g_mockRestApi.lastDeviceCommandUpdate.status.c_str());
+    
+    // Test with REST_ONLY priority - failure case
+    g_mockRestApi.reset();
+    g_mockMqttApi.reset();
+    g_mockRestApi.sendDeviceCommandExecutionResultReturnValue = false;
+    
+    DeviceCommandUpdateDto failedCommand;
+    failedCommand.uid = "device-456";
+    failedCommand.status = "failed";
+    failedCommand.errorMessage = "Hardware error";
+    
+    result = g_hybridApiService->sendDeviceCommandExecutionResult(failedCommand);
+    TEST_ASSERT_FALSE(result);
+    TEST_ASSERT_TRUE(g_mockRestApi.sendDeviceCommandExecutionResultCalled);
+    TEST_ASSERT_FALSE(g_mockMqttApi.sendDeviceCommandExecutionResultCalled);
+    
+    // Test with MQTT_ONLY priority - success case
+    g_mockRestApi.reset();
+    g_mockMqttApi.reset();
+    g_hybridApiService->setApiPriority(ApiPriority::MQTT_ONLY);
+    g_mockMqttApi.sendDeviceCommandExecutionResultReturnValue = true;
+    
+    result = g_hybridApiService->sendDeviceCommandExecutionResult(successCommand);
+    TEST_ASSERT_TRUE(result);
+    TEST_ASSERT_FALSE(g_mockRestApi.sendDeviceCommandExecutionResultCalled);
+    TEST_ASSERT_TRUE(g_mockMqttApi.sendDeviceCommandExecutionResultCalled);
+    TEST_ASSERT_EQUAL_STRING("device-123", g_mockMqttApi.lastDeviceCommandUpdate.uid.c_str());
+    
+    // Test with REST_PREFERRED priority - REST fails, MQTT succeeds
+    g_mockRestApi.reset();
+    g_mockMqttApi.reset();
+    g_hybridApiService->setApiPriority(ApiPriority::REST_PREFERRED);
+    g_mockRestApi.sendDeviceCommandExecutionResultReturnValue = false;
+    g_mockMqttApi.sendDeviceCommandExecutionResultReturnValue = true;
+    
+    result = g_hybridApiService->sendDeviceCommandExecutionResult(successCommand);
+    TEST_ASSERT_TRUE(result);
+    TEST_ASSERT_TRUE(g_mockRestApi.sendDeviceCommandExecutionResultCalled);
+    TEST_ASSERT_TRUE(g_mockMqttApi.sendDeviceCommandExecutionResultCalled);
+    
+    // Test with MQTT_PREFERRED priority - MQTT fails, REST succeeds
+    g_mockRestApi.reset();
+    g_mockMqttApi.reset();
+    g_hybridApiService->setApiPriority(ApiPriority::MQTT_PREFERRED);
+    g_mockMqttApi.sendDeviceCommandExecutionResultReturnValue = false;
+    g_mockRestApi.sendDeviceCommandExecutionResultReturnValue = true;
+    
+    result = g_hybridApiService->sendDeviceCommandExecutionResult(successCommand);
+    TEST_ASSERT_TRUE(result);
+    TEST_ASSERT_TRUE(g_mockMqttApi.sendDeviceCommandExecutionResultCalled);
+    TEST_ASSERT_TRUE(g_mockRestApi.sendDeviceCommandExecutionResultCalled);
+    
+    // Test with BOTH priority - both succeed
+    g_mockRestApi.reset();
+    g_mockMqttApi.reset();
+    g_hybridApiService->setApiPriority(ApiPriority::BOTH);
+    g_mockRestApi.sendDeviceCommandExecutionResultReturnValue = true;
+    g_mockMqttApi.sendDeviceCommandExecutionResultReturnValue = true;
+    
+    result = g_hybridApiService->sendDeviceCommandExecutionResult(successCommand);
+    TEST_ASSERT_TRUE(result);
+    TEST_ASSERT_TRUE(g_mockRestApi.sendDeviceCommandExecutionResultCalled);
+    TEST_ASSERT_TRUE(g_mockMqttApi.sendDeviceCommandExecutionResultCalled);
+    
+    // Test with BOTH priority - both fail
+    g_mockRestApi.reset();
+    g_mockMqttApi.reset();
+    g_mockRestApi.sendDeviceCommandExecutionResultReturnValue = false;
+    g_mockMqttApi.sendDeviceCommandExecutionResultReturnValue = false;
+    
+    result = g_hybridApiService->sendDeviceCommandExecutionResult(failedCommand);
+    TEST_ASSERT_FALSE(result);
+    TEST_ASSERT_TRUE(g_mockRestApi.sendDeviceCommandExecutionResultCalled);
+    TEST_ASSERT_TRUE(g_mockMqttApi.sendDeviceCommandExecutionResultCalled);
+    
+    hybrid_api_service_teardown();
+}
+
 extern "C" int run_hybrid_api_service_tests(void) {
     UNITY_BEGIN();
     
@@ -440,6 +541,7 @@ extern "C" int run_hybrid_api_service_tests(void) {
     RUN_TEST(test_send_diagnostic_data_with_different_priorities);
     RUN_TEST(test_failure_tracking);
     RUN_TEST(test_rest_only_methods);
+    RUN_TEST(test_device_command_execution_result_with_different_priorities);
     
     return UNITY_END();
 }

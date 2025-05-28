@@ -9,6 +9,7 @@
 #include "Core/Domain/Interfaces/Adapters/Json/IJsonConverter.h"
 #include "Application/DTOs/DiagnosticDto.h"
 #include "Application/DTOs/UpdateDto.h"
+#include "Application/DTOs/DeviceCommandUpdateDto.h"
 
 class MqttApiService : public IMqttApiService {
 private:
@@ -22,6 +23,7 @@ private:
     static constexpr const char* MODULE_STRUCTURE_TOPIC = "hardware/structure/%s";
     static constexpr const char* DIAGNOSTIC_TOPIC = "hardware/diagnostic/%s";
     static constexpr const char* UPDATE_TOPIC = "hardware/update/%s";
+    static constexpr const char* DEVICE_COMMAND_TOPIC = "hardware/devices_command/%s";
     
     char _topicBuffer[128];
     
@@ -146,6 +148,33 @@ public:
         
         if (!_mqttManager->publish(topic, updateJson.c_str())) {
             log("MQTT: Failed to publish update data");
+            return false;
+        }
+        
+        return true;
+    }
+    
+    bool sendDeviceCommandExecutionResult(const DeviceCommandUpdateDto& commandUpdate) override {
+        if (_mqttManager == nullptr || !_mqttManager->isConnected()) {
+            log("MQTT: sendDeviceCommandExecutionResult - MQTT Manager not available or not connected");
+            return false;
+        }
+        
+        if (_jsonConverter == nullptr) {
+            log("MQTT: sendDeviceCommandExecutionResult - JSON converter not available");
+            return false;
+        }
+        
+        const char* topic = formatTopic(DEVICE_COMMAND_TOPIC);
+        if (topic == nullptr) {
+            return false;
+        }
+        
+        std::string commandJson = _jsonConverter->deviceCommandUpdateToJson(commandUpdate);
+        log("MQTT: Publishing device command result to topic: %s", topic);
+        
+        if (!_mqttManager->publish(topic, commandJson.c_str())) {
+            log("MQTT: Failed to publish device command result");
             return false;
         }
         
