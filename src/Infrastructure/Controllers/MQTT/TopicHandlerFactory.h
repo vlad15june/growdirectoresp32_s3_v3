@@ -6,6 +6,8 @@
 #include "Core/Domain/Interfaces/IDebugSystem.h"
 #include "Core/Domain/Interfaces/IModuleConfig.h"
 #include "Core/Domain/Interfaces/Mqtt/ITopicHandler.h"
+#include "Application/Interfaces/ICommandService.h"
+#include "Core/Domain/Interfaces/Adapters/Json/IJsonConverter.h"
 #include "TopicHandlers.h"
 
 /**
@@ -17,6 +19,8 @@ private:
     ILogger *_logger;
     IDebugSystem *_debugSystem;
     IModuleConfig *_moduleConfig;
+    ICommandService* _commandService;
+    IJsonConverter* _jsonConverter;
 
     // Logging method
     void log(const char *format, ...)
@@ -37,9 +41,13 @@ public:
     TopicHandlerFactory(
         ILogger *logger,
         IDebugSystem *debugSystem,
-        IModuleConfig *moduleConfig = nullptr) : _logger(logger),
-                                                 _debugSystem(debugSystem),
-                                                 _moduleConfig(moduleConfig)
+        IModuleConfig *moduleConfig = nullptr,
+        ICommandService* commandService = nullptr,
+        IJsonConverter* jsonConverter = nullptr) : _logger(logger),
+                                                   _debugSystem(debugSystem),
+                                                   _moduleConfig(moduleConfig),
+                                                   _commandService(commandService),
+                                                   _jsonConverter(jsonConverter)
     {
     }
 
@@ -51,17 +59,32 @@ public:
         if (_moduleConfig != nullptr)
         {
             const char *moduleUid = _moduleConfig->getModuleUid();
-            log("Creating handlers for module commnds, moduleUID: %s", moduleUid);
-            handlers.push_back(new CommandTopicHandler(_logger, _debugSystem, moduleUid));
+            log("Creating handlers for module commands, moduleUID: %s", moduleUid);
+            handlers.push_back(new CommandTopicHandler(
+                _logger, 
+                _debugSystem, 
+                moduleUid,
+                _commandService,
+                _jsonConverter));
         }
 
         return handlers;
     }
 
-    // Add a setter for the module config in case it's not available at construction time
+    // Add setters for dependencies that might not be available at construction time
     void setModuleConfig(IModuleConfig *moduleConfig)
     {
         _moduleConfig = moduleConfig;
+    }
+
+    void setCommandService(ICommandService* commandService)
+    {
+        _commandService = commandService;
+    }
+
+    void setJsonConverter(IJsonConverter* jsonConverter)
+    {
+        _jsonConverter = jsonConverter;
     }
 
     // Getter for module config

@@ -20,6 +20,7 @@
 #include "Core/Domain/UseCases/ModuleMode/OnChangeModuleModeUseCase.h"
 #include "Core/Domain/UseCases/ModuleMode/OnChangeLocalIpUseCase.h"
 #include "Core/Domain/UseCases/DeviceControl/ProcessDeviceStateUseCaseFactory.h"
+#include "Core/Domain/UseCases/DeviceControl/DeviceCommandExecutionUseCase.h"
 
 #include "Core/Domain/Data/Models/ModuleStructure.h"
 #include "Core/Domain/Data/Models/IDeviceModel.h"
@@ -56,6 +57,7 @@
 #include "Infrastructure/Repositories/RuleRepository.h"
 #include "Application/Services/Devices/IDeviceService.h"
 #include "Application/Services/Devices/DeviceService.h"
+#include "Application/Services/CommandService.h"
 
 const char *mqttUser = "GrowDirectorMqtt";
 const char *mqttPassword = "lasdfh329483457sfdjhs92_w";
@@ -122,6 +124,18 @@ ModuleConfig moduleConfig(&mqttLogger, &debugSystem, &settings, &ntpTimeAdapter,
 ModuleStructure moduleStructure;
 
 DeviceModel deviceModel(&moduleConfig, &moduleStructure);
+
+DeviceCommandExecutionUseCase deviceCommandExecutionUseCase(
+    &deviceModel,
+    &arduinoAdapter,
+    &moduleStructure,
+    &mqttLogger,
+    &debugSystem);
+
+CommandService commandService(
+    &deviceCommandExecutionUseCase,
+    &mqttLogger,
+    &debugSystem);
 
 OnChangeModuleModeUseCase moduleModeUseCase(
     arduinoAdapter,
@@ -239,5 +253,7 @@ ModuleSetupService moduleSetupService(
 void initDependencies()
 {
     topicHandlerFactory.setModuleConfig(&moduleConfig);
+    topicHandlerFactory.setCommandService(&commandService);
+    topicHandlerFactory.setJsonConverter(&jsonConverter);
 }
 #endif // GLOBALS_H

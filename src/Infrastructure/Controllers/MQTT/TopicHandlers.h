@@ -2,6 +2,9 @@
 #define TOPIC_HANDLERS_H
 
 #include "Core/Domain/Interfaces/Mqtt/ITopicHandler.h"
+#include "Application/Interfaces/ICommandService.h"
+#include "Core/Domain/Interfaces/Adapters/Json/IJsonConverter.h"
+#include "Application/DTOs/CommandDto.h"
 #include <string.h>
 #include <string>
 
@@ -89,26 +92,56 @@ public:
  */
 class CommandTopicHandler : public BaseTopicHandler
 {
+private:
+    ICommandService* commandService;
+    IJsonConverter* jsonConverter;
+
 public:
     CommandTopicHandler(
         ILogger *logger,
         IDebugSystem *debugSystem,
-        const char *moduleUid) : BaseTopicHandler((std::string("GrowDirectorMqttTopic/") + moduleUid).c_str(),
-                                                  logger,
-                                                  debugSystem)
+        const char *moduleUid,
+        ICommandService* commandService,
+        IJsonConverter* jsonConverter) : BaseTopicHandler((std::string("GrowDirectorMqttTopic/") + moduleUid).c_str(),
+                                                          logger,
+                                                          debugSystem),
+                                        commandService(commandService),
+                                        jsonConverter(jsonConverter)
     {
     }
 
     void handleMessage(const char *topic, const uint8_t *payload, unsigned int length) override
     {
-        log("Handling command message");
+        log("CommandTopicHandler: Handling command message on topic: %s", topic);
 
         // Convert payload to a null-terminated string
         char *payloadStr = new char[length + 1];
         memcpy(payloadStr, payload, length);
         payloadStr[length] = '\0';
-        log("Payload: %s", payloadStr);
+        
+        log("CommandTopicHandler: Payload: %s", payloadStr);
 
+        // Convert JSON payload to CommandDto
+        CommandDto commandDto;
+        std::string jsonString(payloadStr);
+        
+        if (jsonConverter && jsonConverter->commandFromJson(jsonString, commandDto)) {
+            log("CommandTopicHandler: Successfully parsed command - type: %s", commandDto.type.c_str());
+            
+            // Process the command using the command service
+            if (commandService) {
+                bool success = commandService->process(commandDto);
+                if (success) {
+                    log("CommandTopicHandler: Command processed successfully");
+                } else {
+                    log("CommandTopicHandler: Failed to process command");
+                }
+            } else {
+                log("CommandTopicHandler: Command service not available");
+            }
+        } else {
+            log("CommandTopicHandler: Failed to parse JSON payload to CommandDto");
+        }
 
         delete[] payloadStr;
     }
