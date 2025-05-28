@@ -9,6 +9,7 @@
 #include "Core/Domain/Interfaces/IModuleConfig.h"
 #include "Application/DTOs/DiagnosticDto.h"
 #include "Application/DTOs/UpdateDto.h"
+#include "Application/DTOs/DeviceCommandUpdateDto.h"
 
 /**
  * Implementation of hybrid API service that can use both REST and MQTT APIs
@@ -280,14 +281,14 @@ public:
         return success;
     }
 
-    bool sendDeviceCommandExecutionResult(const char *msg) override
+    bool sendDeviceCommandExecutionResult(const DeviceCommandUpdateDto& commandUpdate) override
     {
         if (_restApiService == nullptr)
         {
             log("HYBRID API: sendDeviceCommandExecutionResult - REST API not available");
             return false;
         }
-        bool success = _restApiService->sendDeviceCommandExecutionResult(msg);
+        bool success = _restApiService->sendDeviceCommandExecutionResult(commandUpdate);
         if (!success)
             trackApiSendFailure(true);
         return success;

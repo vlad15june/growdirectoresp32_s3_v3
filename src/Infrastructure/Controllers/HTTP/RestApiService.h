@@ -9,6 +9,7 @@
 #include "Infrastructure/Adapters/Http/HttpClientAdapter.h"
 #include "Core/Domain/Interfaces/Adapters/Json/IJsonConverter.h"
 #include "Application/DTOs/DiagnosticDto.h"
+#include "Application/DTOs/DeviceCommandUpdateDto.h"
 
 class RestAPIService : public IRestAPIService
 {
@@ -340,17 +341,24 @@ public:
         }
     }
 
-    bool sendDeviceCommandExecutionResult(const char *msg) override
+    bool sendDeviceCommandExecutionResult(const DeviceCommandUpdateDto& commandUpdate) override
     {
+        if (_jsonConverter == nullptr) {
+            log("NET: sendDeviceCommandExecutionResult - JSON converter not available");
+            return false;
+        }
+
         if (_moduleConfig == nullptr || _settings == nullptr)
         {
             log("NET: sendDeviceCommandExecutionResult - ModuleConfig or Settings not available");
             return false;
         }
 
-        log("NET: Device command result %s\n", msg);
+        // Convert DeviceCommandUpdateDto to JSON
+        std::string jsonMsg = _jsonConverter->deviceCommandUpdateToJson(commandUpdate);
+        log("NET: Device command result %s\n", jsonMsg.c_str());
 
-        if (strlen(msg) < 10)
+        if (jsonMsg.length() < 10)
         {
             log("NET: Device command empty");
             return false;
@@ -372,7 +380,7 @@ public:
             _httpClient->begin(_urlBuffer);
             _httpClient->addHeader("Content-Type", "application/json");
 
-            httpResponseCode = _httpClient->POST(msg);
+            httpResponseCode = _httpClient->POST(jsonMsg.c_str());
 
             log("NET: HTTP response %d, try = %d", httpResponseCode, tries);
 

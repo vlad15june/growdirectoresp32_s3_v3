@@ -3,6 +3,7 @@
 #include "Core/Domain/Interfaces/Adapters/Json/IJsonConverter.h"
 #include "Application/DTOs/UpdateDto.h"
 #include "Application/DTOs/CommandDto.h"
+#include "Application/DTOs/DeviceCommandUpdateDto.h"
 #include <ArduinoJson.h>
 
 class ArduinoJsonConverter : public IJsonConverter
@@ -800,6 +801,19 @@ public:
             doc["sensorUid"] = commandDto.sensorUid;
             doc["sensorType"] = commandDto.sensorType;
         }
+
+        std::string output;
+        serializeJson(doc, output);
+        return output;
+    }
+
+    std::string deviceCommandUpdateToJson(const DeviceCommandUpdateDto& commandUpdateDto) override
+    {
+        DynamicJsonDocument doc(1024);
+
+        doc["uid"] = commandUpdateDto.uid;
+        doc["status"] = commandUpdateDto.status;
+        doc["errorMessage"] = commandUpdateDto.errorMessage;
 
         std::string output;
         serializeJson(doc, output);

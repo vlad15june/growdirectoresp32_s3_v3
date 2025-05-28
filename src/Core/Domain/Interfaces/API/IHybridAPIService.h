@@ -4,6 +4,7 @@
 #include "IMqttApiService.h"
 #include "Core/Domain/Data/Models/ModuleStructure.h"
 #include "Application/DTOs/DiagnosticDto.h"
+#include "Application/DTOs/DeviceCommandUpdateDto.h"
 
 /**
  * Enum that defines API priority for sending data
@@ -80,10 +81,10 @@ public:
     
     /**
      * Send device command execution result to the server
-     * @param msg The message containing the execution result
+     * @param commandUpdate The device command update containing the execution result
      * @return true if the operation was successful, false otherwise
      */
-    virtual bool sendDeviceCommandExecutionResult(const char* msg) = 0;
+    virtual bool sendDeviceCommandExecutionResult(const DeviceCommandUpdateDto& commandUpdate) = 0;
     
     /**
      * Send analog input device command execution result to the server

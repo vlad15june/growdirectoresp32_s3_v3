@@ -6,6 +6,7 @@
 #include "Application/DTOs/DiagnosticDto.h"
 #include "Application/DTOs/UpdateDto.h"
 #include "Application/DTOs/CommandDto.h"
+#include "Application/DTOs/DeviceCommandUpdateDto.h"
 #include <string>
 #include <sstream>
 #include <algorithm>
@@ -878,6 +879,17 @@ public:
             oss << ",\"sensorType\":\"" << commandDto.sensorType << "\"";
         }
 
+        oss << "}";
+        return oss.str();
+    }
+
+    std::string deviceCommandUpdateToJson(const DeviceCommandUpdateDto& commandUpdateDto) override
+    {
+        std::ostringstream oss;
+        oss << "{";
+        oss << "\"uid\":\"" << commandUpdateDto.uid << "\"";
+        oss << ",\"status\":\"" << commandUpdateDto.status << "\"";
+        oss << ",\"errorMessage\":\"" << commandUpdateDto.errorMessage << "\"";
         oss << "}";
         return oss.str();
     }

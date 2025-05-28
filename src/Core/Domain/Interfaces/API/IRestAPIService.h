@@ -3,6 +3,7 @@
 #include "Core/Domain/Data/Models/ModuleStructure.h"
 #include "Application/DTOs/DiagnosticDto.h"
 #include "Application/DTOs/UpdateDto.h"
+#include "Application/DTOs/DeviceCommandUpdateDto.h"
 
 class IRestAPIService {
 public:
@@ -17,7 +18,7 @@ public:
     virtual bool sendRuleStateCommand(const char* msg) = 0;
     virtual bool sendByUidRuleStateCommand(const char* uid, const char* msg) = 0;
     virtual bool sendFirmwareVersion() = 0;
-    virtual bool sendDeviceCommandExecutionResult(const char* msg) = 0;
+    virtual bool sendDeviceCommandExecutionResult(const DeviceCommandUpdateDto& commandUpdate) = 0;
     virtual bool sendAnalogInputDeviceCommandExecutionResult(const char* msg) = 0;
     virtual bool sendModuleCommandExecutionResult(const char* msg) = 0;
     

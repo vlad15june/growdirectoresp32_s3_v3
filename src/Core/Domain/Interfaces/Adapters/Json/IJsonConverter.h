@@ -8,6 +8,7 @@
 #include "Core/Domain/Data/Entities/Rule.h"
 #include "Application/DTOs/UpdateDto.h"
 #include "Application/DTOs/CommandDto.h"
+#include "Application/DTOs/DeviceCommandUpdateDto.h"
 
 class IJsonConverter
 {
@@ -85,6 +86,13 @@ public:
      * @return JSON string representation of the CommandDto
      */
     virtual std::string commandToJson(const CommandDto &commandDto) = 0;
+
+    /**
+     * @brief Convert DeviceCommandUpdateDto object to JSON string
+     * @param commandUpdateDto DeviceCommandUpdateDto object to convert
+     * @return JSON string representation of the DeviceCommandUpdateDto
+     */
+    virtual std::string deviceCommandUpdateToJson(const DeviceCommandUpdateDto& commandUpdateDto) = 0;
 
     virtual ~IJsonConverter() = default;
 };
