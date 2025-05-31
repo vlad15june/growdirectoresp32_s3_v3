@@ -3,6 +3,7 @@
 
 #include "Core/Domain/Interfaces/API/IRestAPIService.h"
 #include "Application/DTOs/DeviceCommandUpdateDto.h"
+#include <vector>
 
 class MockRestAPIService : public IRestAPIService {
 public:
@@ -37,7 +38,7 @@ public:
     DeviceCommandUpdateDto lastDeviceCommandUpdate;
     bool sendDiagnosticDataReturnValue = true;
     bool sendModuleUpdateDataReturnValue = true;
-    DeviceCommandDto deviceCommandReturnValue;
+    std::vector<DeviceCommandDto> deviceCommandsReturnValue;
     
     int networkFails = 0;
     int apiSendFails = 0;
@@ -66,7 +67,7 @@ public:
         sendAnalogInputDeviceCommandExecutionResultReturnValue = true;
         sendModuleCommandExecutionResultReturnValue = true;
         getDeviceCommandCalled = false;
-        deviceCommandReturnValue = DeviceCommandDto();
+        deviceCommandsReturnValue.clear();
         
         lastModuleStructure = nullptr;
         lastRuleStateCommand = nullptr;
@@ -141,9 +142,9 @@ public:
         return sendModuleUpdateDataReturnValue;
     }
     
-    DeviceCommandDto getDeviceCommand() override {
+    std::vector<DeviceCommandDto> getDeviceCommand() override {
         getDeviceCommandCalled = true;
-        return deviceCommandReturnValue;
+        return deviceCommandsReturnValue;
     }
     
     int getApiSendFails() const override { return apiSendFails; }

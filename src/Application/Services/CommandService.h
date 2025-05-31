@@ -90,79 +90,100 @@ private:
             "CommandService: Processing device command - deviceUid: %s, state: %s, commandId: %d",
             command.deviceUid.c_str(), command.requestedState.c_str(), command.commandId);
 
-        // Get device command from server
+        // Get device commands from server
         if (!hybridApiService)
         {
             logError("CommandService: HybridAPIService not available");
             return false;
         }
 
-        DeviceCommandDto deviceCommand = hybridApiService->getDeviceCommand();
+        std::vector<DeviceCommandDto> deviceCommands = hybridApiService->getDeviceCommand();
         
-        // Check if we received a valid command
-        if (deviceCommand.uid.empty())
+        // Check if we received any commands
+        if (deviceCommands.empty())
         {
             log(DebugFeatures::DEVICE_COMMAND_DEBUG,
-                "CommandService: No device command received from server");
-            return true; // Not an error, just no command available
+                "CommandService: No device commands received from server");
+            return true; // Not an error, just no commands available
         }
 
         log(DebugFeatures::DEVICE_COMMAND_DEBUG,
-            "CommandService: Received device command from server - deviceUid: %s, state: %s, commandId: %d",
-            deviceCommand.uid.c_str(), deviceCommand.requestedState.c_str(), deviceCommand.id);
+            "CommandService: Received %d device commands from server", deviceCommands.size());
 
-        // Validate command time if time adapter is available
-        if (timeAdapter && !deviceCommand.createdDate.empty())
+        bool allCommandsSuccessful = true;
+
+        // Process each command
+        for (const auto& deviceCommand : deviceCommands)
         {
-            bool isTimeValid = timeAdapter->isCommandTimeValid(deviceCommand.createdDate.c_str(), commandMaxAgeSeconds);
-            
             log(DebugFeatures::DEVICE_COMMAND_DEBUG,
-                "CommandService: Command time validation - createdDate: %s, isValid: %s",
-                deviceCommand.createdDate.c_str(), isTimeValid ? "true" : "false");
+                "CommandService: Processing command - deviceUid: %s, state: %s, commandId: %d",
+                deviceCommand.uid.c_str(), deviceCommand.requestedState.c_str(), deviceCommand.id);
 
-            if (!isTimeValid)
+            // Validate command time if time adapter is available
+            if (timeAdapter && !deviceCommand.createdDate.empty())
             {
-                logError("CommandService: Command is too old - createdDate: %s, maxAge: %lu seconds",
-                        deviceCommand.createdDate.c_str(), commandMaxAgeSeconds);
+                bool isTimeValid = timeAdapter->isCommandTimeValid(deviceCommand.createdDate.c_str(), commandMaxAgeSeconds);
+                
+                log(DebugFeatures::DEVICE_COMMAND_DEBUG,
+                    "CommandService: Command time validation - createdDate: %s, isValid: %s",
+                    deviceCommand.createdDate.c_str(), isTimeValid ? "true" : "false");
 
-                // Send error status for expired command
+                if (!isTimeValid)
+                {
+                    logError("CommandService: Command is too old - createdDate: %s, maxAge: %lu seconds",
+                            deviceCommand.createdDate.c_str(), commandMaxAgeSeconds);
+
+                    // Send error status for expired command
+                    DeviceCommandUpdateDto updateDto;
+                    updateDto.uid = deviceCommand.uid;
+                    updateDto.status = "error";
+                    updateDto.errorMessage = "Command expired: too old to execute";
+                    hybridApiService->sendDeviceCommandExecutionResult(updateDto);
+
+                    allCommandsSuccessful = false;
+                    continue; // Skip this command and process next one
+                }
+            }
+
+            // Execute the device command using the use case
+            if (deviceCommandUseCase)
+            {
+                bool executionResult = deviceCommandUseCase->execute(
+                    deviceCommand.uid, 
+                    deviceCommand.requestedState, 
+                    deviceCommand.id
+                );
+
+                log(DebugFeatures::DEVICE_COMMAND_DEBUG,
+                    "CommandService: Device command execution %s for command %d",
+                    executionResult ? "successful" : "failed", deviceCommand.id);
+
+                DeviceCommandUpdateDto updateDto;
+                updateDto.uid = deviceCommand.uid;
+                updateDto.status = executionResult ? "done" : "error";
+                if (!executionResult)
+                {
+                    updateDto.errorMessage = "Device command execution failed";
+                    allCommandsSuccessful = false;
+                }
+                hybridApiService->sendDeviceCommandExecutionResult(updateDto);
+            }
+            else
+            {
+                logError("CommandService: DeviceCommandExecutionUseCase not available");
+                
+                // Send error status for this command
                 DeviceCommandUpdateDto updateDto;
                 updateDto.uid = deviceCommand.uid;
                 updateDto.status = "error";
-                updateDto.errorMessage = "Command expired: too old to execute";
+                updateDto.errorMessage = "Device command execution service not available";
                 hybridApiService->sendDeviceCommandExecutionResult(updateDto);
-
-                return false;
+                
+                allCommandsSuccessful = false;
             }
         }
 
-        // Execute the device command using the use case
-        if (deviceCommandUseCase)
-        {
-            bool executionResult = deviceCommandUseCase->execute(
-                deviceCommand.uid, 
-                deviceCommand.requestedState, 
-                deviceCommand.id
-            );
-
-            log(DebugFeatures::DEVICE_COMMAND_DEBUG,
-                "CommandService: Device command execution %s",
-                executionResult ? "successful" : "failed");
-
-            DeviceCommandUpdateDto updateDto;
-            updateDto.uid = deviceCommand.uid;
-            updateDto.status = executionResult ? "done" : "error";
-            if (!executionResult)
-            {
-                updateDto.errorMessage = "Device command execution failed";
-            }
-            hybridApiService->sendDeviceCommandExecutionResult(updateDto);
-
-            return executionResult;
-        }
-
-        logError("CommandService: DeviceCommandExecutionUseCase not available");
-        return false;
+        return allCommandsSuccessful;
     }
 
     /**

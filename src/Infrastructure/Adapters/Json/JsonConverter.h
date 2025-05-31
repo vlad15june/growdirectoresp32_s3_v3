@@ -974,6 +974,37 @@ public:
         oss << "}";
         return oss.str();
     }
+
+    bool deviceCommandsFromJson(const std::string &jsonStr, std::vector<DeviceCommandDto> &commands) override
+    {
+        commands.clear();
+        
+        // Simple array parsing - look for array brackets
+        if (jsonStr.front() == '[' && jsonStr.back() == ']')
+        {
+            // Parse as array
+            auto commandObjs = splitObjects(jsonStr);
+            for (const auto &commandStr : commandObjs)
+            {
+                DeviceCommandDto command;
+                if (deviceCommandFromJson(commandStr, command))
+                {
+                    commands.push_back(command);
+                }
+            }
+        }
+        else if (jsonStr.front() == '{' && jsonStr.back() == '}')
+        {
+            // Single object
+            DeviceCommandDto command;
+            if (deviceCommandFromJson(jsonStr, command))
+            {
+                commands.push_back(command);
+            }
+        }
+        
+        return !commands.empty();
+    }
 };
 
 #endif // JSON_CONVERTER_H

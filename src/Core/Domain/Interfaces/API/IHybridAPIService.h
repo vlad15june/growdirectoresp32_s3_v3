@@ -6,6 +6,7 @@
 #include "Application/DTOs/DiagnosticDto.h"
 #include "Application/DTOs/DeviceCommandUpdateDto.h"
 #include "Application/DTOs/DeviceCommandDto.h"
+#include <vector>
 
 /**
  * Enum that defines API priority for sending data
@@ -130,8 +131,8 @@ public:
     virtual void resetApiStatistics() = 0;
 
     /**
-     * Get device command from the server (REST only)
-     * @return DeviceCommandDto containing the command details, empty if no command or error
+     * Get device commands from the server (REST only)
+     * @return vector of DeviceCommandDto containing the command details, empty if no commands or error
      */
-    virtual DeviceCommandDto getDeviceCommand() = 0;
+    virtual std::vector<DeviceCommandDto> getDeviceCommand() = 0;
 };

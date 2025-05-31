@@ -888,4 +888,47 @@ public:
         serializeJson(doc, output);
         return output;
     }
+
+    bool deviceCommandsFromJson(const std::string &jsonStr, std::vector<DeviceCommandDto> &commands) override
+    {
+        DynamicJsonDocument doc(8192); // Larger capacity for array
+        DeserializationError error = deserializeJson(doc, jsonStr);
+        if (error)
+            return false;
+
+        commands.clear();
+        
+        // Check if it's an array
+        if (doc.is<JsonArray>())
+        {
+            for (JsonObject commandObj : doc.as<JsonArray>())
+            {
+                DeviceCommandDto command;
+                command.id = commandObj["id"] | 0;
+                command.uid = commandObj["uid"] | "";
+                command.requestedState = commandObj["requestedState"] | "";
+                command.analogControlPinValue = commandObj["analogControlPinValue"] | 0;
+                command.status = commandObj["status"] | "";
+                command.needToSwitchBack = commandObj["needToSwitchBack"] | false;
+                command.secondsToSwitchBack = commandObj["secondsToSwitchBack"] | 0;
+                command.switchType = commandObj["switchType"] | "";
+                command.errorMessage = commandObj["errorMessage"] | "";
+                command.createdDate = commandObj["createdDate"] | "";
+                command.updatedDate = commandObj["updatedDate"] | "";
+                
+                commands.push_back(command);
+            }
+        }
+        else if (doc.is<JsonObject>())
+        {
+            // Single object - treat as single command
+            DeviceCommandDto command;
+            if (deviceCommandFromJson(jsonStr, command))
+            {
+                commands.push_back(command);
+            }
+        }
+
+        return !commands.empty();
+    }
 };

@@ -110,6 +110,14 @@ public:
      */
     virtual std::string deviceCommandToJson(const DeviceCommandDto &commandDto) = 0;
 
+    /**
+     * @brief Convert JSON string to array of DeviceCommandDto objects
+     * @param jsonStr JSON string to parse
+     * @param commands Vector of DeviceCommandDto objects to populate
+     * @return true if parsing was successful, false otherwise
+     */
+    virtual bool deviceCommandsFromJson(const std::string &jsonStr, std::vector<DeviceCommandDto> &commands) = 0;
+
     virtual ~IJsonConverter() = default;
 };
 

@@ -610,24 +610,22 @@ public:
         return success;
     }
 
-    DeviceCommandDto getDeviceCommand() override
+    std::vector<DeviceCommandDto> getDeviceCommand() override
     {
-        DeviceCommandDto commandDto;
+        std::vector<DeviceCommandDto> commands;
         
         // This method always uses REST API only, regardless of priority setting
         if (_restApiService != nullptr)
         {
-            commandDto = _restApiService->getDeviceCommand();
-            log("NET: ---------------------------");
-            log("HYBRID API: Get device command via REST - has command: %s", 
-                !commandDto.uid.empty() ? "true" : "false");
+            commands = _restApiService->getDeviceCommand();
+            log("HYBRID API: Get device commands via REST - command count: %d", commands.size());
         }
         else
         {
             log("HYBRID API: REST API service not available for getDeviceCommand");
         }
         
-        return commandDto;
+        return commands;
     }
 
     int getRestApiSendFails() const override

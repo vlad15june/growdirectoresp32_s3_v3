@@ -5,6 +5,7 @@
 #include "Application/DTOs/UpdateDto.h"
 #include "Application/DTOs/DeviceCommandUpdateDto.h"
 #include "Application/DTOs/DeviceCommandDto.h"
+#include <vector>
 
 class IRestAPIService {
 public:
@@ -24,10 +25,10 @@ public:
     virtual bool sendModuleCommandExecutionResult(const char* msg) = 0;
     
     /**
-     * @brief Get pending device command from server
-     * @return DeviceCommandDto containing the command details, empty if no command or error
+     * @brief Get pending device commands from server
+     * @return vector of DeviceCommandDto containing the command details, empty if no commands or error
      */
-    virtual DeviceCommandDto getDeviceCommand() = 0;
+    virtual std::vector<DeviceCommandDto> getDeviceCommand() = 0;
     
     /**
      * @brief Sends diagnostic data to the server

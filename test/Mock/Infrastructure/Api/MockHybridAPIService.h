@@ -2,6 +2,7 @@
 #define MOCK_HYBRID_API_SERVICE_H
 
 #include "Core/Domain/Interfaces/API/IHybridAPIService.h"
+#include <vector>
 
 class MockHybridAPIService : public IHybridAPIService {
 public:
@@ -34,6 +35,7 @@ public:
     bool sendDiagnosticDataReturnValue = true;
     bool sendModuleUpdateDataReturnValue = true;
     DeviceCommandDto deviceCommandReturnValue;
+    std::vector<DeviceCommandDto> deviceCommandsReturnValue;
     
     // Parameter storage
     ApiPriority currentApiPriority = ApiPriority::REST_PREFERRED;
@@ -84,6 +86,7 @@ public:
         sendDiagnosticDataReturnValue = true;
         sendModuleUpdateDataReturnValue = true;
         deviceCommandReturnValue = DeviceCommandDto();
+        deviceCommandsReturnValue.clear();
         
         currentApiPriority = ApiPriority::REST_PREFERRED;
         lastSetApiPriority = ApiPriority::UNDEFINED;
@@ -180,9 +183,9 @@ public:
         return sendModuleUpdateDataReturnValue;
     }
     
-    DeviceCommandDto getDeviceCommand() override {
+    std::vector<DeviceCommandDto> getDeviceCommand() override {
         getDeviceCommandCalled = true;
-        return deviceCommandReturnValue;
+        return deviceCommandsReturnValue;
     }
     
     int getRestApiSendFails() const override {

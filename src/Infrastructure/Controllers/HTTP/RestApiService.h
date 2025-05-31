@@ -599,14 +599,14 @@ public:
         }
     }
 
-    DeviceCommandDto getDeviceCommand() override
+    std::vector<DeviceCommandDto> getDeviceCommand() override
     {
-        DeviceCommandDto commandDto;
+        std::vector<DeviceCommandDto> commands;
         
         if (_moduleConfig == nullptr || _settings == nullptr)
         {
             log("NET: getDeviceCommand - ModuleConfig or Settings not available");
-            return commandDto;
+            return commands;
         }
 
         const char *moduleUid = _moduleConfig->getModuleUid();
@@ -648,16 +648,16 @@ public:
         
         if (httpResponseCode == 200 && !responseBody.empty() && _jsonConverter != nullptr)
         {
-            // Parse JSON response to DeviceCommandDto
-            if (_jsonConverter->deviceCommandFromJson(responseBody, commandDto))
+            // Parse JSON response to array of DeviceCommandDto
+            if (_jsonConverter->deviceCommandsFromJson(responseBody, commands))
             {
-                log("NET: Device command parsed successfully");
+                log("NET: Device commands parsed successfully - count: %d", commands.size());
                 trackApiSendSuccess();
             }
             else
             {
-                log("NET: Failed to parse device command JSON");
-                commandDto = DeviceCommandDto(); // Reset to empty
+                log("NET: Failed to parse device commands JSON");
+                commands.clear();
             }
         }
         else
@@ -666,8 +666,7 @@ public:
                 trackApiSendFailure();
         }
         
-        log("NET: ---------------------------");
-        return commandDto;
+        return commands;
     }
 
     // Implementations of network diagnostic counter methods
