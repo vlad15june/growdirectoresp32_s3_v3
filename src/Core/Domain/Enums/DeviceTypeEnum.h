@@ -4,7 +4,8 @@
 enum DeviceTypeEnum {
     DEVICE_TYPE_UNKNOWN = 0,
     DEVICE_TYPE_DIGITAL = 1,
-    DEVICE_TYPE_ANALOG = 2
+    DEVICE_TYPE_ANALOG = 2,
+    DEVICE_TYPE_PUMP = 3
 };
 
 #endif // DEVICE_TYPE_ENUM_H

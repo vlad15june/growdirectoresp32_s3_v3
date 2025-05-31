@@ -42,12 +42,10 @@ public:
     bool init() override {
         clearDevices();
         
-        // Initialize devices based on module type
         int moduleType = moduleConfig->getModuleType();
         int moduleSubType = moduleConfig->getModuleSubType();
         
         if (moduleType == MODULE_TYPE_DEVICE) {
-            // For relay/digital output devices
             auto relays = moduleStructure->getAllRelays();
             for (auto relay : relays) {
                 DeviceDigitalOut* device = new DeviceDigitalOut();
@@ -55,21 +53,28 @@ public:
                 device->state = DEVICE_STATE_OFF;
                 device->isError = false;
                 device->deviceType = DEVICE_TYPE_DIGITAL;
-                // Initialize other properties
                 addDevice(device);
             }
         }
-        else if (moduleType == MODULE_TYPE_ANALOG_INPUT_DEVICE || 
-                (moduleType == MODULE_TYPE_HYDRO && moduleSubType == MODULE_SUBTYPE_DIMMER)) {
-            // For analog output devices
+        else if (moduleType == MODULE_TYPE_HYDRO) {
             auto pumps = moduleStructure->getAllPumps();
             for (auto pump : pumps) {
                 DeviceAnalogOut* device = new DeviceAnalogOut();
                 device->deviceUid = pump->uid.c_str();
                 device->state = DEVICE_STATE_OFF;
                 device->isError = false;
+                device->deviceType = DEVICE_TYPE_PUMP;
+                addDevice(device);
+            }
+        }
+        else if (moduleType == MODULE_TYPE_ANALOG_INPUT_DEVICE) {
+            auto relays = moduleStructure->getAllRelays();
+            for (auto relay : relays) {
+                DeviceAnalogOut* device = new DeviceAnalogOut();
+                device->deviceUid = relay->uid.c_str();
+                device->state = DEVICE_STATE_OFF;
+                device->isError = false;
                 device->deviceType = DEVICE_TYPE_ANALOG;
-                // Initialize other properties
                 addDevice(device);
             }
         }

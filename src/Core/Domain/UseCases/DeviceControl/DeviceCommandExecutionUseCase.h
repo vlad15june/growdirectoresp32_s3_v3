@@ -73,10 +73,9 @@ public:
             return false;
         }
 
-        // Parse requested state
         bool turnOn = (requestedState == "on" || requestedState == "On" || requestedState == "ON");
 
-        // Execute the hardware command
+        // TODO: instead of executeHardwareCommand will use ReleAdapter or PumpAdapter
         if (executeHardwareCommand(device, pin, turnOn))
         {
             // Update device state
@@ -161,6 +160,7 @@ private:
             {
                 // Analog device (PWM)
                 DeviceAnalogOut *analogDevice = static_cast<DeviceAnalogOut *>(device);
+                
                 int analogValue = turnOn ? 255 : 0; // Full on or off for simple command
 
                 // You might want to use specific analog values based on device configuration
@@ -172,6 +172,34 @@ private:
                 arduinoAdapter->analogWrite(pin, analogValue);
 
                 log("DeviceCommandExecutionUseCase: Analog write - pin: %d, value: %d", pin, analogValue);
+            }
+            else if (device->deviceType == DEVICE_TYPE_PUMP)
+            {
+                // Pump device - ensure only one pump can be on at a time
+                if (turnOn)
+                {
+                    log("DeviceCommandExecutionUseCase: Turning on pump, checking for other active pumps");
+                    
+                    // Turn off all other pumps first
+                    if (!turnOffAllOtherPumps(device->deviceUid))
+                    {
+                        log("DeviceCommandExecutionUseCase: Failed to turn off other pumps");
+                        return false;
+                    }
+                }
+
+                DeviceAnalogOut *pumpDevice = static_cast<DeviceAnalogOut *>(device);
+                int analogValue = turnOn ? 255 : 0; // Full on or off for simple command
+
+                // You might want to use specific analog values based on device configuration
+                if (turnOn && pumpDevice->analogPinValueWhenTarget > 0)
+                {
+                    analogValue = static_cast<int>(pumpDevice->analogPinValueWhenTarget);
+                }
+
+                arduinoAdapter->analogWrite(pin, analogValue);
+
+                log("DeviceCommandExecutionUseCase: Pump write - pin: %d, value: %d", pin, analogValue);
             }
             else
             {
@@ -186,6 +214,61 @@ private:
             log("DeviceCommandExecutionUseCase: Exception occurred while executing hardware command");
             return false;
         }
+    }
+
+    /**
+     * @brief Check if device is a pump device
+     * @param device Device to check
+     * @return true if device is a pump
+     */
+    bool isPumpDevice(Device *device)
+    {
+        return (device && device->deviceType == DEVICE_TYPE_PUMP);
+    }
+
+    /**
+     * @brief Turn off all pumps except the specified one
+     * @param excludeUid UID of pump to exclude from turning off
+     * @return true if all other pumps were turned off successfully
+     */
+    bool turnOffAllOtherPumps(const std::string &excludeUid)
+    {
+        bool allSuccess = true;
+        
+        // Get all devices and filter for pumps
+        std::vector<Device*> allDevices = deviceModel->getAllDevices();
+        
+        for (Device* device : allDevices)
+        {
+            if (device && 
+                device->deviceType == DEVICE_TYPE_PUMP && 
+                strcmp(device->deviceUid, excludeUid.c_str()) != 0 &&
+                device->state == DEVICE_STATE_ON)
+            {
+                log("DeviceCommandExecutionUseCase: Turning off pump: %s", device->deviceUid);
+                
+                // Find the pin for this pump
+                int pin = findDevicePin(device->deviceUid);
+                if (pin >= 0)
+                {
+                    // Turn off the pump
+                    arduinoAdapter->analogWrite(pin, 0);
+                    
+                    // Update device state
+                    device->state = DEVICE_STATE_OFF;
+                    device->timeOff = arduinoAdapter->millis();
+                    
+                    log("DeviceCommandExecutionUseCase: Pump turned off: %s", device->deviceUid);
+                }
+                else
+                {
+                    log("DeviceCommandExecutionUseCase: Pin not found for pump: %s", device->deviceUid);
+                    allSuccess = false;
+                }
+            }
+        }
+        
+        return allSuccess;
     }
 
     /**

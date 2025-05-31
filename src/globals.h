@@ -132,11 +132,6 @@ DeviceCommandExecutionUseCase deviceCommandExecutionUseCase(
     &mqttLogger,
     &debugSystem);
 
-CommandService commandService(
-    &deviceCommandExecutionUseCase,
-    &mqttLogger,
-    &debugSystem);
-
 OnChangeModuleModeUseCase moduleModeUseCase(
     arduinoAdapter,
     moduleConfig,
@@ -176,6 +171,12 @@ HybridAPIService hybridApiService(
     &mqttLogger,
     &debugSystem,
     ApiPriority::BOTH);
+
+CommandService commandService(
+    &deviceCommandExecutionUseCase,
+    &hybridApiService,
+    &mqttLogger,
+    &debugSystem);
 
 DiagnosticService diagnosticService(
     &restApiService,

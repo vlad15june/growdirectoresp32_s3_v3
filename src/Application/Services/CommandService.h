@@ -2,7 +2,10 @@
 
 #include "Application/Interfaces/ICommandService.h"
 #include "Application/DTOs/CommandDto.h"
+#include "Application/DTOs/DeviceCommandDto.h"
+#include "Application/DTOs/DeviceCommandUpdateDto.h"
 #include "Core/Domain/Interfaces/UseCases/IDeviceCommandExecutionUseCase.h"
+#include "Core/Domain/Interfaces/API/IHybridAPIService.h"
 #include "Core/Domain/Interfaces/ILogger.h"
 #include "Core/Domain/Interfaces/IDebugSystem.h"
 #include <cstdarg>
@@ -15,6 +18,7 @@ class CommandService : public ICommandService
 {
 private:
     IDeviceCommandExecutionUseCase *deviceCommandUseCase;
+    IHybridAPIService *hybridApiService;
     ILogger *logger;
     IDebugSystem *debugSystem;
 
@@ -22,14 +26,17 @@ public:
     /**
      * @brief Constructor
      * @param deviceCommandUseCase Use case for device command execution
+     * @param hybridApiService Hybrid API service for server communication
      * @param logger Logger instance
      * @param debugSystem Debug system instance
      */
     CommandService(
         IDeviceCommandExecutionUseCase *deviceCommandUseCase,
+        IHybridAPIService *hybridApiService,
         ILogger *logger,
         IDebugSystem *debugSystem)
         : deviceCommandUseCase(deviceCommandUseCase),
+          hybridApiService(hybridApiService),
           logger(logger),
           debugSystem(debugSystem) {}
 
@@ -77,13 +84,53 @@ private:
             "CommandService: Processing device command - deviceUid: %s, state: %s, commandId: %d",
             command.deviceUid.c_str(), command.requestedState.c_str(), command.commandId);
 
-        // TODO: request deviceCommand from server, check command time if time not passed then parse set status of command in progress        
-        if (deviceCommandUseCase)
+        // Get device command from server
+        if (!hybridApiService)
         {
-            //TODO: if execution ok, then send command status to done
-            return deviceCommandUseCase->execute(command.deviceUid, command.requestedState, command.commandId);
+            logError("CommandService: HybridAPIService not available");
+            return false;
         }
 
+        DeviceCommandDto deviceCommand = hybridApiService->getDeviceCommand();
+        
+        // Check if we received a valid command
+        if (deviceCommand.uid.empty())
+        {
+            log(DebugFeatures::DEVICE_COMMAND_DEBUG,
+                "CommandService: No device command received from server");
+            return true; // Not an error, just no command available
+        }
+
+        log(DebugFeatures::DEVICE_COMMAND_DEBUG,
+            "CommandService: Received device command from server - deviceUid: %s, state: %s, commandId: %d",
+            deviceCommand.uid.c_str(), deviceCommand.requestedState.c_str(), deviceCommand.id);
+
+        // Execute the device command using the use case
+        if (deviceCommandUseCase)
+        {
+            bool executionResult = deviceCommandUseCase->execute(
+                deviceCommand.uid, 
+                deviceCommand.requestedState, 
+                deviceCommand.id
+            );
+
+            log(DebugFeatures::DEVICE_COMMAND_DEBUG,
+                "CommandService: Device command execution %s",
+                executionResult ? "successful" : "failed");
+
+            DeviceCommandUpdateDto updateDto;
+            updateDto.uid = deviceCommand.uid;
+            updateDto.status = executionResult ? "done" : "error";
+            if (!executionResult)
+            {
+                updateDto.errorMessage = "Device command execution failed";
+            }
+            hybridApiService->sendDeviceCommandExecutionResult(updateDto);
+
+            return executionResult;
+        }
+
+        logError("CommandService: DeviceCommandExecutionUseCase not available");
         return false;
     }
 
