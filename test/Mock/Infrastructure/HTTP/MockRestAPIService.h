@@ -6,6 +6,7 @@
 
 class MockRestAPIService : public IRestAPIService {
 public:
+    // Tracking flags for method calls
     bool initCalled = false;
     bool isModuleOnlineCalled = false;
     bool sendToServerModuleStructureCalled = false;
@@ -17,7 +18,9 @@ public:
     bool sendModuleCommandExecutionResultCalled = false;
     bool sendDiagnosticDataCalled = false;
     bool sendModuleUpdateDataCalled = false;
+    bool getDeviceCommandCalled = false;
     
+    // Return values
     bool isModuleOnlineReturnValue = true;
     bool sendToServerModuleStructureReturnValue = true;
     bool sendRuleStateCommandReturnValue = true;
@@ -34,6 +37,7 @@ public:
     DeviceCommandUpdateDto lastDeviceCommandUpdate;
     bool sendDiagnosticDataReturnValue = true;
     bool sendModuleUpdateDataReturnValue = true;
+    DeviceCommandDto deviceCommandReturnValue;
     
     int networkFails = 0;
     int apiSendFails = 0;
@@ -61,6 +65,8 @@ public:
         sendDeviceCommandExecutionResultReturnValue = true;
         sendAnalogInputDeviceCommandExecutionResultReturnValue = true;
         sendModuleCommandExecutionResultReturnValue = true;
+        getDeviceCommandCalled = false;
+        deviceCommandReturnValue = DeviceCommandDto();
         
         lastModuleStructure = nullptr;
         lastRuleStateCommand = nullptr;
@@ -133,6 +139,11 @@ public:
         sendModuleUpdateDataCalled = true;
         lastUpdateData = updateData;
         return sendModuleUpdateDataReturnValue;
+    }
+    
+    DeviceCommandDto getDeviceCommand() override {
+        getDeviceCommandCalled = true;
+        return deviceCommandReturnValue;
     }
     
     int getApiSendFails() const override { return apiSendFails; }

@@ -9,6 +9,7 @@
 #include "Application/DTOs/UpdateDto.h"
 #include "Application/DTOs/CommandDto.h"
 #include "Application/DTOs/DeviceCommandUpdateDto.h"
+#include "Application/DTOs/DeviceCommandDto.h"
 
 class IJsonConverter
 {
@@ -93,6 +94,21 @@ public:
      * @return JSON string representation of the DeviceCommandUpdateDto
      */
     virtual std::string deviceCommandUpdateToJson(const DeviceCommandUpdateDto& commandUpdateDto) = 0;
+
+    /**
+     * @brief Convert JSON string to DeviceCommandDto object
+     * @param jsonStr JSON string to parse
+     * @param commandDto DeviceCommandDto object to populate
+     * @return true if parsing was successful, false otherwise
+     */
+    virtual bool deviceCommandFromJson(const std::string &jsonStr, DeviceCommandDto &commandDto) = 0;
+
+    /**
+     * @brief Convert DeviceCommandDto object to JSON string
+     * @param commandDto DeviceCommandDto object to convert
+     * @return JSON string representation of the DeviceCommandDto
+     */
+    virtual std::string deviceCommandToJson(const DeviceCommandDto &commandDto) = 0;
 
     virtual ~IJsonConverter() = default;
 };

@@ -7,6 +7,7 @@
 #include "Application/DTOs/UpdateDto.h"
 #include "Application/DTOs/CommandDto.h"
 #include "Application/DTOs/DeviceCommandUpdateDto.h"
+#include "Application/DTOs/DeviceCommandDto.h"
 #include <string>
 #include <sstream>
 #include <algorithm>
@@ -154,6 +155,24 @@ static double extractDoubleValue(const std::string &src, const std::string &key)
     if (end == std::string::npos)
         end = src.length();
     return std::stod(src.substr(start, end - start));
+}
+
+// Helper function to extract bool value
+static bool extractBoolValue(const std::string &src, const std::string &key)
+{
+    auto keyPos = src.find("\"" + key + "\"");
+    if (keyPos == std::string::npos)
+        return false;
+    auto colon = src.find(':', keyPos);
+    if (colon == std::string::npos)
+        return false;
+
+    // Skip spaces after colon
+    size_t valueStart = colon + 1;
+    while (valueStart < src.size() && std::isspace(src[valueStart]))
+        ++valueStart;
+
+    return src.substr(valueStart, 4) == "true";
 }
 
 class JsonConverter : public IJsonConverter
@@ -890,6 +909,68 @@ public:
         oss << "\"uid\":\"" << commandUpdateDto.uid << "\"";
         oss << ",\"status\":\"" << commandUpdateDto.status << "\"";
         oss << ",\"errorMessage\":\"" << commandUpdateDto.errorMessage << "\"";
+        oss << "}";
+        return oss.str();
+    }
+
+    bool deviceCommandFromJson(const std::string &jsonStr, DeviceCommandDto &commandDto) override
+    {
+        commandDto.id = extractIntValue(jsonStr, "id");
+        commandDto.uid = extractValue(jsonStr, "uid");
+        commandDto.requestedState = extractValue(jsonStr, "requestedState");
+        commandDto.analogControlPinValue = extractIntValue(jsonStr, "analogControlPinValue");
+        commandDto.status = extractValue(jsonStr, "status");
+        commandDto.needToSwitchBack = extractBoolValue(jsonStr, "needToSwitchBack");
+        commandDto.secondsToSwitchBack = extractIntValue(jsonStr, "secondsToSwitchBack");
+        commandDto.switchType = extractValue(jsonStr, "switchType");
+        commandDto.errorMessage = extractValue(jsonStr, "errorMessage");
+        commandDto.createdDate = extractValue(jsonStr, "createdDate");
+        commandDto.updatedDate = extractValue(jsonStr, "updatedDate");
+
+        return true;
+    }
+
+    std::string deviceCommandToJson(const DeviceCommandDto &commandDto) override
+    {
+        std::ostringstream oss;
+        oss << "{";
+        oss << "\"id\":" << commandDto.id;
+        oss << ",\"uid\":\"" << commandDto.uid << "\"";
+        oss << ",\"requestedState\":\"" << commandDto.requestedState << "\"";
+        
+        if (commandDto.analogControlPinValue > 0)
+        {
+            oss << ",\"analogControlPinValue\":" << commandDto.analogControlPinValue;
+        }
+        
+        oss << ",\"status\":\"" << commandDto.status << "\"";
+        oss << ",\"needToSwitchBack\":" << (commandDto.needToSwitchBack ? "true" : "false");
+        
+        if (commandDto.secondsToSwitchBack > 0)
+        {
+            oss << ",\"secondsToSwitchBack\":" << commandDto.secondsToSwitchBack;
+        }
+        
+        if (!commandDto.switchType.empty())
+        {
+            oss << ",\"switchType\":\"" << commandDto.switchType << "\"";
+        }
+        
+        if (!commandDto.errorMessage.empty())
+        {
+            oss << ",\"errorMessage\":\"" << commandDto.errorMessage << "\"";
+        }
+        
+        if (!commandDto.createdDate.empty())
+        {
+            oss << ",\"createdDate\":\"" << commandDto.createdDate << "\"";
+        }
+        
+        if (!commandDto.updatedDate.empty())
+        {
+            oss << ",\"updatedDate\":\"" << commandDto.updatedDate << "\"";
+        }
+
         oss << "}";
         return oss.str();
     }

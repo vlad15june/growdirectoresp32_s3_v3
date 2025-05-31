@@ -10,6 +10,7 @@
 #include "Core/Domain/Interfaces/Adapters/Json/IJsonConverter.h"
 #include "Application/DTOs/DiagnosticDto.h"
 #include "Application/DTOs/DeviceCommandUpdateDto.h"
+#include "Application/DTOs/DeviceCommandDto.h"
 
 class RestAPIService : public IRestAPIService
 {
@@ -596,6 +597,76 @@ public:
             trackApiSendFailure();
             return false;
         }
+    }
+
+    DeviceCommandDto getDeviceCommand() override
+    {
+        DeviceCommandDto commandDto;
+        
+        if (_moduleConfig == nullptr || _settings == nullptr)
+        {
+            log("NET: getDeviceCommand - ModuleConfig or Settings not available");
+            return commandDto;
+        }
+
+        const char *moduleUid = _moduleConfig->getModuleUid();
+        
+        snprintf(_urlBuffer, sizeof(_urlBuffer),
+                 "%s/api/v1/HardWare/devices_command?token=%s&grow_director_uid=%s&status=new",
+                 _serverUrl, _token, moduleUid);
+
+        log("NET: GET %s", _urlBuffer);
+
+        byte tries = 0;
+        int httpResponseCode = 0;
+        std::string responseBody;
+        
+        while (tries < 3 && httpResponseCode != 200)
+        {
+            _httpClient->setTimeout(30000);
+            _httpClient->begin(_urlBuffer);
+            
+            httpResponseCode = _httpClient->GET();
+            
+            if (httpResponseCode > 0)
+            {
+                log("NET: HTTP Response code: %d", httpResponseCode);
+                
+                // Get response body
+                responseBody = _httpClient->getString();
+                log("NET: HTTP Response: %s", responseBody.c_str());
+            }
+            else
+            {
+                log("NET: HTTP Response Error code: %d", httpResponseCode);
+            }
+            
+            _httpClient->end();
+            delay(200);
+            tries++;
+        }
+        
+        if (httpResponseCode == 200 && !responseBody.empty() && _jsonConverter != nullptr)
+        {
+            // Parse JSON response to DeviceCommandDto
+            if (_jsonConverter->deviceCommandFromJson(responseBody, commandDto))
+            {
+                log("NET: Device command parsed successfully");
+                trackApiSendSuccess();
+            }
+            else
+            {
+                log("NET: Failed to parse device command JSON");
+                commandDto = DeviceCommandDto(); // Reset to empty
+            }
+        }
+        else
+        {
+            if (httpResponseCode != 200)
+                trackApiSendFailure();
+        }
+        
+        return commandDto;
     }
 
     // Implementations of network diagnostic counter methods

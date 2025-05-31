@@ -5,6 +5,7 @@
 #include "Core/Domain/Data/Models/ModuleStructure.h"
 #include "Application/DTOs/DiagnosticDto.h"
 #include "Application/DTOs/DeviceCommandUpdateDto.h"
+#include "Application/DTOs/DeviceCommandDto.h"
 
 /**
  * Enum that defines API priority for sending data
@@ -127,4 +128,10 @@ public:
      * Reset API statistics
      */
     virtual void resetApiStatistics() = 0;
+
+    /**
+     * Get device command from the server (REST only)
+     * @return DeviceCommandDto containing the command details, empty if no command or error
+     */
+    virtual DeviceCommandDto getDeviceCommand() = 0;
 };

@@ -19,6 +19,7 @@ public:
     bool sendDiagnosticDataCalled = false;
     bool sendModuleUpdateDataCalled = false;
     bool resetApiStatisticsCalled = false;
+    bool getDeviceCommandCalled = false;
     
     // Return values
     bool initReturnValue = true;
@@ -32,6 +33,7 @@ public:
     bool sendModuleCommandExecutionResultReturnValue = true;
     bool sendDiagnosticDataReturnValue = true;
     bool sendModuleUpdateDataReturnValue = true;
+    DeviceCommandDto deviceCommandReturnValue;
     
     // Parameter storage
     ApiPriority currentApiPriority = ApiPriority::REST_PREFERRED;
@@ -68,6 +70,7 @@ public:
         sendDiagnosticDataCalled = false;
         sendModuleUpdateDataCalled = false;
         resetApiStatisticsCalled = false;
+        getDeviceCommandCalled = false;
         
         initReturnValue = true;
         isModuleOnlineReturnValue = true;
@@ -80,6 +83,7 @@ public:
         sendModuleCommandExecutionResultReturnValue = true;
         sendDiagnosticDataReturnValue = true;
         sendModuleUpdateDataReturnValue = true;
+        deviceCommandReturnValue = DeviceCommandDto();
         
         currentApiPriority = ApiPriority::REST_PREFERRED;
         lastSetApiPriority = ApiPriority::UNDEFINED;
@@ -174,6 +178,11 @@ public:
         lastUpdateData = updateData;
         lastUpdateDataPriority = priority;
         return sendModuleUpdateDataReturnValue;
+    }
+    
+    DeviceCommandDto getDeviceCommand() override {
+        getDeviceCommandCalled = true;
+        return deviceCommandReturnValue;
     }
     
     int getRestApiSendFails() const override {

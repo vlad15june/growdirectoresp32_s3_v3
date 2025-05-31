@@ -4,6 +4,7 @@
 #include "Application/DTOs/DiagnosticDto.h"
 #include "Application/DTOs/UpdateDto.h"
 #include "Application/DTOs/DeviceCommandUpdateDto.h"
+#include "Application/DTOs/DeviceCommandDto.h"
 
 class IRestAPIService {
 public:
@@ -21,6 +22,12 @@ public:
     virtual bool sendDeviceCommandExecutionResult(const DeviceCommandUpdateDto& commandUpdate) = 0;
     virtual bool sendAnalogInputDeviceCommandExecutionResult(const char* msg) = 0;
     virtual bool sendModuleCommandExecutionResult(const char* msg) = 0;
+    
+    /**
+     * @brief Get pending device command from server
+     * @return DeviceCommandDto containing the command details, empty if no command or error
+     */
+    virtual DeviceCommandDto getDeviceCommand() = 0;
     
     /**
      * @brief Sends diagnostic data to the server

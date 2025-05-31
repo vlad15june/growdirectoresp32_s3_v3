@@ -10,6 +10,7 @@
 #include "Application/DTOs/DiagnosticDto.h"
 #include "Application/DTOs/UpdateDto.h"
 #include "Application/DTOs/DeviceCommandUpdateDto.h"
+#include "Application/DTOs/DeviceCommandDto.h"
 
 /**
  * Implementation of hybrid API service that can use both REST and MQTT APIs
@@ -607,6 +608,24 @@ public:
             break;
         }
         return success;
+    }
+
+    DeviceCommandDto getDeviceCommand() override
+    {
+        DeviceCommandDto commandDto;
+        
+        // This method always uses REST API only, regardless of priority setting
+        if (_restApiService != nullptr)
+        {
+            commandDto = _restApiService->getDeviceCommand();
+            log("HYBRID API: Get device command via REST - has command: %s");
+        }
+        else
+        {
+            log("HYBRID API: REST API service not available for getDeviceCommand");
+        }
+        
+        return commandDto;
     }
 
     int getRestApiSendFails() const override

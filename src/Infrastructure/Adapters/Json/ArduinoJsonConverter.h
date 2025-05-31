@@ -4,6 +4,7 @@
 #include "Application/DTOs/UpdateDto.h"
 #include "Application/DTOs/CommandDto.h"
 #include "Application/DTOs/DeviceCommandUpdateDto.h"
+#include "Application/DTOs/DeviceCommandDto.h"
 #include <ArduinoJson.h>
 
 class ArduinoJsonConverter : public IJsonConverter
@@ -814,6 +815,74 @@ public:
         doc["uid"] = commandUpdateDto.uid;
         doc["status"] = commandUpdateDto.status;
         doc["errorMessage"] = commandUpdateDto.errorMessage;
+
+        std::string output;
+        serializeJson(doc, output);
+        return output;
+    }
+
+    bool deviceCommandFromJson(const std::string &jsonStr, DeviceCommandDto &commandDto) override
+    {
+        DynamicJsonDocument doc(2048);
+        DeserializationError error = deserializeJson(doc, jsonStr);
+        if (error)
+            return false;
+
+        commandDto.id = doc["id"] | 0;
+        commandDto.uid = doc["uid"] | "";
+        commandDto.requestedState = doc["requestedState"] | "";
+        commandDto.analogControlPinValue = doc["analogControlPinValue"] | 0;
+        commandDto.status = doc["status"] | "";
+        commandDto.needToSwitchBack = doc["needToSwitchBack"] | false;
+        commandDto.secondsToSwitchBack = doc["secondsToSwitchBack"] | 0;
+        commandDto.switchType = doc["switchType"] | "";
+        commandDto.errorMessage = doc["errorMessage"] | "";
+        commandDto.createdDate = doc["createdDate"] | "";
+        commandDto.updatedDate = doc["updatedDate"] | "";
+
+        return true;
+    }
+
+    std::string deviceCommandToJson(const DeviceCommandDto &commandDto) override
+    {
+        DynamicJsonDocument doc(2048);
+
+        doc["id"] = commandDto.id;
+        doc["uid"] = commandDto.uid;
+        doc["requestedState"] = commandDto.requestedState;
+        
+        if (commandDto.analogControlPinValue > 0)
+        {
+            doc["analogControlPinValue"] = commandDto.analogControlPinValue;
+        }
+        
+        doc["status"] = commandDto.status;
+        doc["needToSwitchBack"] = commandDto.needToSwitchBack;
+        
+        if (commandDto.secondsToSwitchBack > 0)
+        {
+            doc["secondsToSwitchBack"] = commandDto.secondsToSwitchBack;
+        }
+        
+        if (!commandDto.switchType.empty())
+        {
+            doc["switchType"] = commandDto.switchType;
+        }
+        
+        if (!commandDto.errorMessage.empty())
+        {
+            doc["errorMessage"] = commandDto.errorMessage;
+        }
+        
+        if (!commandDto.createdDate.empty())
+        {
+            doc["createdDate"] = commandDto.createdDate;
+        }
+        
+        if (!commandDto.updatedDate.empty())
+        {
+            doc["updatedDate"] = commandDto.updatedDate;
+        }
 
         std::string output;
         serializeJson(doc, output);
