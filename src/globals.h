@@ -176,7 +176,8 @@ CommandService commandService(
     &deviceCommandExecutionUseCase,
     &hybridApiService,
     &mqttLogger,
-    &debugSystem);
+    &debugSystem,
+    &ntpTimeAdapter);
 
 DiagnosticService diagnosticService(
     &restApiService,

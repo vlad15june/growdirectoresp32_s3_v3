@@ -618,7 +618,9 @@ public:
         if (_restApiService != nullptr)
         {
             commandDto = _restApiService->getDeviceCommand();
-            log("HYBRID API: Get device command via REST - has command: %s");
+            log("NET: ---------------------------");
+            log("HYBRID API: Get device command via REST - has command: %s", 
+                !commandDto.uid.empty() ? "true" : "false");
         }
         else
         {

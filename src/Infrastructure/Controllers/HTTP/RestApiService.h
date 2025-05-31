@@ -666,6 +666,7 @@ public:
                 trackApiSendFailure();
         }
         
+        log("NET: ---------------------------");
         return commandDto;
     }
 

@@ -8,6 +8,7 @@
 #include "Core/Domain/Interfaces/API/IHybridAPIService.h"
 #include "Core/Domain/Interfaces/ILogger.h"
 #include "Core/Domain/Interfaces/IDebugSystem.h"
+#include "Infrastructure/Adapters/Time/INTPTimeAdapter.h"
 #include <cstdarg>
 #include <cstdio>
 
@@ -21,6 +22,8 @@ private:
     IHybridAPIService *hybridApiService;
     ILogger *logger;
     IDebugSystem *debugSystem;
+    INTPTimeAdapter *timeAdapter;
+    static const unsigned long commandMaxAgeSeconds = 300; // 5 minutes
 
 public:
     /**
@@ -29,16 +32,19 @@ public:
      * @param hybridApiService Hybrid API service for server communication
      * @param logger Logger instance
      * @param debugSystem Debug system instance
+     * @param timeAdapter Time adapter for command validation
      */
     CommandService(
         IDeviceCommandExecutionUseCase *deviceCommandUseCase,
         IHybridAPIService *hybridApiService,
         ILogger *logger,
-        IDebugSystem *debugSystem)
+        IDebugSystem *debugSystem,
+        INTPTimeAdapter *timeAdapter = nullptr)
         : deviceCommandUseCase(deviceCommandUseCase),
           hybridApiService(hybridApiService),
           logger(logger),
-          debugSystem(debugSystem) {}
+          debugSystem(debugSystem),
+          timeAdapter(timeAdapter) {}
 
     /**
      * @brief Process a command DTO
@@ -104,6 +110,31 @@ private:
         log(DebugFeatures::DEVICE_COMMAND_DEBUG,
             "CommandService: Received device command from server - deviceUid: %s, state: %s, commandId: %d",
             deviceCommand.uid.c_str(), deviceCommand.requestedState.c_str(), deviceCommand.id);
+
+        // Validate command time if time adapter is available
+        if (timeAdapter && !deviceCommand.createdDate.empty())
+        {
+            bool isTimeValid = timeAdapter->isCommandTimeValid(deviceCommand.createdDate.c_str(), commandMaxAgeSeconds);
+            
+            log(DebugFeatures::DEVICE_COMMAND_DEBUG,
+                "CommandService: Command time validation - createdDate: %s, isValid: %s",
+                deviceCommand.createdDate.c_str(), isTimeValid ? "true" : "false");
+
+            if (!isTimeValid)
+            {
+                logError("CommandService: Command is too old - createdDate: %s, maxAge: %lu seconds",
+                        deviceCommand.createdDate.c_str(), commandMaxAgeSeconds);
+
+                // Send error status for expired command
+                DeviceCommandUpdateDto updateDto;
+                updateDto.uid = deviceCommand.uid;
+                updateDto.status = "error";
+                updateDto.errorMessage = "Command expired: too old to execute";
+                hybridApiService->sendDeviceCommandExecutionResult(updateDto);
+
+                return false;
+            }
+        }
 
         // Execute the device command using the use case
         if (deviceCommandUseCase)
