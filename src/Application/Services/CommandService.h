@@ -94,20 +94,15 @@ private:
             return false;
         }
 
-        // Get current time in seconds from time adapter
-        unsigned long currentTimeSeconds = 0;
+        // Get current epoch time from time adapter
+        unsigned long currentEpoch = 0;
         if (timeAdapter)
         {
-            unsigned long currentEpoch = timeAdapter->getEpochTime();
-            if (currentEpoch > 0)
-            {
-                // Convert epoch to seconds of day for comparison
-                currentTimeSeconds = (currentEpoch % 86400); // 86400 seconds in a day
-            }
-            else
+            currentEpoch = timeAdapter->getEpochTime();
+            if (currentEpoch == 0)
             {
                 log(DebugFeatures::DEVICE_COMMAND_DEBUG,
-                    "CommandService: Could not get current time from adapter, using fallback");
+                    "CommandService: Could not get current time from adapter");
                 return false; // If we can't get time, reject for safety
             }
         }
@@ -129,92 +124,138 @@ private:
             return false;
         }
 
-        // Find decimal point for milliseconds
-        size_t splitPoint = createdDateStr.find(".", splitT);
-        if (splitPoint == std::string::npos)
+        // Extract date part (YYYY-MM-DD)
+        std::string datePart = createdDateStr.substr(0, splitT);
+        std::string timePart = createdDateStr.substr(splitT + 1);
+
+        // Remove milliseconds and timezone from time part
+        size_t dotIndex = timePart.find(".");
+        if (dotIndex != std::string::npos)
         {
-            // No milliseconds, find timezone or end
-            splitPoint = createdDateStr.find("+", splitT);
-            if (splitPoint == std::string::npos)
-            {
-                splitPoint = createdDateStr.find("Z", splitT);
-                if (splitPoint == std::string::npos)
-                {
-                    splitPoint = createdDateStr.length();
-                }
-            }
+            timePart = timePart.substr(0, dotIndex);
+        }
+        size_t zIndex = timePart.find("Z");
+        if (zIndex != std::string::npos)
+        {
+            timePart = timePart.substr(0, zIndex);
+        }
+        size_t plusIndex = timePart.find("+");
+        if (plusIndex != std::string::npos)
+        {
+            timePart = timePart.substr(0, plusIndex);
         }
 
-        // Extract time portion (HH:MM:SS)
-        std::string timeStamp = createdDateStr.substr(splitT + 1, splitPoint - splitT - 1);
-        
-        log(DebugFeatures::DEVICE_COMMAND_DEBUG,
-            "CommandService: Extracted timeStamp: %s", timeStamp.c_str());
+        // Parse date (YYYY-MM-DD)
+        size_t firstDash = datePart.find("-");
+        size_t secondDash = datePart.find("-", firstDash + 1);
+        if (firstDash == std::string::npos || secondDash == std::string::npos)
+        {
+            logError("CommandService: Invalid date format in timestamp");
+            return false;
+        }
 
-        // Parse hours, minutes, seconds
-        if (timeStamp.length() < 8) // Minimum HH:MM:SS
+        std::string yearStr = datePart.substr(0, firstDash);
+        std::string monthStr = datePart.substr(firstDash + 1, secondDash - firstDash - 1);
+        std::string dayStr = datePart.substr(secondDash + 1);
+
+        // Parse time (HH:MM:SS)
+        size_t firstColon = timePart.find(":");
+        size_t secondColon = timePart.find(":", firstColon + 1);
+        if (firstColon == std::string::npos || secondColon == std::string::npos)
         {
             logError("CommandService: Invalid time format in timestamp");
             return false;
         }
 
-        std::string hoursStr = timeStamp.substr(0, 2);
-        std::string minutesStr = timeStamp.substr(3, 2);
-        std::string secondsStr = timeStamp.substr(6, 2);
+        std::string hoursStr = timePart.substr(0, firstColon);
+        std::string minutesStr = timePart.substr(firstColon + 1, secondColon - firstColon - 1);
+        std::string secondsStr = timePart.substr(secondColon + 1);
 
-        int hoursInt = std::stoi(hoursStr);
-        int minutesInt = std::stoi(minutesStr);
-        int secondsInt = std::stoi(secondsStr);
+        // Convert to integers
+        int year, month, day, hours, minutes, seconds;
+        try {
+            year = std::stoi(yearStr);
+            month = std::stoi(monthStr);
+            day = std::stoi(dayStr);
+            hours = std::stoi(hoursStr);
+            minutes = std::stoi(minutesStr);
+            seconds = std::stoi(secondsStr);
+        } catch (const std::exception& e) {
+            logError("CommandService: Failed to parse timestamp values");
+            return false;
+        }
 
         // Validate parsed values
-        if (hoursInt < 0 || hoursInt > 23 || minutesInt < 0 || minutesInt > 59 || 
-            secondsInt < 0 || secondsInt > 59)
+        if (year < 2020 || year > 2050 || month < 1 || month > 12 || 
+            day < 1 || day > 31 || hours < 0 || hours > 23 || 
+            minutes < 0 || minutes > 59 || seconds < 0 || seconds > 59)
         {
-            logError("CommandService: Invalid time values - H:%d M:%d S:%d", 
-                     hoursInt, minutesInt, secondsInt);
+            logError("CommandService: Invalid datetime values - Y:%d M:%d D:%d H:%d Min:%d S:%d", 
+                     year, month, day, hours, minutes, seconds);
             return false;
         }
 
         log(DebugFeatures::DEVICE_COMMAND_DEBUG,
-            "CommandService: timeStamp = %s, createdDate h=%d, min=%d, sec=%d",
-            timeStamp.c_str(), hoursInt, minutesInt, secondsInt);
+            "CommandService: Parsed command timestamp - %04d-%02d-%02d %02d:%02d:%02d",
+            year, month, day, hours, minutes, seconds);
 
-        // Convert command time to seconds of day
-        unsigned long commandTimeSeconds = hoursInt * 3600 + minutesInt * 60 + secondsInt;
-
-        // Calculate time difference
-        long differenceTime = static_cast<long>(currentTimeSeconds) - static_cast<long>(commandTimeSeconds);
+        // Convert command timestamp to epoch time (simplified calculation)
+        // Note: This is a basic calculation and doesn't account for leap years, etc.
+        // For production use, consider using a proper date/time library
         
-        log(DebugFeatures::DEVICE_COMMAND_DEBUG,
-            "CommandService: diff command time %ld, currentTimeSeconds %lu, commandTimeSeconds %lu",
-            differenceTime, currentTimeSeconds, commandTimeSeconds);
-
-        // Handle negative difference (command from future or day rollover)
-        if (differenceTime < 0)
-        {
-            // Check if it's a day rollover case
-            long adjustedDifference = differenceTime + 86400; // Add one day
-            if (adjustedDifference > 0 && adjustedDifference <= static_cast<long>(commandMaxAgeSeconds))
-            {
-                differenceTime = adjustedDifference;
-                log(DebugFeatures::DEVICE_COMMAND_DEBUG,
-                    "CommandService: Adjusted for day rollover, new diff: %ld", differenceTime);
-            }
-            else
-            {
-                differenceTime = 0;
-                log(DebugFeatures::DEVICE_COMMAND_DEBUG,
-                    "CommandService: diff command time was less than 0 and set to %ld", differenceTime);
+        // Days since epoch (1970-01-01) - simplified calculation
+        int daysSinceEpoch = 0;
+        
+        // Add years (approximate - 365 days per year, plus leap years)
+        for (int y = 1970; y < year; y++) {
+            if ((y % 4 == 0 && y % 100 != 0) || (y % 400 == 0)) {
+                daysSinceEpoch += 366; // Leap year
+            } else {
+                daysSinceEpoch += 365;
             }
         }
+        
+        // Days in months for current year (non-leap year)
+        int daysInMonth[] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
+        
+        // Check if current year is leap year
+        bool isLeapYear = ((year % 4 == 0 && year % 100 != 0) || (year % 400 == 0));
+        if (isLeapYear) {
+            daysInMonth[1] = 29;
+        }
+        
+        // Add days for completed months in current year
+        for (int m = 1; m < month; m++) {
+            daysSinceEpoch += daysInMonth[m - 1];
+        }
+        
+        // Add days in current month
+        daysSinceEpoch += (day - 1);
+        
+        // Convert to seconds and add time
+        unsigned long commandEpoch = daysSinceEpoch * 86400UL + hours * 3600UL + minutes * 60UL + seconds;
 
-        // Check if difference is within acceptable range
-        unsigned long absDifferenceTime = static_cast<unsigned long>(abs(differenceTime));
-        bool isValid = absDifferenceTime <= commandMaxAgeSeconds;
+        // Calculate time difference in seconds
+        long timeDifference = static_cast<long>(currentEpoch) - static_cast<long>(commandEpoch);
+        unsigned long absoluteDifference = abs(timeDifference);
+
+        log(DebugFeatures::DEVICE_COMMAND_DEBUG,
+            "CommandService: Time comparison - current epoch: %lu, command epoch: %lu, diff: %ld seconds",
+            currentEpoch, commandEpoch, timeDifference);
+
+        // Check if within allowed time window
+        bool isValid = absoluteDifference <= commandMaxAgeSeconds;
 
         log(DebugFeatures::DEVICE_COMMAND_DEBUG,
             "CommandService: Command time validation - abs difference: %lu seconds, max allowed: %lu seconds, valid: %s",
-            absDifferenceTime, commandMaxAgeSeconds, isValid ? "true" : "false");
+            absoluteDifference, commandMaxAgeSeconds, isValid ? "true" : "false");
+
+        if (!isValid)
+        {
+            log(DebugFeatures::DEVICE_COMMAND_DEBUG,
+                "CommandService: Command rejected - time difference (%lu seconds) exceeds maximum allowed (%lu seconds)",
+                absoluteDifference, commandMaxAgeSeconds);
+        }
 
         return isValid;
     }
