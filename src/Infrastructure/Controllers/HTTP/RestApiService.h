@@ -385,8 +385,13 @@ public:
 
             log("NET: HTTP response %d, try = %d", httpResponseCode, tries);
 
+            if (httpResponseCode != 200)
+            {
+                std::string errorBody = _httpClient->getString();
+                log("NET: HTTP Error body: %s", errorBody.c_str());
+                delay(200 * tries);
+            }
             _httpClient->end();
-            delay(200);
             tries++;
         }
         
@@ -488,6 +493,8 @@ public:
             _httpClient->end();
             if (httpResponseCode != 200)
             {
+                std::string errorBody = _httpClient->getString();
+                log("NET: HTTP Error body: %s", errorBody.c_str());
                 delay(1000 * tries);
             }
             tries++;
@@ -585,6 +592,8 @@ public:
             
             _httpClient->end();
             if (httpResponseCode != 200) {
+                std::string errorBody = _httpClient->getString();
+                log("NET: HTTP Error body: %s", errorBody.c_str());
                 delay(200);
             }
             tries++;
