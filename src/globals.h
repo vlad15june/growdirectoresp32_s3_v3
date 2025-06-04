@@ -21,6 +21,7 @@
 #include "Core/Domain/UseCases/ModuleMode/OnChangeLocalIpUseCase.h"
 #include "Core/Domain/UseCases/DeviceControl/ProcessDeviceStateUseCaseFactory.h"
 #include "Core/Domain/UseCases/DeviceControl/DeviceCommandExecutionUseCase.h"
+#include "Core/Domain/UseCases/Sensors/SensorCommandUseCase.h"
 
 #include "Core/Domain/Data/Models/ModuleStructure.h"
 #include "Core/Domain/Data/Models/IDeviceModel.h"
@@ -132,6 +133,12 @@ DeviceCommandExecutionUseCase deviceCommandExecutionUseCase(
     &mqttLogger,
     &debugSystem);
 
+SensorCommandUseCase sensorCommandUseCase(
+    &moduleConfig,
+    &settings,
+    &mqttLogger,
+    &debugSystem);
+
 OnChangeModuleModeUseCase moduleModeUseCase(
     arduinoAdapter,
     moduleConfig,
@@ -174,6 +181,7 @@ HybridAPIService hybridApiService(
 
 CommandService commandService(
     &deviceCommandExecutionUseCase,
+    &sensorCommandUseCase,
     &hybridApiService,
     &mqttLogger,
     &debugSystem,

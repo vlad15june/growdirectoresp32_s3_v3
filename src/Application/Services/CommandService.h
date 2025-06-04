@@ -4,7 +4,9 @@
 #include "Application/DTOs/CommandDto.h"
 #include "Application/DTOs/DeviceCommandDto.h"
 #include "Application/DTOs/DeviceCommandUpdateDto.h"
+#include "Application/DTOs/CommandResultDto.h"
 #include "Core/Domain/Interfaces/UseCases/IDeviceCommandExecutionUseCase.h"
+#include "Core/Domain/Interfaces/UseCases/ISensorCommandUseCase.h"
 #include "Core/Domain/Interfaces/API/IHybridAPIService.h"
 #include "Core/Domain/Interfaces/ILogger.h"
 #include "Core/Domain/Interfaces/IDebugSystem.h"
@@ -19,6 +21,7 @@ class CommandService : public ICommandService
 {
 private:
     IDeviceCommandExecutionUseCase *deviceCommandUseCase;
+    ISensorCommandUseCase *sensorCommandUseCase;
     IHybridAPIService *hybridApiService;
     ILogger *logger;
     IDebugSystem *debugSystem;
@@ -29,6 +32,7 @@ public:
     /**
      * @brief Constructor
      * @param deviceCommandUseCase Use case for device command execution
+     * @param sensorCommandUseCase Use case for sensor command execution
      * @param hybridApiService Hybrid API service for server communication
      * @param logger Logger instance
      * @param debugSystem Debug system instance
@@ -36,11 +40,13 @@ public:
      */
     CommandService(
         IDeviceCommandExecutionUseCase *deviceCommandUseCase,
+        ISensorCommandUseCase *sensorCommandUseCase,
         IHybridAPIService *hybridApiService,
         ILogger *logger,
         IDebugSystem *debugSystem,
         INTPTimeAdapter *timeAdapter = nullptr)
         : deviceCommandUseCase(deviceCommandUseCase),
+          sensorCommandUseCase(sensorCommandUseCase),
           hybridApiService(hybridApiService),
           logger(logger),
           debugSystem(debugSystem),
@@ -413,10 +419,35 @@ private:
             "CommandService: Processing sensor type command - sensorUid: %s, type: %s",
             command.sensorUid.c_str(), command.sensorType.c_str());
 
-        // TODO: Implement sensor type configuration logic
-        logInfo("CommandService: Sensor type command processing not yet implemented");
+        // Send accepted status first
+        CommandResultDto result("accepted", "SensorType");
+        if (hybridApiService)
+        {
+            hybridApiService->sendCommandResult(result);
+        }
 
-        return true; // Return true for now to indicate command was handled
+        // Execute the sensor command using the use case
+        bool success = false;
+        if (sensorCommandUseCase)
+        {
+            success = sensorCommandUseCase->execute(command.sensorType, command.sensorUid);
+
+            if (success)
+            {
+                log(DebugFeatures::SETUP_SENSOR_DEBUG,
+                    "CommandService: Sensor type command executed successfully");
+            }
+            else
+            {
+                logError("CommandService: Failed to execute sensor type command");
+            }
+        }
+        else
+        {
+            logError("CommandService: SensorCommandUseCase not available");
+        }
+
+        return success;
     }
 
     /**
