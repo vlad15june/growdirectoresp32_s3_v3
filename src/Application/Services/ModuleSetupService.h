@@ -553,11 +553,12 @@ inline void ModuleSetupService::fillSensorModuleStructure(Node &node)
     log("SETUP: Preparing sensor module structure");
     node.subtype = "sensor";
 
-    std::string macAddress = node.uid;
+    std::string nodeUid = node.uid;
     int sensorPinCount = moduleConfig->getSensorPinCount();
 
     for (int group = 0; group < sensorPinCount; group++)
     {
+        //TODO: only for sensor for hydro without additional sensors
         for (int i = 0; i < 3; i++)
         {
             Sensor sensor;
@@ -566,7 +567,7 @@ inline void ModuleSetupService::fillSensorModuleStructure(Node &node)
 
             char sensorId[20];
             sprintf(sensorId, ".%02d.%02d", group, i + 1);
-            sensor.uid = macAddress + sensorId;
+            sensor.uid = nodeUid + sensorId;
 
             node.sensors.push_back(sensor);
 

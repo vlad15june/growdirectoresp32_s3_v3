@@ -8,6 +8,7 @@
 #include "Core/Domain/Data/Entities/Rule.h"
 #include "Application/DTOs/UpdateDto.h"
 #include "Application/DTOs/CommandDto.h"
+#include "Application/DTOs/CommandResultDto.h"
 #include "Application/DTOs/DeviceCommandUpdateDto.h"
 #include "Application/DTOs/DeviceCommandDto.h"
 
@@ -117,6 +118,21 @@ public:
      * @return true if parsing was successful, false otherwise
      */
     virtual bool deviceCommandsFromJson(const std::string &jsonStr, std::vector<DeviceCommandDto> &commands) = 0;
+
+    /**
+     * @brief Convert CommandResultDto object to JSON string
+     * @param commandResultDto CommandResultDto object to convert
+     * @return JSON string representation of the CommandResultDto
+     */
+    virtual std::string commandResultToJson(const CommandResultDto &commandResultDto) = 0;
+
+    /**
+     * @brief Convert JSON string to CommandResultDto object
+     * @param jsonStr JSON string to parse
+     * @param commandResultDto CommandResultDto object to populate
+     * @return true if parsing was successful, false otherwise
+     */
+    virtual bool commandResultFromJson(const std::string &jsonStr, CommandResultDto &commandResultDto) = 0;
 
     virtual ~IJsonConverter() = default;
 };

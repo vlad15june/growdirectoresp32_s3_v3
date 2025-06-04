@@ -3,6 +3,7 @@
 
 #include "Core/Domain/Interfaces/API/IMqttApiService.h"
 #include "Application/DTOs/UpdateDto.h"
+#include "Application/DTOs/CommandResultDto.h"
 #include "Application/DTOs/DeviceCommandUpdateDto.h"
 
 
@@ -13,16 +14,19 @@ public:
     bool sendDiagnosticDataCalled = false;
     bool sendModuleUpdateDataCalled = false;
     bool sendDeviceCommandExecutionResultCalled = false;
+    bool sendCommandResultCalled = false;
     
     const ModuleStructure* lastModuleStructure = nullptr;
     DiagnosticDto lastDiagnosticData;
     UpdateDto lastUpdateData;
     DeviceCommandUpdateDto lastDeviceCommandUpdate;
+    CommandResultDto lastCommandResult;
     bool isModuleOnlineReturnValue = true;
     bool sendDiagnosticDataReturnValue = true;
     bool sendModuleUpdateDataReturnValue = true;
     bool sendToServerModuleStructureReturnValue = true;
     bool sendDeviceCommandExecutionResultReturnValue = true;
+    bool sendCommandResultReturnValue = true;
     
     void reset() {
         isModuleOnlineCalled = false;
@@ -30,12 +34,14 @@ public:
         sendDiagnosticDataCalled = false;
         sendModuleUpdateDataCalled = false;
         sendDeviceCommandExecutionResultCalled = false;
+        sendCommandResultCalled = false;
         lastModuleStructure = nullptr;
         isModuleOnlineReturnValue = true;
         sendDiagnosticDataReturnValue = true;
         sendModuleUpdateDataReturnValue = true;
         sendToServerModuleStructureReturnValue = true;
         sendDeviceCommandExecutionResultReturnValue = true;
+        sendCommandResultReturnValue = true;
     }
     
     // IMqttApiService interface implementation
@@ -66,6 +72,12 @@ public:
         sendDeviceCommandExecutionResultCalled = true;
         lastDeviceCommandUpdate = commandUpdate;
         return sendDeviceCommandExecutionResultReturnValue;
+    }
+    
+    bool sendCommandResult(const CommandResultDto& commandResult) override {
+        sendCommandResultCalled = true;
+        lastCommandResult = commandResult;
+        return sendCommandResultReturnValue;
     }
 };
 

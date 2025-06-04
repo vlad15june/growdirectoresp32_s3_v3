@@ -21,6 +21,7 @@ public:
     bool sendModuleUpdateDataCalled = false;
     bool resetApiStatisticsCalled = false;
     bool getDeviceCommandCalled = false;
+    bool sendCommandResultCalled = false;
     
     // Return values
     bool initReturnValue = true;
@@ -34,6 +35,7 @@ public:
     bool sendModuleCommandExecutionResultReturnValue = true;
     bool sendDiagnosticDataReturnValue = true;
     bool sendModuleUpdateDataReturnValue = true;
+    bool sendCommandResultReturnValue = true;
     DeviceCommandDto deviceCommandReturnValue;
     std::vector<DeviceCommandDto> deviceCommandsReturnValue;
     
@@ -50,8 +52,10 @@ public:
     const char* lastModuleCommandResult = nullptr;
     DiagnosticDto lastDiagnosticData;
     UpdateDto lastUpdateData;
+    CommandResultDto lastCommandResult;
     ApiPriority lastDiagnosticDataPriority = ApiPriority::UNDEFINED;
     ApiPriority lastUpdateDataPriority = ApiPriority::UNDEFINED;
+    ApiPriority lastCommandResultPriority = ApiPriority::UNDEFINED;
     
     // Statistics
     int restApiSendFailsValue = 0;
@@ -73,6 +77,7 @@ public:
         sendModuleUpdateDataCalled = false;
         resetApiStatisticsCalled = false;
         getDeviceCommandCalled = false;
+        sendCommandResultCalled = false;
         
         initReturnValue = true;
         isModuleOnlineReturnValue = true;
@@ -85,6 +90,7 @@ public:
         sendModuleCommandExecutionResultReturnValue = true;
         sendDiagnosticDataReturnValue = true;
         sendModuleUpdateDataReturnValue = true;
+        sendCommandResultReturnValue = true;
         deviceCommandReturnValue = DeviceCommandDto();
         deviceCommandsReturnValue.clear();
         
@@ -99,6 +105,7 @@ public:
         lastModuleCommandResult = nullptr;
         lastDiagnosticDataPriority = ApiPriority::UNDEFINED;
         lastUpdateDataPriority = ApiPriority::UNDEFINED;
+        lastCommandResultPriority = ApiPriority::UNDEFINED;
         
         restApiSendFailsValue = 0;
         mqttApiSendFailsValue = 0;
@@ -181,6 +188,13 @@ public:
         lastUpdateData = updateData;
         lastUpdateDataPriority = priority;
         return sendModuleUpdateDataReturnValue;
+    }
+    
+    bool sendCommandResult(const CommandResultDto& commandResult, ApiPriority priority = ApiPriority::UNDEFINED) override {
+        sendCommandResultCalled = true;
+        lastCommandResult = commandResult;
+        lastCommandResultPriority = priority;
+        return sendCommandResultReturnValue;
     }
     
     std::vector<DeviceCommandDto> getDeviceCommand() override {

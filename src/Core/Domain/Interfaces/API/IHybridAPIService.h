@@ -4,6 +4,7 @@
 #include "IMqttApiService.h"
 #include "Core/Domain/Data/Models/ModuleStructure.h"
 #include "Application/DTOs/DiagnosticDto.h"
+#include "Application/DTOs/CommandResultDto.h"
 #include "Application/DTOs/DeviceCommandUpdateDto.h"
 #include "Application/DTOs/DeviceCommandDto.h"
 #include <vector>
@@ -117,6 +118,14 @@ public:
      * @return true if the operation was successful, false otherwise
      */
     virtual bool sendModuleUpdateData(const UpdateDto& updateData, ApiPriority priority = ApiPriority::UNDEFINED) = 0;
+    
+    /**
+     * Send command result to the server
+     * @param commandResult The command result containing status and command type
+     * @param priority Optional API priority to use for this call (overrides default)
+     * @return true if the operation was successful, false otherwise
+     */
+    virtual bool sendCommandResult(const CommandResultDto& commandResult, ApiPriority priority = ApiPriority::UNDEFINED) = 0;
     
     /**
      * Get statistics about API usage and performance

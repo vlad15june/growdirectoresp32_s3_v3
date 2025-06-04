@@ -6,6 +6,7 @@
 #include "Application/DTOs/DiagnosticDto.h"
 #include "Application/DTOs/UpdateDto.h"
 #include "Application/DTOs/CommandDto.h"
+#include "Application/DTOs/CommandResultDto.h"
 #include "Application/DTOs/DeviceCommandUpdateDto.h"
 #include "Application/DTOs/DeviceCommandDto.h"
 #include <string>
@@ -900,6 +901,31 @@ public:
 
         oss << "}";
         return oss.str();
+    }
+
+    std::string commandResultToJson(const CommandResultDto &commandResultDto) override
+    {
+        std::ostringstream oss;
+        oss << "{";
+        oss << "\"status\":\"" << commandResultDto.status << "\"";
+        oss << ",\"command\":\"" << commandResultDto.command << "\"";
+        
+        if (!commandResultDto.message.empty())
+        {
+            oss << ",\"message\":\"" << commandResultDto.message << "\"";
+        }
+        
+        oss << "}";
+        return oss.str();
+    }
+
+    bool commandResultFromJson(const std::string &jsonStr, CommandResultDto &commandResultDto) override
+    {
+        commandResultDto.status = extractValue(jsonStr, "status");
+        commandResultDto.command = extractValue(jsonStr, "command");
+        commandResultDto.message = extractValue(jsonStr, "message");
+
+        return !commandResultDto.status.empty() && !commandResultDto.command.empty();
     }
 
     std::string deviceCommandUpdateToJson(const DeviceCommandUpdateDto& commandUpdateDto) override

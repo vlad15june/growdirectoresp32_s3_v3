@@ -3,6 +3,7 @@
 #include "Core/Domain/Interfaces/Adapters/Json/IJsonConverter.h"
 #include "Application/DTOs/UpdateDto.h"
 #include "Application/DTOs/CommandDto.h"
+#include "Application/DTOs/CommandResultDto.h"
 #include "Application/DTOs/DeviceCommandUpdateDto.h"
 #include "Application/DTOs/DeviceCommandDto.h"
 #include <ArduinoJson.h>
@@ -806,6 +807,37 @@ public:
         std::string output;
         serializeJson(doc, output);
         return output;
+    }
+
+    std::string commandResultToJson(const CommandResultDto &commandResultDto) override
+    {
+        DynamicJsonDocument doc(512);
+        
+        doc["status"] = commandResultDto.status;
+        doc["command"] = commandResultDto.command;
+        
+        if (!commandResultDto.message.empty())
+        {
+            doc["message"] = commandResultDto.message;
+        }
+
+        std::string output;
+        serializeJson(doc, output);
+        return output;
+    }
+
+    bool commandResultFromJson(const std::string &jsonStr, CommandResultDto &commandResultDto) override
+    {
+        DynamicJsonDocument doc(512);
+        DeserializationError error = deserializeJson(doc, jsonStr);
+        if (error)
+            return false;
+
+        commandResultDto.status = doc["status"] | "";
+        commandResultDto.command = doc["command"] | "";
+        commandResultDto.message = doc["message"] | "";
+
+        return true;
     }
 
     std::string deviceCommandUpdateToJson(const DeviceCommandUpdateDto& commandUpdateDto) override

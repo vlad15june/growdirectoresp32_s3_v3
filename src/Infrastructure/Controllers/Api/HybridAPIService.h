@@ -11,6 +11,7 @@
 #include "Application/DTOs/UpdateDto.h"
 #include "Application/DTOs/DeviceCommandUpdateDto.h"
 #include "Application/DTOs/DeviceCommandDto.h"
+#include "Application/DTOs/CommandResultDto.h"
 
 /**
  * Implementation of hybrid API service that can use both REST and MQTT APIs
@@ -628,6 +629,26 @@ public:
         return commands;
     }
 
+    bool sendCommandResult(const CommandResultDto& commandResult, ApiPriority priority = ApiPriority::UNDEFINED) override
+    {
+        bool success = false;
+
+        if (_mqttApiService != nullptr)
+        {
+            success = _mqttApiService->sendCommandResult(commandResult);
+            if (!success)
+                trackApiSendFailure(false);
+        }
+        else
+        {
+            log("HYBRID API: MQTT API not available for command result");
+        }
+
+        log("HYBRID API: Command result sent - success: %s, command: %s, status: %s", 
+            success ? "true" : "false", commandResult.command.c_str(), commandResult.status.c_str());
+        return success;
+    }
+
     int getRestApiSendFails() const override
     {
         return _restApiSendFails;
@@ -649,7 +670,6 @@ public:
         _mqttApiSendFails = 0;
         _apiSendFailRatio = 0.0f;
 
-        // Also reset the underlying API service statistics if available
         if (_restApiService != nullptr)
         {
             _restApiService->resetApiSendFails();
