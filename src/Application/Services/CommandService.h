@@ -430,15 +430,20 @@ private:
         bool success = false;
         if (sensorCommandUseCase)
         {
+            //TODO; will return status and message instead of bool
+            //TODO: convert to sensor domain model
             success = sensorCommandUseCase->execute(command.sensorType, command.sensorUid);
 
             if (success)
             {
+                //TODO: send CommandResultDto result("done", "SensorType");
+                //TODO: send structure to server
                 log(DebugFeatures::SETUP_SENSOR_DEBUG,
                     "CommandService: Sensor type command executed successfully");
             }
             else
             {
+                //TODO: send CommandResultDto result("error", "SensorType", errorMessage);
                 logError("CommandService: Failed to execute sensor type command");
             }
         }

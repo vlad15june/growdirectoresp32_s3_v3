@@ -559,6 +559,9 @@ inline void ModuleSetupService::fillSensorModuleStructure(Node &node)
     for (int group = 0; group < sensorPinCount; group++)
     {
         //TODO: only for sensor for hydro without additional sensors
+        //TODO: read connecter sensors
+        //TODO: use setting to understand if sensor is connected, if yes use repository to get sensors with all properties
+        //TODO: try connect to sensor and figureout does sensor online or not
         for (int i = 0; i < 3; i++)
         {
             Sensor sensor;

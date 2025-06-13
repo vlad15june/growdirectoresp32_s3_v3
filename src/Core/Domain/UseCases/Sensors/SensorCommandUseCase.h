@@ -49,6 +49,11 @@ public:
      */
     bool execute(const std::string &sensorType, const std::string &sensorUid) override
     {
+        //TODO: use sensor domain models instead of strings
+        //TODO: store in repository instead of settings
+        //TODO: check sensor connection, try to connect to sensor and read sensor data
+        //TODO: return not bool but status and message
+        //TODO: use ModuleStructure &_moduleStructure to update structure and then send structure to server(send in APP layer)
         log("SensorCommandUseCase: Processing sensor type command - type: %s, uid: %s",
             sensorType.c_str(), sensorUid.c_str());
 

@@ -34,6 +34,8 @@ public:
         if (deviceService) {
             deviceService->loop();
         }
+
+        //TODO: add sensorService->loop();
         
         if (buttonUseCases) {
             if (buttonUseCases->isButtonHeldForDuration()) {
