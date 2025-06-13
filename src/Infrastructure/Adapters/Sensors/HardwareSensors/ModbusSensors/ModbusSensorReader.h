@@ -3,8 +3,8 @@
 
 #include <vector>
 #include <string>
-#include "ModbusRegisterConfig.h"
-#include "IModbusSensorReader.h"
+#include "../../../../../Core/Domain/Data/Entities/Sensor/ModbusRegisterConfig.h"
+#include "../../../../../Core/Domain/Interfaces/Adapters/Sensors/IModbusSensorReader.h"
 #include "../../../Rs485/IModbusRS485.h"
 #include "../../../../../Core/Domain/Interfaces/Adapters/IArduinoAdapter.h"
 

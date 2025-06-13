@@ -3,9 +3,8 @@
 
 #include <vector>
 #include <string>
-#include "ModbusRegisterConfig.h"
+#include "Core/Domain/Data/Entities/Sensor/ModbusRegisterConfig.h"
 
-// Interface
 class IModbusSensorReader
 {
 public:
