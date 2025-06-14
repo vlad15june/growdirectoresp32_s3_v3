@@ -426,33 +426,65 @@ private:
             hybridApiService->sendCommandResult(result);
         }
 
+        // Create sensor entity from command data
+        SensorEntity sensor;
+        sensor.uid = command.sensorUid;
+        sensor.sensorType = command.sensorType;
+        sensor.isActive = true;  // Default to active for new sensor configuration
+
         // Execute the sensor command using the use case
-        bool success = false;
         if (sensorCommandUseCase)
         {
-            //TODO; will return status and message instead of bool
-            //TODO: convert to sensor domain model
-            success = sensorCommandUseCase->execute(command.sensorType, command.sensorUid);
+            SensorCommandResult commandResult = sensorCommandUseCase->execute(sensor);
 
-            if (success)
+            log(DebugFeatures::SETUP_SENSOR_DEBUG,
+                "CommandService: Sensor command result - success: %s, status: %s, message: %s",
+                commandResult.success ? "true" : "false",
+                commandResult.status.c_str(),
+                commandResult.message.c_str());
+
+            // Send final result based on execution outcome
+            CommandResultDto finalResult;
+            if (commandResult.success)
             {
-                //TODO: send CommandResultDto result("done", "SensorType");
-                //TODO: send structure to server
+                if (commandResult.status == "warning")
+                {
+                    finalResult = CommandResultDto("warning", "SensorType", commandResult.message);
+                }
+                else
+                {
+                    finalResult = CommandResultDto("done", "SensorType", commandResult.message);
+                }
+                
                 log(DebugFeatures::SETUP_SENSOR_DEBUG,
-                    "CommandService: Sensor type command executed successfully");
+                    "CommandService: Sensor type command executed successfully - %s", commandResult.message.c_str());
             }
             else
             {
-                //TODO: send CommandResultDto result("error", "SensorType", errorMessage);
-                logError("CommandService: Failed to execute sensor type command");
+                finalResult = CommandResultDto("error", "SensorType", commandResult.message);
+                logError("CommandService: Failed to execute sensor type command - %s", commandResult.message.c_str());
             }
+
+            if (hybridApiService)
+            {
+                hybridApiService->sendCommandResult(finalResult);
+            }
+
+            return commandResult.success;
         }
         else
         {
-            logError("CommandService: SensorCommandUseCase not available");
+            std::string errorMsg = "SensorCommandUseCase not available";
+            logError("CommandService: %s", errorMsg.c_str());
+            
+            CommandResultDto errorResult("error", "SensorType", errorMsg);
+            if (hybridApiService)
+            {
+                hybridApiService->sendCommandResult(errorResult);
+            }
+            
+            return false;
         }
-
-        return success;
     }
 
     /**

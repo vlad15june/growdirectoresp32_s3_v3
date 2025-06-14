@@ -1,6 +1,8 @@
 #pragma once
 
 #include "Core/Domain/Interfaces/UseCases/ISensorCommandUseCase.h"
+#include "Core/Domain/Data/Models/SensorCommandResult.h"
+#include "Core/Domain/Data/Entities/Sensor/Sensor.h"
 #include "Core/Domain/Interfaces/IModuleConfig.h"
 #include "Core/Domain/Interfaces/ISettings.h"
 #include "Core/Domain/Interfaces/ILogger.h"
@@ -12,9 +14,6 @@
 #include <cstdarg>
 #include <cstdio>
 
-/**
- * @brief Implementation of sensor command execution use case
- */
 class SensorCommandUseCase : public ISensorCommandUseCase
 {
 private:
@@ -24,13 +23,6 @@ private:
     IDebugSystem *debugSystem;
 
 public:
-    /**
-     * @brief Constructor
-     * @param moduleConfig Module configuration for accessing module type
-     * @param settings Settings for storing sensor configuration
-     * @param logger Logger instance
-     * @param debugSystem Debug system instance
-     */
     SensorCommandUseCase(
         IModuleConfig *moduleConfig,
         ISettings *settings,
@@ -41,141 +33,166 @@ public:
           logger(logger),
           debugSystem(debugSystem) {}
 
-    /**
-     * @brief Execute a sensor type configuration command
-     * @param sensorType Sensor type name
-     * @param sensorUid Sensor unique identifier
-     * @return true if command was executed successfully, false otherwise
-     */
-    bool execute(const std::string &sensorType, const std::string &sensorUid) override
+    SensorCommandResult execute(const SensorEntity& sensor) override
     {
         //TODO: use sensor domain models instead of strings
         //TODO: store in repository instead of settings
         //TODO: check sensor connection, try to connect to sensor and read sensor data
         //TODO: return not bool but status and message
         //TODO: use ModuleStructure &_moduleStructure to update structure and then send structure to server(send in APP layer)
-        log("SensorCommandUseCase: Processing sensor type command - type: %s, uid: %s",
-            sensorType.c_str(), sensorUid.c_str());
 
+        log("SensorCommandUseCase: Processing sensor command - type: %s, uid: %s",
+            sensor.sensorType.c_str(), sensor.uid.c_str());
+
+        // Validate dependencies
         if (!moduleConfig || !settings)
         {
-            log("SensorCommandUseCase: Missing dependencies - moduleConfig or settings is null");
-            return false;
+            std::string errorMsg = "Missing dependencies - moduleConfig or settings is null";
+            log("SensorCommandUseCase: %s", errorMsg.c_str());
+            return SensorCommandResult::createError(errorMsg, "MISSING_DEPENDENCIES");
+        }
+
+        // Validate sensor entity
+        if (sensor.uid.empty())
+        {
+            std::string errorMsg = "Sensor UID cannot be empty";
+            log("SensorCommandUseCase: %s", errorMsg.c_str());
+            return SensorCommandResult::createError(errorMsg, "INVALID_SENSOR_UID");
+        }
+
+        if (sensor.sensorType.empty())
+        {
+            std::string errorMsg = "Sensor type cannot be empty";
+            log("SensorCommandUseCase: %s", errorMsg.c_str());
+            return SensorCommandResult::createError(errorMsg, "INVALID_SENSOR_TYPE");
         }
 
         int moduleType = moduleConfig->getModuleType();
-        bool configChanged = false;
 
+        SensorCommandResult result;
         if (moduleType == MODULE_TYPE_HYDRO)
         {
-            configChanged = processHydroSensorCommand(sensorType);
+            result = processHydroSensorCommand(sensor);
         }
         else if (moduleType == MODULE_TYPE_SENSOR)
         {
-            configChanged = processSensorModuleCommand(sensorType, sensorUid);
+            result = processSensorModuleCommand(sensor);
         }
         else
         {
-            log("SensorCommandUseCase: Module type %d does not support sensor configuration", moduleType);
-            return false;
+            std::string errorMsg = "Module type " + std::to_string(moduleType) + " does not support sensor configuration";
+            log("SensorCommandUseCase: %s", errorMsg.c_str());
+            return SensorCommandResult::createError(errorMsg, "UNSUPPORTED_MODULE_TYPE");
         }
 
-        if (configChanged)
+        if (result.success)
         {
             // Set boot type and request restart
             settings->setBootType(BOOT_TYPE_SENSOR_CHNG);
             moduleConfig->setRequestedModuleMode(CONFIGURED_NEED_RESTART);
             
             log("SensorCommandUseCase: Sensor configuration changed, restart requested");
+            
+            // Update success message to include restart info
+            result.message += " - System restart requested to apply changes";
         }
 
-        return configChanged;
+        return result;
     }
 
 private:
-    /**
-     * @brief Process sensor command for hydro module
-     * @param sensorType Sensor type name
-     * @return true if configuration was changed
-     */
-    bool processHydroSensorCommand(const std::string &sensorType)
+
+    SensorCommandResult processHydroSensorCommand(const SensorEntity& sensor)
     {
         int currentType = getSensorTypeDoOrp();
         
-        if (currentType != ANALOG_DO_CONNECTED && sensorType == getSensorTypeName(ANALOG_DO_CONNECTED))
+        if (currentType != ANALOG_DO_CONNECTED && sensor.sensorType == getSensorTypeName(ANALOG_DO_CONNECTED))
         {
             putSensorTypeDoOrp(ANALOG_DO_CONNECTED);
             log("SensorCommandUseCase: Hydro module - configured DO sensor");
-            return true;
+            return SensorCommandResult::createSuccess("Successfully configured DO sensor for hydro module");
         }
 
-        if (currentType != ANALOG_ORP_CONNECTED && sensorType == getSensorTypeName(ANALOG_ORP_CONNECTED))
+        if (currentType != ANALOG_ORP_CONNECTED && sensor.sensorType == getSensorTypeName(ANALOG_ORP_CONNECTED))
         {
             putSensorTypeDoOrp(ANALOG_ORP_CONNECTED);
             log("SensorCommandUseCase: Hydro module - configured ORP sensor");
-            return true;
+            return SensorCommandResult::createSuccess("Successfully configured ORP sensor for hydro module");
         }
 
-        return false;
+        // Check if sensor is already configured
+        if ((currentType == ANALOG_DO_CONNECTED && sensor.sensorType == getSensorTypeName(ANALOG_DO_CONNECTED)) ||
+            (currentType == ANALOG_ORP_CONNECTED && sensor.sensorType == getSensorTypeName(ANALOG_ORP_CONNECTED)))
+        {
+            std::string warningMsg = "Sensor type " + sensor.sensorType + " is already configured";
+            log("SensorCommandUseCase: %s", warningMsg.c_str());
+            return SensorCommandResult::createWarning(warningMsg);
+        }
+
+        std::string errorMsg = "Unsupported sensor type '" + sensor.sensorType + "' for hydro module";
+        log("SensorCommandUseCase: %s", errorMsg.c_str());
+        return SensorCommandResult::createError(errorMsg, "UNSUPPORTED_SENSOR_TYPE");
     }
 
-    /**
-     * @brief Process sensor command for sensor module
-     * @param sensorType Sensor type name
-     * @param sensorUid Sensor unique identifier
-     * @return true if configuration was changed
-     */
-    bool processSensorModuleCommand(const std::string &sensorType, const std::string &sensorUid)
+    SensorCommandResult processSensorModuleCommand(const SensorEntity& sensor)
     {
-        // Extract channel from sensorUid (format: "84:F7:03:FE:1B:30.00")
-        uint8_t channel = extractChannelFromUid(sensorUid);
+        // Extract channel from sensor UID (format: "84:F7:03:FE:1B:30.00")
+        uint8_t channel = extractChannelFromUid(sensor.uid);
         if (channel == 255) // Invalid channel
         {
-            log("SensorCommandUseCase: Invalid channel extracted from sensorUid: %s", sensorUid.c_str());
-            return false;
+            std::string errorMsg = "Invalid channel extracted from sensor UID: " + sensor.uid;
+            log("SensorCommandUseCase: %s", errorMsg.c_str());
+            return SensorCommandResult::createError(errorMsg, "INVALID_CHANNEL");
         }
 
         uint8_t currentType = getSensorType(channel);
 
         log("SensorCommandUseCase: Channel: %d, current type: %d, requested type: %s", 
-            channel, currentType, sensorType.c_str());
+            channel, currentType, sensor.sensorType.c_str());
 
-        if (currentType != ANALOG_SOIL_MOISTURE && sensorType == getSensorTypeName(ANALOG_SOIL_MOISTURE))
+        // Check each supported sensor type
+        if (currentType != ANALOG_SOIL_MOISTURE && sensor.sensorType == getSensorTypeName(ANALOG_SOIL_MOISTURE))
         {
             putSensorType(ANALOG_SOIL_MOISTURE, channel);
             log("SensorCommandUseCase: Sensor module - configured soil moisture sensor on channel %d", channel);
-            return true;
+            return SensorCommandResult::createSuccess("Successfully configured soil moisture sensor on channel " + std::to_string(channel));
         }
 
-        if (currentType != ANALOG_LUX_CONNECTED && sensorType == getSensorTypeName(ANALOG_LUX_CONNECTED))
+        if (currentType != ANALOG_LUX_CONNECTED && sensor.sensorType == getSensorTypeName(ANALOG_LUX_CONNECTED))
         {
             putSensorType(ANALOG_LUX_CONNECTED, channel);
             log("SensorCommandUseCase: Sensor module - configured LUX sensor on channel %d", channel);
-            return true;
+            return SensorCommandResult::createSuccess("Successfully configured LUX sensor on channel " + std::to_string(channel));
         }
 
-        if (currentType != ANALOG_PAR_CONNECTED && sensorType == getSensorTypeName(ANALOG_PAR_CONNECTED))
+        if (currentType != ANALOG_PAR_CONNECTED && sensor.sensorType == getSensorTypeName(ANALOG_PAR_CONNECTED))
         {
             putSensorType(ANALOG_PAR_CONNECTED, channel);
             log("SensorCommandUseCase: Sensor module - configured PAR sensor on channel %d", channel);
-            return true;
+            return SensorCommandResult::createSuccess("Successfully configured PAR sensor on channel " + std::to_string(channel));
         }
 
-        if (currentType != ANALOG_TEMP_HUM_CONNECTED && sensorType == getSensorTypeName(ANALOG_TEMP_HUM_CONNECTED))
+        if (currentType != ANALOG_TEMP_HUM_CONNECTED && sensor.sensorType == getSensorTypeName(ANALOG_TEMP_HUM_CONNECTED))
         {
             putSensorType(ANALOG_TEMP_HUM_CONNECTED, channel);
             log("SensorCommandUseCase: Sensor module - configured temperature humidity sensor on channel %d", channel);
-            return true;
+            return SensorCommandResult::createSuccess("Successfully configured temperature humidity sensor on channel " + std::to_string(channel));
         }
 
-        return false;
+        // Check if sensor is already configured with the requested type
+        uint8_t requestedTypeId = getSensorTypeId(sensor.sensorType);
+        if (requestedTypeId != 255 && currentType == requestedTypeId)
+        {
+            std::string warningMsg = "Sensor type " + sensor.sensorType + " is already configured on channel " + std::to_string(channel);
+            log("SensorCommandUseCase: %s", warningMsg.c_str());
+            return SensorCommandResult::createWarning(warningMsg);
+        }
+
+        std::string errorMsg = "Unsupported sensor type '" + sensor.sensorType + "' for sensor module or invalid configuration";
+        log("SensorCommandUseCase: %s", errorMsg.c_str());
+        return SensorCommandResult::createError(errorMsg, "UNSUPPORTED_SENSOR_TYPE");
     }
 
-    /**
-     * @brief Extract channel number from sensor UID
-     * @param sensorUid Sensor UID in format "84:F7:03:FE:1B:30.00"
-     * @return Channel number (0-3) or 255 if invalid
-     */
     uint8_t extractChannelFromUid(const std::string &sensorUid)
     {
         // Find the last dot in the UID
@@ -201,10 +218,17 @@ private:
         return 255; // Invalid channel
     }
 
-    /**
-     * @brief Get current sensor type for DO/ORP (hydro module)
-     * @return Current sensor type
-     */
+    uint8_t getSensorTypeId(const std::string& sensorType)
+    {
+        if (sensorType == getSensorTypeName(ANALOG_SOIL_MOISTURE)) return ANALOG_SOIL_MOISTURE;
+        if (sensorType == getSensorTypeName(ANALOG_LUX_CONNECTED)) return ANALOG_LUX_CONNECTED;
+        if (sensorType == getSensorTypeName(ANALOG_PAR_CONNECTED)) return ANALOG_PAR_CONNECTED;
+        if (sensorType == getSensorTypeName(ANALOG_TEMP_HUM_CONNECTED)) return ANALOG_TEMP_HUM_CONNECTED;
+        if (sensorType == getSensorTypeName(ANALOG_DO_CONNECTED)) return ANALOG_DO_CONNECTED;
+        if (sensorType == getSensorTypeName(ANALOG_ORP_CONNECTED)) return ANALOG_ORP_CONNECTED;
+        return 255; // Unknown type
+    }
+
     int getSensorTypeDoOrp()
     {
         // This should be implemented to read from settings
@@ -212,10 +236,6 @@ private:
         return settings ? settings->getSensorTypeDoOrp() : 0;
     }
 
-    /**
-     * @brief Set sensor type for DO/ORP (hydro module)
-     * @param type Sensor type to set
-     */
     void putSensorTypeDoOrp(int type)
     {
         if (settings)
@@ -224,22 +244,12 @@ private:
         }
     }
 
-    /**
-     * @brief Get sensor type for a specific channel (sensor module)
-     * @param channel Channel number
-     * @return Sensor type
-     */
     uint8_t getSensorType(uint8_t channel)
     {
         // This should be implemented to read from settings
         return settings ? settings->getSensorType(channel) : 0;
     }
 
-    /**
-     * @brief Set sensor type for a specific channel (sensor module)
-     * @param type Sensor type to set
-     * @param channel Channel number
-     */
     void putSensorType(uint8_t type, uint8_t channel)
     {
         if (settings)
@@ -248,9 +258,6 @@ private:
         }
     }
 
-    /**
-     * @brief Log with debug feature check
-     */
     void log(const char *format, ...)
     {
         if (debugSystem && debugSystem->isFeatureEnabled(DebugFeatures::SETUP_SENSOR_DEBUG))
