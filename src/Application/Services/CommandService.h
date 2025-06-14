@@ -14,9 +14,6 @@
 #include <cstdarg>
 #include <cstdio>
 
-/**
- * @brief Implementation of command processing service
- */
 class CommandService : public ICommandService
 {
 private:
@@ -26,43 +23,31 @@ private:
     ILogger *logger;
     IDebugSystem *debugSystem;
     INTPTimeAdapter *timeAdapter;
-    static const unsigned long commandMaxAgeSeconds = 300; // 5 minutes
+    IJsonConverter *jsonConverter;
+    static const unsigned long commandMaxAgeSeconds = 300;
 
 public:
-    /**
-     * @brief Constructor
-     * @param deviceCommandUseCase Use case for device command execution
-     * @param sensorCommandUseCase Use case for sensor command execution
-     * @param hybridApiService Hybrid API service for server communication
-     * @param logger Logger instance
-     * @param debugSystem Debug system instance
-     * @param timeAdapter Time adapter for command validation
-     */
     CommandService(
         IDeviceCommandExecutionUseCase *deviceCommandUseCase,
         ISensorCommandUseCase *sensorCommandUseCase,
         IHybridAPIService *hybridApiService,
         ILogger *logger,
         IDebugSystem *debugSystem,
-        INTPTimeAdapter *timeAdapter = nullptr)
+        INTPTimeAdapter *timeAdapter = nullptr,
+        IJsonConverter *jsonConverter = nullptr)
         : deviceCommandUseCase(deviceCommandUseCase),
           sensorCommandUseCase(sensorCommandUseCase),
           hybridApiService(hybridApiService),
           logger(logger),
           debugSystem(debugSystem),
-          timeAdapter(timeAdapter) {}
+          timeAdapter(timeAdapter),
+          jsonConverter(jsonConverter) {}
 
-    /**
-     * @brief Process a command DTO
-     * @param command Command to process
-     * @return true if command was processed successfully, false otherwise
-     */
     bool process(const CommandDto &command) override
     {
         log(DebugFeatures::MODULE_COMMAND_DEBUG,
             "CommandService: Processing command type: %s", command.type.c_str());
 
-        // Route command based on type
         if (command.isDeviceCommand())
         {
             return processDeviceCommand(command);
@@ -87,11 +72,6 @@ public:
     }
 
 private:
-    /**
-     * @brief Check if command time is valid based on creation timestamp
-     * @param createdDate ISO timestamp from server (e.g., "2022-12-16T06:02:42.262074+00:00")
-     * @return true if command is within acceptable time window, false otherwise
-     */
     bool checkCommandTime(const std::string& createdDate)
     {
         if (createdDate.empty())
@@ -100,7 +80,6 @@ private:
             return false;
         }
 
-        // Get current epoch time from time adapter
         unsigned long currentEpoch = 0;
         if (timeAdapter)
         {
@@ -109,20 +88,17 @@ private:
             {
                 log(DebugFeatures::DEVICE_COMMAND_DEBUG,
                     "CommandService: Could not get current time from adapter");
-                return false; // If we can't get time, reject for safety
+                return false;
             }
         }
         else
         {
             log(DebugFeatures::DEVICE_COMMAND_DEBUG,
                 "CommandService: No time adapter available for validation");
-            return false; // No time adapter, reject for safety
+            return false;
         }
 
-        // Parse ISO timestamp: "2022-12-16T06:02:42.262074+00:00"
         std::string createdDateStr = createdDate;
-        
-        // Find T separator
         size_t splitT = createdDateStr.find("T");
         if (splitT == std::string::npos)
         {
@@ -130,11 +106,9 @@ private:
             return false;
         }
 
-        // Extract date part (YYYY-MM-DD)
         std::string datePart = createdDateStr.substr(0, splitT);
         std::string timePart = createdDateStr.substr(splitT + 1);
 
-        // Remove milliseconds and timezone from time part
         size_t dotIndex = timePart.find(".");
         if (dotIndex != std::string::npos)
         {
@@ -151,7 +125,6 @@ private:
             timePart = timePart.substr(0, plusIndex);
         }
 
-        // Parse date (YYYY-MM-DD)
         size_t firstDash = datePart.find("-");
         size_t secondDash = datePart.find("-", firstDash + 1);
         if (firstDash == std::string::npos || secondDash == std::string::npos)
@@ -164,7 +137,6 @@ private:
         std::string monthStr = datePart.substr(firstDash + 1, secondDash - firstDash - 1);
         std::string dayStr = datePart.substr(secondDash + 1);
 
-        // Parse time (HH:MM:SS)
         size_t firstColon = timePart.find(":");
         size_t secondColon = timePart.find(":", firstColon + 1);
         if (firstColon == std::string::npos || secondColon == std::string::npos)
@@ -177,7 +149,6 @@ private:
         std::string minutesStr = timePart.substr(firstColon + 1, secondColon - firstColon - 1);
         std::string secondsStr = timePart.substr(secondColon + 1);
 
-        // Convert to integers
         int year, month, day, hours, minutes, seconds;
         try {
             year = std::stoi(yearStr);
@@ -191,7 +162,6 @@ private:
             return false;
         }
 
-        // Validate parsed values
         if (year < 2020 || year > 2050 || month < 1 || month > 12 || 
             day < 1 || day > 31 || hours < 0 || hours > 23 || 
             minutes < 0 || minutes > 59 || seconds < 0 || seconds > 59)
@@ -205,43 +175,25 @@ private:
             "CommandService: Parsed command timestamp - %04d-%02d-%02d %02d:%02d:%02d",
             year, month, day, hours, minutes, seconds);
 
-        // Convert command timestamp to epoch time (simplified calculation)
-        // Note: This is a basic calculation and doesn't account for leap years, etc.
-        // For production use, consider using a proper date/time library
-        
-        // Days since epoch (1970-01-01) - simplified calculation
         int daysSinceEpoch = 0;
-        
-        // Add years (approximate - 365 days per year, plus leap years)
         for (int y = 1970; y < year; y++) {
             if ((y % 4 == 0 && y % 100 != 0) || (y % 400 == 0)) {
-                daysSinceEpoch += 366; // Leap year
+                daysSinceEpoch += 366;
             } else {
                 daysSinceEpoch += 365;
             }
         }
-        
-        // Days in months for current year (non-leap year)
         int daysInMonth[] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
-        
-        // Check if current year is leap year
         bool isLeapYear = ((year % 4 == 0 && year % 100 != 0) || (year % 400 == 0));
         if (isLeapYear) {
             daysInMonth[1] = 29;
         }
-        
-        // Add days for completed months in current year
         for (int m = 1; m < month; m++) {
             daysSinceEpoch += daysInMonth[m - 1];
         }
-        
-        // Add days in current month
         daysSinceEpoch += (day - 1);
-        
-        // Convert to seconds and add time
         unsigned long commandEpoch = daysSinceEpoch * 86400UL + hours * 3600UL + minutes * 60UL + seconds;
 
-        // Calculate time difference in seconds
         long timeDifference = static_cast<long>(currentEpoch) - static_cast<long>(commandEpoch);
         unsigned long absoluteDifference = abs(timeDifference);
 
@@ -249,7 +201,6 @@ private:
             "CommandService: Time comparison - current epoch: %lu, command epoch: %lu, diff: %ld seconds",
             currentEpoch, commandEpoch, timeDifference);
 
-        // Check if within allowed time window
         bool isValid = absoluteDifference <= commandMaxAgeSeconds;
 
         log(DebugFeatures::DEVICE_COMMAND_DEBUG,
@@ -266,16 +217,12 @@ private:
         return isValid;
     }
 
-    /**
-     * @brief Process device command notification
-     */
     bool processDeviceCommand(const CommandDto &command)
     {
         log(DebugFeatures::DEVICE_COMMAND_DEBUG,
             "CommandService: Processing device command - deviceUid: %s, state: %s, commandId: %d",
             command.deviceUid.c_str(), command.requestedState.c_str(), command.commandId);
 
-        // Get device commands from server
         if (!hybridApiService)
         {
             logError("CommandService: HybridAPIService not available");
@@ -283,13 +230,11 @@ private:
         }
 
         std::vector<DeviceCommandDto> deviceCommands = hybridApiService->getDeviceCommand();
-        
-        // Check if we received any commands
         if (deviceCommands.empty())
         {
             log(DebugFeatures::DEVICE_COMMAND_DEBUG,
                 "CommandService: No device commands received from server");
-            return true; // Not an error, just no commands available
+            return true;
         }
 
         log(DebugFeatures::DEVICE_COMMAND_DEBUG,
@@ -297,18 +242,15 @@ private:
 
         bool allCommandsSuccessful = true;
 
-        // Process each command
         for (const auto& deviceCommand : deviceCommands)
         {
             log(DebugFeatures::DEVICE_COMMAND_DEBUG,
                 "CommandService: Processing command - deviceUid: %s, state: %s, commandId: %d",
                 deviceCommand.uid.c_str(), deviceCommand.requestedState.c_str(), deviceCommand.id);
 
-            // Validate command time using internal method
             if (!deviceCommand.createdDate.empty())
             {
                 bool isTimeValid = checkCommandTime(deviceCommand.createdDate);
-                
                 log(DebugFeatures::DEVICE_COMMAND_DEBUG,
                     "CommandService: Command time validation - createdDate: %s, isValid: %s",
                     deviceCommand.createdDate.c_str(), isTimeValid ? "true" : "false");
@@ -318,7 +260,6 @@ private:
                     logError("CommandService: Command is too old - createdDate: %s, maxAge: %lu seconds",
                             deviceCommand.createdDate.c_str(), commandMaxAgeSeconds);
 
-                    // Send error status for expired command
                     DeviceCommandUpdateDto updateDto;
                     updateDto.uid = deviceCommand.uid;
                     updateDto.status = "error";
@@ -326,7 +267,7 @@ private:
                     hybridApiService->sendDeviceCommandExecutionResult(updateDto);
 
                     allCommandsSuccessful = false;
-                    continue; // Skip this command and process next one
+                    continue;
                 }
             }
             else
@@ -336,7 +277,6 @@ private:
                     deviceCommand.id);
             }
 
-            // Execute the device command using the use case
             if (deviceCommandUseCase)
             {
                 bool executionResult = deviceCommandUseCase->execute(
@@ -362,14 +302,11 @@ private:
             else
             {
                 logError("CommandService: DeviceCommandExecutionUseCase not available");
-                
-                // Send error status for this command
                 DeviceCommandUpdateDto updateDto;
                 updateDto.uid = deviceCommand.uid;
                 updateDto.status = "error";
                 updateDto.errorMessage = "Device command execution service not available";
                 hybridApiService->sendDeviceCommandExecutionResult(updateDto);
-                
                 allCommandsSuccessful = false;
             }
         }
@@ -377,24 +314,16 @@ private:
         return allCommandsSuccessful;
     }
 
-    /**
-     * @brief Process rule command notification
-     */
     bool processRuleCommand(const CommandDto &command)
     {
         log(DebugFeatures::RULE_DEBUG,
             "CommandService: Processing rule command - ruleUid: %s", command.ruleUid.c_str());
 
-        // TODO: Implement rule command processing
-        // This would involve parsing the rulesPayload and updating rules
         logInfo("CommandService: Rule command processing not yet implemented");
 
-        return true; // Return true for now to indicate command was handled
+        return true;
     }
 
-    /**
-     * @brief Process module command notification
-     */
     bool processModuleCommand(const CommandDto &command)
     {
         log(DebugFeatures::MODULE_COMMAND_DEBUG,
@@ -407,32 +336,37 @@ private:
                     command.version.c_str(), command.url.c_str());
         }
 
-        return true; // Return true for now to indicate command was handled
+        return true;
     }
 
-    /**
-     * @brief Process sensor type command notification
-     */
     bool processSensorTypeCommand(const CommandDto &command)
     {
         log(DebugFeatures::SETUP_SENSOR_DEBUG,
-            "CommandService: Processing sensor type command - sensorUid: %s, type: %s",
-            command.sensorUid.c_str(), command.sensorType.c_str());
+            "CommandService: Processing sensor type command - sensorUid: %s, type: %s, model: %s, command: %s",
+            command.sensorUid.c_str(), command.sensorType.c_str(), command.model.c_str(), command.command.c_str());
 
-        // Send accepted status first
         CommandResultDto result("accepted", "SensorType");
         if (hybridApiService)
         {
             hybridApiService->sendCommandResult(result);
         }
 
-        // Create sensor entity from command data
-        SensorEntity sensor;
-        sensor.uid = command.sensorUid;
-        sensor.sensorType = command.sensorType;
-        sensor.isActive = true;  // Default to active for new sensor configuration
+        SensorEntity sensor = createSensorFromCommand(command);
 
-        // Execute the sensor command using the use case
+        if (sensor.uid.empty() || sensor.sensorType.empty())
+        {
+            std::string errorMsg = "Invalid sensor data in command - missing UID or sensor type";
+            logError("CommandService: %s", errorMsg.c_str());
+            
+            CommandResultDto errorResult("error", "SensorType", errorMsg);
+            if (hybridApiService)
+            {
+                hybridApiService->sendCommandResult(errorResult);
+            }
+            
+            return false;
+        }
+
         if (sensorCommandUseCase)
         {
             SensorCommandResult commandResult = sensorCommandUseCase->execute(sensor);
@@ -443,7 +377,6 @@ private:
                 commandResult.status.c_str(),
                 commandResult.message.c_str());
 
-            // Send final result based on execution outcome
             CommandResultDto finalResult;
             if (commandResult.success)
             {
@@ -487,9 +420,149 @@ private:
         }
     }
 
-    /**
-     * @brief Log with debug feature check
-     */
+private:
+    SensorEntity createSensorFromCommand(const CommandDto& command)
+    {
+        SensorEntity sensor;
+        sensor.uid = command.sensorUid;
+        sensor.sensorType = command.sensorType;
+        sensor.model = command.model;
+        sensor.createdAt = command.createdAt;
+        sensor.isActive = true;
+        sensor.isError = false;
+
+        if (!command.options.empty())
+        {
+            parseSensorOptions(command.options, sensor);
+        }
+
+        log(DebugFeatures::SETUP_SENSOR_DEBUG,
+            "CommandService: Created sensor entity - UID: %s, Type: %s, Model: %s, Protocol: %s",
+            sensor.uid.c_str(), sensor.sensorType.c_str(), sensor.model.c_str(), sensor.protocol.c_str());
+
+        return sensor;
+    }
+
+    void parseSensorOptions(const std::string& optionsJson, SensorEntity& sensor)
+    {
+        sensor.protocol = extractJsonValue(optionsJson, "protocol");
+        if (sensor.protocol == "RS485")
+        {
+            sensor.modbusDeviceAddress = extractJsonIntValue(optionsJson, "modbusDeviceAddress");
+            sensor.baudRate = extractJsonIntValue(optionsJson, "baudRate");
+            parseModbusRegisterConfig(optionsJson, sensor);
+        }
+        else if (sensor.protocol == "I2C")
+        {
+            sensor.i2cAddress = extractJsonValue(optionsJson, "i2cAddress");
+            sensor.chipType = extractJsonValue(optionsJson, "chipType");
+            parseI2CRegisterConfig(optionsJson, sensor);
+        }
+
+        log(DebugFeatures::SETUP_SENSOR_DEBUG,
+            "CommandService: Parsed sensor options - Protocol: %s, Address: %s/%d, ChipType: %s",
+            sensor.protocol.c_str(), sensor.i2cAddress.c_str(), sensor.modbusDeviceAddress, sensor.chipType.c_str());
+    }
+
+    std::string extractJsonValue(const std::string& json, const std::string& key)
+    {
+        std::string searchKey = "\"" + key + "\"";
+        size_t keyPos = json.find(searchKey);
+        if (keyPos == std::string::npos) return "";
+        size_t colonPos = json.find(":", keyPos);
+        if (colonPos == std::string::npos) return "";
+        size_t valueStart = json.find("\"", colonPos);
+        if (valueStart == std::string::npos) return "";
+        size_t valueEnd = json.find("\"", valueStart + 1);
+        if (valueEnd == std::string::npos) return "";
+        return json.substr(valueStart + 1, valueEnd - valueStart - 1);
+    }
+
+    int extractJsonIntValue(const std::string& json, const std::string& key)
+    {
+        std::string searchKey = "\"" + key + "\"";
+        size_t keyPos = json.find(searchKey);
+        if (keyPos == std::string::npos) return 0;
+        size_t colonPos = json.find(":", keyPos);
+        if (colonPos == std::string::npos) return 0;
+        size_t valueStart = colonPos + 1;
+        while (valueStart < json.size() && std::isspace(json[valueStart])) valueStart++;
+        size_t valueEnd = valueStart;
+        while (valueEnd < json.size() && (std::isdigit(json[valueEnd]) || json[valueEnd] == '-')) valueEnd++;
+        if (valueEnd > valueStart)
+        {
+            try
+            {
+                return std::stoi(json.substr(valueStart, valueEnd - valueStart));
+            }
+            catch (const std::exception& e)
+            {
+                logError("CommandService: Failed to parse integer value for key '%s'", key.c_str());
+            }
+        }
+        return 0;
+    }
+
+    void parseModbusRegisterConfig(const std::string& json, SensorEntity& sensor)
+    {
+        std::string key = "\"modbusRegisterConfig\"";
+        size_t keyPos = json.find(key);
+        if (keyPos == std::string::npos) return;
+
+        size_t arrayStart = json.find('[', keyPos);
+        size_t arrayEnd = std::string::npos;
+        if (arrayStart != std::string::npos) {
+            int depth = 1;
+            size_t i = arrayStart + 1;
+            while (i < json.size() && depth > 0) {
+                if (json[i] == '[') depth++;
+                else if (json[i] == ']') depth--;
+                i++;
+            }
+            if (depth == 0) arrayEnd = i;
+        }
+        if (arrayStart == std::string::npos || arrayEnd == std::string::npos) return;
+
+        std::string arrayJson = json.substr(arrayStart, arrayEnd - arrayStart);
+
+        if (jsonConverter) {
+            std::vector<ModbusRegisterConfig> configs;
+            if (jsonConverter->modbusRegisterConfigsFromJson(arrayJson, configs)) {
+                sensor.modbusRegisterConfigs = configs;
+            }
+        }
+    }
+
+    void parseI2CRegisterConfig(const std::string& json, SensorEntity& sensor)
+    {
+        std::string key = "\"i2cRegisterConfig\"";
+        size_t keyPos = json.find(key);
+        if (keyPos == std::string::npos) return;
+
+        size_t objStart = json.find('{', keyPos);
+        size_t objEnd = std::string::npos;
+        if (objStart != std::string::npos) {
+            int depth = 1;
+            size_t i = objStart + 1;
+            while (i < json.size() && depth > 0) {
+                if (json[i] == '{') depth++;
+                else if (json[i] == '}') depth--;
+                i++;
+            }
+            if (depth == 0) objEnd = i;
+        }
+        if (objStart == std::string::npos || objEnd == std::string::npos) return;
+
+        std::string objJson = json.substr(objStart, objEnd - objStart);
+
+        if (jsonConverter) {
+            std::vector<std::pair<std::string, I2CRegisterConfig>> configs;
+            if (jsonConverter->i2cRegisterConfigsFromJson(objJson, configs)) {
+                sensor.i2cRegisterConfigs = configs;
+            }
+        }
+    }
+
     void log(const char *feature, const char *format, ...)
     {
         if (debugSystem && debugSystem->isFeatureEnabled(feature))
@@ -504,9 +577,6 @@ private:
         }
     }
 
-    /**
-     * @brief Log error message
-     */
     void logError(const char *format, ...)
     {
         if (logger)
@@ -521,9 +591,6 @@ private:
         }
     }
 
-    /**
-     * @brief Log info message
-     */
     void logInfo(const char *format, ...)
     {
         if (logger)

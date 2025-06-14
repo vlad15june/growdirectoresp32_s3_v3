@@ -42,7 +42,7 @@ public:
     bool isSensorTypeCommand() const { return type == "SensorTypeCommandNotification"; }
     
     // Helper methods for sensor commands
-    bool isAddSensorCommand() const { return command == "AddSensor"; }
-    bool isScanSensorCommand() const { return command == "ScanSensor"; }
-    bool isRemoveSensorCommand() const { return command == "RemoveSensor"; }
+    bool isAddSensorCommand() const { return isSensorTypeCommand() && command == "AddSensor"; }
+    bool isScanSensorCommand() const { return isSensorTypeCommand() && command == "ScanSensor"; }
+    bool isRemoveSensorCommand() const { return isSensorTypeCommand() && command == "RemoveSensor"; }
 };

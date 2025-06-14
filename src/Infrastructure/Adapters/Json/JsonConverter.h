@@ -21,12 +21,9 @@ static std::string extractValue(const std::string &src, const std::string &key)
     auto colon = src.find(':', keyPos);
     if (colon == std::string::npos)
         return "";
-
-    // Skip spaces after colon
     size_t valueStart = colon + 1;
     while (valueStart < src.size() && std::isspace(src[valueStart]))
         ++valueStart;
-
     if (valueStart < src.size() && src[valueStart] == '"')
     {
         auto start = valueStart;
@@ -35,16 +32,13 @@ static std::string extractValue(const std::string &src, const std::string &key)
             return "";
         return src.substr(start + 1, end - start - 1);
     }
-
     if (src.substr(valueStart, 4) == "null")
     {
         return "";
     }
-
     return "";
 }
 
-// Helper function to extract array section
 static std::string extractArray(const std::string &src, const std::string &key)
 {
     auto keyPos = src.find("\"" + key + "\"");
@@ -66,7 +60,6 @@ static std::string extractArray(const std::string &src, const std::string &key)
     return src.substr(start, end - start);
 }
 
-// Helper function to split array items (top-level only)
 static std::vector<std::string> splitObjects(const std::string &arrayStr)
 {
     std::vector<std::string> result;
@@ -92,7 +85,6 @@ static std::vector<std::string> splitObjects(const std::string &arrayStr)
     return result;
 }
 
-// Helper function to extract int value
 static int extractIntValue(const std::string &src, const std::string &key)
 {
     auto keyPos = src.find("\"" + key + "\"");
@@ -101,34 +93,27 @@ static int extractIntValue(const std::string &src, const std::string &key)
     auto colon = src.find(':', keyPos);
     if (colon == std::string::npos)
         return 0;
-
-    // Skip spaces after colon
     size_t valueStart = colon + 1;
     while (valueStart < src.size() && std::isspace(src[valueStart]))
         ++valueStart;
-
     if (valueStart + 4 <= src.size() && src.substr(valueStart, 4) == "null")
     {
         return 0;
     }
-
     auto start = valueStart;
     if (start < src.size() && src[start] == '-')
     {
-        ++start; // Skip the minus sign
+        ++start;
     }
-
     if (start >= src.size() || !std::isdigit(src[start]))
     {
         return 0;
     }
-
     auto end = src.find_first_not_of("0123456789", start);
     if (end == std::string::npos)
     {
         end = src.size();
     }
-
     try
     {
         std::string numStr = src.substr(valueStart, end - valueStart);
@@ -140,7 +125,6 @@ static int extractIntValue(const std::string &src, const std::string &key)
     }
 }
 
-// Helper function to extract double value
 static double extractDoubleValue(const std::string &src, const std::string &key)
 {
     auto keyPos = src.find("\"" + key + "\"");
@@ -158,7 +142,6 @@ static double extractDoubleValue(const std::string &src, const std::string &key)
     return std::stod(src.substr(start, end - start));
 }
 
-// Helper function to extract bool value
 static bool extractBoolValue(const std::string &src, const std::string &key)
 {
     auto keyPos = src.find("\"" + key + "\"");
@@ -167,12 +150,9 @@ static bool extractBoolValue(const std::string &src, const std::string &key)
     auto colon = src.find(':', keyPos);
     if (colon == std::string::npos)
         return false;
-
-    // Skip spaces after colon
     size_t valueStart = colon + 1;
     while (valueStart < src.size() && std::isspace(src[valueStart]))
         ++valueStart;
-
     return src.substr(valueStart, 4) == "true";
 }
 
@@ -828,6 +808,8 @@ public:
     {
         commandDto.growDirectorUid = extractValue(jsonStr, "growDirectorUid");
         commandDto.type = extractValue(jsonStr, "type");
+        commandDto.createdAt = extractValue(jsonStr, "createdAt");
+        commandDto.commandUid = extractValue(jsonStr, "commandUid");
 
         // DeviceCommandNotification fields
         if (commandDto.isDeviceCommand())
@@ -857,6 +839,11 @@ public:
         {
             commandDto.sensorUid = extractValue(jsonStr, "sensorUid");
             commandDto.sensorType = extractValue(jsonStr, "sensorType");
+            commandDto.model = extractValue(jsonStr, "model");
+            commandDto.command = extractValue(jsonStr, "command");
+            
+            // Extract options object as JSON string (simplified)
+            commandDto.options = extractJsonObject(jsonStr, "options");
         }
 
         return true;
@@ -868,6 +855,16 @@ public:
         oss << "{";
         oss << "\"growDirectorUid\":\"" << commandDto.growDirectorUid << "\"";
         oss << ",\"type\":\"" << commandDto.type << "\"";
+        
+        if (!commandDto.createdAt.empty())
+        {
+            oss << ",\"createdAt\":\"" << commandDto.createdAt << "\"";
+        }
+        
+        if (!commandDto.commandUid.empty())
+        {
+            oss << ",\"commandUid\":\"" << commandDto.commandUid << "\"";
+        }
 
         // DeviceCommandNotification fields
         if (commandDto.isDeviceCommand())
@@ -897,6 +894,21 @@ public:
         {
             oss << ",\"sensorUid\":\"" << commandDto.sensorUid << "\"";
             oss << ",\"sensorType\":\"" << commandDto.sensorType << "\"";
+            
+            if (!commandDto.model.empty())
+            {
+                oss << ",\"model\":\"" << commandDto.model << "\"";
+            }
+            
+            if (!commandDto.command.empty())
+            {
+                oss << ",\"command\":\"" << commandDto.command << "\"";
+            }
+            
+            if (!commandDto.options.empty())
+            {
+                oss << ",\"options\":" << commandDto.options;
+            }
         }
 
         oss << "}";
@@ -1120,6 +1132,191 @@ public:
         }
         oss << "]";
         return oss.str();
+    }
+
+    bool modbusRegisterConfigFromJson(const std::string &jsonStr, ModbusRegisterConfig &config) override
+    {
+        config.functionCode = extractIntValue(jsonStr, "functionCode");
+        config.startRegister = static_cast<uint16_t>(extractIntValue(jsonStr, "startRegister"));
+        config.numRegisters = static_cast<uint16_t>(extractIntValue(jsonStr, "numRegisters"));
+        config.multiplier = static_cast<float>(extractDoubleValue(jsonStr, "multiplier"));
+        config.offset = static_cast<float>(extractDoubleValue(jsonStr, "offset"));
+        config.channelName = extractValue(jsonStr, "chanel_name");  // Note: API uses "chanel_name" (typo in original)
+        config.channel = static_cast<uint8_t>(extractIntValue(jsonStr, "chanel"));  // Note: API uses "chanel"
+
+        return !config.channelName.empty();
+    }
+
+    std::string modbusRegisterConfigToJson(const ModbusRegisterConfig &config) override
+    {
+        std::ostringstream oss;
+        oss << "{";
+        oss << "\"functionCode\":" << static_cast<int>(config.functionCode);
+        oss << ",\"startRegister\":" << config.startRegister;
+        oss << ",\"numRegisters\":" << config.numRegisters;
+        oss << ",\"multiplier\":" << config.multiplier;
+        oss << ",\"offset\":" << config.offset;
+        oss << ",\"chanel_name\":\"" << config.channelName << "\"";
+        oss << ",\"chanel\":" << static_cast<int>(config.channel);
+        oss << "}";
+        return oss.str();
+    }
+
+    bool modbusRegisterConfigsFromJson(const std::string &jsonStr, std::vector<ModbusRegisterConfig> &configs) override
+    {
+        configs.clear();
+        auto configObjs = splitObjects(jsonStr);
+        for (const auto &configStr : configObjs)
+        {
+            ModbusRegisterConfig config;
+            if (modbusRegisterConfigFromJson(configStr, config))
+            {
+                configs.push_back(config);
+            }
+        }
+        return !configs.empty();
+    }
+
+    std::string modbusRegisterConfigsToJson(const std::vector<ModbusRegisterConfig> &configs) override
+    {
+        std::ostringstream oss;
+        oss << "[";
+        for (size_t i = 0; i < configs.size(); ++i)
+        {
+            oss << modbusRegisterConfigToJson(configs[i]);
+            if (i + 1 < configs.size())
+                oss << ",";
+        }
+        oss << "]";
+        return oss.str();
+    }
+
+    bool i2cRegisterConfigFromJson(const std::string &jsonStr, I2CRegisterConfig &config) override
+    {
+        config.registerAddr = static_cast<uint16_t>(extractIntValue(jsonStr, "register"));
+        config.length = static_cast<uint8_t>(extractIntValue(jsonStr, "length"));
+        config.multiplier = static_cast<float>(extractDoubleValue(jsonStr, "multiplier"));
+        config.offset = static_cast<float>(extractDoubleValue(jsonStr, "offset"));
+
+        return true;
+    }
+
+    std::string i2cRegisterConfigToJson(const I2CRegisterConfig &config) override
+    {
+        std::ostringstream oss;
+        oss << "{";
+        oss << "\"register\":" << config.registerAddr;
+        oss << ",\"length\":" << static_cast<int>(config.length);
+        oss << ",\"multiplier\":" << config.multiplier;
+        oss << ",\"offset\":" << config.offset;
+        oss << "}";
+        return oss.str();
+    }
+
+    bool i2cRegisterConfigsFromJson(const std::string &jsonStr, std::vector<std::pair<std::string, I2CRegisterConfig>> &configs) override
+    {
+        configs.clear();
+        
+        // Extract I2C register config object (should be a JSON object, not array)
+        std::string configObj = extractJsonObject(jsonStr, "i2cRegisterConfig");
+        if (configObj.empty()) return false;
+        
+        // Parse each key-value pair in the object
+        // This is a simplified implementation - in production, use proper JSON parser
+        size_t pos = 1; // Start after opening brace
+        while (pos < configObj.size())
+        {
+            // Find key
+            size_t keyStart = configObj.find("\"", pos);
+            if (keyStart == std::string::npos) break;
+            
+            size_t keyEnd = configObj.find("\"", keyStart + 1);
+            if (keyEnd == std::string::npos) break;
+            
+            std::string key = configObj.substr(keyStart + 1, keyEnd - keyStart - 1);
+            
+            // Find value object
+            size_t colonPos = configObj.find(":", keyEnd);
+            if (colonPos == std::string::npos) break;
+            
+            size_t valueStart = configObj.find("{", colonPos);
+            if (valueStart == std::string::npos) break;
+            
+            // Find matching closing brace
+            int braceCount = 1;
+            size_t valueEnd = valueStart + 1;
+            while (valueEnd < configObj.size() && braceCount > 0)
+            {
+                if (configObj[valueEnd] == '{') braceCount++;
+                else if (configObj[valueEnd] == '}') braceCount--;
+                valueEnd++;
+            }
+            
+            if (braceCount == 0)
+            {
+                std::string valueJson = configObj.substr(valueStart, valueEnd - valueStart);
+                I2CRegisterConfig config;
+                if (i2cRegisterConfigFromJson(valueJson, config))
+                {
+                    configs.push_back({key, config});
+                }
+            }
+            
+            pos = valueEnd;
+        }
+        
+        return !configs.empty();
+    }
+
+    std::string i2cRegisterConfigsToJson(const std::vector<std::pair<std::string, I2CRegisterConfig>> &configs) override
+    {
+        std::ostringstream oss;
+        oss << "{";
+        for (size_t i = 0; i < configs.size(); ++i)
+        {
+            const auto& pair = configs[i];
+            oss << "\"" << pair.first << "\":" << i2cRegisterConfigToJson(pair.second);
+            if (i + 1 < configs.size())
+                oss << ",";
+        }
+        oss << "}";
+        return oss.str();
+    }
+
+private:
+    /**
+     * @brief Extract JSON object as string
+     * @param json Source JSON string
+     * @param key Key to extract
+     * @return JSON object as string
+     */
+    std::string extractJsonObject(const std::string& json, const std::string& key)
+    {
+        std::string searchKey = "\"" + key + "\"";
+        size_t keyPos = json.find(searchKey);
+        if (keyPos == std::string::npos) return "";
+        
+        size_t colonPos = json.find(":", keyPos);
+        if (colonPos == std::string::npos) return "";
+        
+        size_t valueStart = colonPos + 1;
+        while (valueStart < json.size() && std::isspace(json[valueStart])) valueStart++;
+        if (valueStart < json.size() && json[valueStart] == '{')
+        {
+            int braceCount = 1;
+            size_t valueEnd = valueStart + 1;
+            while (valueEnd < json.size() && braceCount > 0)
+            {
+                if (json[valueEnd] == '{') braceCount++;
+                else if (json[valueEnd] == '}') braceCount--;
+                valueEnd++;
+            }
+            if (braceCount == 0)
+            {
+                return json.substr(valueStart, valueEnd - valueStart);
+            }
+        }
+        return "";
     }
 };
 

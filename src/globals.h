@@ -185,7 +185,8 @@ CommandService commandService(
     &hybridApiService,
     &mqttLogger,
     &debugSystem,
-    &ntpTimeAdapter);
+    &ntpTimeAdapter,
+    &jsonConverter);
 
 DiagnosticService diagnosticService(
     &restApiService,

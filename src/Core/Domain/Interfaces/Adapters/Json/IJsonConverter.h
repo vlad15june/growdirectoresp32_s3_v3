@@ -16,155 +16,34 @@
 class IJsonConverter
 {
 public:
-    /**
-     * @brief Convert JSON string to ModuleStructure object
-     * @param jsonStr JSON string to parse
-     * @param moduleStructure ModuleStructure object to populate
-     * @return true if parsing was successful, false otherwise
-     */
     virtual bool moduleStructureFromJson(const std::string &jsonStr, ModuleStructure &moduleStructure) = 0;
-
-    /**
-     * @brief Convert ModuleStructure object to JSON string
-     * @param moduleStructure ModuleStructure object to convert
-     * @return JSON string representation of the ModuleStructure
-     */
     virtual std::string moduleStructureToJson(const ModuleStructure &moduleStructure) = 0;
-
-    /**
-     * @brief Convert JSON string to Rule object
-     * @param jsonStr JSON string to parse
-     * @param rule Rule object to populate
-     * @return true if parsing was successful, false otherwise
-     */
     virtual bool ruleFromJson(const std::string &jsonStr, Rule &rule) = 0;
-
-    /**
-     * @brief Convert Rule object to JSON string
-     * @param rule Rule object to convert
-     * @return JSON string representation of the Rule
-     */
     virtual std::string ruleToJson(const Rule &rule) = 0;
-
-    /**
-     * @brief Convert JSON string to array of Rule objects
-     * @param jsonStr JSON string to parse
-     * @param rules Vector of Rule objects to populate
-     * @return true if parsing was successful, false otherwise
-     */
     virtual bool rulesFromJson(const std::string &jsonStr, std::vector<Rule> &rules) = 0;
-
-    /**
-     * @brief Convert array of Rule objects to JSON string
-     * @param rules Vector of Rule objects to convert
-     * @return JSON string representation of the array of Rules
-     */
     virtual std::string rulesToJson(const std::vector<Rule> &rules) = 0;
-
-    /**
-     * @brief Convert DiagnosticDto to JSON string
-     * @param diagnosticData DiagnosticDto object to convert
-     * @return JSON string representation of the diagnostic data
-     */
     virtual std::string diagnosticToJson(const DiagnosticDto &diagnosticData) = 0;
-
-    /**
-     * @brief Convert UpdateDto to JSON string
-     * @param updateData UpdateDto object to convert
-     * @return JSON string representation of the update data
-     */
     virtual std::string updateToJson(const UpdateDto &updateData) = 0;
-
-    /**
-     * @brief Convert JSON string to CommandDto object
-     * @param jsonStr JSON string to parse
-     * @param commandDto CommandDto object to populate
-     * @return true if parsing was successful, false otherwise
-     */
     virtual bool commandFromJson(const std::string &jsonStr, CommandDto &commandDto) = 0;
-
-    /**
-     * @brief Convert CommandDto object to JSON string
-     * @param commandDto CommandDto object to convert
-     * @return JSON string representation of the CommandDto
-     */
     virtual std::string commandToJson(const CommandDto &commandDto) = 0;
-
-    /**
-     * @brief Convert DeviceCommandUpdateDto object to JSON string
-     * @param commandUpdateDto DeviceCommandUpdateDto object to convert
-     * @return JSON string representation of the DeviceCommandUpdateDto
-     */
     virtual std::string deviceCommandUpdateToJson(const DeviceCommandUpdateDto& commandUpdateDto) = 0;
-
-    /**
-     * @brief Convert JSON string to DeviceCommandDto object
-     * @param jsonStr JSON string to parse
-     * @param commandDto DeviceCommandDto object to populate
-     * @return true if parsing was successful, false otherwise
-     */
     virtual bool deviceCommandFromJson(const std::string &jsonStr, DeviceCommandDto &commandDto) = 0;
-
-    /**
-     * @brief Convert DeviceCommandDto object to JSON string
-     * @param commandDto DeviceCommandDto object to convert
-     * @return JSON string representation of the DeviceCommandDto
-     */
     virtual std::string deviceCommandToJson(const DeviceCommandDto &commandDto) = 0;
-
-    /**
-     * @brief Convert JSON string to array of DeviceCommandDto objects
-     * @param jsonStr JSON string to parse
-     * @param commands Vector of DeviceCommandDto objects to populate
-     * @return true if parsing was successful, false otherwise
-     */
     virtual bool deviceCommandsFromJson(const std::string &jsonStr, std::vector<DeviceCommandDto> &commands) = 0;
-
-    /**
-     * @brief Convert CommandResultDto object to JSON string
-     * @param commandResultDto CommandResultDto object to convert
-     * @return JSON string representation of the CommandResultDto
-     */
     virtual std::string commandResultToJson(const CommandResultDto &commandResultDto) = 0;
-
-    /**
-     * @brief Convert JSON string to CommandResultDto object
-     * @param jsonStr JSON string to parse
-     * @param commandResultDto CommandResultDto object to populate
-     * @return true if parsing was successful, false otherwise
-     */
     virtual bool commandResultFromJson(const std::string &jsonStr, CommandResultDto &commandResultDto) = 0;
-
-    /**
-     * @brief Convert JSON string to SensorEntity object
-     * @param jsonStr JSON string to parse
-     * @param sensor SensorEntity object to populate
-     * @return true if parsing was successful, false otherwise
-     */
     virtual bool sensorFromJson(const std::string &jsonStr, SensorEntity &sensor) = 0;
-
-    /**
-     * @brief Convert SensorEntity object to JSON string
-     * @param sensor SensorEntity object to convert
-     * @return JSON string representation of the SensorEntity
-     */
     virtual std::string sensorToJson(const SensorEntity &sensor) = 0;
-
-    /**
-     * @brief Convert JSON string to array of SensorEntity objects
-     * @param jsonStr JSON string to parse
-     * @param sensors Vector of SensorEntity objects to populate
-     * @return true if parsing was successful, false otherwise
-     */
     virtual bool sensorsFromJson(const std::string &jsonStr, std::vector<SensorEntity> &sensors) = 0;
-
-    /**
-     * @brief Convert array of SensorEntity objects to JSON string
-     * @param sensors Vector of SensorEntity objects to convert
-     * @return JSON string representation of the array of SensorEntity objects
-     */
     virtual std::string sensorsToJson(const std::vector<SensorEntity> &sensors) = 0;
-
+    virtual bool modbusRegisterConfigFromJson(const std::string &jsonStr, ModbusRegisterConfig &config) = 0;
+    virtual std::string modbusRegisterConfigToJson(const ModbusRegisterConfig &config) = 0;
+    virtual bool modbusRegisterConfigsFromJson(const std::string &jsonStr, std::vector<ModbusRegisterConfig> &configs) = 0;
+    virtual std::string modbusRegisterConfigsToJson(const std::vector<ModbusRegisterConfig> &configs) = 0;
+    virtual bool i2cRegisterConfigFromJson(const std::string &jsonStr, I2CRegisterConfig &config) = 0;
+    virtual std::string i2cRegisterConfigToJson(const I2CRegisterConfig &config) = 0;
+    virtual bool i2cRegisterConfigsFromJson(const std::string &jsonStr, std::vector<std::pair<std::string, I2CRegisterConfig>> &configs) = 0;
+    virtual std::string i2cRegisterConfigsToJson(const std::vector<std::pair<std::string, I2CRegisterConfig>> &configs) = 0;
     virtual ~IJsonConverter() = default;
 };
 
