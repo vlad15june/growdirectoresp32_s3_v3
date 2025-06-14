@@ -8,9 +8,9 @@
 /**
  * @brief Base sensor entity class
  */
-class Sensor {
+class SensorEntity {
 public:
-    std::string sensorUid;
+    std::string uid;
     std::string sensorType;
     std::string model;
     std::string protocol;
@@ -30,7 +30,7 @@ public:
     uint32_t lastReadTime;
     std::vector<std::pair<std::string, float>> channelValues;
 
-    Sensor() : isActive(true), isError(false), modbusDeviceAddress(1), baudRate(9600), 
+    SensorEntity() : isActive(true), isError(false), modbusDeviceAddress(1), baudRate(9600), 
                currentValue(0.0f), lastReadTime(0) {}
 
     bool isModbusSensor() const { return protocol == "RS485"; }

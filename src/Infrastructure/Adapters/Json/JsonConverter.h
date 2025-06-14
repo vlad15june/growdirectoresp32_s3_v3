@@ -1031,6 +1031,96 @@ public:
         
         return !commands.empty();
     }
+
+    bool sensorFromJson(const std::string &jsonStr, SensorEntity &sensor) override
+    {
+        sensor.uid = extractValue(jsonStr, "uid");
+        sensor.sensorType = extractValue(jsonStr, "sensorType");
+        sensor.model = extractValue(jsonStr, "model");
+        sensor.protocol = extractValue(jsonStr, "protocol");
+        sensor.createdAt = extractValue(jsonStr, "createdAt");
+        sensor.isActive = extractBoolValue(jsonStr, "isActive");
+        sensor.isError = extractBoolValue(jsonStr, "isError");
+        
+        sensor.modbusDeviceAddress = extractIntValue(jsonStr, "modbusDeviceAddress");
+        sensor.baudRate = extractIntValue(jsonStr, "baudRate");
+        sensor.i2cAddress = extractValue(jsonStr, "i2cAddress");
+        sensor.chipType = extractValue(jsonStr, "chipType");
+        
+        sensor.currentValue = static_cast<float>(extractDoubleValue(jsonStr, "currentValue"));
+        sensor.lastReadTime = static_cast<uint32_t>(extractIntValue(jsonStr, "lastReadTime"));
+
+        // Simple channel values parsing (basic implementation)
+        sensor.channelValues.clear();
+        // Note: This is a simplified implementation. A full implementation would parse the channelValues object
+
+        return true;
+    }
+
+    std::string sensorToJson(const SensorEntity &sensor) override
+    {
+        std::ostringstream oss;
+        oss << "{";
+        oss << "\"uid\":\"" << sensor.uid << "\"";
+        oss << ",\"sensorType\":\"" << sensor.sensorType << "\"";
+        oss << ",\"model\":\"" << sensor.model << "\"";
+        oss << ",\"protocol\":\"" << sensor.protocol << "\"";
+        oss << ",\"createdAt\":\"" << sensor.createdAt << "\"";
+        oss << ",\"isActive\":" << (sensor.isActive ? "true" : "false");
+        oss << ",\"isError\":" << (sensor.isError ? "true" : "false");
+        oss << ",\"modbusDeviceAddress\":" << sensor.modbusDeviceAddress;
+        oss << ",\"baudRate\":" << sensor.baudRate;
+        oss << ",\"i2cAddress\":\"" << sensor.i2cAddress << "\"";
+        oss << ",\"chipType\":\"" << sensor.chipType << "\"";
+        oss << ",\"currentValue\":" << sensor.currentValue;
+        oss << ",\"lastReadTime\":" << sensor.lastReadTime;
+
+        // Add channel values
+        if (!sensor.channelValues.empty())
+        {
+            oss << ",\"channelValues\":{";
+            for (size_t i = 0; i < sensor.channelValues.size(); ++i)
+            {
+                const auto& pair = sensor.channelValues[i];
+                oss << "\"" << pair.first << "\":" << pair.second;
+                if (i + 1 < sensor.channelValues.size())
+                    oss << ",";
+            }
+            oss << "}";
+        }
+
+        oss << "}";
+        return oss.str();
+    }
+
+    bool sensorsFromJson(const std::string &jsonStr, std::vector<SensorEntity> &sensors) override
+    {
+        sensors.clear();
+        auto sensorObjs = splitObjects(jsonStr);
+        for (const auto &sensorStr : sensorObjs)
+        {
+            SensorEntity sensor;
+            if (sensorFromJson(sensorStr, sensor))
+            {
+                sensors.push_back(sensor);
+            }
+        }
+        return !sensors.empty();
+    }
+
+    std::string sensorsToJson(const std::vector<SensorEntity> &sensors) override
+    {
+        std::ostringstream oss;
+        oss << "[";
+        for (size_t i = 0; i < sensors.size(); ++i)
+        {
+            oss << sensorToJson(sensors[i]);
+            if (i + 1 < sensors.size())
+                oss << ",";
+        }
+        oss << "]";
+        return oss.str();
+    }
 };
 
 #endif // JSON_CONVERTER_H

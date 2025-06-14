@@ -963,4 +963,125 @@ public:
 
         return !commands.empty();
     }
+
+    bool sensorFromJson(const std::string &jsonStr, SensorEntity &sensor) override
+    {
+        DynamicJsonDocument doc(4096);
+        DeserializationError error = deserializeJson(doc, jsonStr);
+        if (error)
+            return false;
+
+        sensor.uid = doc["uid"] | "";
+        sensor.sensorType = doc["sensorType"] | "";
+        sensor.model = doc["model"] | "";
+        sensor.protocol = doc["protocol"] | "";
+        sensor.createdAt = doc["createdAt"] | "";
+        sensor.isActive = doc["isActive"] | true;
+        sensor.isError = doc["isError"] | false;
+        
+        sensor.modbusDeviceAddress = doc["modbusDeviceAddress"] | 1;
+        sensor.baudRate = doc["baudRate"] | 9600;
+        sensor.i2cAddress = doc["i2cAddress"] | "";
+        sensor.chipType = doc["chipType"] | "";
+        
+        sensor.currentValue = doc["currentValue"] | 0.0f;
+        sensor.lastReadTime = doc["lastReadTime"] | 0;
+
+        // Parse channel values
+        sensor.channelValues.clear();
+        if (doc.containsKey("channelValues"))
+        {
+            for (JsonPair kv : doc["channelValues"].as<JsonObject>())
+            {
+                sensor.channelValues.push_back({kv.key().c_str(), kv.value().as<float>()});
+            }
+        }
+
+        return true;
+    }
+
+    std::string sensorToJson(const SensorEntity &sensor) override
+    {
+        DynamicJsonDocument doc(4096);
+        
+        doc["uid"] = sensor.uid;
+        doc["sensorType"] = sensor.sensorType;
+        doc["model"] = sensor.model;
+        doc["protocol"] = sensor.protocol;
+        doc["createdAt"] = sensor.createdAt;
+        doc["isActive"] = sensor.isActive;
+        doc["isError"] = sensor.isError;
+        
+        doc["modbusDeviceAddress"] = sensor.modbusDeviceAddress;
+        doc["baudRate"] = sensor.baudRate;
+        doc["i2cAddress"] = sensor.i2cAddress;
+        doc["chipType"] = sensor.chipType;
+        
+        doc["currentValue"] = sensor.currentValue;
+        doc["lastReadTime"] = sensor.lastReadTime;
+
+        // Add channel values
+        if (!sensor.channelValues.empty())
+        {
+            JsonObject channelObj = doc.createNestedObject("channelValues");
+            for (const auto& pair : sensor.channelValues)
+            {
+                channelObj[pair.first] = pair.second;
+            }
+        }
+
+        std::string output;
+        serializeJson(doc, output);
+        return output;
+    }
+
+    bool sensorsFromJson(const std::string &jsonStr, std::vector<SensorEntity> &sensors) override
+    {
+        DynamicJsonDocument doc(16384); // Larger capacity for array
+        DeserializationError error = deserializeJson(doc, jsonStr);
+        if (error)
+            return false;
+
+        sensors.clear();
+        for (JsonObject sensorObj : doc.as<JsonArray>())
+        {
+            SensorEntity sensor;
+
+            // Copy to a separate document for individual processing
+            DynamicJsonDocument sensorDoc(4096);
+            JsonObject destObj = sensorDoc.to<JsonObject>();
+
+            // Copy all properties from the array element
+            for (JsonPair kv : sensorObj)
+            {
+                destObj[kv.key()] = kv.value();
+            }
+
+            // Serialize and then parse this single sensor
+            std::string sensorJson;
+            serializeJson(sensorDoc, sensorJson);
+
+            if (sensorFromJson(sensorJson, sensor))
+            {
+                sensors.push_back(sensor);
+            }
+        }
+
+        return !sensors.empty();
+    }
+
+    std::string sensorsToJson(const std::vector<SensorEntity> &sensors) override
+    {
+        DynamicJsonDocument doc(16384); // Larger capacity for array
+        JsonArray sensorsArr = doc.to<JsonArray>();
+
+        for (const SensorEntity &sensor : sensors)
+        {
+            sensorsArr.add(serialized(sensorToJson(sensor)));
+        }
+
+        std::string output;
+        serializeJson(doc, output);
+        return output;
+    }
 };

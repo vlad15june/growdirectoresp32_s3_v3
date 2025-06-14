@@ -6,6 +6,7 @@
 #include "Core/Domain/Data/Models/ModuleStructure.h"
 #include "Application/DTOs/DiagnosticDto.h"
 #include "Core/Domain/Data/Entities/Rule.h"
+#include "Core/Domain/Data/Entities/Sensor/Sensor.h"
 #include "Application/DTOs/UpdateDto.h"
 #include "Application/DTOs/CommandDto.h"
 #include "Application/DTOs/CommandResultDto.h"
@@ -133,6 +134,36 @@ public:
      * @return true if parsing was successful, false otherwise
      */
     virtual bool commandResultFromJson(const std::string &jsonStr, CommandResultDto &commandResultDto) = 0;
+
+    /**
+     * @brief Convert JSON string to SensorEntity object
+     * @param jsonStr JSON string to parse
+     * @param sensor SensorEntity object to populate
+     * @return true if parsing was successful, false otherwise
+     */
+    virtual bool sensorFromJson(const std::string &jsonStr, SensorEntity &sensor) = 0;
+
+    /**
+     * @brief Convert SensorEntity object to JSON string
+     * @param sensor SensorEntity object to convert
+     * @return JSON string representation of the SensorEntity
+     */
+    virtual std::string sensorToJson(const SensorEntity &sensor) = 0;
+
+    /**
+     * @brief Convert JSON string to array of SensorEntity objects
+     * @param jsonStr JSON string to parse
+     * @param sensors Vector of SensorEntity objects to populate
+     * @return true if parsing was successful, false otherwise
+     */
+    virtual bool sensorsFromJson(const std::string &jsonStr, std::vector<SensorEntity> &sensors) = 0;
+
+    /**
+     * @brief Convert array of SensorEntity objects to JSON string
+     * @param sensors Vector of SensorEntity objects to convert
+     * @return JSON string representation of the array of SensorEntity objects
+     */
+    virtual std::string sensorsToJson(const std::vector<SensorEntity> &sensors) = 0;
 
     virtual ~IJsonConverter() = default;
 };
