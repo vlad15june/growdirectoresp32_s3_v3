@@ -55,7 +55,9 @@
 #include "Infrastructure/Controllers/API/HybridAPIService.h"
 #include "Infrastructure/Adapters/SPIFFS/SpiffsAdapter.h"
 #include "Infrastructure/Adapters/SPIFFS/SpiffsRuleDao.h"
+#include "Infrastructure/Adapters/SPIFFS/SpiffsSensorDao.h"
 #include "Infrastructure/Repositories/RuleRepository.h"
+#include "Infrastructure/Repositories/SensorRepository.h"
 #include "Application/Services/Devices/IDeviceService.h"
 #include "Application/Services/Devices/DeviceService.h"
 #include "Application/Services/CommandService.h"
@@ -133,11 +135,20 @@ DeviceCommandExecutionUseCase deviceCommandExecutionUseCase(
     &mqttLogger,
     &debugSystem);
 
+SpiffsAdapter spiffsAdapter(&mqttLogger, &debugSystem);
+
+SpiffsRuleDao ruleDao(&spiffsAdapter, &jsonConverter);
+RuleRepository ruleRepository(&ruleDao);
+
+SpiffsSensorDao sensorDao(&spiffsAdapter, &jsonConverter);
+SensorRepository sensorRepository(&sensorDao);
+
 SensorCommandUseCase sensorCommandUseCase(
     &moduleConfig,
     &settings,
     &mqttLogger,
-    &debugSystem);
+    &debugSystem,
+    &sensorRepository);
 
 OnChangeModuleModeUseCase moduleModeUseCase(
     arduinoAdapter,
@@ -208,11 +219,6 @@ OnChangeLocalIpUseCase onChangeLocalIpUseCase(
     moduleConfig,
     mqttLogger,
     debugSystem);
-
-SpiffsAdapter spiffsAdapter(&mqttLogger, &debugSystem);
-
-SpiffsRuleDao ruleDao(&spiffsAdapter, &jsonConverter);
-RuleRepository ruleRepository(&ruleDao);
 
 ProcessDeviceStateUseCaseFactory deviceStateUseCaseFactory(
     &mqttLogger,

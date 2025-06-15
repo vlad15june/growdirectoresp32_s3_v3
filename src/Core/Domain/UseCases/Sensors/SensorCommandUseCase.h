@@ -7,6 +7,7 @@
 #include "Core/Domain/Interfaces/ISettings.h"
 #include "Core/Domain/Interfaces/ILogger.h"
 #include "Core/Domain/Interfaces/IDebugSystem.h"
+#include "Core/Domain/Interfaces/Repositories/ISensorRepository.h"
 #include "Core/Domain/Enums/ModuleModeEnum.h"
 #include "Core/Domain/Enums/BootTypeEnum.h"
 #include "Core/Domain/Enums/SensorTypeEnum.h"
@@ -21,22 +22,25 @@ private:
     ISettings *settings;
     ILogger *logger;
     IDebugSystem *debugSystem;
+    ISensorRepository *sensorRepository;
 
 public:
     SensorCommandUseCase(
         IModuleConfig *moduleConfig,
         ISettings *settings,
         ILogger *logger,
-        IDebugSystem *debugSystem)
+        IDebugSystem *debugSystem,
+        ISensorRepository *sensorRepository)
         : moduleConfig(moduleConfig),
           settings(settings),
           logger(logger),
-          debugSystem(debugSystem) {}
+          debugSystem(debugSystem),
+          sensorRepository(sensorRepository) {}
 
     SensorCommandResult execute(const SensorEntity& sensor) override
     {
-        //TODO: use sensor domain models instead of strings
-        //TODO: store in repository instead of settings
+        //TODO: (done) use sensor domain models instead of strings
+        //TODO: store in repository and in settings
         //TODO: check sensor connection, try to connect to sensor and read sensor data
         //TODO: return not bool but status and message
         //TODO: use ModuleStructure &_moduleStructure to update structure and then send structure to server(send in APP layer)
@@ -45,9 +49,9 @@ public:
             sensor.sensorType.c_str(), sensor.uid.c_str());
 
         // Validate dependencies
-        if (!moduleConfig || !settings)
+        if (!moduleConfig || !settings || !sensorRepository)
         {
-            std::string errorMsg = "Missing dependencies - moduleConfig or settings is null";
+            std::string errorMsg = "Missing dependencies - moduleConfig, settings, or sensorRepository is null";
             log("SensorCommandUseCase: %s", errorMsg.c_str());
             return SensorCommandResult::createError(errorMsg, "MISSING_DEPENDENCIES");
         }
@@ -87,14 +91,12 @@ public:
 
         if (result.success)
         {
-            // Set boot type and request restart
             settings->setBootType(BOOT_TYPE_SENSOR_CHNG);
             moduleConfig->setRequestedModuleMode(CONFIGURED_NEED_RESTART);
             
             log("SensorCommandUseCase: Sensor configuration changed, restart requested");
             
-            // Update success message to include restart info
-            result.message += " - System restart requested to apply changes";
+            result.message += "System restart requested to apply changes";
         }
 
         return result;
@@ -145,7 +147,7 @@ private:
             return SensorCommandResult::createError(errorMsg, "INVALID_CHANNEL");
         }
 
-        uint8_t currentType = getSensorType(channel);
+        uint8_t currentType = getSensorType(channel); //TODO: store "protocol": "I2C"
 
         log("SensorCommandUseCase: Channel: %d, current type: %d, requested type: %s", 
             channel, currentType, sensor.sensorType.c_str());
