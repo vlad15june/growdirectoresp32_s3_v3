@@ -147,47 +147,71 @@ private:
             return SensorCommandResult::createError(errorMsg, "INVALID_CHANNEL");
         }
 
-        uint8_t currentType = getSensorType(channel); //TODO: store "protocol": "I2C"
+        // uint8_t currentType = getSensorType(channel); //TODO: store "protocol": "I2C"
+        auto existingSensor = sensorRepository->get(sensor.uid.c_str());
+        uint8_t currentType = existingSensor.has_value() ? getSensorTypeId(existingSensor.value().sensorType) : getSensorType(channel);
+        
+        log("SensorCommandUseCase: Channel: %d, current type: %d, requested type: %s, protocol: %s", 
+            channel, currentType, sensor.sensorType.c_str(), sensor.protocol.c_str());
 
-        log("SensorCommandUseCase: Channel: %d, current type: %d, requested type: %s", 
-            channel, currentType, sensor.sensorType.c_str());
-
-        // Check each supported sensor type
-        if (currentType != ANALOG_SOIL_MOISTURE && sensor.sensorType == getSensorTypeName(ANALOG_SOIL_MOISTURE))
+        // Handle different protocols
+        if (sensor.protocol == "Analog")
         {
-            putSensorType(ANALOG_SOIL_MOISTURE, channel);
-            log("SensorCommandUseCase: Sensor module - configured soil moisture sensor on channel %d", channel);
-            return SensorCommandResult::createSuccess("Successfully configured soil moisture sensor on channel " + std::to_string(channel));
+            // Check each supported analog sensor type
+            if (currentType != ANALOG_SOIL_MOISTURE && sensor.sensorType == getSensorTypeName(ANALOG_SOIL_MOISTURE))
+            {
+                putSensorType(ANALOG_SOIL_MOISTURE, channel);
+                storeSensorInRepository(sensor);
+                log("SensorCommandUseCase: Sensor module - configured soil moisture sensor on channel %d", channel);
+                return SensorCommandResult::createSuccess("Successfully configured soil moisture sensor on channel " + std::to_string(channel));
+            }
+
+            if (currentType != ANALOG_LUX_CONNECTED && sensor.sensorType == getSensorTypeName(ANALOG_LUX_CONNECTED))
+            {
+                putSensorType(ANALOG_LUX_CONNECTED, channel);
+                storeSensorInRepository(sensor);
+                log("SensorCommandUseCase: Sensor module - configured LUX sensor on channel %d", channel);
+                return SensorCommandResult::createSuccess("Successfully configured LUX sensor on channel " + std::to_string(channel));
+            }
+
+            if (currentType != ANALOG_PAR_CONNECTED && sensor.sensorType == getSensorTypeName(ANALOG_PAR_CONNECTED))
+            {
+                putSensorType(ANALOG_PAR_CONNECTED, channel);
+                storeSensorInRepository(sensor);
+                log("SensorCommandUseCase: Sensor module - configured PAR sensor on channel %d", channel);
+                return SensorCommandResult::createSuccess("Successfully configured PAR sensor on channel " + std::to_string(channel));
+            }
+
+            if (currentType != ANALOG_TEMP_HUM_CONNECTED && sensor.sensorType == getSensorTypeName(ANALOG_TEMP_HUM_CONNECTED))
+            {
+                putSensorType(ANALOG_TEMP_HUM_CONNECTED, channel);
+                storeSensorInRepository(sensor);
+                log("SensorCommandUseCase: Sensor module - configured temperature humidity sensor on channel %d", channel);
+                return SensorCommandResult::createSuccess("Successfully configured temperature humidity sensor on channel " + std::to_string(channel));
+            }
+
+            // Check if sensor is already configured with the requested type
+            uint8_t requestedTypeId = getSensorTypeId(sensor.sensorType);
+            if (requestedTypeId != 255 && currentType == requestedTypeId)
+            {
+                std::string warningMsg = "Sensor type " + sensor.sensorType + " is already configured on channel " + std::to_string(channel);
+                log("SensorCommandUseCase: %s", warningMsg.c_str());
+                return SensorCommandResult::createWarning(warningMsg);
+            }
         }
-
-        if (currentType != ANALOG_LUX_CONNECTED && sensor.sensorType == getSensorTypeName(ANALOG_LUX_CONNECTED))
+        else if (sensor.protocol == "I2C" || sensor.protocol == "ModBus")
         {
-            putSensorType(ANALOG_LUX_CONNECTED, channel);
-            log("SensorCommandUseCase: Sensor module - configured LUX sensor on channel %d", channel);
-            return SensorCommandResult::createSuccess("Successfully configured LUX sensor on channel " + std::to_string(channel));
+            // For I2C and ModBus sensors, just store in repository
+            storeSensorInRepository(sensor);
+            log("SensorCommandUseCase: Sensor module - configured %s sensor with protocol %s", 
+                sensor.sensorType.c_str(), sensor.protocol.c_str());
+            return SensorCommandResult::createSuccess("Successfully configured " + sensor.sensorType + " sensor with " + sensor.protocol + " protocol");
         }
-
-        if (currentType != ANALOG_PAR_CONNECTED && sensor.sensorType == getSensorTypeName(ANALOG_PAR_CONNECTED))
+        else
         {
-            putSensorType(ANALOG_PAR_CONNECTED, channel);
-            log("SensorCommandUseCase: Sensor module - configured PAR sensor on channel %d", channel);
-            return SensorCommandResult::createSuccess("Successfully configured PAR sensor on channel " + std::to_string(channel));
-        }
-
-        if (currentType != ANALOG_TEMP_HUM_CONNECTED && sensor.sensorType == getSensorTypeName(ANALOG_TEMP_HUM_CONNECTED))
-        {
-            putSensorType(ANALOG_TEMP_HUM_CONNECTED, channel);
-            log("SensorCommandUseCase: Sensor module - configured temperature humidity sensor on channel %d", channel);
-            return SensorCommandResult::createSuccess("Successfully configured temperature humidity sensor on channel " + std::to_string(channel));
-        }
-
-        // Check if sensor is already configured with the requested type
-        uint8_t requestedTypeId = getSensorTypeId(sensor.sensorType);
-        if (requestedTypeId != 255 && currentType == requestedTypeId)
-        {
-            std::string warningMsg = "Sensor type " + sensor.sensorType + " is already configured on channel " + std::to_string(channel);
-            log("SensorCommandUseCase: %s", warningMsg.c_str());
-            return SensorCommandResult::createWarning(warningMsg);
+            std::string errorMsg = "Unsupported protocol '" + sensor.protocol + "' for sensor configuration";
+            log("SensorCommandUseCase: %s", errorMsg.c_str());
+            return SensorCommandResult::createError(errorMsg, "UNSUPPORTED_PROTOCOL");
         }
 
         std::string errorMsg = "Unsupported sensor type '" + sensor.sensorType + "' for sensor module or invalid configuration";
@@ -272,5 +296,26 @@ private:
 
             logger->println(DebugFeatures::SETUP_SENSOR_DEBUG, buffer);
         }
+    }
+
+    bool storeSensorInRepository(const SensorEntity& sensor)
+    {
+        if (!sensorRepository)
+        {
+            log("SensorCommandUseCase: Repository is null, cannot store sensor");
+            return false;
+        }
+
+        bool success = sensorRepository->save(sensor);
+        if (success)
+        {
+            log("SensorCommandUseCase: Successfully stored sensor %s in repository", sensor.uid.c_str());
+        }
+        else
+        {
+            log("SensorCommandUseCase: Failed to store sensor %s in repository", sensor.uid.c_str());
+        }
+        
+        return success;
     }
 };
