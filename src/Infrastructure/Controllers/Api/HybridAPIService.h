@@ -11,6 +11,7 @@
 #include "Application/DTOs/UpdateDto.h"
 #include "Application/DTOs/DeviceCommandUpdateDto.h"
 #include "Application/DTOs/DeviceCommandDto.h"
+#include "Core/Domain/Data/Entities/Rule.h"
 
 /**
  * Implementation of hybrid API service that can use both REST and MQTT APIs
@@ -626,6 +627,24 @@ public:
         }
         
         return commands;
+    }
+
+    std::vector<Rule> getRuleList() override
+    {
+        std::vector<Rule> rules;
+        
+        // This method always uses REST API only, regardless of priority setting
+        if (_restApiService != nullptr)
+        {
+            rules = _restApiService->getRuleList();
+            log("HYBRID API: Get rule list via REST - rule count: %d", rules.size());
+        }
+        else
+        {
+            log("HYBRID API: REST API service not available for getRuleList");
+        }
+        
+        return rules;
     }
 
     int getRestApiSendFails() const override

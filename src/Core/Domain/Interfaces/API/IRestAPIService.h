@@ -5,6 +5,7 @@
 #include "Application/DTOs/UpdateDto.h"
 #include "Application/DTOs/DeviceCommandUpdateDto.h"
 #include "Application/DTOs/DeviceCommandDto.h"
+#include "Core/Domain/Data/Entities/Rule.h"
 #include <vector>
 
 class IRestAPIService {
@@ -29,6 +30,12 @@ public:
      * @return vector of DeviceCommandDto containing the command details, empty if no commands or error
      */
     virtual std::vector<DeviceCommandDto> getDeviceCommand() = 0;
+    
+    /**
+     * @brief Get rule list from server
+     * @return vector of Rule containing the rule details, empty if no rules or error
+     */
+    virtual std::vector<Rule> getRuleList() = 0;
     
     /**
      * @brief Sends diagnostic data to the server

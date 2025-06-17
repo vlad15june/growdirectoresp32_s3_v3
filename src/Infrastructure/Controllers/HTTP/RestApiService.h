@@ -11,6 +11,7 @@
 #include "Application/DTOs/DiagnosticDto.h"
 #include "Application/DTOs/DeviceCommandUpdateDto.h"
 #include "Application/DTOs/DeviceCommandDto.h"
+#include "Core/Domain/Data/Entities/Rule.h"
 
 class RestAPIService : public IRestAPIService
 {
@@ -676,6 +677,76 @@ public:
         }
         
         return commands;
+    }
+
+    std::vector<Rule> getRuleList() override
+    {
+        std::vector<Rule> rules;
+        
+        if (_moduleConfig == nullptr || _settings == nullptr)
+        {
+            log("NET: getRuleList - ModuleConfig or Settings not available");
+            return rules;
+        }
+
+        const char *moduleUid = _moduleConfig->getModuleUid();
+        
+        snprintf(_urlBuffer, sizeof(_urlBuffer),
+                 "%s/api/v1/HardWare/rulelist?token=%s&grow_director_uid=%s",
+                 _serverUrl, _token, moduleUid);
+
+        log("NET: GET %s", _urlBuffer);
+
+        byte tries = 0;
+        int httpResponseCode = 0;
+        std::string responseBody;
+        
+        while (tries < 3 && httpResponseCode != 200)
+        {
+            _httpClient->setTimeout(30000);
+            _httpClient->begin(_urlBuffer);
+            
+            httpResponseCode = _httpClient->GET();
+            
+            if (httpResponseCode > 0)
+            {
+                log("NET: HTTP Response code: %d", httpResponseCode);
+                
+                // Get response body
+                responseBody = _httpClient->getString();
+                log("NET: HTTP Response: %s", responseBody.c_str());
+            }
+            else
+            {
+                log("NET: HTTP Response Error code: %d", httpResponseCode);
+            }
+            
+            _httpClient->end();
+            delay(200);
+            tries++;
+        }
+        
+        if (httpResponseCode == 200 && !responseBody.empty() && _jsonConverter != nullptr)
+        {
+            // Parse JSON response to array of Rule
+            if (_jsonConverter->rulesFromJson(responseBody, rules))
+            {
+                log("NET: Rules parsed successfully - count: %d", rules.size());
+                trackApiSendSuccess();
+            }
+            else
+            {
+                log("NET: Failed to parse rules JSON");
+                rules.clear();
+            }
+        }
+        else
+        {
+            if (httpResponseCode != 200)
+                trackApiSendFailure();
+        }
+        
+        return rules;
     }
 
     // Implementations of network diagnostic counter methods

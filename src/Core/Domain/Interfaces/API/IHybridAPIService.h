@@ -135,4 +135,10 @@ public:
      * @return vector of DeviceCommandDto containing the command details, empty if no commands or error
      */
     virtual std::vector<DeviceCommandDto> getDeviceCommand() = 0;
+    
+    /**
+     * Get rule list from the server (REST only)
+     * @return vector of Rule containing the rule details, empty if no rules or error
+     */
+    virtual std::vector<Rule> getRuleList() = 0;
 };
