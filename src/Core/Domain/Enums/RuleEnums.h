@@ -9,10 +9,15 @@ enum class RuleType {
     SCHEDULE,
     EC,
     PH,
-    LOOP
+    LOOP,
+    DIMMER_AUTO,
+    DIMMER_MANUAL,
+    AVERAGE_SENSOR,
+    UNKNOWN
 };
 
 enum class RuleDirection {
+    UNKNOWN,
     UP,
     DOWN
 };
@@ -39,7 +44,7 @@ inline RuleDirection getRuleDirectionFromString(const char* directionStr) {
         return RuleDirection::DOWN;
     }
     
-    return RuleDirection::DOWN;
+    return RuleDirection::UNKNOWN;
 }
 
 enum class RuleMode {
@@ -52,7 +57,8 @@ enum class RuleState {
     SYNCHRONIZED,
     UNSYNCHRONIZED,
     PENDING,
-    DELETING
+    DELETING,
+    ERROR
 };
 
 #endif // RULE_ENUMS_H
