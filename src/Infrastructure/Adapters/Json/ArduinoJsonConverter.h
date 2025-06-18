@@ -5,6 +5,7 @@
 #include "Application/DTOs/CommandDto.h"
 #include "Application/DTOs/DeviceCommandUpdateDto.h"
 #include "Application/DTOs/DeviceCommandDto.h"
+#include "Application/DTOs/RuleStateUpdateDto.h"
 #include <ArduinoJson.h>
 
 class ArduinoJsonConverter : public IJsonConverter
@@ -930,5 +931,116 @@ public:
         }
 
         return !commands.empty();
+    }
+
+    std::string ruleStateToJson(const RuleStateDto& ruleState) override
+    {
+        DynamicJsonDocument doc(512);
+
+        doc["uid"] = ruleState.uid;
+        doc["state"] = ruleState.state;
+        doc["mode"] = ruleState.mode;
+        
+        if (!ruleState.modeReason.empty())
+        {
+            doc["modeReason"] = ruleState.modeReason;
+        }
+        
+        if (!ruleState.errorType.empty())
+        {
+            doc["errorType"] = ruleState.errorType;
+        }
+
+        std::string output;
+        serializeJson(doc, output);
+        return output;
+    }
+
+    bool ruleStateFromJson(const std::string& jsonStr, RuleStateDto& ruleState) override
+    {
+        DynamicJsonDocument doc(512);
+        DeserializationError error = deserializeJson(doc, jsonStr);
+        if (error)
+            return false;
+
+        ruleState.uid = doc["uid"] | "";
+        ruleState.state = doc["state"] | "Synchronized";
+        ruleState.mode = doc["mode"] | "Off";
+        ruleState.modeReason = doc["modeReason"] | "";
+        ruleState.errorType = doc["errorType"] | "";
+
+        return true;
+    }
+
+    std::string ruleStateUpdateToJson(const RuleStateUpdateDto& ruleStateUpdate) override
+    {
+        DynamicJsonDocument doc(4096);
+
+        doc["timestamp"] = ruleStateUpdate.timestamp;
+        doc["status"] = ruleStateUpdate.status;
+        
+        if (!ruleStateUpdate.errorType.empty())
+        {
+            doc["errorType"] = ruleStateUpdate.errorType;
+        }
+        
+        if (!ruleStateUpdate.accountUid.empty())
+        {
+            doc["accountUid"] = ruleStateUpdate.accountUid;
+        }
+
+        JsonArray rulesArr = doc.createNestedArray("rules");
+        for (const auto& ruleState : ruleStateUpdate.rules)
+        {
+            JsonObject ruleObj = rulesArr.createNestedObject();
+            ruleObj["uid"] = ruleState.uid;
+            ruleObj["state"] = ruleState.state;
+            ruleObj["mode"] = ruleState.mode;
+            
+            if (!ruleState.modeReason.empty())
+            {
+                ruleObj["modeReason"] = ruleState.modeReason;
+            }
+            
+            if (!ruleState.errorType.empty())
+            {
+                ruleObj["errorType"] = ruleState.errorType;
+            }
+        }
+
+        std::string output;
+        serializeJson(doc, output);
+        return output;
+    }
+
+    bool ruleStateUpdateFromJson(const std::string& jsonStr, RuleStateUpdateDto& ruleStateUpdate) override
+    {
+        DynamicJsonDocument doc(4096);
+        DeserializationError error = deserializeJson(doc, jsonStr);
+        if (error)
+            return false;
+
+        ruleStateUpdate.timestamp = doc["timestamp"] | "";
+        ruleStateUpdate.status = doc["status"] | "Success";
+        ruleStateUpdate.errorType = doc["errorType"] | "";
+        ruleStateUpdate.accountUid = doc["accountUid"] | "";
+
+        ruleStateUpdate.rules.clear();
+        if (doc.containsKey("rules"))
+        {
+            for (JsonObject ruleObj : doc["rules"].as<JsonArray>())
+            {
+                RuleStateDto ruleState;
+                ruleState.uid = ruleObj["uid"] | "";
+                ruleState.state = ruleObj["state"] | "Synchronized";
+                ruleState.mode = ruleObj["mode"] | "Off";
+                ruleState.modeReason = ruleObj["modeReason"] | "";
+                ruleState.errorType = ruleObj["errorType"] | "";
+                
+                ruleStateUpdate.rules.push_back(ruleState);
+            }
+        }
+
+        return true;
     }
 };

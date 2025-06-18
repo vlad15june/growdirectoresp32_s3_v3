@@ -7,8 +7,10 @@
 #include "Core/Domain/Interfaces/ILogger.h"
 #include "Core/Domain/Interfaces/IDebugSystem.h"
 #include "Core/Domain/Interfaces/Adapters/IArduinoAdapter.h"
+#include "Core/Domain/Interfaces/Adapters/Json/IJsonConverter.h"
 #include "Infrastructure/Adapters/Time/INTPTimeAdapter.h"
 #include "Application/Services/Rules/RuleValidator.h"
+#include "Application/DTOs/RuleStateUpdateDto.h"
 
 /**
  * Use case for synchronizing rules with the server
@@ -21,6 +23,7 @@ private:
     IDebugSystem* _debugSystem;
     IArduinoAdapter* _arduinoAdapter;
     INTPTimeAdapter* _ntpTimeAdapter;
+    IJsonConverter* _jsonConverter;
     RuleValidator _ruleValidator;
     
     // Sync timing
@@ -41,9 +44,21 @@ private:
         }
     }
     
+    // Enhanced sync methods
     bool syncRulesFromServer();
-    bool validateAndProcessRules(const std::vector<Rule>& rules, std::vector<Rule>& validRules);
-    std::string generateRuleStateResponse(const std::vector<Rule>& rules, const std::vector<RuleValidationResult>& validationResults);
+    bool processServerRules(const std::vector<Rule>& serverRules);
+    bool processMqttRuleUpdates(const std::vector<Rule>& mqttRules);
+    bool validateAndStoreRules(const std::vector<Rule>& rules);
+    RuleStateUpdateDto generateRuleStateUpdate(const std::vector<Rule>& rules, const std::vector<RuleValidationResult>& validationResults);
+    bool sendRuleStateUpdate(const RuleStateUpdateDto& stateUpdate);
+    
+    // Rule comparison and merging
+    bool shouldUpdateRule(const Rule& existingRule, const Rule& newRule);
+    Rule mergeRuleUpdates(const Rule& existingRule, const Rule& newRule);
+    
+    // Enhanced error handling
+    bool handleSyncFailure();
+    void trackSyncAttempt(bool success);
 
 public:
     SyncRulesUseCase(
@@ -51,6 +66,7 @@ public:
         IRuleRepository* ruleRepository,
         IArduinoAdapter* arduinoAdapter,
         INTPTimeAdapter* ntpTimeAdapter,
+        IJsonConverter* jsonConverter = nullptr,
         ILogger* logger = nullptr,
         IDebugSystem* debugSystem = nullptr
     ) : _apiService(apiService),
@@ -59,6 +75,7 @@ public:
         _debugSystem(debugSystem),
         _arduinoAdapter(arduinoAdapter),
         _ntpTimeAdapter(ntpTimeAdapter),
+        _jsonConverter(jsonConverter),
         _ruleValidator(logger, debugSystem),
         _lastSyncTime(0) {
         
@@ -133,40 +150,7 @@ public:
         _forceSyncRequested = true;
         return true;
     }
-    
-    bool sendRuleStateUpdate(const std::string& ruleUid, RuleState state, const std::string& errorType) override {
-        log("SYNC_RULES: Sending rule state update for %s - state: %d", ruleUid.c_str(), static_cast<int>(state));
-        
-        if (!_apiService) {
-            log("SYNC_RULES: API service not available for state update");
-            return false;
-        }
-        
-        // Create JSON message for rule state
-        std::string stateStr;
-        switch (state) {
-            case RuleState::SYNCHRONIZED: stateStr = "Synchronized"; break;
-            case RuleState::ERROR: stateStr = "Error"; break;
-            case RuleState::DELETING: stateStr = "Deleting"; break;
-            default: stateStr = "Unsynchronized"; break;
-        }
-        
-        char jsonMsg[512];
-        unsigned long currentTime = _ntpTimeAdapter ? _ntpTimeAdapter->getEpochTime() : 0;
-        
-        if (errorType.empty()) {
-            snprintf(jsonMsg, sizeof(jsonMsg),
-                "{\"rules\":[{\"uid\":\"%s\",\"state\":\"%s\"}],\"timestamp\":%lu}",
-                ruleUid.c_str(), stateStr.c_str(), currentTime);
-        } else {
-            snprintf(jsonMsg, sizeof(jsonMsg),
-                "{\"rules\":[{\"uid\":\"%s\",\"state\":\"%s\",\"errorType\":\"%s\"}],\"timestamp\":%lu}",
-                ruleUid.c_str(), stateStr.c_str(), errorType.c_str(), currentTime);
-        }
-        
-        return _apiService->sendByUidRuleStateCommand(ruleUid.c_str(), jsonMsg);
-    }
-    
+
     bool getLastSyncStatus() const override {
         return _lastSyncStatus;
     }
@@ -185,18 +169,20 @@ private:
         std::vector<Rule> serverRules = _apiService->getRuleList();
         
         if (serverRules.empty()) {
-            log("SYNC_RULES: No rules received from server");
-            return true; // Empty response is valid
+            log("SYNC_RULES: No rules received from server, checking local storage");
+            return handleEmptyServerResponse();
         }
         
         log("SYNC_RULES: Received %d rules from server", static_cast<int>(serverRules.size()));
-        
-        // Validate rules
+        return processServerRules(serverRules);
+    }
+    
+    bool processServerRules(const std::vector<Rule>& serverRules) {
+        // Validate incoming rules
         std::vector<RuleValidationResult> validationResults = _ruleValidator.validateRules(serverRules);
         
-        // Filter valid rules
+        // Separate valid and invalid rules
         std::vector<Rule> validRules;
-        validRules.reserve(serverRules.size());
         
         for (size_t i = 0; i < serverRules.size(); ++i) {
             const auto& rule = serverRules[i];
@@ -206,91 +192,211 @@ private:
                 validRules.push_back(rule);
             } else {
                 log("SYNC_RULES: Rule %s validation failed: %s", rule.uid.c_str(), result.errorMessage.c_str());
-                // Send error state back to server
-                sendRuleStateUpdate(rule.uid, RuleState::ERROR, result.errorType);
             }
         }
         
-        // Synchronize with repository
-        int syncedCount = _ruleRepository->synchronizeRules(validRules);
-        log("SYNC_RULES: Synchronized %d rules successfully", syncedCount);
-        
-        // Generate and send rule state response
-        std::string stateResponse = generateRuleStateResponse(serverRules, validationResults);
-        if (!stateResponse.empty()) {
-            _apiService->sendRuleStateCommand(stateResponse.c_str());
+        // Store valid rules in repository
+        bool syncSuccess = false;
+        if (!validRules.empty()) {
+            int syncedCount = _ruleRepository->synchronizeRules(validRules);
+            syncSuccess = (syncedCount > 0);
+            log("SYNC_RULES: Synchronized %d/%d rules successfully", syncedCount, static_cast<int>(validRules.size()));
         }
         
-        return true;
+        // Generate and send rule state update for ALL rules (valid and invalid)
+        RuleStateUpdateDto stateUpdate = generateRuleStateUpdate(serverRules, validationResults);
+        if (stateUpdate.hasRules()) {
+            sendRuleStateUpdate(stateUpdate);
+        }
+        
+        trackSyncAttempt(syncSuccess);
+        return syncSuccess;
     }
     
-    bool validateAndProcessRules(const std::vector<Rule>& rules, std::vector<Rule>& validRules) {
-        log("SYNC_RULES: Validating %d rules", static_cast<int>(rules.size()));
-        
-        std::vector<RuleValidationResult> validationResults = _ruleValidator.validateRules(rules);
-        
-        validRules.clear();
-        validRules.reserve(rules.size());
-        
-        for (size_t i = 0; i < rules.size(); ++i) {
-            const auto& rule = rules[i];
-            const auto& result = validationResults[i];
-            
-            if (result.isValid || rule.state == RuleState::DELETING) {
-                validRules.push_back(rule);
-            } else {
-                log("SYNC_RULES: Rule %s validation failed: %s", rule.uid.c_str(), result.errorMessage.c_str());
-                // Send error state back to server
-                sendRuleStateUpdate(rule.uid, RuleState::ERROR, result.errorType);
-            }
+    bool processMqttRuleUpdates(const std::vector<Rule>& mqttRules) {
+        if (mqttRules.empty()) {
+            return true;
         }
         
-        // Generate and send rule state response
-        std::string stateResponse = generateRuleStateResponse(rules, validationResults);
-        if (!stateResponse.empty()) {
-            _apiService->sendRuleStateCommand(stateResponse.c_str());
-        }
+        log("SYNC_RULES: Processing %d MQTT rule updates", static_cast<int>(mqttRules.size()));
         
-        log("SYNC_RULES: Validated %d/%d rules successfully", 
-            static_cast<int>(validRules.size()), static_cast<int>(rules.size()));
+        // Get current rules from repository
+        std::vector<Rule> currentRules = _ruleRepository->getAll();
+        bool rulesUpdated = false;
         
-        return true;
-    }
-    
-    std::string generateRuleStateResponse(const std::vector<Rule>& rules, const std::vector<RuleValidationResult>& validationResults) {
-        if (rules.empty()) {
-            return "";
-        }
-        
-        std::string response = "{\"rules\":[";
-        bool first = true;
-        
-        for (size_t i = 0; i < rules.size(); ++i) {
-            const auto& rule = rules[i];
-            const auto& result = validationResults[i];
+        for (const auto& mqttRule : mqttRules) {
+            bool isNewRule = true;
             
-            if (!first) {
-                response += ",";
-            }
-            first = false;
-            
-            response += "{\"uid\":\"" + rule.uid + "\"";
-            
-            if (result.isValid || rule.state == RuleState::DELETING) {
-                response += ",\"state\":\"Synchronized\"";
-            } else {
-                response += ",\"state\":\"Error\"";
-                if (!result.errorType.empty()) {
-                    response += ",\"errorType\":\"" + result.errorType + "\"";
+            // Look for existing rule with same UID
+            for (auto& currentRule : currentRules) {
+                if (currentRule.uid == mqttRule.uid) {
+                    isNewRule = false;
+                    
+                    if (shouldUpdateRule(currentRule, mqttRule)) {
+                        Rule updatedRule = mergeRuleUpdates(currentRule, mqttRule);
+                        if (_ruleRepository->save(updatedRule)) {
+                            rulesUpdated = true;
+                            log("SYNC_RULES: Updated rule %s", mqttRule.uid.c_str());
+                            
+                            // Create RuleStateDto and send confirmation to server
+                            RuleStateDto ruleState;
+                            ruleState.uid = mqttRule.uid;
+                            ruleState.state = "Synchronized";
+                            ruleState.mode = mqttRule.mode == RuleMode::ON ? "On" : 
+                                             mqttRule.mode == RuleMode::OFF ? "Off" : "Auto";
+                            ruleState.modeReason = mqttRule.modeReason;
+                            
+                            sendRuleStateUpdate(mqttRule.uid, ruleState);
+                        }
+                    }
+                    break;
                 }
             }
             
-            response += "}";
+            // Add new rule
+            if (isNewRule) {
+                Rule newRule = mqttRule;
+                newRule.state = RuleState::SYNCHRONIZED;
+                
+                if (_ruleRepository->save(newRule)) {
+                    rulesUpdated = true;
+                    log("SYNC_RULES: Added new rule %s", mqttRule.uid.c_str());
+                    
+                    // Create RuleStateDto and send confirmation to server
+                    RuleStateDto ruleState;
+                    ruleState.uid = mqttRule.uid;
+                    ruleState.state = "Synchronized";
+                    ruleState.mode = mqttRule.mode == RuleMode::ON ? "On" : 
+                                     mqttRule.mode == RuleMode::OFF ? "Off" : "Auto";
+                    ruleState.modeReason = mqttRule.modeReason;
+                    
+                    sendRuleStateUpdate(mqttRule.uid, ruleState);
+                }
+            }
         }
         
-        unsigned long currentTime = _ntpTimeAdapter ? _ntpTimeAdapter->getEpochTime() : 0;
-        response += "],\"timestamp\":" + std::to_string(currentTime) + "}";
-        return response;
+        return rulesUpdated;
+    }
+    
+    bool shouldUpdateRule(const Rule& existingRule, const Rule& newRule) {
+        // Update if versions differ
+        if (existingRule.version != newRule.version) {
+            return true;
+        }
+        
+        // Update if mode or state changed
+        if (existingRule.mode != newRule.mode || 
+            existingRule.state != newRule.state ||
+            existingRule.modeReason != newRule.modeReason) {
+            return true;
+        }
+        
+        return false;
+    }
+    
+    Rule mergeRuleUpdates(const Rule& existingRule, const Rule& newRule) {
+        Rule updatedRule = existingRule;
+        
+        // If versions are equal, only update mode-related fields
+        if (existingRule.version == newRule.version) {
+            updatedRule.mode = newRule.mode;
+            updatedRule.modeReason = newRule.modeReason;
+            updatedRule.state = newRule.state;
+        } else {
+            // If versions differ, replace entire rule but preserve local state if needed
+            updatedRule = newRule;
+            updatedRule.state = RuleState::SYNCHRONIZED;
+        }
+        
+        return updatedRule;
+    }
+    
+    RuleStateUpdateDto generateRuleStateUpdate(const std::vector<Rule>& rules, const std::vector<RuleValidationResult>& validationResults) {
+        RuleStateUpdateDto stateUpdate;
+        
+        if (_ntpTimeAdapter) {
+            // Convert epoch time to ISO string format
+            time_t currentTime = _ntpTimeAdapter->getEpochTime();
+            struct tm* timeinfo = gmtime(&currentTime);
+            char timestamp[32];
+            strftime(timestamp, sizeof(timestamp), "%Y-%m-%dT%H:%M:%S.000Z", timeinfo);
+            stateUpdate.timestamp = timestamp;
+        }
+        
+        stateUpdate.status = "Success";
+        // stateUpdate.accountUid would be set from configuration if available
+        
+        for (size_t i = 0; i < rules.size(); ++i) {
+            const auto& rule = rules[i];
+            const auto& result = validationResults[i];
+            
+            std::string ruleState = result.isValid ? "Synchronized" : "Error";
+            std::string ruleMode = rule.mode == RuleMode::ON ? "On" : 
+                                  rule.mode == RuleMode::OFF ? "Off" : "Auto";
+            
+            stateUpdate.addRuleState(rule.uid, ruleState, ruleMode, rule.modeReason, 
+                                   result.isValid ? "" : result.errorType);
+        }
+        
+        return stateUpdate;
+    }
+    
+    bool sendRuleStateUpdate(const RuleStateUpdateDto& stateUpdate) {
+        if (!_apiService || !stateUpdate.hasRules()) {
+            return false;
+        }
+        
+        if (!_jsonConverter) {
+            log("SYNC_RULES: JSON converter not available for rule state update");
+            return false;
+        }
+        
+        std::string jsonMsg = _jsonConverter->ruleStateUpdateToJson(stateUpdate);
+        
+        log("SYNC_RULES: Sending rule state update: %s", jsonMsg.c_str());
+        return _apiService->sendRuleStateCommand(jsonMsg.c_str());
+    }
+    
+    bool handleEmptyServerResponse() {
+        // When server returns empty, try to restore from local storage
+        std::vector<Rule> localRules = _ruleRepository->getAll();
+        
+        if (!localRules.empty()) {
+            log("SYNC_RULES: Using %d rules from local storage", static_cast<int>(localRules.size()));
+            return true;
+        }
+        
+        log("SYNC_RULES: No rules available locally or from server");
+        return true; // Empty is valid state
+    }
+    
+    bool handleSyncFailure() {
+        log("SYNC_RULES: Sync failure, implementing recovery strategy");
+        
+        // Check if we've been failing for too long (5 minutes)
+        static unsigned long lastSuccessfulSync = 0;
+        unsigned long now = _arduinoAdapter ? _arduinoAdapter->millis() : 0;
+        
+        if (_lastSyncStatus && _lastSuccessfulSyncTimestamp > 0) {
+            lastSuccessfulSync = now;
+        }
+        
+        if (now - lastSuccessfulSync > 300000) { // 5 minutes
+            log("SYNC_RULES: Failed to sync for 5 minutes, requesting restart");
+            // This would trigger a system restart if configured
+            return false;
+        }
+        
+        return true;
+    }
+    
+    void trackSyncAttempt(bool success) {
+        if (success) {
+            if (_ntpTimeAdapter) {
+                _lastSuccessfulSyncTimestamp = _ntpTimeAdapter->getEpochTime();
+            }
+        }
+        _lastSyncStatus = success;
     }
 };
 

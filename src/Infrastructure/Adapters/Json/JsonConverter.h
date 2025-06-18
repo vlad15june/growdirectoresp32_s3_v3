@@ -1005,6 +1005,125 @@ public:
         
         return !commands.empty();
     }
+
+    std::string ruleStateToJson(const RuleStateDto& ruleState) override
+    {
+        std::ostringstream oss;
+        oss << "{";
+        oss << "\"uid\":\"" << ruleState.uid << "\"";
+        oss << ",\"state\":\"" << ruleState.state << "\"";
+        oss << ",\"mode\":\"" << ruleState.mode << "\"";
+        
+        if (!ruleState.modeReason.empty())
+        {
+            oss << ",\"modeReason\":\"" << ruleState.modeReason << "\"";
+        }
+        
+        if (!ruleState.errorType.empty())
+        {
+            oss << ",\"errorType\":\"" << ruleState.errorType << "\"";
+        }
+        
+        oss << "}";
+        return oss.str();
+    }
+
+    bool ruleStateFromJson(const std::string& jsonStr, RuleStateDto& ruleState) override
+    {
+        ruleState.uid = extractValue(jsonStr, "uid");
+        ruleState.state = extractValue(jsonStr, "state");
+        if (ruleState.state.empty())
+            ruleState.state = "Synchronized";
+        
+        ruleState.mode = extractValue(jsonStr, "mode");
+        if (ruleState.mode.empty())
+            ruleState.mode = "Off";
+        
+        ruleState.modeReason = extractValue(jsonStr, "modeReason");
+        ruleState.errorType = extractValue(jsonStr, "errorType");
+        
+        return !ruleState.uid.empty();
+    }
+
+    std::string ruleStateUpdateToJson(const RuleStateUpdateDto& ruleStateUpdate) override
+    {
+        std::ostringstream oss;
+        oss << "{";
+        oss << "\"timestamp\":\"" << ruleStateUpdate.timestamp << "\"";
+        oss << ",\"status\":\"" << ruleStateUpdate.status << "\"";
+        
+        if (!ruleStateUpdate.errorType.empty())
+        {
+            oss << ",\"errorType\":\"" << ruleStateUpdate.errorType << "\"";
+        }
+        
+        if (!ruleStateUpdate.accountUid.empty())
+        {
+            oss << ",\"accountUid\":\"" << ruleStateUpdate.accountUid << "\"";
+        }
+
+        oss << ",\"rules\":[";
+        for (size_t i = 0; i < ruleStateUpdate.rules.size(); ++i)
+        {
+            const auto& ruleState = ruleStateUpdate.rules[i];
+            oss << "{";
+            oss << "\"uid\":\"" << ruleState.uid << "\"";
+            oss << ",\"state\":\"" << ruleState.state << "\"";
+            oss << ",\"mode\":\"" << ruleState.mode << "\"";
+            
+            if (!ruleState.modeReason.empty())
+            {
+                oss << ",\"modeReason\":\"" << ruleState.modeReason << "\"";
+            }
+            
+            if (!ruleState.errorType.empty())
+            {
+                oss << ",\"errorType\":\"" << ruleState.errorType << "\"";
+            }
+            
+            oss << "}";
+            if (i + 1 < ruleStateUpdate.rules.size())
+                oss << ",";
+        }
+        oss << "]}";
+
+        return oss.str();
+    }
+
+    bool ruleStateUpdateFromJson(const std::string& jsonStr, RuleStateUpdateDto& ruleStateUpdate) override
+    {
+        ruleStateUpdate.timestamp = extractValue(jsonStr, "timestamp");
+        ruleStateUpdate.status = extractValue(jsonStr, "status");
+        if (ruleStateUpdate.status.empty())
+            ruleStateUpdate.status = "Success";
+        
+        ruleStateUpdate.errorType = extractValue(jsonStr, "errorType");
+        ruleStateUpdate.accountUid = extractValue(jsonStr, "accountUid");
+
+        ruleStateUpdate.rules.clear();
+        std::string rulesArr = extractArray(jsonStr, "rules");
+        auto ruleObjs = splitObjects(rulesArr);
+        
+        for (const auto& ruleStr : ruleObjs)
+        {
+            RuleStateDto ruleState;
+            ruleState.uid = extractValue(ruleStr, "uid");
+            ruleState.state = extractValue(ruleStr, "state");
+            if (ruleState.state.empty())
+                ruleState.state = "Synchronized";
+            
+            ruleState.mode = extractValue(ruleStr, "mode");
+            if (ruleState.mode.empty())
+                ruleState.mode = "Off";
+            
+            ruleState.modeReason = extractValue(ruleStr, "modeReason");
+            ruleState.errorType = extractValue(ruleStr, "errorType");
+            
+            ruleStateUpdate.rules.push_back(ruleState);
+        }
+
+        return !ruleStateUpdate.rules.empty() || jsonStr.find("\"rules\":[]") != std::string::npos;
+    }
 };
 
 #endif // JSON_CONVERTER_H

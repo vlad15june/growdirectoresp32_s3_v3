@@ -10,6 +10,7 @@
 #include "Application/DTOs/CommandDto.h"
 #include "Application/DTOs/DeviceCommandUpdateDto.h"
 #include "Application/DTOs/DeviceCommandDto.h"
+#include "Application/DTOs/RuleStateUpdateDto.h"
 
 class IJsonConverter
 {
@@ -117,6 +118,36 @@ public:
      * @return true if parsing was successful, false otherwise
      */
     virtual bool deviceCommandsFromJson(const std::string &jsonStr, std::vector<DeviceCommandDto> &commands) = 0;
+
+    /**
+     * @brief Convert RuleStateDto object to JSON string
+     * @param ruleState RuleStateDto object to convert
+     * @return JSON string representation of the RuleStateDto
+     */
+    virtual std::string ruleStateToJson(const RuleStateDto& ruleState) = 0;
+
+    /**
+     * @brief Convert JSON string to RuleStateDto object
+     * @param jsonStr JSON string to parse
+     * @param ruleState RuleStateDto object to populate
+     * @return true if parsing was successful, false otherwise
+     */
+    virtual bool ruleStateFromJson(const std::string& jsonStr, RuleStateDto& ruleState) = 0;
+
+    /**
+     * @brief Convert RuleStateUpdateDto object to JSON string
+     * @param ruleStateUpdate RuleStateUpdateDto object to convert
+     * @return JSON string representation of the RuleStateUpdateDto
+     */
+    virtual std::string ruleStateUpdateToJson(const RuleStateUpdateDto& ruleStateUpdate) = 0;
+
+    /**
+     * @brief Convert JSON string to RuleStateUpdateDto object
+     * @param jsonStr JSON string to parse
+     * @param ruleStateUpdate RuleStateUpdateDto object to populate
+     * @return true if parsing was successful, false otherwise
+     */
+    virtual bool ruleStateUpdateFromJson(const std::string& jsonStr, RuleStateUpdateDto& ruleStateUpdate) = 0;
 
     virtual ~IJsonConverter() = default;
 };

@@ -30,15 +30,6 @@ public:
     virtual bool forceSync() = 0;
     
     /**
-     * Send rule state update to server
-     * @param ruleUid The UID of the rule
-     * @param state The new state of the rule
-     * @param errorType Optional error type if rule failed
-     * @return true if sent successfully, false otherwise
-     */
-    virtual bool sendRuleStateUpdate(const std::string& ruleUid, RuleState state, const std::string& errorType = "") = 0;
-    
-    /**
      * Get the last sync status
      * @return true if last sync was successful, false otherwise
      */
