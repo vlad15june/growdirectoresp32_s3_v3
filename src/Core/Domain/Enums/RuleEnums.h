@@ -50,7 +50,8 @@ inline RuleDirection getRuleDirectionFromString(const char* directionStr) {
 enum class RuleMode {
     ON,
     OFF,
-    AUTO
+    AUTO,
+    RULE_MODE_WAITING_FOR_USER_CONFIRM
 };
 
 enum class RuleState {

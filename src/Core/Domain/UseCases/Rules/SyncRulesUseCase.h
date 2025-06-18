@@ -212,105 +212,7 @@ private:
         trackSyncAttempt(syncSuccess);
         return syncSuccess;
     }
-    
-    bool processMqttRuleUpdates(const std::vector<Rule>& mqttRules) {
-        if (mqttRules.empty()) {
-            return true;
-        }
         
-        log("SYNC_RULES: Processing %d MQTT rule updates", static_cast<int>(mqttRules.size()));
-        
-        // Get current rules from repository
-        std::vector<Rule> currentRules = _ruleRepository->getAll();
-        bool rulesUpdated = false;
-        
-        for (const auto& mqttRule : mqttRules) {
-            bool isNewRule = true;
-            
-            // Look for existing rule with same UID
-            for (auto& currentRule : currentRules) {
-                if (currentRule.uid == mqttRule.uid) {
-                    isNewRule = false;
-                    
-                    if (shouldUpdateRule(currentRule, mqttRule)) {
-                        Rule updatedRule = mergeRuleUpdates(currentRule, mqttRule);
-                        if (_ruleRepository->save(updatedRule)) {
-                            rulesUpdated = true;
-                            log("SYNC_RULES: Updated rule %s", mqttRule.uid.c_str());
-                            
-                            // Create RuleStateDto and send confirmation to server
-                            RuleStateDto ruleState;
-                            ruleState.uid = mqttRule.uid;
-                            ruleState.state = "Synchronized";
-                            ruleState.mode = mqttRule.mode == RuleMode::ON ? "On" : 
-                                             mqttRule.mode == RuleMode::OFF ? "Off" : "Auto";
-                            ruleState.modeReason = mqttRule.modeReason;
-                            
-                            sendRuleStateUpdate(mqttRule.uid, ruleState);
-                        }
-                    }
-                    break;
-                }
-            }
-            
-            // Add new rule
-            if (isNewRule) {
-                Rule newRule = mqttRule;
-                newRule.state = RuleState::SYNCHRONIZED;
-                
-                if (_ruleRepository->save(newRule)) {
-                    rulesUpdated = true;
-                    log("SYNC_RULES: Added new rule %s", mqttRule.uid.c_str());
-                    
-                    // Create RuleStateDto and send confirmation to server
-                    RuleStateDto ruleState;
-                    ruleState.uid = mqttRule.uid;
-                    ruleState.state = "Synchronized";
-                    ruleState.mode = mqttRule.mode == RuleMode::ON ? "On" : 
-                                     mqttRule.mode == RuleMode::OFF ? "Off" : "Auto";
-                    ruleState.modeReason = mqttRule.modeReason;
-                    
-                    sendRuleStateUpdate(mqttRule.uid, ruleState);
-                }
-            }
-        }
-        
-        return rulesUpdated;
-    }
-    
-    bool shouldUpdateRule(const Rule& existingRule, const Rule& newRule) {
-        // Update if versions differ
-        if (existingRule.version != newRule.version) {
-            return true;
-        }
-        
-        // Update if mode or state changed
-        if (existingRule.mode != newRule.mode || 
-            existingRule.state != newRule.state ||
-            existingRule.modeReason != newRule.modeReason) {
-            return true;
-        }
-        
-        return false;
-    }
-    
-    Rule mergeRuleUpdates(const Rule& existingRule, const Rule& newRule) {
-        Rule updatedRule = existingRule;
-        
-        // If versions are equal, only update mode-related fields
-        if (existingRule.version == newRule.version) {
-            updatedRule.mode = newRule.mode;
-            updatedRule.modeReason = newRule.modeReason;
-            updatedRule.state = newRule.state;
-        } else {
-            // If versions differ, replace entire rule but preserve local state if needed
-            updatedRule = newRule;
-            updatedRule.state = RuleState::SYNCHRONIZED;
-        }
-        
-        return updatedRule;
-    }
-    
     RuleStateUpdateDto generateRuleStateUpdate(const std::vector<Rule>& rules, const std::vector<RuleValidationResult>& validationResults) {
         RuleStateUpdateDto stateUpdate;
         
@@ -323,8 +225,15 @@ private:
             stateUpdate.timestamp = timestamp;
         }
         
-        stateUpdate.status = "Success";
-        // stateUpdate.accountUid would be set from configuration if available
+        bool hasErrors = false;
+        for (const auto& result : validationResults) {
+            if (!result.isValid) {
+                hasErrors = true;
+                break;
+            }
+        }
+        
+        stateUpdate.status = hasErrors ? "Error" : "Success";
         
         for (size_t i = 0; i < rules.size(); ++i) {
             const auto& rule = rules[i];
@@ -332,7 +241,7 @@ private:
             
             std::string ruleState = result.isValid ? "Synchronized" : "Error";
             std::string ruleMode = rule.mode == RuleMode::ON ? "On" : 
-                                  rule.mode == RuleMode::OFF ? "Off" : "Auto";
+                                  rule.mode == RuleMode::OFF ? "Off" : "WaitingForUserConfirm";
             
             stateUpdate.addRuleState(rule.uid, ruleState, ruleMode, rule.modeReason, 
                                    result.isValid ? "" : result.errorType);
@@ -358,7 +267,6 @@ private:
     }
     
     bool handleEmptyServerResponse() {
-        // When server returns empty, try to restore from local storage
         std::vector<Rule> localRules = _ruleRepository->getAll();
         
         if (!localRules.empty()) {
@@ -367,7 +275,7 @@ private:
         }
         
         log("SYNC_RULES: No rules available locally or from server");
-        return true; // Empty is valid state
+        return true;
     }
     
     bool handleSyncFailure() {
