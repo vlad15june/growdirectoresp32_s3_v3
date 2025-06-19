@@ -46,7 +46,7 @@ private:
         }
     }
     
-    bool evaluateScheduleRule(const Rule& rule);
+    RuleEvaluationResult evaluateScheduleRule(const Rule& rule, RuleEvaluationResult& result);
     bool evaluateSensorRule(const Rule& rule);
     bool evaluateStepRule(const Rule& rule);
     bool evaluateTimeConditions(const Rule& rule);
@@ -238,17 +238,9 @@ public:
         
         switch (rule.ruleType) {
             case RuleType::SCHEDULE:
-                conditionMet = evaluateScheduleRule(rule);
-                if (conditionMet) {
-                    resultState = DEVICE_STATE_ON;
-                    // Find active schedule and set duration
-                    for (const auto& scheduleItem : rule.schedule) {
-                        // Check if this schedule is currently active
-                        // Implementation depends on time handling
-                        result.ruleScheduleDuration = scheduleItem.duration;
-                        break; // Use first matching schedule
-                    }
-                }
+                result = evaluateScheduleRule(rule, result);
+                conditionMet = result.isRuleTurnOnDevice;
+                resultState = result.state;
                 break;
             case RuleType::SENSOR:
                 conditionMet = evaluateSensorRule(rule);
@@ -269,56 +261,7 @@ public:
                 log("EVALUATE_RULES: Unsupported rule type for rule %s", rule.uid.c_str());
                 result.state = DEVICE_STATE_OFF;
                 return result;
-        }
-        
-        // Handle delays
-        if (conditionMet && rule.delayOn > 0) {
-            auto delayKey = rule.uid + "_on";
-            if (_delayTimers.find(delayKey) == _delayTimers.end()) {
-                if (_arduinoAdapter) {
-                    _delayTimers[delayKey] = _arduinoAdapter->millis();
-                    result.delayStartTime = _arduinoAdapter->millis();
-                }
-                log("EVALUATE_RULES: Starting delay ON timer for rule %s", rule.uid.c_str());
-                result.state = DEVICE_STATE_DELAY_ON;
-                result.durationOn = rule.delayOn * 1000; // Convert to milliseconds
-                return result;
-            } else {
-                unsigned long elapsed = _arduinoAdapter ? (_arduinoAdapter->millis() - _delayTimers[delayKey]) : 0;
-                if (elapsed < (rule.delayOn * 1000)) {
-                    result.state = DEVICE_STATE_DELAY_ON;
-                    result.delayStartTime = _delayTimers[delayKey];
-                    result.durationOn = (rule.delayOn * 1000) - elapsed;
-                    return result;
-                }
-                _delayTimers.erase(delayKey);
-            }
-        }
-        
-        if (!conditionMet && rule.delayOff > 0) {
-            auto delayKey = rule.uid + "_off";
-            if (_delayTimers.find(delayKey) == _delayTimers.end()) {
-                if (_arduinoAdapter) {
-                    _delayTimers[delayKey] = _arduinoAdapter->millis();
-                    result.delayStartTime = _arduinoAdapter->millis();
-                }
-                log("EVALUATE_RULES: Starting delay OFF timer for rule %s", rule.uid.c_str());
-                result.state = DEVICE_STATE_DELAY_OFF;
-                result.timeOff = rule.delayOff * 1000; // Convert to milliseconds
-                return result;
-            } else {
-                unsigned long elapsed = _arduinoAdapter ? (_arduinoAdapter->millis() - _delayTimers[delayKey]) : 0;
-                if (elapsed < (rule.delayOff * 1000)) {
-                    result.state = DEVICE_STATE_DELAY_OFF;
-                    result.delayStartTime = _delayTimers[delayKey];
-                    result.timeOff = (rule.delayOff * 1000) - elapsed;
-                    return result;
-                }
-                _delayTimers.erase(delayKey);
-            }
-        }
-        
-        result.state = resultState;
+        }                
         
         // Store evaluation result
         _lastEvaluationResults[rule.uid] = result;
@@ -330,7 +273,7 @@ public:
             rule.uid.c_str(), conditionMet ? "MET" : "NOT MET", getDeviceStateName(result.state));
         return result;
     }
-    
+
     bool executeRuleActions(const Rule& rule) override {
         log("EVALUATE_RULES: Executing actions for rule %s", rule.uid.c_str());
         
@@ -367,6 +310,124 @@ public:
             return it->second;
         }
         return RuleEvaluationResult();
+    }
+
+private:
+    RuleEvaluationResult evaluateScheduleRule(const Rule& rule, RuleEvaluationResult& result) {
+        log("EVALUATE_RULES: Evaluating schedule rule %s", rule.uid.c_str());
+        
+        if (!_ntpTimeAdapter) {
+            log("EVALUATE_RULES: NTP time adapter not available for schedule rule");
+            result.state = DEVICE_STATE_OFF;
+            result.isRuleTurnOnDevice = false;
+            return result;
+        }
+        
+        // Get current time
+        time_t currentTime = _ntpTimeAdapter->getEpochTime();
+        struct tm timeinfo;
+        if (!gmtime_r(&currentTime, &timeinfo)) {
+            log("EVALUATE_RULES: Failed to get current time for schedule rule");
+            result.state = DEVICE_STATE_OFF;
+            result.isRuleTurnOnDevice = false;
+            return result;
+        }
+        
+        log("EVALUATE_RULES: LocalTime = %d:%d", timeinfo.tm_hour, timeinfo.tm_min);
+        
+        if (rule.schedule.empty()) {
+            log("EVALUATE_RULES: No schedule items in rule %s", rule.uid.c_str());
+            result.state = DEVICE_STATE_OFF;
+            result.isRuleTurnOnDevice = false;
+            return result;
+        }
+        
+        log("EVALUATE_RULES: rules[%s][schedule].size= %d", rule.uid.c_str(), static_cast<int>(rule.schedule.size()));
+        
+        bool isSchRuleOn = false;
+        uint32_t durationOn = 0;
+        struct tm whenRuleShouldStarted = {0};
+        int ruleScheduleDuration = 0;
+        char buffer[150];
+        buffer[0] = 0;
+        
+        for (size_t si = 0; si < rule.schedule.size(); ++si) {
+            const auto& scheduleItem = rule.schedule[si];
+            
+            log("EVALUATE_RULES: schedule[%d][duration]= %d", static_cast<int>(si), scheduleItem.duration);
+            
+            // Convert startAt time_t to tm structure
+            struct tm startAt = {0};
+            if (!gmtime_r(&scheduleItem.startAt, &startAt)) {
+                log("EVALUATE_RULES: Failed to parse startAt time for schedule item %d", static_cast<int>(si));
+                continue;
+            }
+            
+            log("EVALUATE_RULES: startAt = %d:%d", startAt.tm_hour, startAt.tm_min);
+            
+            uint32_t duration = scheduleItem.duration;
+            uint32_t totalSecondWhenStart = startAt.tm_hour * 3600 + startAt.tm_min * 60;
+            uint32_t totalSecondWhenEnd = startAt.tm_hour * 3600 + startAt.tm_min * 60 + duration;
+            uint32_t totalSecondNow = timeinfo.tm_hour * 3600 + timeinfo.tm_min * 60 + timeinfo.tm_sec;
+            
+            // Check if current time is within schedule today
+            if (totalSecondWhenStart <= totalSecondNow && totalSecondNow < totalSecondWhenEnd) {
+                isSchRuleOn = true;
+                durationOn = totalSecondWhenEnd - totalSecondNow;
+                ruleScheduleDuration = scheduleItem.duration;
+                whenRuleShouldStarted = timeinfo;
+                whenRuleShouldStarted.tm_hour = startAt.tm_hour;
+                whenRuleShouldStarted.tm_min = startAt.tm_min;
+                whenRuleShouldStarted.tm_sec = 0;
+                strftime(buffer, sizeof(buffer), "%Y-%m-%dT%H:%M:%SZ", &whenRuleShouldStarted);
+                log("EVALUATE_RULES: RULE_ON: whenRuleShouldStarted=%s", buffer);
+                break;
+            }
+            
+            // Check if current time is within schedule from yesterday (cross-midnight schedules)
+            struct tm yesterday = timeinfo;
+            yesterday.tm_mday--;
+            mktime(&yesterday);
+            uint32_t totalSecondNowNextDay = totalSecondNow + 24 * 3600;
+            if (totalSecondWhenStart <= totalSecondNowNextDay && totalSecondNowNextDay < totalSecondWhenEnd) {
+                isSchRuleOn = true;
+                durationOn = totalSecondWhenEnd - totalSecondNowNextDay;
+                ruleScheduleDuration = scheduleItem.duration;
+                whenRuleShouldStarted = yesterday;
+                whenRuleShouldStarted.tm_hour = startAt.tm_hour;
+                whenRuleShouldStarted.tm_min = startAt.tm_min;
+                whenRuleShouldStarted.tm_sec = 0;
+                strftime(buffer, sizeof(buffer), "%Y-%m-%dT%H:%M:%SZ", &whenRuleShouldStarted);
+                log("EVALUATE_RULES: RULE_ON: whenRuleShouldStarted=%s", buffer);
+                break;
+            }
+            
+            log("EVALUATE_RULES: RULE_ON: totalSecondWhenStart = %d, totalSecondWhenEnd = %d, totalSecondNow = %d, duration in rule = %d", 
+                totalSecondWhenStart, totalSecondWhenEnd, totalSecondNow, duration);
+        }
+        
+        if (isSchRuleOn) {
+            log("EVALUATE_RULES: RULE_ON: uid = %s, current time = %d:%d; rule time = %d:%d ; duration = %d", 
+                rule.uid.c_str(), timeinfo.tm_hour, timeinfo.tm_min, 
+                whenRuleShouldStarted.tm_hour, whenRuleShouldStarted.tm_min, durationOn);
+            
+            result.isRuleTurnOnDevice = true;
+            result.state = DEVICE_STATE_REQUEST_ON;
+            result.durationOn = durationOn * 1000; // Convert to milliseconds
+            if (_arduinoAdapter) {
+                result.timeOn = _arduinoAdapter->millis();
+                result.timeResquestOn = _arduinoAdapter->millis();
+            }
+            result.needToSwitchBack = true;
+            result.mixTime = 0;
+            result.ruleScheduleStartAt = buffer;
+            result.ruleScheduleDuration = ruleScheduleDuration;
+        } else {
+            result.isRuleTurnOnDevice = false;
+            result.state = DEVICE_STATE_OFF;
+        }
+        
+        return result;
     }
 };
 

@@ -16,6 +16,7 @@ public:
     uint32_t durationOn = 0;
     uint32_t timeOn = 0;
     uint32_t timeOff = 0;
+    uint32_t timeResquestOn = 0;  // Time when request was made
     
     // Sensor information
     std::string sensorUid;
