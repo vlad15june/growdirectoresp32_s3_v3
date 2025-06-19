@@ -6,6 +6,7 @@
 #include "Core/Domain/Interfaces/Mqtt/IMqttManager.h"
 #include "Application/Interfaces/IDiagnosticService.h"
 #include "Application/Services/Devices/IDeviceService.h"
+#include "Application/Services/Sensors/ISensorService.h"
 
 class LoopServiceConfigureDone : public LoopServiceBase {
 private:
@@ -13,6 +14,7 @@ private:
     IMqttManager* mqttManager;
     IDiagnosticService* diagnosticService;
     IDeviceService* deviceService;
+    ISensorService* sensorService;
     
     // Diagnostic timer variables
     unsigned long lastDiagnosticTime = 0;
@@ -24,7 +26,8 @@ public:
           onChangeLocalIpUseCase(nullptr),
           mqttManager(nullptr),
           diagnosticService(nullptr),
-          deviceService(nullptr) {}
+          deviceService(nullptr),
+          sensorService(nullptr) {}
     
     ~LoopServiceConfigureDone() override = default;
     
@@ -35,7 +38,9 @@ public:
             deviceService->loop();
         }
 
-        //TODO: add sensorService->loop();
+        if (sensorService) {
+            sensorService->loop();
+        }
         
         if (buttonUseCases) {
             if (buttonUseCases->isButtonHeldForDuration()) {
@@ -79,6 +84,10 @@ public:
     
     virtual void setDeviceService(IDeviceService* service) {
         this->deviceService = service;
+    }
+    
+    virtual void setSensorService(ISensorService* service) {
+        this->sensorService = service;
     }
 };
 

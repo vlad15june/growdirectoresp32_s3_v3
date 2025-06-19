@@ -1,8 +1,8 @@
 #ifndef I_SENSOR_READER_H
 #define I_SENSOR_READER_H
 
-#include "../../Data/Entities/Sensor/Sensor.h"
-#include "../../Data/Models/SensorReadResult.h"
+#include "Core/Domain/Data/Entities/Sensor/Sensor.h"
+#include "Core/Domain/Data/Models/SensorReadResult.h"
 
 class ISensorReader
 {
