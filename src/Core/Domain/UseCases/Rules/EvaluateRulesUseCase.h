@@ -9,7 +9,7 @@
 #include "Core/Domain/Interfaces/Adapters/IArduinoAdapter.h"
 #include "Infrastructure/Adapters/Time/INTPTimeAdapter.h"
 #include "Application/Services/Rules/RuleValidator.h"
-#include "Core/Domain/Enums/DeviceStateEnum.h"
+#include "Core/Domain/Data/Models/RuleEvaluationResult.h"
 #include <map>
 
 /**
@@ -26,8 +26,8 @@ private:
     RuleValidator _ruleValidator;
     
     // Rule state tracking
-    std::map<std::string, DeviceStateEnum> _ruleActiveStates;
-    std::map<std::string, DeviceStateEnum> _lastEvaluationResults;
+    std::map<std::string, RuleEvaluationResult> _ruleActiveStates;
+    std::map<std::string, RuleEvaluationResult> _lastEvaluationResults;
     std::map<std::string, unsigned long> _ruleLastEvaluated;
     std::map<std::string, unsigned long> _delayTimers;
     
@@ -51,7 +51,7 @@ private:
     bool evaluateStepRule(const Rule& rule);
     bool evaluateTimeConditions(const Rule& rule);
     double getSensorValue(const std::string& sensorUid);
-    bool executeDeviceAction(const std::string& deviceUid, DeviceStateEnum deviceState) {
+    bool executeDeviceAction(const std::string& deviceUid, const RuleEvaluationResult& evaluationResult) {
         if (!_deviceModel) {
             log("EVALUATE_RULES: Device model not available");
             return false;
@@ -63,12 +63,18 @@ private:
             return false;
         }
         
-        // Execute device action based on device state
-        log("EVALUATE_RULES: Executing device action - device %s, state %s", 
-            deviceUid.c_str(), getDeviceStateName(deviceState));
-            device->state = deviceState;
+        // Execute device action based on evaluation result
+        device->state = evaluationResult.state;
+        device->durationOn = evaluationResult.durationOn;
+        device->timeOn = evaluationResult.timeOn;
+        device->timeOff = evaluationResult.timeOff;
+        device->needToSwitchBack = evaluationResult.needToSwitchBack;
+        device->mixTime = evaluationResult.mixTime;
         
-        return true; // Placeholder - implement actual device control
+        log("EVALUATE_RULES: Executing device action - device %s, state %s", 
+            deviceUid.c_str(), getDeviceStateName(evaluationResult.state));
+        
+        return true;
     }
 
 public:
@@ -163,20 +169,68 @@ public:
         }
     }
     
-    DeviceStateEnum evaluateRule(const Rule& rule) override {
+    RuleEvaluationResult evaluateRule(const Rule& rule) override {
         log("EVALUATE_RULES: Evaluating rule %s", rule.uid.c_str());
+        
+        // Create result with basic rule information
+        RuleEvaluationResult result(rule.uid, rule.ruleType, rule.version);
         
         // Skip if rule is not active
         if (rule.mode != RuleMode::ON) {
             log("EVALUATE_RULES: Rule %s is not in ON mode", rule.uid.c_str());
-            return DEVICE_STATE_OFF;
+            result.state = DEVICE_STATE_OFF;
+            return result;
         }
         
         // Validate rule first
         auto validationResult = _ruleValidator.validateRuleExecution(rule);
         if (!validationResult.isValid) {
             log("EVALUATE_RULES: Rule %s validation failed: %s", rule.uid.c_str(), validationResult.errorMessage.c_str());
-            return DEVICE_STATE_OFF;
+            result.state = DEVICE_STATE_OFF;
+            result.ruleStopReason = validationResult.errorMessage;
+            return result;
+        }
+        
+        // Fill sensor information
+        if (!rule.sensorUid.empty()) {
+            result.sensorUid = rule.sensorUid;
+            result.sensorValue = getSensorValue(rule.sensorUid);
+            if (_arduinoAdapter) {
+                result.sensorValueTime = _arduinoAdapter->millis();
+            }
+        }
+        
+        // Get device to access current cycle for step rules
+        Device* device = nullptr;
+        if (_deviceModel) {
+            device = _deviceModel->getDeviceByUid(rule.deviceUid.c_str());
+        }
+        
+        // Fill rule-specific values
+        switch (rule.ruleType) {
+            case RuleType::STEP:
+                result.valueTarget = rule.valueTarget;
+                result.cyclesToSetPoint = rule.cyclesToSetPoint;
+                // Get current cycle from device if available
+                if (device && device->deviceType != DeviceTypeEnum::DEVICE_TYPE_ANALOG) {
+                    DeviceDigitalOut* digitalDevice = static_cast<DeviceDigitalOut*>(device);
+                    result.currentCycle = digitalDevice->currentCycle;
+                } else {
+                    result.currentCycle = 0;
+                }
+                result.sensorValueLow = rule.valueLow;
+                result.sensorValueHigh = rule.valueHigh;
+                break;
+            case RuleType::SENSOR:
+                result.valueLow = rule.valueLow;
+                result.valueHigh = rule.valueHigh;
+                result.sensorValueLow = rule.valueLow;
+                result.sensorValueHigh = rule.valueHigh;
+                result.timeToSetPoint = rule.timeToSetPoint;
+                break;
+            case RuleType::SCHEDULE:
+                result.ruleScheduleDuration = 0; // Will be set based on active schedule
+                break;
         }
         
         bool conditionMet = false;
@@ -185,30 +239,36 @@ public:
         switch (rule.ruleType) {
             case RuleType::SCHEDULE:
                 conditionMet = evaluateScheduleRule(rule);
-                resultState = conditionMet ? DEVICE_STATE_ON : DEVICE_STATE_OFF;
+                if (conditionMet) {
+                    resultState = DEVICE_STATE_ON;
+                    // Find active schedule and set duration
+                    for (const auto& scheduleItem : rule.schedule) {
+                        // Check if this schedule is currently active
+                        // Implementation depends on time handling
+                        result.ruleScheduleDuration = scheduleItem.duration;
+                        break; // Use first matching schedule
+                    }
+                }
                 break;
             case RuleType::SENSOR:
                 conditionMet = evaluateSensorRule(rule);
                 resultState = conditionMet ? DEVICE_STATE_ON : DEVICE_STATE_OFF;
+                result.isRuleTurnOnDevice = conditionMet;
                 break;
             case RuleType::STEP:
                 conditionMet = evaluateStepRule(rule);
                 if (conditionMet) {
-                    // For step rules, we might need different states based on the step phase
                     resultState = DEVICE_STATE_STEP_ON;
+                    result.isRuleTurnOnDevice = true;
                 } else {
-                    resultState = DEVICE_STATE_OFF;
+                    resultState = DEVICE_STATE_STEP_WAITING;
+                    result.isRuleTurnOnDevice = false;
                 }
                 break;
             default:
                 log("EVALUATE_RULES: Unsupported rule type for rule %s", rule.uid.c_str());
-                return DEVICE_STATE_OFF;
-        }
-        
-        // Store evaluation result
-        _lastEvaluationResults[rule.uid] = resultState;
-        if (_arduinoAdapter) {
-            _ruleLastEvaluated[rule.uid] = _arduinoAdapter->millis();
+                result.state = DEVICE_STATE_OFF;
+                return result;
         }
         
         // Handle delays
@@ -217,13 +277,19 @@ public:
             if (_delayTimers.find(delayKey) == _delayTimers.end()) {
                 if (_arduinoAdapter) {
                     _delayTimers[delayKey] = _arduinoAdapter->millis();
+                    result.delayStartTime = _arduinoAdapter->millis();
                 }
                 log("EVALUATE_RULES: Starting delay ON timer for rule %s", rule.uid.c_str());
-                return DEVICE_STATE_DELAY_ON;
+                result.state = DEVICE_STATE_DELAY_ON;
+                result.durationOn = rule.delayOn * 1000; // Convert to milliseconds
+                return result;
             } else {
                 unsigned long elapsed = _arduinoAdapter ? (_arduinoAdapter->millis() - _delayTimers[delayKey]) : 0;
-                if (elapsed < (rule.delayOn * 1000)) { // Convert seconds to milliseconds
-                    return DEVICE_STATE_DELAY_ON;
+                if (elapsed < (rule.delayOn * 1000)) {
+                    result.state = DEVICE_STATE_DELAY_ON;
+                    result.delayStartTime = _delayTimers[delayKey];
+                    result.durationOn = (rule.delayOn * 1000) - elapsed;
+                    return result;
                 }
                 _delayTimers.erase(delayKey);
             }
@@ -234,30 +300,44 @@ public:
             if (_delayTimers.find(delayKey) == _delayTimers.end()) {
                 if (_arduinoAdapter) {
                     _delayTimers[delayKey] = _arduinoAdapter->millis();
+                    result.delayStartTime = _arduinoAdapter->millis();
                 }
                 log("EVALUATE_RULES: Starting delay OFF timer for rule %s", rule.uid.c_str());
-                return DEVICE_STATE_DELAY_OFF;
+                result.state = DEVICE_STATE_DELAY_OFF;
+                result.timeOff = rule.delayOff * 1000; // Convert to milliseconds
+                return result;
             } else {
                 unsigned long elapsed = _arduinoAdapter ? (_arduinoAdapter->millis() - _delayTimers[delayKey]) : 0;
-                if (elapsed < (rule.delayOff * 1000)) { // Convert seconds to milliseconds
-                    return DEVICE_STATE_DELAY_OFF;
+                if (elapsed < (rule.delayOff * 1000)) {
+                    result.state = DEVICE_STATE_DELAY_OFF;
+                    result.delayStartTime = _delayTimers[delayKey];
+                    result.timeOff = (rule.delayOff * 1000) - elapsed;
+                    return result;
                 }
                 _delayTimers.erase(delayKey);
             }
         }
         
+        result.state = resultState;
+        
+        // Store evaluation result
+        _lastEvaluationResults[rule.uid] = result;
+        if (_arduinoAdapter) {
+            _ruleLastEvaluated[rule.uid] = _arduinoAdapter->millis();
+        }
+        
         log("EVALUATE_RULES: Rule %s condition %s, state: %s", 
-            rule.uid.c_str(), conditionMet ? "MET" : "NOT MET", getDeviceStateName(resultState));
-        return resultState;
+            rule.uid.c_str(), conditionMet ? "MET" : "NOT MET", getDeviceStateName(result.state));
+        return result;
     }
     
     bool executeRuleActions(const Rule& rule) override {
         log("EVALUATE_RULES: Executing actions for rule %s", rule.uid.c_str());
         
-        DeviceStateEnum currentState = _ruleActiveStates[rule.uid];
-        DeviceStateEnum shouldBeActive = evaluateRule(rule);
+        RuleEvaluationResult currentState = _ruleActiveStates[rule.uid];
+        RuleEvaluationResult shouldBeActive = evaluateRule(rule);
         
-        if (currentState == shouldBeActive) {
+        if (currentState.state == shouldBeActive.state) {
             return true; // No change needed
         }
         
@@ -265,7 +345,7 @@ public:
         if (success) {
             _ruleActiveStates[rule.uid] = shouldBeActive;
             log("EVALUATE_RULES: Rule %s action executed - device state %s", 
-                rule.uid.c_str(), getDeviceStateName(shouldBeActive));
+                rule.uid.c_str(), getDeviceStateName(shouldBeActive.state));
         } else {
             log("EVALUATE_RULES: Failed to execute action for rule %s", rule.uid.c_str());
         }
@@ -276,16 +356,17 @@ public:
     bool isRuleActive(const std::string& ruleUid) const override {
         auto it = _ruleActiveStates.find(ruleUid);
         if (it != _ruleActiveStates.end()) {
-            // Rule is considered "active" if it's in any state other than OFF or NONE
-            DeviceStateEnum state = it->second;
-            return state != DEVICE_STATE_OFF && state != DEVICE_STATE_NONE;
+            return it->second.isDeviceOn();
         }
         return false;
     }
     
-    DeviceStateEnum getLastEvaluationResult(const std::string& ruleUid) const override {
+    RuleEvaluationResult getLastEvaluationResult(const std::string& ruleUid) const override {
         auto it = _lastEvaluationResults.find(ruleUid);
-        return it != _lastEvaluationResults.end() ? it->second : DEVICE_STATE_OFF;
+        if (it != _lastEvaluationResults.end()) {
+            return it->second;
+        }
+        return RuleEvaluationResult();
     }
 };
 
