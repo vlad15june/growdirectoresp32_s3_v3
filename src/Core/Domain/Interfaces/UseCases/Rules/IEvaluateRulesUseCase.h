@@ -2,6 +2,7 @@
 #define IEVALUATE_RULES_USE_CASE_H
 
 #include "Core/Domain/Data/Entities/Rule.h"
+#include "Core/Domain/Enums/DeviceStateEnum.h"
 #include <vector>
 
 /**
@@ -26,9 +27,9 @@ public:
     /**
      * Evaluate a specific rule
      * @param rule The rule to evaluate
-     * @return true if rule condition is met, false otherwise
+     * @return DeviceStateEnum indicating the desired device state
      */
-    virtual bool evaluateRule(const Rule& rule) = 0;
+    virtual DeviceStateEnum evaluateRule(const Rule& rule) = 0;
     
     /**
      * Execute actions for a rule
@@ -47,9 +48,9 @@ public:
     /**
      * Get the last evaluation result for a rule
      * @param ruleUid The UID of the rule
-     * @return true if last evaluation was positive, false otherwise
+     * @return DeviceStateEnum of the last evaluation result
      */
-    virtual bool getLastEvaluationResult(const std::string& ruleUid) const = 0;
+    virtual DeviceStateEnum getLastEvaluationResult(const std::string& ruleUid) const = 0;
 };
 
 #endif // IEVALUATE_RULES_USE_CASE_H
