@@ -21,6 +21,6 @@ public:
     SensorDto() : isActive(true), isError(false), currentValue(0.0f), lastReadTime(0) {}
     
     // Helper methods
-    bool isModbusSensor() const { return protocol == "RS485"; }
+    bool isModbusSensor() const { return protocol == "ModBus"; }
     bool isI2CSensor() const { return protocol == "I2C"; }
 };

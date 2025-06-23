@@ -56,8 +56,10 @@
 #include "Infrastructure/Adapters/SPIFFS/SpiffsAdapter.h"
 #include "Infrastructure/Adapters/SPIFFS/SpiffsRuleDao.h"
 #include "Infrastructure/Adapters/SPIFFS/SpiffsSensorDao.h"
+#include "Infrastructure/Adapters/SPIFFS/SpiffsSensorTypeDao.h"
 #include "Infrastructure/Repositories/RuleRepository.h"
 #include "Infrastructure/Repositories/SensorRepository.h"
+#include "Infrastructure/Repositories/SensorTypeRepository.h"
 #include "Application/Services/Devices/IDeviceService.h"
 #include "Application/Services/Devices/DeviceService.h"
 #include "Application/Services/CommandService.h"
@@ -142,6 +144,9 @@ RuleRepository ruleRepository(&ruleDao);
 
 SpiffsSensorDao sensorDao(&spiffsAdapter, &jsonConverter);
 SensorRepository sensorRepository(&sensorDao);
+
+SpiffsSensorTypeDao sensorTypeDao(&spiffsAdapter, &jsonConverter);
+SensorTypeRepository sensorTypeRepository(&sensorTypeDao);
 
 SensorCommandUseCase sensorCommandUseCase(
     &moduleConfig,

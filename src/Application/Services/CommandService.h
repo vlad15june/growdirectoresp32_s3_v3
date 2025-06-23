@@ -446,7 +446,7 @@ private:
     void parseSensorOptions(const std::string& optionsJson, SensorEntity& sensor)
     {
         sensor.protocol = extractJsonValue(optionsJson, "protocol");
-        if (sensor.protocol == "RS485")
+        if (sensor.protocol == "ModBus")
         {
             sensor.modbusDeviceAddress = extractJsonIntValue(optionsJson, "modbusDeviceAddress");
             sensor.baudRate = extractJsonIntValue(optionsJson, "baudRate");

@@ -100,7 +100,7 @@ public:
     }
 
     std::vector<SensorEntity> getModbusSensors() override {
-        return getSensorsByProtocol("RS485");
+        return getSensorsByProtocol("ModBus");
     }
 
     std::vector<SensorEntity> getI2CSensors() override {

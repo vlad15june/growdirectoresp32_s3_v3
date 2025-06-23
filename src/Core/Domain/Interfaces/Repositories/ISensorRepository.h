@@ -12,7 +12,7 @@ public:
 
     /**
      * @brief Get sensors by protocol type
-     * @param protocol Protocol type (e.g., "RS485", "I2C")
+     * @param protocol Protocol type (e.g., "ModBus", "I2C")
      * @return Vector of sensors using the specified protocol
      */
     virtual std::vector<SensorEntity> getSensorsByProtocol(const char* protocol) = 0;

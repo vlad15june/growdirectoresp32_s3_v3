@@ -39,7 +39,7 @@ public:
         {
             return readAnalogSensor(sensor, outValue);
         }
-        else if (sensor.protocol == "RS485" || sensor.protocol == "ModBus")
+        else if (sensor.protocol == "ModBus")
         {
             return readModbusSensor(sensor, outValue);
         }
@@ -58,7 +58,7 @@ public:
         {
             return scanAnalogSensor(sensor);
         }
-        else if (sensor.protocol == "RS485" || sensor.protocol == "ModBus")
+        else if (sensor.protocol == "ModBus")
         {
             return scanModbusSensor(sensor);
         }
@@ -91,7 +91,6 @@ public:
                 return SensorReadResult::createSuccess(value, readTime);
             }
             
-            // Determine error type based on scan result
             if (!scanSensor(sensor))
             {
                 return SensorReadResult::createError("Sensor is offline", SensorReadStatus::SENSOR_OFFLINE);
@@ -108,19 +107,26 @@ public:
             return false;
         }
 
-        // Read each channel
-        for (const auto& channel : sensor.channels)
+        if (sensor.protocol == "ModBus")
         {
-            float value;
-            if (sensor.protocol == "Analog")
+            if (!_modbusReader || sensor.modbusDeviceAddress == 0)
             {
-                if (_analogReader && channel.pin >= 0)
+                return false;
+            }
+
+            for (const auto& registerConfig : sensor.modbusRegisterConfigs)
+            {
+                float value;
+                if (_modbusReader->readRegister(sensor.modbusDeviceAddress, registerConfig, value))
                 {
-                    value = _analogReader->readCalibratedValue(channel.pin, channel.multiplier, channel.offset);
-                    channelValues[channel.name] = value;
+                    channelValues[registerConfig.channelName] = value;
+                    log("SensorReader: Read modbus channel %s, value: %.2f", registerConfig.channelName.c_str(), value);
+                }
+                else
+                {
+                    log("SensorReader: Failed to read modbus channel %s", registerConfig.channelName.c_str());
                 }
             }
-            // Add other protocols as needed
         }
 
         return !channelValues.empty();
@@ -129,15 +135,23 @@ public:
 private:
     bool readAnalogSensor(const SensorEntity& sensor, float& outValue)
     {
-        if (!_analogReader || sensor.pin < 0)
+        if (!_analogReader)
         {
             return false;
         }
 
         try
         {
-            outValue = _analogReader->readCalibratedValue(sensor.pin, sensor.multiplier, sensor.offset);
-            log("SensorReader: Read analog sensor %s, value: %.2f", sensor.uid.c_str(), outValue);
+            // For analog sensors, extract pin from UID or use configuration
+            // Assuming UID format: <module_uid>.<pin>
+            int pinNumber = extractPinFromUid(sensor.uid);
+            if (pinNumber < 0) {
+                log("SensorReader: Could not extract pin from UID %s", sensor.uid.c_str());
+                return false;
+            }
+            
+            outValue = _analogReader->readCalibratedValue(pinNumber, sensor.multiplier, sensor.offset);
+            log("SensorReader: Read analog sensor %s, pin %d, value: %.2f", sensor.uid.c_str(), pinNumber, outValue);
             return true;
         }
         catch (...)
@@ -147,19 +161,32 @@ private:
         }
     }
 
-    bool readModbusSensor(const SensorEntity& sensor, float& outValue)
+    bool readModbusSensor(const SensorEntity& sensor, float& outValue, int channelIndex = 0)
     {
-        if (!_modbusReader || sensor.modbusConfig.deviceAddress == 0)
+        if (!_modbusReader || sensor.modbusDeviceAddress == 0)
         {
             return false;
         }
 
+        if (sensor.modbusRegisterConfigs.empty())
+        {
+            log("SensorReader: No modbus register configs for sensor %s", sensor.uid.c_str());
+            return false;
+        }
+
+        if (channelIndex >= sensor.modbusRegisterConfigs.size())
+        {
+            channelIndex = 0;
+        }
+
         try
         {
-            bool success = _modbusReader->readRegister(sensor.modbusConfig.deviceAddress, sensor.modbusConfig, outValue);
+            const ModbusRegisterConfig& config = sensor.modbusRegisterConfigs[channelIndex];
+            bool success = _modbusReader->readRegister(sensor.modbusDeviceAddress, config, outValue);
             if (success)
             {
-                log("SensorReader: Read modbus sensor %s, value: %.2f", sensor.uid.c_str(), outValue);
+                log("SensorReader: Read modbus sensor %s, channel %d, value: %.2f", 
+                    sensor.uid.c_str(), channelIndex, outValue);
             }
             return success;
         }
@@ -172,38 +199,45 @@ private:
 
     bool readI2CSensor(const SensorEntity& sensor, float& outValue)
     {
-        // Placeholder for I2C sensor reading
         log("SensorReader: I2C sensor reading not yet implemented for %s", sensor.uid.c_str());
         return false;
     }
 
     bool scanAnalogSensor(const SensorEntity& sensor)
     {
-        if (!_analogReader || sensor.pin < 0)
+        if (!_analogReader)
         {
             return false;
         }
 
-        // For analog sensors, check if pin gives reasonable values
-        int rawValue = _analogReader->readRawValue(sensor.pin);
-        return rawValue >= 0 && rawValue <= 4095; // ESP32 ADC range
+        int pinNumber = extractPinFromUid(sensor.uid);
+        if (pinNumber < 0) {
+            return false;
+        }
+
+        int rawValue = _analogReader->readRawValue(pinNumber);
+        return rawValue >= 0 && rawValue <= 4095;
     }
 
     bool scanModbusSensor(const SensorEntity& sensor)
     {
-        if (!_modbusReader || sensor.modbusConfig.deviceAddress == 0)
+        if (!_modbusReader || sensor.modbusDeviceAddress == 0)
         {
             return false;
         }
 
-        // Try to read a register to check if sensor responds
+        if (sensor.modbusRegisterConfigs.empty())
+        {
+            return false;
+        }
+
         float dummyValue;
-        return _modbusReader->readRegister(sensor.modbusConfig.deviceAddress, sensor.modbusConfig, dummyValue);
+        const ModbusRegisterConfig& config = sensor.modbusRegisterConfigs[0];
+        return _modbusReader->readRegister(sensor.modbusDeviceAddress, config, dummyValue);
     }
 
     bool scanI2CSensor(const SensorEntity& sensor)
     {
-        // Placeholder for I2C sensor scanning
         return false;
     }
 
@@ -219,6 +253,21 @@ private:
 
             _logger->println(DebugFeatures::SETUP_SENSOR_DEBUG, buffer);
         }
+    }
+
+    int extractPinFromUid(const std::string& uid) const
+    {
+        // Extract pin number from UID format: <module_uid>.<pin>
+        size_t lastDot = uid.find_last_of('.');
+        if (lastDot != std::string::npos && lastDot < uid.length() - 1) {
+            try {
+                std::string pinStr = uid.substr(lastDot + 1);
+                return std::stoi(pinStr);
+            } catch (...) {
+                return -1;
+            }
+        }
+        return -1;
     }
 };
 

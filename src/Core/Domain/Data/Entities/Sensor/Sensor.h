@@ -4,6 +4,7 @@
 #include <vector>
 #include "ModbusRegisterConfig.h"
 #include "I2CRegisterConfig.h"
+#include "SensorType.h"
 
 /**
  * @brief Base sensor entity class
@@ -29,11 +30,17 @@ public:
     float currentValue;
     uint32_t lastReadTime;
     std::vector<std::pair<std::string, float>> channelValues;
+    
+    // Analog sensor calibration values
+    float multiplier = 1.0f;
+    float offset = 0.0f;
+
+    int sensorTypeId = 0;
 
     SensorEntity() : isActive(true), isError(false), modbusDeviceAddress(1), baudRate(9600), 
-               currentValue(0.0f), lastReadTime(0) {}
+               currentValue(0.0f), lastReadTime(0), multiplier(1.0f), offset(0.0f), sensorTypeId(0) {}
 
-    bool isModbusSensor() const { return protocol == "RS485"; }
+    bool isModbusSensor() const { return protocol == "ModBus"; }
     bool isI2CSensor() const { return protocol == "I2C"; }
     bool isAtlasSensor() const { return model.find("atlas_") == 0; }
     bool isMultiChannel() const { return !channelValues.empty(); }

@@ -7,6 +7,7 @@
 #include "Application/DTOs/DiagnosticDto.h"
 #include "Core/Domain/Data/Entities/Rule.h"
 #include "Core/Domain/Data/Entities/Sensor/Sensor.h"
+#include "Core/Domain/Data/Entities/Sensor/SensorType.h"
 #include "Application/DTOs/UpdateDto.h"
 #include "Application/DTOs/CommandDto.h"
 #include "Application/DTOs/CommandResultDto.h"
@@ -36,6 +37,10 @@ public:
     virtual std::string sensorToJson(const SensorEntity &sensor) = 0;
     virtual bool sensorsFromJson(const std::string &jsonStr, std::vector<SensorEntity> &sensors) = 0;
     virtual std::string sensorsToJson(const std::vector<SensorEntity> &sensors) = 0;
+    virtual bool sensorTypeFromJson(const std::string &jsonStr, SensorType &sensorType) = 0;
+    virtual std::string sensorTypeToJson(const SensorType &sensorType) = 0;
+    virtual bool sensorTypesFromJson(const std::string &jsonStr, std::vector<SensorType> &sensorTypes) = 0;
+    virtual std::string sensorTypesToJson(const std::vector<SensorType> &sensorTypes) = 0;
     virtual bool modbusRegisterConfigFromJson(const std::string &jsonStr, ModbusRegisterConfig &config) = 0;
     virtual std::string modbusRegisterConfigToJson(const ModbusRegisterConfig &config) = 0;
     virtual bool modbusRegisterConfigsFromJson(const std::string &jsonStr, std::vector<ModbusRegisterConfig> &configs) = 0;

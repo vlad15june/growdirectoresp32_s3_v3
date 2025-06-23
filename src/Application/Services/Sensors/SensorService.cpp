@@ -184,17 +184,17 @@ std::string SensorService::generateSensorUid(const SensorEntity& sensor, const s
     std::string moduleUid = moduleConfig->getModuleUid();
     std::string baseUid = sensor.uid;
     
-    if (sensor.protocol == "ANALOG") {
-        return baseUid;
+    if (sensor.protocol == "Analog") {
+        return baseUid + (channelName.empty() ? "" : "." + channelName);
     }
     else if (sensor.protocol == "I2C") {
         std::string sensorNumber = "1";
-        return baseUid + "." + sensorNumber;
+        return baseUid + "." + sensorNumber + (channelName.empty() ? "" : "." + channelName);
     }
-    else if (sensor.protocol == "RS485") {
+    else if (sensor.protocol == "ModBus") {
         std::string sensorAddress = std::to_string(sensor.modbusDeviceAddress);
         std::string sensorNumber = "1";
-        return baseUid + "." + sensorAddress + "." + sensorNumber;
+        return baseUid + "." + sensorAddress + "." + sensorNumber + (channelName.empty() ? "" : "." + channelName);
     }
     
     return baseUid;

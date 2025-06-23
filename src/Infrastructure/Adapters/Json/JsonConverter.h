@@ -1318,6 +1318,97 @@ private:
         }
         return "";
     }
+
+    // SensorType conversion methods
+    bool sensorTypeFromJson(const std::string &jsonStr, SensorType &sensorType) override
+    {
+        sensorType.id = extractIntValue(jsonStr, "id");
+        sensorType.name = extractValue(jsonStr, "name");
+        sensorType.displayName = extractValue(jsonStr, "displayName");
+        sensorType.isAnalog = extractBoolValue(jsonStr, "isAnalog");
+        sensorType.canCalibrate = extractBoolValue(jsonStr, "canCalibrate");
+        sensorType.validCalibrationPeriodDays = extractIntValue(jsonStr, "validCalibrationPeriodDays");
+        sensorType.calibrationTimeInSeconds = extractIntValue(jsonStr, "calibrationTimeInSeconds");
+        sensorType.minValue = static_cast<float>(extractDoubleValue(jsonStr, "minValue"));
+        sensorType.maxValue = static_cast<float>(extractDoubleValue(jsonStr, "maxValue"));
+        sensorType.limitMinValue = static_cast<float>(extractDoubleValue(jsonStr, "limitMinValue"));
+        sensorType.limitMaxValue = static_cast<float>(extractDoubleValue(jsonStr, "limitMaxValue"));
+        sensorType.unit = extractValue(jsonStr, "unit");
+        sensorType.step = static_cast<float>(extractDoubleValue(jsonStr, "step"));
+        sensorType.precisionPercent = static_cast<float>(extractDoubleValue(jsonStr, "precisionPercent"));
+        sensorType.precisionValue = static_cast<float>(extractDoubleValue(jsonStr, "precisionValue"));
+        
+        std::string protocolStr = extractValue(jsonStr, "protocol");
+        sensorType.setProtocolFromString(protocolStr);
+        
+        sensorType.i2cAddress = extractValue(jsonStr, "i2cAddress");
+        sensorType.chipType = extractValue(jsonStr, "chipType");
+        sensorType.modbusDeviceAddress = extractIntValue(jsonStr, "modbusDeviceAddress");
+        sensorType.baudRate = extractIntValue(jsonStr, "baudRate");
+
+        // Parse arrays (simplified implementation)
+        sensorType.i2cRegisterConfig.clear();
+        sensorType.modbusRegisterConfig.clear();
+
+        return !sensorType.name.empty();
+    }
+
+    std::string sensorTypeToJson(const SensorType &sensorType) override
+    {
+        std::ostringstream oss;
+        oss << "{";
+        oss << "\"id\":" << sensorType.id;
+        oss << ",\"name\":\"" << sensorType.name << "\"";
+        oss << ",\"displayName\":\"" << sensorType.displayName << "\"";
+        oss << ",\"isAnalog\":" << (sensorType.isAnalog ? "true" : "false");
+        oss << ",\"canCalibrate\":" << (sensorType.canCalibrate ? "true" : "false");
+        oss << ",\"validCalibrationPeriodDays\":" << sensorType.validCalibrationPeriodDays;
+        oss << ",\"calibrationTimeInSeconds\":" << sensorType.calibrationTimeInSeconds;
+        oss << ",\"minValue\":" << sensorType.minValue;
+        oss << ",\"maxValue\":" << sensorType.maxValue;
+        oss << ",\"limitMinValue\":" << sensorType.limitMinValue;
+        oss << ",\"limitMaxValue\":" << sensorType.limitMaxValue;
+        oss << ",\"unit\":\"" << sensorType.unit << "\"";
+        oss << ",\"step\":" << sensorType.step;
+        oss << ",\"precisionPercent\":" << sensorType.precisionPercent;
+        oss << ",\"precisionValue\":" << sensorType.precisionValue;
+        oss << ",\"protocol\":\"" << sensorType.getProtocolString() << "\"";
+        oss << ",\"i2cAddress\":\"" << sensorType.i2cAddress << "\"";
+        oss << ",\"chipType\":\"" << sensorType.chipType << "\"";
+        oss << ",\"modbusDeviceAddress\":" << sensorType.modbusDeviceAddress;
+        oss << ",\"baudRate\":" << sensorType.baudRate;
+        oss << "}";
+        return oss.str();
+    }
+
+    bool sensorTypesFromJson(const std::string &jsonStr, std::vector<SensorType> &sensorTypes) override
+    {
+        sensorTypes.clear();
+        auto typeObjs = splitObjects(jsonStr);
+        for (const auto &typeStr : typeObjs)
+        {
+            SensorType sensorType;
+            if (sensorTypeFromJson(typeStr, sensorType))
+            {
+                sensorTypes.push_back(sensorType);
+            }
+        }
+        return !sensorTypes.empty();
+    }
+
+    std::string sensorTypesToJson(const std::vector<SensorType> &sensorTypes) override
+    {
+        std::ostringstream oss;
+        oss << "[";
+        for (size_t i = 0; i < sensorTypes.size(); ++i)
+        {
+            oss << sensorTypeToJson(sensorTypes[i]);
+            if (i + 1 < sensorTypes.size())
+                oss << ",";
+        }
+        oss << "]";
+        return oss.str();
+    }
 };
 
 #endif // JSON_CONVERTER_H
