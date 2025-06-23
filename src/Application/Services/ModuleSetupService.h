@@ -20,6 +20,7 @@
 #include "Core/Domain/Enums/BootTypeEnum.h"
 #include "Core/Domain/Enums/FileSystemStatusEnum.h"
 #include "Application/Services/Devices/IDeviceService.h"
+#include "Core/Domain/Interfaces/Repositories/ISensorRepository.h"
 
 class IModuleSetupService
 {
@@ -48,6 +49,7 @@ private:
     IMqttManager *mqttManager;
     ModuleStructure *moduleStructure;
     IDeviceService *deviceService;
+    ISensorRepository *sensorRepository;
 
     void log(const char *format, ...);
 
@@ -78,6 +80,9 @@ private:
     void fillDeviceModuleStructure(Node &node);
     void fillAnalogInputDeviceStructure(Node &node);
 
+    // Helper method for sensor UID generation
+    std::string generateSensorUid(const SensorEntity& sensor, const std::string& channelName = "") const;
+
 public:
     friend class ModuleSetupServiceTestHelper;
     friend class FillModuleStructureTestHelper;
@@ -95,7 +100,8 @@ public:
         ILoopServiceFactory *loopServiceFactory = nullptr,
         IMqttManager *mqttManager = nullptr,
         ModuleStructure *moduleStructure = nullptr,
-        IDeviceService *deviceService = nullptr);
+        IDeviceService *deviceService = nullptr,
+        ISensorRepository *sensorRepository = nullptr);
 
     void setupModule() override;
     std::unique_ptr<ILoopService> getLoopService() override;
@@ -116,7 +122,8 @@ inline ModuleSetupService::ModuleSetupService(
     ILoopServiceFactory *loopServiceFactory,
     IMqttManager *mqttManager,
     ModuleStructure *moduleStructure,
-    IDeviceService *deviceService) : logger(logger),
+    IDeviceService *deviceService,
+    ISensorRepository *sensorRepository) : logger(logger),
                                     debugSystem(debugSystem),
                                     moduleConfig(moduleConfig),
                                     ledAdapter(ledAdapter),
@@ -128,7 +135,8 @@ inline ModuleSetupService::ModuleSetupService(
                                     loopServiceFactory(loopServiceFactory),
                                     mqttManager(mqttManager),
                                     moduleStructure(moduleStructure),
-                                    deviceService(deviceService)
+                                    deviceService(deviceService),
+                                    sensorRepository(sensorRepository)
 {
 }
 
@@ -553,31 +561,88 @@ inline void ModuleSetupService::fillSensorModuleStructure(Node &node)
     log("SETUP: Preparing sensor module structure");
     node.subtype = "sensor";
 
-    std::string nodeUid = node.uid;
-    int sensorPinCount = moduleConfig->getSensorPinCount();
+    if (!sensorRepository) {
+        log("SETUP: Sensor repository not available, creating placeholder sensors");
+        
+        // Fallback to original logic if repository is not available
+        std::string nodeUid = node.uid;
+        int sensorPinCount = moduleConfig->getSensorPinCount();
 
-    for (int group = 0; group < sensorPinCount; group++)
-    {
-        //TODO: only for sensor for hydro without additional sensors
-        //TODO: read connecter sensors
-        //TODO: use setting to understand if sensor is connected, if yes use repository to get sensors with all properties
-        //TODO: try connect to sensor and figureout does sensor online or not
-        for (int i = 0; i < 3; i++)
+        for (int group = 0; group < sensorPinCount; group++)
         {
+            for (int i = 0; i < 3; i++)
+            {
+                Sensor sensor;
+                sensor.pin = sensorPinCount - group;
+                sensor.type = "none";
+
+                char sensorId[20];
+                sprintf(sensorId, ".%02d.%02d", group, i + 1);
+                sensor.uid = nodeUid + sensorId;
+
+                node.sensors.push_back(sensor);
+
+                log("SETUP: Added placeholder sensor group %d index %d, type: %s, pin: %d, uid: %s",
+                    group, i, sensor.type.c_str(), sensor.pin, sensor.uid.c_str());
+            }
+        }
+        return;
+    }
+
+    // Read actual sensors from repository
+    auto sensorEntities = sensorRepository->getAll();
+    log("SETUP: Found %zu sensors in repository", sensorEntities.size());
+
+    for (const auto& sensorEntity : sensorEntities) {
+        // Extract pin based on sensor protocol
+        int sensorPin = 1; // Default fallback
+        
+        if (sensorEntity.protocol == "Analog") {
+            // For analog sensors, extract pin from UID (format: moduleUid.pin)
+            size_t lastDot = sensorEntity.uid.find_last_of('.');
+            if (lastDot != std::string::npos) {
+                std::string pinStr = sensorEntity.uid.substr(lastDot + 1);
+                sensorPin = std::atoi(pinStr.c_str());
+            }
+        } else if (sensorEntity.protocol == "I2C") {
+            // For I2C sensors, pin is typically derived from I2C address or configuration
+            if (!sensorEntity.i2cAddress.empty()) {
+                // Convert hex address to pin number or use a mapping
+                sensorPin = std::strtol(sensorEntity.i2cAddress.c_str(), nullptr, 16) & 0xFF;
+            }
+        } else if (sensorEntity.protocol == "ModBus") {
+            // For ModBus sensors, use the device address as pin reference
+            sensorPin = sensorEntity.modbusDeviceAddress;
+        }
+        
+        if (sensorEntity.isMultiChannel()) {
+            // Handle multi-channel sensors
+            for (const auto& channelValue : sensorEntity.channelValues) {
+                Sensor sensor;
+                sensor.uid = generateSensorUid(sensorEntity, channelValue.first);
+                sensor.type = sensorEntity.sensorType;
+                sensor.pin = sensorPin;
+                
+                node.sensors.push_back(sensor);
+                
+                log("SETUP: Added multi-channel sensor %s, type: %s, channel: %s, pin: %d",
+                    sensor.uid.c_str(), sensor.type.c_str(), channelValue.first.c_str(), sensor.pin);
+            }
+        } else {
+            // Handle single-channel sensors
             Sensor sensor;
-            sensor.pin = sensorPinCount - group;
-            sensor.type = "none";
-
-            char sensorId[20];
-            sprintf(sensorId, ".%02d.%02d", group, i + 1);
-            sensor.uid = nodeUid + sensorId;
-
+            sensor.uid = generateSensorUid(sensorEntity);
+            sensor.type = sensorEntity.sensorType;
+            sensor.pin = sensorPin;
+            
             node.sensors.push_back(sensor);
-
-            log("SETUP: Added sensor group %d index %d, type: %s, pin: %d, uid: %s",
-                group, i, sensor.type.c_str(), sensor.pin, sensor.uid.c_str());
+            
+            log("SETUP: Added sensor %s, type: %s, protocol: %s, pin: %d",
+                sensor.uid.c_str(), sensor.type.c_str(), sensorEntity.protocol.c_str(), sensor.pin);
         }
     }
+
+    log("SETUP: Sensor module structure filled with %zu sensors", node.sensors.size());
 }
 
 inline void ModuleSetupService::fillHydroModuleStructure(Node &node)
@@ -812,6 +877,26 @@ inline std::unique_ptr<ILoopService> ModuleSetupService::getLoopService()
         log("SETUP: Error creating loop service: %s", e.what());
         return loopServiceFactory->createLoopService(ModuleModeEnum::USER_CAN_CONFIGURE);
     }
+}
+
+inline std::string ModuleSetupService::generateSensorUid(const SensorEntity& sensor, const std::string& channelName) const {
+    std::string moduleUid = moduleConfig->getModuleUid();
+    std::string baseUid = sensor.uid;
+    
+    if (sensor.protocol == "Analog") {
+        return baseUid + (channelName.empty() ? "" : "." + channelName);
+    }
+    else if (sensor.protocol == "I2C") {
+        std::string sensorNumber = "1";
+        return baseUid + "." + sensorNumber + (channelName.empty() ? "" : "." + channelName);
+    }
+    else if (sensor.protocol == "ModBus") {
+        std::string sensorAddress = std::to_string(sensor.modbusDeviceAddress);
+        std::string sensorNumber = "1";
+        return baseUid + "." + sensorAddress + "." + sensorNumber + (channelName.empty() ? "" : "." + channelName);
+    }
+    
+    return baseUid;
 }
 
 #endif // MODULE_SETUP_SERVICE_H
