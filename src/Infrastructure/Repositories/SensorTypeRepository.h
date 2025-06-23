@@ -1,13 +1,12 @@
 #pragma once
 
-#include "Repository.h"
 #include "Core/Domain/Interfaces/Repositories/ISensorTypeRepository.h"
 #include "Infrastructure/Adapters/SPIFFS/ISpiffsSensorTypeDao.h"
 #include <string>
 #include <vector>
 #include <algorithm>
 
-class SensorTypeRepository : public Repository<SensorType>, public ISensorTypeRepository {
+class SensorTypeRepository : public ISensorTypeRepository {
 private:
     ISpiffsSensorTypeDao* sensorTypeDao;
 
@@ -15,55 +14,62 @@ public:
     ~SensorTypeRepository() noexcept override = default;
 
     SensorTypeRepository(ISpiffsSensorTypeDao* dao) 
-        : Repository<SensorType>(dao), sensorTypeDao(dao) {
+        : sensorTypeDao(dao) {
         if (!dao) {
             throw std::invalid_argument("DAO cannot be null");
         }
     }
 
-    Utils::Optional<SensorType> get(const char* uid) override {
-        return Repository<SensorType>::get(uid);
+    Utils::Optional<SensorType> get(const char* id) override {
+        if (!id) return Utils::Optional<SensorType>();
+        
+        SensorType sensorType;
+        if (sensorTypeDao->getById(id, sensorType)) {
+            return Utils::Optional<SensorType>(sensorType);
+        }
+        return Utils::Optional<SensorType>();
     }
 
     std::vector<SensorType> getAll() override {
-        return Repository<SensorType>::getAll();
+        std::vector<SensorType> sensorTypes;
+        sensorTypeDao->getAll(sensorTypes);
+        return sensorTypes;
     }
 
     bool save(const SensorType& entity) override {
-        return Repository<SensorType>::save(entity);
+        return sensorTypeDao->save(entity, std::to_string(entity.id));
     }
 
     int saveAll(const std::vector<SensorType>& entities) override {
-        return Repository<SensorType>::saveAll(entities);
+        return sensorTypeDao->saveAll(entities) ? entities.size() : 0;
     }
 
-    bool remove(const char* uid) override {
-        return Repository<SensorType>::remove(uid);
+    bool remove(const char* id) override {
+        if (!id) return false;
+        return sensorTypeDao->remove(id);
     }
 
     int removeAll() override {
-        return Repository<SensorType>::removeAll();
+        std::vector<SensorType> empty;
+        return sensorTypeDao->saveAll(empty) ? 0 : -1;
     }
 
     int count() override {
-        return Repository<SensorType>::count();
+        std::vector<SensorType> sensorTypes = getAll();
+        return sensorTypes.size();
     }
 
-    bool exists(const char* uid) override {
-        return Repository<SensorType>::exists(uid);
+    bool exists(const char* id) override {
+        if (!id) return false;
+        
+        SensorType sensorType;
+        return sensorTypeDao->getById(id, sensorType);
     }
 
     std::vector<SensorType> getSensorTypesByProtocol(SensorProtocol protocol) override {
-        std::vector<SensorType> allTypes = Repository<SensorType>::getAll();
-        std::vector<SensorType> filteredTypes;
-
-        for (const auto& type : allTypes) {
-            if (type.protocol == protocol) {
-                filteredTypes.push_back(type);
-            }
-        }
-
-        return filteredTypes;
+        std::vector<SensorType> sensorTypes;
+        sensorTypeDao->getSensorTypesByProtocol(protocol, sensorTypes);
+        return sensorTypes;
     }
 
     std::vector<SensorType> getAnalogSensorTypes() override {
@@ -79,27 +85,16 @@ public:
     }
 
     std::vector<SensorType> getCalibrableSensorTypes() override {
-        std::vector<SensorType> allTypes = Repository<SensorType>::getAll();
-        std::vector<SensorType> calibrableTypes;
-
-        for (const auto& type : allTypes) {
-            if (type.canCalibrate) {
-                calibrableTypes.push_back(type);
-            }
-        }
-
-        return calibrableTypes;
+        std::vector<SensorType> sensorTypes;
+        sensorTypeDao->getCalibrableSensorTypes(sensorTypes);
+        return sensorTypes;
     }
 
     SensorType* getSensorTypeByName(const std::string& name) override {
-        std::vector<SensorType> allTypes = Repository<SensorType>::getAll();
-        
-        for (auto& type : allTypes) {
-            if (type.name == name) {
-                return &type;
-            }
+        static SensorType foundSensorType;
+        if (sensorTypeDao->getSensorTypeByName(name, foundSensorType)) {
+            return &foundSensorType;
         }
-        
         return nullptr;
     }
 };
