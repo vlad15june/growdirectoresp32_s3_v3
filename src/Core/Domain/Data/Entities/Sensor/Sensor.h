@@ -16,6 +16,7 @@ public:
     std::string model;
     std::string protocol;
     std::string createdAt;
+    int pin;
     bool isActive;
     bool isError;
     
@@ -25,7 +26,7 @@ public:
     
     std::string i2cAddress;
     std::string chipType;
-    std::vector<std::pair<std::string, I2CRegisterConfig>> i2cRegisterConfigs;
+    std::vector<I2CRegisterConfig> i2cRegisterConfigs;
     
     float currentValue;
     uint32_t lastReadTime;

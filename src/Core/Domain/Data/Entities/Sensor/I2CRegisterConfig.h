@@ -11,8 +11,8 @@ struct I2CRegisterConfig {
     uint8_t length;             // Data length in bytes
     float multiplier;           // Value multiplier
     float offset;               // Value offset
-
-    I2CRegisterConfig() : registerAddr(0), length(1), multiplier(1.0f), offset(0.0f) {}
+    std::string channelName;
+    uint8_t channel;
 };
 
 #endif

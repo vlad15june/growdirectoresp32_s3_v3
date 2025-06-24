@@ -96,6 +96,7 @@ void setup()
   // settings.begin();
   // settings.setConfigured(ModuleModeEnum::USER_CAN_CONFIGURE);
 
+  spiffsAdapter.initSPIFFS();
   // Create and store test sensor types
   createTestSensorTypes();
 

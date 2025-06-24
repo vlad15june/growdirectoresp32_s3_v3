@@ -47,8 +47,8 @@ public:
     virtual std::string modbusRegisterConfigsToJson(const std::vector<ModbusRegisterConfig> &configs) = 0;
     virtual bool i2cRegisterConfigFromJson(const std::string &jsonStr, I2CRegisterConfig &config) = 0;
     virtual std::string i2cRegisterConfigToJson(const I2CRegisterConfig &config) = 0;
-    virtual bool i2cRegisterConfigsFromJson(const std::string &jsonStr, std::vector<std::pair<std::string, I2CRegisterConfig>> &configs) = 0;
-    virtual std::string i2cRegisterConfigsToJson(const std::vector<std::pair<std::string, I2CRegisterConfig>> &configs) = 0;
+    virtual bool i2cRegisterConfigsFromJson(const std::string &jsonStr, std::vector<I2CRegisterConfig> &configs) = 0;
+    virtual std::string i2cRegisterConfigsToJson(const std::vector<I2CRegisterConfig> &configs) = 0;
     virtual ~IJsonConverter() = default;
 };
 

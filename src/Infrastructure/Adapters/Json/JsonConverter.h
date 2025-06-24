@@ -1141,8 +1141,8 @@ public:
         config.numRegisters = static_cast<uint16_t>(extractIntValue(jsonStr, "numRegisters"));
         config.multiplier = static_cast<float>(extractDoubleValue(jsonStr, "multiplier"));
         config.offset = static_cast<float>(extractDoubleValue(jsonStr, "offset"));
-        config.channelName = extractValue(jsonStr, "chanel_name");  // Note: API uses "chanel_name" (typo in original)
-        config.channel = static_cast<uint8_t>(extractIntValue(jsonStr, "chanel"));  // Note: API uses "chanel"
+        config.channelName = extractValue(jsonStr, "channel_name");
+        config.channel = static_cast<uint8_t>(extractIntValue(jsonStr, "channel"));
 
         return !config.channelName.empty();
     }
@@ -1156,8 +1156,8 @@ public:
         oss << ",\"numRegisters\":" << config.numRegisters;
         oss << ",\"multiplier\":" << config.multiplier;
         oss << ",\"offset\":" << config.offset;
-        oss << ",\"chanel_name\":\"" << config.channelName << "\"";
-        oss << ",\"chanel\":" << static_cast<int>(config.channel);
+        oss << ",\"channel_name\":\"" << config.channelName << "\"";
+        oss << ",\"channel\":" << static_cast<int>(config.channel);
         oss << "}";
         return oss.str();
     }
@@ -1213,73 +1213,43 @@ public:
         return oss.str();
     }
 
-    bool i2cRegisterConfigsFromJson(const std::string &jsonStr, std::vector<std::pair<std::string, I2CRegisterConfig>> &configs) override
+    bool i2cRegisterConfigsFromJson(const std::string &jsonStr, std::vector<I2CRegisterConfig> &configs) override
     {
         configs.clear();
-        
-        // Extract I2C register config object (should be a JSON object, not array)
-        std::string configObj = extractJsonObject(jsonStr, "i2cRegisterConfig");
-        if (configObj.empty()) return false;
-        
-        // Parse each key-value pair in the object
-        // This is a simplified implementation - in production, use proper JSON parser
-        size_t pos = 1; // Start after opening brace
-        while (pos < configObj.size())
+        auto configObjs = splitObjects(jsonStr);
+        for (const auto &configStr : configObjs)
         {
-            // Find key
-            size_t keyStart = configObj.find("\"", pos);
-            if (keyStart == std::string::npos) break;
-            
-            size_t keyEnd = configObj.find("\"", keyStart + 1);
-            if (keyEnd == std::string::npos) break;
-            
-            std::string key = configObj.substr(keyStart + 1, keyEnd - keyStart - 1);
-            
-            // Find value object
-            size_t colonPos = configObj.find(":", keyEnd);
-            if (colonPos == std::string::npos) break;
-            
-            size_t valueStart = configObj.find("{", colonPos);
-            if (valueStart == std::string::npos) break;
-            
-            // Find matching closing brace
-            int braceCount = 1;
-            size_t valueEnd = valueStart + 1;
-            while (valueEnd < configObj.size() && braceCount > 0)
+            I2CRegisterConfig config;
+            if (i2cRegisterConfigFromJson(configStr, config))
             {
-                if (configObj[valueEnd] == '{') braceCount++;
-                else if (configObj[valueEnd] == '}') braceCount--;
-                valueEnd++;
+                // Extract channel name and channel from the config JSON
+                config.channelName = extractValue(configStr, "channel_name");
+                config.channel = static_cast<uint8_t>(extractIntValue(configStr, "channel"));
+                configs.push_back(config);
             }
-            
-            if (braceCount == 0)
-            {
-                std::string valueJson = configObj.substr(valueStart, valueEnd - valueStart);
-                I2CRegisterConfig config;
-                if (i2cRegisterConfigFromJson(valueJson, config))
-                {
-                    configs.push_back({key, config});
-                }
-            }
-            
-            pos = valueEnd;
         }
-        
         return !configs.empty();
     }
 
-    std::string i2cRegisterConfigsToJson(const std::vector<std::pair<std::string, I2CRegisterConfig>> &configs) override
+    std::string i2cRegisterConfigsToJson(const std::vector<I2CRegisterConfig> &configs) override
     {
         std::ostringstream oss;
-        oss << "{";
+        oss << "[";
         for (size_t i = 0; i < configs.size(); ++i)
         {
-            const auto& pair = configs[i];
-            oss << "\"" << pair.first << "\":" << i2cRegisterConfigToJson(pair.second);
+            const auto& config = configs[i];
+            oss << "{";
+            oss << "\"register\":" << config.registerAddr;
+            oss << ",\"length\":" << static_cast<int>(config.length);
+            oss << ",\"multiplier\":" << config.multiplier;
+            oss << ",\"offset\":" << config.offset;
+            oss << ",\"channel_name\":\"" << config.channelName << "\"";
+            oss << ",\"channel\":" << static_cast<int>(config.channel);
+            oss << "}";
             if (i + 1 < configs.size())
                 oss << ",";
         }
-        oss << "}";
+        oss << "]";
         return oss.str();
     }
 

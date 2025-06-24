@@ -1140,8 +1140,8 @@ public:
         config.numRegisters = doc["numRegisters"] | 1;
         config.multiplier = doc["multiplier"] | 1.0f;
         config.offset = doc["offset"] | 0.0f;
-        config.channelName = doc["chanel_name"] | "";  // Note: API uses "chanel_name" (typo in original)
-        config.channel = doc["chanel"] | 0;             // Note: API uses "chanel" (typo in original)
+        config.channelName = doc["channel_name"] | "";
+        config.channel = doc["channel"] | 0;
 
         return true;
     }
@@ -1155,8 +1155,8 @@ public:
         doc["numRegisters"] = config.numRegisters;
         doc["multiplier"] = config.multiplier;
         doc["offset"] = config.offset;
-        doc["chanel_name"] = config.channelName;
-        doc["chanel"] = config.channel;
+        doc["channel_name"] = config.channelName;
+        doc["channel"] = config.channel;
 
         std::string output;
         serializeJson(doc, output);
@@ -1182,8 +1182,8 @@ public:
                 config.numRegisters = configObj["numRegisters"] | 1;
                 config.multiplier = configObj["multiplier"] | 1.0f;
                 config.offset = configObj["offset"] | 0.0f;
-                config.channelName = configObj["chanel_name"] | "";
-                config.channel = configObj["chanel"] | 0;
+                config.channelName = configObj["channel_name"] | "";
+                config.channel = configObj["channel"] | 0;
                 
                 configs.push_back(config);
             }
@@ -1205,8 +1205,8 @@ public:
             configObj["numRegisters"] = config.numRegisters;
             configObj["multiplier"] = config.multiplier;
             configObj["offset"] = config.offset;
-            configObj["chanel_name"] = config.channelName;
-            configObj["chanel"] = config.channel;
+            configObj["channel_name"] = config.channelName;
+            configObj["channel"] = config.channel;
         }
 
         std::string output;
@@ -1243,7 +1243,7 @@ public:
         return output;
     }
 
-    bool i2cRegisterConfigsFromJson(const std::string &jsonStr, std::vector<std::pair<std::string, I2CRegisterConfig>> &configs) override
+    bool i2cRegisterConfigsFromJson(const std::string &jsonStr, std::vector<I2CRegisterConfig> &configs) override
     {
         DynamicJsonDocument doc(2048);
         DeserializationError error = deserializeJson(doc, jsonStr);
@@ -1252,37 +1252,39 @@ public:
 
         configs.clear();
         
-        if (doc.is<JsonObject>())
+        if (doc.is<JsonArray>())
         {
-            for (JsonPair kv : doc.as<JsonObject>())
+            for (JsonObject configObj : doc.as<JsonArray>())
             {
                 I2CRegisterConfig config;
-                JsonObject configObj = kv.value().as<JsonObject>();
-                
                 config.registerAddr = configObj["register"] | 0;
                 config.length = configObj["length"] | 1;
                 config.multiplier = configObj["multiplier"] | 1.0f;
                 config.offset = configObj["offset"] | 0.0f;
+                config.channelName = configObj["channel_name"] | "";
+                config.channel = configObj["channel"] | 0;
                 
-                configs.push_back({kv.key().c_str(), config});
+                configs.push_back(config);
             }
         }
 
         return !configs.empty();
     }
 
-    std::string i2cRegisterConfigsToJson(const std::vector<std::pair<std::string, I2CRegisterConfig>> &configs) override
+    std::string i2cRegisterConfigsToJson(const std::vector<I2CRegisterConfig> &configs) override
     {
         DynamicJsonDocument doc(2048);
-        JsonObject configsObj = doc.to<JsonObject>();
+        JsonArray configsArr = doc.to<JsonArray>();
 
-        for (const auto &pair : configs)
+        for (const auto &config : configs)
         {
-            JsonObject configObj = configsObj.createNestedObject(pair.first);
-            configObj["register"] = pair.second.registerAddr;
-            configObj["length"] = pair.second.length;
-            configObj["multiplier"] = pair.second.multiplier;
-            configObj["offset"] = pair.second.offset;
+            JsonObject configObj = configsArr.createNestedObject();
+            configObj["register"] = config.registerAddr;
+            configObj["length"] = config.length;
+            configObj["multiplier"] = config.multiplier;
+            configObj["offset"] = config.offset;
+            configObj["channel_name"] = config.channelName;
+            configObj["channel"] = config.channel;
         }
 
         std::string output;
@@ -1348,8 +1350,8 @@ public:
                 config.numRegisters = configObj["numRegisters"] | 1;
                 config.multiplier = configObj["multiplier"] | 1.0f;
                 config.offset = configObj["offset"] | 0.0f;
-                config.channelName = configObj["chanel_name"] | "";
-                config.channel = configObj["chanel"] | 0;
+                config.channelName = configObj["channel_name"] | "";
+                config.channel = configObj["channel"] | 0;
                 sensorType.modbusRegisterConfig.push_back(config);
             }
         }
@@ -1408,8 +1410,8 @@ public:
                 configObj["numRegisters"] = config.numRegisters;
                 configObj["multiplier"] = config.multiplier;
                 configObj["offset"] = config.offset;
-                configObj["chanel_name"] = config.channelName;
-                configObj["chanel"] = config.channel;
+                configObj["channel_name"] = config.channelName;
+                configObj["channel"] = config.channel;
             }
         }
 

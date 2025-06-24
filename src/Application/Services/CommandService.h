@@ -539,25 +539,25 @@ private:
         size_t keyPos = json.find(key);
         if (keyPos == std::string::npos) return;
 
-        size_t objStart = json.find('{', keyPos);
-        size_t objEnd = std::string::npos;
-        if (objStart != std::string::npos) {
+        size_t arrayStart = json.find('[', keyPos);
+        size_t arrayEnd = std::string::npos;
+        if (arrayStart != std::string::npos) {
             int depth = 1;
-            size_t i = objStart + 1;
+            size_t i = arrayStart + 1;
             while (i < json.size() && depth > 0) {
-                if (json[i] == '{') depth++;
-                else if (json[i] == '}') depth--;
+                if (json[i] == '[') depth++;
+                else if (json[i] == ']') depth--;
                 i++;
             }
-            if (depth == 0) objEnd = i;
+            if (depth == 0) arrayEnd = i;
         }
-        if (objStart == std::string::npos || objEnd == std::string::npos) return;
+        if (arrayStart == std::string::npos || arrayEnd == std::string::npos) return;
 
-        std::string objJson = json.substr(objStart, objEnd - objStart);
+        std::string arrayJson = json.substr(arrayStart, arrayEnd - arrayStart);
 
         if (jsonConverter) {
-            std::vector<std::pair<std::string, I2CRegisterConfig>> configs;
-            if (jsonConverter->i2cRegisterConfigsFromJson(objJson, configs)) {
+            std::vector<I2CRegisterConfig> configs;
+            if (jsonConverter->i2cRegisterConfigsFromJson(arrayJson, configs)) {
                 sensor.i2cRegisterConfigs = configs;
             }
         }
