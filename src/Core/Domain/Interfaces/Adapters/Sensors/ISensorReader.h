@@ -10,6 +10,12 @@ public:
     virtual ~ISensorReader() = default;
 
     /**
+     * @brief Initialize the sensor reader with optional parameters
+     * @param modbusBaud Baud rate for Modbus communication, default is 9600
+     */
+    virtual void init(unsigned long modbusBaud = 9600) = 0;
+
+    /**
      * @brief Read sensor value based on sensor configuration
      * @param sensor Sensor entity containing configuration
      * @param outValue Output value read from sensor

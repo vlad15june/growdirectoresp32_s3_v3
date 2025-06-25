@@ -44,7 +44,7 @@ public:
     bool isModbusSensor() const { return protocol == "ModBus"; }
     bool isI2CSensor() const { return protocol == "I2C"; }
     bool isAtlasSensor() const { return model.find("atlas_") == 0; }
-    bool isMultiChannel() const { return !channelValues.empty(); }
+    bool isMultiChannel() const { return !modbusRegisterConfigs.empty() || !i2cRegisterConfigs.empty(); }
     
     float getChannelValue(const std::string& channelName) const {
         for (const auto& pair : channelValues) {

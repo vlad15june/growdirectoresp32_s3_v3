@@ -11,7 +11,7 @@ public:
     virtual ~IModbusRS485() = default;
     
     // Initialize RS-485 port
-    virtual void begin(unsigned long baud, uint32_t config, int rxPin, int txPin) = 0;
+    virtual void begin(unsigned long baud) = 0;
     
     // Send data via RS-485
     virtual void sendData(uint8_t *data, uint8_t length) = 0;

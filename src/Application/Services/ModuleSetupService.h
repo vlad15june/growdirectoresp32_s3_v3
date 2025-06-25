@@ -23,6 +23,7 @@
 #include "Core/Domain/Interfaces/Repositories/ISensorRepository.h"
 #include "Core/Domain/Interfaces/Repositories/ISensorTypeRepository.h"
 #include "Core/Domain/Interfaces/Adapters/Sensors/ISensorReader.h"
+#include "Infrastructure/Adapters/SPIFFS/ISpiffsAdapter.h"
 
 class IModuleSetupService
 {
@@ -54,6 +55,7 @@ private:
     ISensorRepository *sensorRepository;
     ISensorTypeRepository *sensorTypeRepository;
     ISensorReader *sensorReader;
+    ISpiffsAdapter *spiffsAdapter;
 
     void log(const char *format, ...);
 
@@ -118,7 +120,8 @@ public:
         IDeviceService *deviceService = nullptr,
         ISensorRepository *sensorRepository = nullptr,
         ISensorTypeRepository *sensorTypeRepository = nullptr,
-        ISensorReader *sensorReader = nullptr);
+        ISensorReader *sensorReader = nullptr,
+        ISpiffsAdapter *spiffsAdapter = nullptr);
 
     void setupModule() override;
     std::unique_ptr<ILoopService> getLoopService() override;
@@ -142,7 +145,8 @@ inline ModuleSetupService::ModuleSetupService(
     IDeviceService *deviceService,
     ISensorRepository *sensorRepository,
     ISensorTypeRepository *sensorTypeRepository,
-    ISensorReader *sensorReader) : logger(logger),
+    ISensorReader *sensorReader,
+    ISpiffsAdapter *spiffsAdapter) : logger(logger),
                                    debugSystem(debugSystem),
                                    moduleConfig(moduleConfig),
                                    ledAdapter(ledAdapter),
@@ -157,7 +161,8 @@ inline ModuleSetupService::ModuleSetupService(
                                    deviceService(deviceService),
                                    sensorRepository(sensorRepository),
                                    sensorTypeRepository(sensorTypeRepository),
-                                   sensorReader(sensorReader)
+                                   sensorReader(sensorReader),
+                                   spiffsAdapter(spiffsAdapter)
 {
 }
 
@@ -875,6 +880,16 @@ inline void ModuleSetupService::fillModuleStructure()
 
 inline void ModuleSetupService::setupModule()
 {
+    if (spiffsAdapter)
+    {
+        spiffsAdapter->initSPIFFS();
+        log("SETUP: SPIFFS initialized");
+    }
+    else
+    {
+        log("SETUP: SPIFFS adapter not available");
+    }
+
     if (!initializeModuleConfiguration())
     {
         log("SETUP: Module setup failed - unable to initialize configuration");
@@ -1020,6 +1035,7 @@ inline void ModuleSetupService::scanPinForSensorTypes(int pin, Node &node)
         tempSensor.protocol = sensorType.getProtocolString();
         tempSensor.isActive = true;
         tempSensor.uid = moduleUid + "." + std::to_string(pin);
+        tempSensor.pin = pin;
 
         if (sensorType.isI2CSensor())
         {

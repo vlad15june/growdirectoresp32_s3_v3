@@ -261,7 +261,7 @@ public:
         }
         else
         {
-            reconnect();
+            reconnect();            
         }
     }
 

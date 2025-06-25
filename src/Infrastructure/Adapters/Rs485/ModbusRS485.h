@@ -10,19 +10,22 @@ private:
     int _controlPin;       // Control pin for receive/transmit switching
     const char *_portName; // Port name for debugging
     IArduinoAdapter &_arduino;
+    uint32_t _config;      // Serial configuration
+    int _rxPin;           // RX pin
+    int _txPin;           // TX pin
 
 public:
-    ModbusRS485(HardwareSerial &port, int controlPin, const char *portName, IArduinoAdapter &arduino)
-        : _port(port), _controlPin(controlPin), _portName(portName), _arduino(arduino)
+    ModbusRS485(HardwareSerial &port, int controlPin, const char *portName, IArduinoAdapter &arduino, uint32_t config, int rxPin, int txPin)
+        : _port(port), _controlPin(controlPin), _portName(portName), _arduino(arduino), _config(config), _rxPin(rxPin), _txPin(txPin)
     {
         _arduino.pinMode(_controlPin, _arduino.getPinModeOutput());
         _arduino.digitalWrite(_controlPin, _arduino.getDigitalLow());
     }
 
     // Initialize RS-485 port
-    void begin(unsigned long baud, uint32_t config, int rxPin, int txPin) override
+    void begin(unsigned long baud) override
     {
-        _port.begin(baud, config, rxPin, txPin);
+        _port.begin(baud, _config, _rxPin, _txPin);
         Serial.printf("[%s] Initialized at %lu baud\n", _portName, baud);
     }
 

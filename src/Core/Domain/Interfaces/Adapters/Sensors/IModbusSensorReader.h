@@ -10,6 +10,8 @@ class IModbusSensorReader
 public:
     virtual ~IModbusSensorReader() = default;
 
+    virtual void init(unsigned long baud = 9600) = 0;
+
     virtual bool readRegister(uint8_t deviceAddress, const ModbusRegisterConfig &config, float &outValue) = 0;
 };
 

@@ -79,8 +79,33 @@ void createTestSensorTypes() {
   Serial.printf("Total sensor types in repository: %d\n", finalTypes.size());
   
   for (const auto& type : finalTypes) {
-    Serial.printf("- ID: %d, Name: %s, Protocol: %s\n", 
-                  type.id, type.name.c_str(), type.getProtocolString().c_str());
+    Serial.printf("Sensor Type Details:\n");
+    Serial.printf("  ID: %d\n", type.id);
+    Serial.printf("  Name: %s\n", type.name.c_str());
+    Serial.printf("  Display Name: %s\n", type.displayName.c_str());
+    Serial.printf("  Is Analog: %s\n", type.isAnalog ? "true" : "false");
+    Serial.printf("  Can Calibrate: %s\n", type.canCalibrate ? "true" : "false");
+    Serial.printf("  Valid Calibration Period (days): %d\n", type.validCalibrationPeriodDays);
+    Serial.printf("  Calibration Time (seconds): %d\n", type.calibrationTimeInSeconds);
+    Serial.printf("  Min Value: %.2f\n", type.minValue);
+    Serial.printf("  Max Value: %.2f\n", type.maxValue);
+    Serial.printf("  Limit Min Value: %.2f\n", type.limitMinValue);
+    Serial.printf("  Limit Max Value: %.2f\n", type.limitMaxValue);
+    Serial.printf("  Unit: %s\n", type.unit.c_str());
+    Serial.printf("  Step: %.3f\n", type.step);
+    Serial.printf("  Precision Percent: %.2f\n", type.precisionPercent);
+    Serial.printf("  Precision Value: %.3f\n", type.precisionValue);
+    Serial.printf("  Protocol: %s\n", type.getProtocolString().c_str());
+    Serial.printf("  Modbus Device Address: %d\n", type.modbusDeviceAddress);
+    Serial.printf("  Baud Rate: %d\n", type.baudRate);
+    Serial.printf("  Modbus Register Configs: %d\n", type.modbusRegisterConfig.size());
+    for (size_t i = 0; i < type.modbusRegisterConfig.size(); i++) {
+      const auto& config = type.modbusRegisterConfig[i];
+      Serial.printf("    Config %d: Function=%d, Start=%d, Num=%d, Multiplier=%.3f, Offset=%.3f, Channel=%s, ChannelNum=%d\n",
+                    i, config.functionCode, config.startRegister, config.numRegisters,
+                    config.multiplier, config.offset, config.channelName.c_str(), config.channel);
+    }
+    Serial.println("---");
   }
 }
 

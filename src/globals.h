@@ -63,6 +63,10 @@
 #include "Application/Services/Devices/IDeviceService.h"
 #include "Application/Services/Devices/DeviceService.h"
 #include "Application/Services/CommandService.h"
+#include "Infrastructure/Adapters/Sensors/SensorReader.h"
+#include "Infrastructure/Adapters/Sensors/HardwareSensors/AnalogSensors/AnalogSensorReader.h"
+#include "Infrastructure/Adapters/Sensors/HardwareSensors/ModbusSensors/ModbusSensorReader.h"
+#include "Infrastructure/Adapters/Rs485/ModbusRS485.h"
 
 const char *mqttUser = "GrowDirectorMqtt";
 const char *mqttPassword = "lasdfh329483457sfdjhs92_w";
@@ -147,6 +151,17 @@ SensorRepository sensorRepository(&sensorDao);
 
 SpiffsSensorTypeDao sensorTypeDao(&spiffsAdapter, &jsonConverter);
 SensorTypeRepository sensorTypeRepository(&sensorTypeDao);
+
+HardwareSerial RS485_1(1);  // Serial1
+HardwareSerial RS485_2(2);  // Serial2
+ModbusRS485 modbusRS485(RS485_1, 19, "ModbusRS485_1", arduinoAdapter, SERIAL_8N1, 18, 16);
+// ModbusRS485 modbusRS485(RS485_2, 20, "ModbusRS485_2", arduinoAdapter, SERIAL_8N1, 15, 14);
+
+
+AnalogSensorReader analogSensorReader(arduinoAdapter);
+ModbusSensorReader modbusSensorReader(modbusRS485, arduinoAdapter, &mqttLogger, &debugSystem);
+
+SensorReader sensorReader(&analogSensorReader, &modbusSensorReader, &arduinoAdapter, &mqttLogger, &debugSystem);
 
 SensorCommandUseCase sensorCommandUseCase(
     &moduleConfig,
@@ -270,7 +285,11 @@ ModuleSetupService moduleSetupService(
     &loopServiceFactory,
     &mqttManager,
     &moduleStructure,
-    &deviceService);
+    &deviceService,
+    &sensorRepository,
+    &sensorTypeRepository,
+    &sensorReader,
+    &spiffsAdapter);
 
 void initDependencies()
 {
