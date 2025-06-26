@@ -12,7 +12,7 @@ public:
 
     virtual void init(unsigned long baud = 9600) = 0;
 
-    virtual bool readRegister(uint8_t deviceAddress, const ModbusRegisterConfig &config, float &outValue) = 0;
+    virtual bool readRegister(uint8_t deviceAddress, const ModbusRegisterConfig &config, float &outValue, int portIndex = 0) = 0;
 };
 
 #endif

@@ -123,17 +123,19 @@ public:
                 return false;
             }
 
+            int portIndex = sensor.pin;
+
             for (const auto &registerConfig : sensor.modbusRegisterConfigs)
             {
                 float value;
-                if (_modbusReader->readRegister(sensor.modbusDeviceAddress, registerConfig, value))
+                if (_modbusReader->readRegister(sensor.modbusDeviceAddress, registerConfig, value, portIndex))
                 {
                     channelValues[registerConfig.channelName] = value;
-                    log("SensorReader: Read modbus channel %s, value: %.2f", registerConfig.channelName.c_str(), value);
+                    log("SensorReader: Read modbus channel %s, value: %.2f on port %d", registerConfig.channelName.c_str(), value, portIndex);
                 }
                 else
                 {
-                    log("SensorReader: Failed to read modbus channel %s", registerConfig.channelName.c_str());
+                    log("SensorReader: Failed to read modbus channel %s on port %d", registerConfig.channelName.c_str(), portIndex);
                 }
             }
         }
@@ -191,12 +193,13 @@ private:
 
         try
         {
+            int portIndex = sensor.pin;
             const ModbusRegisterConfig &config = sensor.modbusRegisterConfigs[channelIndex];
-            bool success = _modbusReader->readRegister(sensor.modbusDeviceAddress, config, outValue);
+            bool success = _modbusReader->readRegister(sensor.modbusDeviceAddress, config, outValue, portIndex);
             if (success)
             {
-                log("SensorReader: Read modbus sensor %s, channel %d, value: %.2f",
-                    sensor.uid.c_str(), channelIndex, outValue);
+                log("SensorReader: Read modbus sensor %s, channel %d, value: %.2f on port %d",
+                    sensor.uid.c_str(), channelIndex, outValue, portIndex);
             }
             return success;
         }
@@ -242,11 +245,12 @@ private:
             return false;
         }
 
+        int portIndex = sensor.pin;
         float dummyValue;
         _modbusReader->init(sensor.baudRate);
         for (const auto &config : sensor.modbusRegisterConfigs)
         {
-            if (!_modbusReader->readRegister(sensor.modbusDeviceAddress, config, dummyValue))
+            if (!_modbusReader->readRegister(sensor.modbusDeviceAddress, config, dummyValue, portIndex))
             {
                 return false;
             }

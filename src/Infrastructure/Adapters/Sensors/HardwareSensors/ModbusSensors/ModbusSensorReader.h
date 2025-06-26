@@ -13,22 +13,33 @@
 class ModbusSensorReader : public IModbusSensorReader
 {
 private:
-    IModbusRS485 &_modbus;
+    std::vector<IModbusRS485*> _modbusPorts;
     IArduinoAdapter &_arduino;
     ILogger* _logger;
     IDebugSystem* _debugSystem;
 
 public:
-    ModbusSensorReader(IModbusRS485 &modbus, IArduinoAdapter &arduino, ILogger* logger, IDebugSystem* debugSystem)
-        : _modbus(modbus), _arduino(arduino), _logger(logger), _debugSystem(debugSystem) {}
+    ModbusSensorReader(const std::vector<IModbusRS485*>& modbusPorts, IArduinoAdapter &arduino, ILogger* logger, IDebugSystem* debugSystem)
+        : _modbusPorts(modbusPorts), _arduino(arduino), _logger(logger), _debugSystem(debugSystem) {}
 
     void init(unsigned long baud = 9600)
     {
-        _modbus.begin(baud);
+        for (auto* modbus : _modbusPorts)
+        {
+            modbus->begin(baud);
+        }
     }
 
-    bool readRegister(uint8_t deviceAddress, const ModbusRegisterConfig &config, float &outValue) override
+    bool readRegister(uint8_t deviceAddress, const ModbusRegisterConfig &config, float &outValue, int portIndex = 0) override
     {
+        if (portIndex < 0 || portIndex >= _modbusPorts.size())
+        {
+            log("ModbusSensorReader: Invalid port index %d", portIndex);
+            return false;
+        }
+
+        IModbusRS485* modbus = _modbusPorts[portIndex];
+
         uint8_t request[8] = {
             deviceAddress,
             config.functionCode,
@@ -38,17 +49,17 @@ public:
             (uint8_t)(config.numRegisters & 0xFF)
         };
 
-        uint16_t crc = _modbus.calculateCRC(request, 6);
+        uint16_t crc = modbus->calculateCRC(request, 6);
         request[6] = crc & 0xFF;
         request[7] = (crc >> 8);
 
-        _modbus.sendData(request, sizeof(request));
+        modbus->sendData(request, sizeof(request));
 
         _arduino.delay(300);
 
         uint8_t response[64];
-        int bytesRead = _modbus.readAvailable(response, sizeof(response));
-        log("ModbusSensorReader: Read %d bytes from device %d", bytesRead, deviceAddress);
+        int bytesRead = modbus->readAvailable(response, sizeof(response));
+        log("ModbusSensorReader: Read %d bytes from device %d on port %d", bytesRead, deviceAddress, portIndex);
 
         if (bytesRead >= 5 && response[1] == config.functionCode)
         {
@@ -66,7 +77,7 @@ public:
                 }
 
                 outValue = rawValue * config.multiplier + config.offset;
-                log("ModbusSensorReader: Read value %.2f from device %d", outValue, deviceAddress);
+                log("ModbusSensorReader: Read value %.2f from device %d on port %d", outValue, deviceAddress, portIndex);
                 return true;
             }
         }
