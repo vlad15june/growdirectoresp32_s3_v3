@@ -1044,6 +1044,41 @@ public:
             }
         }
 
+        // Parse modbus register configs
+        sensor.modbusRegisterConfigs.clear();
+        if (doc.containsKey("modbusRegisterConfigs"))
+        {
+            for (JsonObject configObj : doc["modbusRegisterConfigs"].as<JsonArray>())
+            {
+                ModbusRegisterConfig config;
+                config.functionCode = configObj["functionCode"] | 3;
+                config.startRegister = configObj["startRegister"] | 0;
+                config.numRegisters = configObj["numRegisters"] | 1;
+                config.multiplier = configObj["multiplier"] | 1.0f;
+                config.offset = configObj["offset"] | 0.0f;
+                config.channelName = configObj["channel_name"] | "";
+                config.channel = configObj["channel"] | 0;
+                sensor.modbusRegisterConfigs.push_back(config);
+            }
+        }
+
+        // Parse i2c register configs
+        sensor.i2cRegisterConfigs.clear();
+        if (doc.containsKey("i2cRegisterConfigs"))
+        {
+            for (JsonObject configObj : doc["i2cRegisterConfigs"].as<JsonArray>())
+            {
+                I2CRegisterConfig config;
+                config.registerAddr = configObj["register"] | 0;
+                config.length = configObj["length"] | 1;
+                config.multiplier = configObj["multiplier"] | 1.0f;
+                config.offset = configObj["offset"] | 0.0f;
+                config.channelName = configObj["channel_name"] | "";
+                config.channel = configObj["channel"] | 0;
+                sensor.i2cRegisterConfigs.push_back(config);
+            }
+        }
+
         return true;
     }
 
@@ -1075,6 +1110,39 @@ public:
             for (const auto& pair : sensor.channelValues)
             {
                 channelObj[pair.first] = pair.second;
+            }
+        }
+
+        // Add modbus register configs
+        if (!sensor.modbusRegisterConfigs.empty())
+        {
+            JsonArray modbusConfigArr = doc.createNestedArray("modbusRegisterConfigs");
+            for (const auto& config : sensor.modbusRegisterConfigs)
+            {
+                JsonObject configObj = modbusConfigArr.createNestedObject();
+                configObj["functionCode"] = config.functionCode;
+                configObj["startRegister"] = config.startRegister;
+                configObj["numRegisters"] = config.numRegisters;
+                configObj["multiplier"] = config.multiplier;
+                configObj["offset"] = config.offset;
+                configObj["channel_name"] = config.channelName;
+                configObj["channel"] = config.channel;
+            }
+        }
+
+        // Add i2c register configs
+        if (!sensor.i2cRegisterConfigs.empty())
+        {
+            JsonArray i2cConfigArr = doc.createNestedArray("i2cRegisterConfigs");
+            for (const auto& config : sensor.i2cRegisterConfigs)
+            {
+                JsonObject configObj = i2cConfigArr.createNestedObject();
+                configObj["register"] = config.registerAddr;
+                configObj["length"] = config.length;
+                configObj["multiplier"] = config.multiplier;
+                configObj["offset"] = config.offset;
+                configObj["channel_name"] = config.channelName;
+                configObj["channel"] = config.channel;
             }
         }
 

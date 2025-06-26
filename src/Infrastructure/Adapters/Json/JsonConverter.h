@@ -1071,6 +1071,39 @@ public:
         sensor.channelValues.clear();
         // Note: This is a simplified implementation. A full implementation would parse the channelValues object
 
+        // Parse modbus register configs
+        sensor.modbusRegisterConfigs.clear();
+        std::string modbusConfigsArr = extractArray(jsonStr, "modbusRegisterConfigs");
+        auto modbusConfigObjs = splitObjects(modbusConfigsArr);
+        for (const auto &configStr : modbusConfigObjs)
+        {
+            ModbusRegisterConfig config;
+            config.functionCode = static_cast<uint8_t>(extractIntValue(configStr, "functionCode"));
+            config.startRegister = static_cast<uint16_t>(extractIntValue(configStr, "startRegister"));
+            config.numRegisters = static_cast<uint16_t>(extractIntValue(configStr, "numRegisters"));
+            config.multiplier = static_cast<float>(extractDoubleValue(configStr, "multiplier"));
+            config.offset = static_cast<float>(extractDoubleValue(configStr, "offset"));
+            config.channelName = extractValue(configStr, "channel_name");
+            config.channel = static_cast<uint8_t>(extractIntValue(configStr, "channel"));
+            sensor.modbusRegisterConfigs.push_back(config);
+        }
+
+        // Parse i2c register configs
+        sensor.i2cRegisterConfigs.clear();
+        std::string i2cConfigsArr = extractArray(jsonStr, "i2cRegisterConfigs");
+        auto i2cConfigObjs = splitObjects(i2cConfigsArr);
+        for (const auto &configStr : i2cConfigObjs)
+        {
+            I2CRegisterConfig config;
+            config.registerAddr = static_cast<uint16_t>(extractIntValue(configStr, "register"));
+            config.length = static_cast<uint8_t>(extractIntValue(configStr, "length"));
+            config.multiplier = static_cast<float>(extractDoubleValue(configStr, "multiplier"));
+            config.offset = static_cast<float>(extractDoubleValue(configStr, "offset"));
+            config.channelName = extractValue(configStr, "channel_name");
+            config.channel = static_cast<uint8_t>(extractIntValue(configStr, "channel"));
+            sensor.i2cRegisterConfigs.push_back(config);
+        }
+
         return true;
     }
 
@@ -1105,6 +1138,49 @@ public:
                     oss << ",";
             }
             oss << "}";
+        }
+
+        // Add modbus register configs
+        if (!sensor.modbusRegisterConfigs.empty())
+        {
+            oss << ",\"modbusRegisterConfigs\":[";
+            for (size_t i = 0; i < sensor.modbusRegisterConfigs.size(); ++i)
+            {
+                const auto& config = sensor.modbusRegisterConfigs[i];
+                oss << "{";
+                oss << "\"functionCode\":" << static_cast<int>(config.functionCode);
+                oss << ",\"startRegister\":" << config.startRegister;
+                oss << ",\"numRegisters\":" << config.numRegisters;
+                oss << ",\"multiplier\":" << config.multiplier;
+                oss << ",\"offset\":" << config.offset;
+                oss << ",\"channel_name\":\"" << config.channelName << "\"";
+                oss << ",\"channel\":" << static_cast<int>(config.channel);
+                oss << "}";
+                if (i + 1 < sensor.modbusRegisterConfigs.size())
+                    oss << ",";
+            }
+            oss << "]";
+        }
+
+        // Add i2c register configs
+        if (!sensor.i2cRegisterConfigs.empty())
+        {
+            oss << ",\"i2cRegisterConfigs\":[";
+            for (size_t i = 0; i < sensor.i2cRegisterConfigs.size(); ++i)
+            {
+                const auto& config = sensor.i2cRegisterConfigs[i];
+                oss << "{";
+                oss << "\"register\":" << config.registerAddr;
+                oss << ",\"length\":" << static_cast<int>(config.length);
+                oss << ",\"multiplier\":" << config.multiplier;
+                oss << ",\"offset\":" << config.offset;
+                oss << ",\"channel_name\":\"" << config.channelName << "\"";
+                oss << ",\"channel\":" << static_cast<int>(config.channel);
+                oss << "}";
+                if (i + 1 < sensor.i2cRegisterConfigs.size())
+                    oss << ",";
+            }
+            oss << "]";
         }
 
         oss << "}";
