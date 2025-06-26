@@ -87,20 +87,13 @@ bool SensorService::readAllSensors() {
     return success;
 }
 
-bool SensorService::readSensor(const char* uid) {
-    if (!uid || !sensorRepository || !sensorReader) {
+bool SensorService::readSensor(SensorEntity sensor) {
+    if (!sensorRepository || !sensorReader) {
         return false;
     }
     
-    auto sensorOpt = sensorRepository->get(uid);
-    if (!sensorOpt.has_value()) {
-        log("SensorService: Sensor with UID %s not found", uid);
-        return false;
-    }
-    
-    SensorEntity sensor = sensorOpt.value();
     if (!sensor.isActive) {
-        log("SensorService: Sensor %s is not active", uid);
+        log("SensorService: Sensor %s is not active", sensor.uid.c_str());
         return false;
     }
     
@@ -110,26 +103,26 @@ bool SensorService::readSensor(const char* uid) {
         std::map<std::string, float> channelValues;
         if (sensorReader->readMultiChannelSensor(sensor, channelValues)) {
             for (const auto& pair : channelValues) {
-                sensorRepository->updateChannelValue(uid, pair.first.c_str(), pair.second);
+                sensorRepository->updateChannelValue(sensor.uid.c_str(), pair.first.c_str(), pair.second);
             }
-            sensorRepository->updateSensorStatus(uid, true, false);
-            log("SensorService: Read multi-channel sensor %s", uid);
+            sensorRepository->updateSensorStatus(sensor.uid.c_str(), true, false);
+            log("SensorService: Read multi-channel sensor %s", sensor.uid.c_str());
             return true;
         } else {
-            sensorRepository->updateSensorStatus(uid, sensor.isActive, true);
-            log("SensorService: Failed to read multi-channel sensor %s", uid);
+            sensorRepository->updateSensorStatus(sensor.uid.c_str(), sensor.isActive, true);
+            log("SensorService: Failed to read multi-channel sensor %s", sensor.uid.c_str());
             return false;
         }
     } else {
         float value;
         if (sensorReader->readSensor(sensor, value)) {
-            sensorRepository->updateSensorValue(uid, value, currentTime);
-            sensorRepository->updateSensorStatus(uid, true, false);
-            log("SensorService: Read sensor %s, value: %.2f", uid, value);
+            sensorRepository->updateSensorValue(sensor.uid.c_str(), value, currentTime);
+            sensorRepository->updateSensorStatus(sensor.uid.c_str(), true, false);
+            log("SensorService: Read sensor %s, value: %.2f", sensor.uid.c_str(), value);
             return true;
         } else {
-            sensorRepository->updateSensorStatus(uid, sensor.isActive, true);
-            log("SensorService: Failed to read sensor %s", uid);
+            sensorRepository->updateSensorStatus(sensor.uid.c_str(), sensor.isActive, true);
+            log("SensorService: Failed to read sensor %s", sensor.uid.c_str());
             return false;
         }
     }
@@ -142,7 +135,7 @@ bool SensorService::readAnalogSensors() {
     for (const auto& sensor : analogSensors) {
         if (!sensor.isActive) continue;
         
-        if (!readSensor(sensor.uid.c_str())) {
+        if (!readSensor(sensor)) {
             allSuccess = false;
         }
     }
@@ -157,7 +150,7 @@ bool SensorService::readI2CSensors() {
     for (const auto& sensor : i2cSensors) {
         if (!sensor.isActive) continue;
         
-        if (!readSensor(sensor.uid.c_str())) {
+        if (!readSensor(sensor)) {
             allSuccess = false;
         }
     }
@@ -173,7 +166,7 @@ bool SensorService::readModbusSensors() {
     for (const auto& sensor : modbusSensors) {
         if (!sensor.isActive) continue;
         
-        if (!readSensor(sensor.uid.c_str())) {
+        if (!readSensor(sensor)) {
             allSuccess = false;
         }
     }

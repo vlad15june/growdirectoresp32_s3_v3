@@ -11,5 +11,5 @@ public:
     virtual bool init() = 0;
     virtual void loop() = 0;
     virtual bool readAllSensors() = 0;
-    virtual bool readSensor(const char* uid) = 0;
+    virtual bool readSensor(SensorEntity sensor) = 0;
 };

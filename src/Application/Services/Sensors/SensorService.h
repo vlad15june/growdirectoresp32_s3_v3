@@ -69,5 +69,5 @@ public:
     bool init() override;
     void loop() override;
     bool readAllSensors() override;
-    bool readSensor(const char* uid) override;
+    bool readSensor(SensorEntity sensor) override;
 };
