@@ -55,7 +55,7 @@ void createTestSensorTypes() {
     tempConfig.numRegisters = 1;
     tempConfig.multiplier = 0.1f;
     tempConfig.offset = 0.0f;
-    tempConfig.channelName = "temperature";
+    tempConfig.channelName = "air_temp";
     tempConfig.channel = 0;
     tempHumiditySensorType.modbusRegisterConfig.push_back(tempConfig);
 
@@ -122,6 +122,7 @@ void setup()
   // settings.setConfigured(ModuleModeEnum::USER_CAN_CONFIGURE);
 
   spiffsAdapter.initSPIFFS();
+  // spiffsAdapter.RemoveFile("/data/sensorTypes.json");
   // Create and store test sensor types
   createTestSensorTypes();
 

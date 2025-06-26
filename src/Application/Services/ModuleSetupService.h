@@ -147,22 +147,22 @@ inline ModuleSetupService::ModuleSetupService(
     ISensorTypeRepository *sensorTypeRepository,
     ISensorReader *sensorReader,
     ISpiffsAdapter *spiffsAdapter) : logger(logger),
-                                   debugSystem(debugSystem),
-                                   moduleConfig(moduleConfig),
-                                   ledAdapter(ledAdapter),
-                                   ledUseCases(ledUseCases),
-                                   buttonUseCases(buttonUseCases),
-                                   wifiAdapter(wifiAdapter),
-                                   wifiManager(wifiManager),
-                                   webServerLauncher(webServerLauncher),
-                                   loopServiceFactory(loopServiceFactory),
-                                   mqttManager(mqttManager),
-                                   moduleStructure(moduleStructure),
-                                   deviceService(deviceService),
-                                   sensorRepository(sensorRepository),
-                                   sensorTypeRepository(sensorTypeRepository),
-                                   sensorReader(sensorReader),
-                                   spiffsAdapter(spiffsAdapter)
+                                     debugSystem(debugSystem),
+                                     moduleConfig(moduleConfig),
+                                     ledAdapter(ledAdapter),
+                                     ledUseCases(ledUseCases),
+                                     buttonUseCases(buttonUseCases),
+                                     wifiAdapter(wifiAdapter),
+                                     wifiManager(wifiManager),
+                                     webServerLauncher(webServerLauncher),
+                                     loopServiceFactory(loopServiceFactory),
+                                     mqttManager(mqttManager),
+                                     moduleStructure(moduleStructure),
+                                     deviceService(deviceService),
+                                     sensorRepository(sensorRepository),
+                                     sensorTypeRepository(sensorTypeRepository),
+                                     sensorReader(sensorReader),
+                                     spiffsAdapter(spiffsAdapter)
 {
 }
 
@@ -587,8 +587,8 @@ inline void ModuleSetupService::addMultiChannelModbusSensor(Node &node, const Se
     for (const auto &config : sensorEntity.modbusRegisterConfigs)
     {
         Sensor sensor;
-        sensor.uid = generateSensorUid(sensorEntity, std::to_string(config.channel));
-        sensor.type = sensorEntity.sensorType;
+        sensor.uid = sensorEntity.uid + "." + (config.channel < 10 ? "0" : "") + std::to_string(config.channel+1);
+        sensor.type = config.channelName.empty() ? sensorEntity.sensorType : config.channelName;
         sensor.pin = sensorEntity.pin;
 
         node.sensors.push_back(sensor);
@@ -603,7 +603,7 @@ inline void ModuleSetupService::addMultiChannelI2CSensor(Node &node, const Senso
     for (const auto &config : sensorEntity.i2cRegisterConfigs)
     {
         Sensor sensor;
-        sensor.uid = generateSensorUid(sensorEntity, std::to_string(config.channel));
+        sensor.uid = sensorEntity.uid + "." + (config.channel < 10 ? "0" : "") + std::to_string(config.channel+1);
         sensor.type = sensorEntity.sensorType;
         sensor.pin = sensorEntity.pin;
 
@@ -617,7 +617,7 @@ inline void ModuleSetupService::addMultiChannelI2CSensor(Node &node, const Senso
 inline void ModuleSetupService::addSingleChannelSensor(Node &node, const SensorEntity &sensorEntity)
 {
     Sensor sensor;
-    sensor.uid = generateSensorUid(sensorEntity, "01");
+    sensor.uid = sensorEntity.uid + ".01";
     sensor.type = sensorEntity.sensorType;
     sensor.pin = sensorEntity.pin;
 
@@ -667,22 +667,22 @@ inline void ModuleSetupService::fillSensorModuleStructure(Node &node)
         std::string nodeUid = node.uid;
         int sensorPinCount = moduleConfig->getSensorPinCount();
 
-        for (int group = 0; group < sensorPinCount; group++)
+        for (int sensorPin = 0; sensorPin < sensorPinCount; sensorPin++)
         {
             for (int i = 0; i < 3; i++)
             {
                 Sensor sensor;
-                sensor.pin = sensorPinCount - group;
+                sensor.pin = sensorPin;
                 sensor.type = "none";
 
                 char sensorId[20];
-                sprintf(sensorId, ".%02d.%02d", group, i + 1);
+                sprintf(sensorId, ".%02d.%02d", sensorPin, i + 1);
                 sensor.uid = nodeUid + sensorId;
 
                 node.sensors.push_back(sensor);
 
                 log("SETUP: Added placeholder sensor group %d index %d, type: %s, pin: %d, uid: %s",
-                    group, i, sensor.type.c_str(), sensor.pin, sensor.uid.c_str());
+                    sensorPin, i, sensor.type.c_str(), sensor.pin, sensor.uid.c_str());
             }
         }
         return;
@@ -1025,17 +1025,19 @@ inline void ModuleSetupService::scanPinForSensorTypes(int pin, Node &node)
         return;
     }
 
+    bool isAdded = false;
+    std::string moduleUid = moduleConfig->getModuleUid();
     for (const auto &sensorType : allSensorTypes)
     {
-        std::string moduleUid = moduleConfig->getModuleUid();
-        
         SensorEntity tempSensor;
         tempSensor.sensorType = sensorType.name;
         tempSensor.model = sensorType.name;
         tempSensor.protocol = sensorType.getProtocolString();
         tempSensor.isActive = true;
-        tempSensor.uid = moduleUid + "." + std::to_string(pin);
-        tempSensor.pin = pin;
+        tempSensor.pin = pin+1;
+        char pinStr[3];
+        sprintf(pinStr, "%02d", pin);
+        tempSensor.uid = moduleUid + "." + pinStr;
 
         if (sensorType.isI2CSensor())
         {
@@ -1054,14 +1056,36 @@ inline void ModuleSetupService::scanPinForSensorTypes(int pin, Node &node)
             tempSensor.modbusRegisterConfigs = sensorType.modbusRegisterConfig;
         }
 
-        // Try to scan/detect the sensor
         if (sensorReader->scanSensor(tempSensor))
         {
             log("SETUP: Detected %s sensor on pin %d", sensorType.name.c_str(), pin);
 
+            isAdded = true;
+
             addSensorToStructure(node, tempSensor);
 
+            // TODO: Add sensor to repository with status not_approved
+
             break;
+        }
+    }
+
+    if (isAdded == false)
+    {
+        for (int i = 0; i < 3; i++)
+        {
+            Sensor sensor;
+            sensor.pin = pin;
+            sensor.type = "none";
+
+            char sensorId[20];
+            sprintf(sensorId, ".%02d.%02d", pin, i + 1);
+            sensor.uid = node.uid + sensorId;
+
+            node.sensors.push_back(sensor);
+
+            log("SETUP: Added placeholder sensor group %d index %d, type: %s, pin: %d, uid: %s",
+                pin, i, sensor.type.c_str(), sensor.pin, sensor.uid.c_str());
         }
     }
 }
@@ -1078,7 +1102,7 @@ inline void ModuleSetupService::scanEmptyPinsForSensors(Node &node, const std::v
     log("SETUP: Scanning %d pins for undetected sensors", sensorPinCount);
 
     // Check each available pin
-    for (int pin = 1; pin <= sensorPinCount; pin++)
+    for (int pin = 0; pin < sensorPinCount; pin++)
     {
         bool pinOccupied = false;
 
