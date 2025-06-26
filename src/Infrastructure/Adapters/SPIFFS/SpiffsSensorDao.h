@@ -16,7 +16,7 @@ protected:
     }
 
     std::string getBasePath() const override {
-        return "/sensors";
+        return "/data";
     }
 
     // JSON conversion methods

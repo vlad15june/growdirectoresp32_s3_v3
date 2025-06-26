@@ -593,7 +593,7 @@ inline void ModuleSetupService::addMultiChannelModbusSensor(Node &node, const Se
     {
         Sensor sensor;
         sensor.uid = sensorEntity.uid + "." + (config.channel < 10 ? "0" : "") + std::to_string(config.channel+1);
-        sensor.type = config.channelName.empty() ? sensorEntity.sensorType : config.channelName;
+        sensor.type = config.sensorType.empty() ? sensorEntity.sensorType : config.channelName;
         sensor.pin = sensorEntity.pin;
 
         node.sensors.push_back(sensor);
@@ -609,7 +609,7 @@ inline void ModuleSetupService::addMultiChannelI2CSensor(Node &node, const Senso
     {
         Sensor sensor;
         sensor.uid = sensorEntity.uid + "." + (config.channel < 10 ? "0" : "") + std::to_string(config.channel+1);
-        sensor.type = sensorEntity.sensorType;
+        sensor.type = config.sensorType.empty() ? sensorEntity.sensorType : config.channelName;
         sensor.pin = sensorEntity.pin;
 
         node.sensors.push_back(sensor);

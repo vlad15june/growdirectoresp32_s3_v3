@@ -1085,6 +1085,7 @@ public:
             config.offset = static_cast<float>(extractDoubleValue(configStr, "offset"));
             config.channelName = extractValue(configStr, "channel_name");
             config.channel = static_cast<uint8_t>(extractIntValue(configStr, "channel"));
+            config.sensorType = extractValue(configStr, "sensorType");
             sensor.modbusRegisterConfigs.push_back(config);
         }
 
@@ -1101,6 +1102,7 @@ public:
             config.offset = static_cast<float>(extractDoubleValue(configStr, "offset"));
             config.channelName = extractValue(configStr, "channel_name");
             config.channel = static_cast<uint8_t>(extractIntValue(configStr, "channel"));
+            config.sensorType = extractValue(configStr, "sensorType");
             sensor.i2cRegisterConfigs.push_back(config);
         }
 
@@ -1155,6 +1157,7 @@ public:
                 oss << ",\"offset\":" << config.offset;
                 oss << ",\"channel_name\":\"" << config.channelName << "\"";
                 oss << ",\"channel\":" << static_cast<int>(config.channel);
+                oss << ",\"sensorType\":\"" << config.sensorType << "\"";
                 oss << "}";
                 if (i + 1 < sensor.modbusRegisterConfigs.size())
                     oss << ",";
@@ -1176,6 +1179,7 @@ public:
                 oss << ",\"offset\":" << config.offset;
                 oss << ",\"channel_name\":\"" << config.channelName << "\"";
                 oss << ",\"channel\":" << static_cast<int>(config.channel);
+                oss << ",\"sensorType\":\"" << config.sensorType << "\"";
                 oss << "}";
                 if (i + 1 < sensor.i2cRegisterConfigs.size())
                     oss << ",";
@@ -1225,6 +1229,7 @@ public:
         config.offset = static_cast<float>(extractDoubleValue(jsonStr, "offset"));
         config.channelName = extractValue(jsonStr, "channel_name");
         config.channel = static_cast<uint8_t>(extractIntValue(jsonStr, "channel"));
+        config.sensorType = extractValue(jsonStr, "sensorType");
 
         return !config.channelName.empty();
     }
@@ -1240,6 +1245,7 @@ public:
         oss << ",\"offset\":" << config.offset;
         oss << ",\"channel_name\":\"" << config.channelName << "\"";
         oss << ",\"channel\":" << static_cast<int>(config.channel);
+        oss << ",\"sensorType\":\"" << config.sensorType << "\"";
         oss << "}";
         return oss.str();
     }
@@ -1279,6 +1285,9 @@ public:
         config.length = static_cast<uint8_t>(extractIntValue(jsonStr, "length"));
         config.multiplier = static_cast<float>(extractDoubleValue(jsonStr, "multiplier"));
         config.offset = static_cast<float>(extractDoubleValue(jsonStr, "offset"));
+        config.channelName = extractValue(jsonStr, "channel_name");
+        config.channel = static_cast<uint8_t>(extractIntValue(jsonStr, "channel"));
+        config.sensorType = extractValue(jsonStr, "sensorType");
 
         return true;
     }
@@ -1307,6 +1316,7 @@ public:
                 // Extract channel name and channel from the config JSON
                 config.channelName = extractValue(configStr, "channel_name");
                 config.channel = static_cast<uint8_t>(extractIntValue(configStr, "channel"));
+                config.sensorType = extractValue(configStr, "sensorType");
                 configs.push_back(config);
             }
         }
@@ -1327,6 +1337,7 @@ public:
             oss << ",\"offset\":" << config.offset;
             oss << ",\"channel_name\":\"" << config.channelName << "\"";
             oss << ",\"channel\":" << static_cast<int>(config.channel);
+            oss << ",\"sensorType\":\"" << config.sensorType << "\"";
             oss << "}";
             if (i + 1 < configs.size())
                 oss << ",";

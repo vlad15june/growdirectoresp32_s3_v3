@@ -1058,6 +1058,7 @@ public:
                 config.offset = configObj["offset"] | 0.0f;
                 config.channelName = configObj["channel_name"] | "";
                 config.channel = configObj["channel"] | 0;
+                config.sensorType = configObj["sensorType"] | "";
                 sensor.modbusRegisterConfigs.push_back(config);
             }
         }
@@ -1075,6 +1076,7 @@ public:
                 config.offset = configObj["offset"] | 0.0f;
                 config.channelName = configObj["channel_name"] | "";
                 config.channel = configObj["channel"] | 0;
+                config.sensorType = configObj["sensorType"] | "";
                 sensor.i2cRegisterConfigs.push_back(config);
             }
         }
@@ -1127,6 +1129,7 @@ public:
                 configObj["offset"] = config.offset;
                 configObj["channel_name"] = config.channelName;
                 configObj["channel"] = config.channel;
+                configObj["sensorType"] = config.sensorType;
             }
         }
 
@@ -1143,6 +1146,7 @@ public:
                 configObj["offset"] = config.offset;
                 configObj["channel_name"] = config.channelName;
                 configObj["channel"] = config.channel;
+                configObj["sensorType"] = config.sensorType;
             }
         }
 
@@ -1215,6 +1219,7 @@ public:
         config.offset = doc["offset"] | 0.0f;
         config.channelName = doc["channel_name"] | "";
         config.channel = doc["channel"] | 0;
+        config.sensorType = doc["sensorType"] | "";
 
         return true;
     }
@@ -1230,6 +1235,7 @@ public:
         doc["offset"] = config.offset;
         doc["channel_name"] = config.channelName;
         doc["channel"] = config.channel;
+        doc["sensorType"] = config.sensorType;
 
         std::string output;
         serializeJson(doc, output);
@@ -1257,6 +1263,7 @@ public:
                 config.offset = configObj["offset"] | 0.0f;
                 config.channelName = configObj["channel_name"] | "";
                 config.channel = configObj["channel"] | 0;
+                config.sensorType = configObj["sensorType"] | "";
                 
                 configs.push_back(config);
             }
@@ -1280,6 +1287,7 @@ public:
             configObj["offset"] = config.offset;
             configObj["channel_name"] = config.channelName;
             configObj["channel"] = config.channel;
+            configObj["sensorType"] = config.sensorType;
         }
 
         std::string output;
@@ -1298,6 +1306,9 @@ public:
         config.length = doc["length"] | 1;
         config.multiplier = doc["multiplier"] | 1.0f;
         config.offset = doc["offset"] | 0.0f;
+        config.channelName = doc["channel_name"] | "";
+        config.channel = doc["channel"] | 0;
+        config.sensorType = doc["sensorType"] | "";
 
         return true;
     }
@@ -1310,6 +1321,9 @@ public:
         doc["length"] = config.length;
         doc["multiplier"] = config.multiplier;
         doc["offset"] = config.offset;
+        doc["channel_name"] = config.channelName;
+        doc["channel"] = config.channel;
+        doc["sensorType"] = config.sensorType;
 
         std::string output;
         serializeJson(doc, output);
@@ -1336,6 +1350,7 @@ public:
                 config.offset = configObj["offset"] | 0.0f;
                 config.channelName = configObj["channel_name"] | "";
                 config.channel = configObj["channel"] | 0;
+                config.sensorType = configObj["sensorType"] | "";
                 
                 configs.push_back(config);
             }
@@ -1358,6 +1373,7 @@ public:
             configObj["offset"] = config.offset;
             configObj["channel_name"] = config.channelName;
             configObj["channel"] = config.channel;
+            configObj["sensorType"] = config.sensorType;
         }
 
         std::string output;
@@ -1425,6 +1441,7 @@ public:
                 config.offset = configObj["offset"] | 0.0f;
                 config.channelName = configObj["channel_name"] | "";
                 config.channel = configObj["channel"] | 0;
+                config.sensorType = configObj["sensorType"] | "";
                 sensorType.modbusRegisterConfig.push_back(config);
             }
         }
@@ -1485,6 +1502,7 @@ public:
                 configObj["offset"] = config.offset;
                 configObj["channel_name"] = config.channelName;
                 configObj["channel"] = config.channel;
+                configObj["sensorType"] = config.sensorType;
             }
         }
 
