@@ -167,6 +167,7 @@ bool SensorService::readI2CSensors() {
 
 bool SensorService::readModbusSensors() {
     auto modbusSensors = sensorRepository->getModbusSensors();
+    log("SensorService: Found %zu Modbus sensors", modbusSensors.size());
     bool allSuccess = true;
     
     for (const auto& sensor : modbusSensors) {

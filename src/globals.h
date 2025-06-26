@@ -63,6 +63,8 @@
 #include "Application/Services/Devices/IDeviceService.h"
 #include "Application/Services/Devices/DeviceService.h"
 #include "Application/Services/CommandService.h"
+#include "Application/Services/Sensors/ISensorService.h"
+#include "Application/Services/Sensors/SensorService.h"
 #include "Infrastructure/Adapters/Sensors/SensorReader.h"
 #include "Infrastructure/Adapters/Sensors/HardwareSensors/AnalogSensors/AnalogSensorReader.h"
 #include "Infrastructure/Adapters/Sensors/HardwareSensors/ModbusSensors/ModbusSensorReader.h"
@@ -259,6 +261,17 @@ DeviceService deviceService(
     &mqttLogger,
     &debugSystem);
 
+SensorService sensorService(
+    &moduleConfig,
+    &moduleStructure,
+    &sensorRepository,
+    &sensorReader,
+    &ntpTimeAdapter,
+    &arduinoAdapter,
+    &hybridApiService,
+    &mqttLogger,
+    &debugSystem);
+
 LoopServiceFactory loopServiceFactory(
     &ledUseCases,
     &buttonUseCases,
@@ -271,7 +284,8 @@ LoopServiceFactory loopServiceFactory(
     &onChangeLocalIpUseCase,
     &mqttManager,
     &diagnosticService,
-    &deviceService);
+    &deviceService,
+    &sensorService);
 
 ModuleSetupService moduleSetupService(
     &mqttLogger,

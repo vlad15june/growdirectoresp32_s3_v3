@@ -41,7 +41,7 @@ private:
     
     void log(const char* format, ...)
     {
-        if (logger != nullptr && debugSystem != nullptr && debugSystem->isFeatureEnabled(DebugFeatures::RULE_SENSOR_VALUE_DEBUG))
+        if (logger != nullptr && debugSystem != nullptr && debugSystem->isFeatureEnabled(DebugFeatures::SENSOR_DATA_DEBUG))
         {
             char buffer[128];
             va_list args;
@@ -49,7 +49,7 @@ private:
             vsnprintf(buffer, sizeof(buffer), format, args);
             va_end(args);
     
-            logger->println(DebugFeatures::RULE_SENSOR_VALUE_DEBUG, buffer);
+            logger->println(DebugFeatures::SENSOR_DATA_DEBUG, buffer);
         }
     }
     

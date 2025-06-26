@@ -52,6 +52,7 @@ private:
         registerFeature(DebugFeatures::ANALOG_INPUT_DEVICE_COMMAND_DEBUG, "analog_input_device_command", true);
         registerFeature(DebugFeatures::SETUP_SENSOR_DEBUG, "setup_sensor", true);
         registerFeature(DebugFeatures::SENSOR_ERROR_DEBUG, "sensor_error", false);
+        registerFeature(DebugFeatures::SENSOR_DATA_DEBUG, "sensor_data", true);
         registerFeature(DebugFeatures::DATA_DEBUG, "data", false);
         registerFeature(DebugFeatures::SETTINGS_DEBUG, "settings", true);
         registerFeature(DebugFeatures::SETUP_DEBUG, "setup", true);
