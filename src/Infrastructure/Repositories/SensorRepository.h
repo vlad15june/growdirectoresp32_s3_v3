@@ -173,4 +173,34 @@ public:
         
         return Repository<SensorEntity>::save(sensor);
     }
+
+    bool createOrUpdateSensor(const SensorEntity& sensor) override {
+        return Repository<SensorEntity>::save(sensor);
+    }
+
+    bool updateSensorStatusEnum(const char* uid, SensorStatusEnum status) override {
+        if (!uid) return false;
+
+        SensorEntity sensor;
+        if (!sensorDao->getSensor(uid, sensor)) {
+            return false;
+        }
+
+        sensor.status = status;
+        
+        return Repository<SensorEntity>::save(sensor);
+    }
+
+    std::vector<SensorEntity> getSensorsByStatus(SensorStatusEnum status) override {
+        std::vector<SensorEntity> allSensors = Repository<SensorEntity>::getAll();
+        std::vector<SensorEntity> filteredSensors;
+
+        for (const auto& sensor : allSensors) {
+            if (sensor.status == status) {
+                filteredSensors.push_back(sensor);
+            }
+        }
+
+        return filteredSensors;
+    }
 };

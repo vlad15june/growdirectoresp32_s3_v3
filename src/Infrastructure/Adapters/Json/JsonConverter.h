@@ -9,6 +9,7 @@
 #include "Application/DTOs/CommandResultDto.h"
 #include "Application/DTOs/DeviceCommandUpdateDto.h"
 #include "Application/DTOs/DeviceCommandDto.h"
+#include "Core/Domain/Enums/SensorStatusEnum.h"
 #include <string>
 #include <sstream>
 #include <algorithm>
@@ -1054,6 +1055,10 @@ public:
         sensor.isActive = extractBoolValue(jsonStr, "isActive");
         sensor.isError = extractBoolValue(jsonStr, "isError");
         
+        std::string statusStr = extractValue(jsonStr, "status");
+        if (statusStr.empty()) statusStr = "new"; // default
+        sensor.status = getSensorStatusFromString(statusStr);
+        
         sensor.modbusDeviceAddress = extractIntValue(jsonStr, "modbusDeviceAddress");
         sensor.baudRate = extractIntValue(jsonStr, "baudRate");
         sensor.i2cAddress = extractValue(jsonStr, "i2cAddress");
@@ -1080,6 +1085,7 @@ public:
         oss << ",\"createdAt\":\"" << sensor.createdAt << "\"";
         oss << ",\"isActive\":" << (sensor.isActive ? "true" : "false");
         oss << ",\"isError\":" << (sensor.isError ? "true" : "false");
+        oss << ",\"status\":\"" << getSensorStatusName(sensor.status) << "\"";
         oss << ",\"modbusDeviceAddress\":" << sensor.modbusDeviceAddress;
         oss << ",\"baudRate\":" << sensor.baudRate;
         oss << ",\"i2cAddress\":\"" << sensor.i2cAddress << "\"";

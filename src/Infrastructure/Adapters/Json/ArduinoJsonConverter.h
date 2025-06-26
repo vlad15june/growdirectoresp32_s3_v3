@@ -6,6 +6,7 @@
 #include "Application/DTOs/CommandResultDto.h"
 #include "Application/DTOs/DeviceCommandUpdateDto.h"
 #include "Application/DTOs/DeviceCommandDto.h"
+#include "Core/Domain/Enums/SensorStatusEnum.h"
 #include <ArduinoJson.h>
 
 class ArduinoJsonConverter : public IJsonConverter
@@ -1022,6 +1023,9 @@ public:
         sensor.isActive = doc["isActive"] | true;
         sensor.isError = doc["isError"] | false;
         
+        std::string statusStr = doc["status"] | "new";
+        sensor.status = getSensorStatusFromString(statusStr);
+        
         sensor.modbusDeviceAddress = doc["modbusDeviceAddress"] | 1;
         sensor.baudRate = doc["baudRate"] | 9600;
         sensor.i2cAddress = doc["i2cAddress"] | "";
@@ -1054,6 +1058,7 @@ public:
         doc["createdAt"] = sensor.createdAt;
         doc["isActive"] = sensor.isActive;
         doc["isError"] = sensor.isError;
+        doc["status"] = getSensorStatusName(sensor.status);
         
         doc["modbusDeviceAddress"] = sensor.modbusDeviceAddress;
         doc["baudRate"] = sensor.baudRate;

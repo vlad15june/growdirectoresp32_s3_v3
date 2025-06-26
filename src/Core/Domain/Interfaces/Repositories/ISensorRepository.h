@@ -3,6 +3,7 @@
 
 #include "IRepository.h"
 #include "Core/Domain/Data/Entities/Sensor/Sensor.h"
+#include "Core/Domain/Enums/SensorStatusEnum.h"
 #include <vector>
 #include <string>
 
@@ -93,6 +94,28 @@ public:
      * @return true if operation was successful, false otherwise
      */
     virtual bool updateChannelValue(const char* uid, const char* channelName, float value) = 0;
+
+    /**
+     * @brief Create or update sensor with status handling
+     * @param sensor Sensor entity to save
+     * @return true if operation was successful, false otherwise
+     */
+    virtual bool createOrUpdateSensor(const SensorEntity& sensor) = 0;
+
+    /**
+     * @brief Update sensor status by UID using SensorStatusEnum
+     * @param uid UID of the sensor to update
+     * @param status New sensor status
+     * @return true if operation was successful, false otherwise
+     */
+    virtual bool updateSensorStatusEnum(const char* uid, SensorStatusEnum status) = 0;
+
+    /**
+     * @brief Get sensors by status
+     * @param status Sensor status to filter by
+     * @return Vector of sensors with the specified status
+     */
+    virtual std::vector<SensorEntity> getSensorsByStatus(SensorStatusEnum status) = 0;
 };
 
 #endif // I_SENSOR_REPOSITORY_H

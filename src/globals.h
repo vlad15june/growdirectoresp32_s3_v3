@@ -289,7 +289,8 @@ ModuleSetupService moduleSetupService(
     &sensorRepository,
     &sensorTypeRepository,
     &sensorReader,
-    &spiffsAdapter);
+    &spiffsAdapter,
+    &jsonConverter);
 
 void initDependencies()
 {

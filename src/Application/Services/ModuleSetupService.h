@@ -24,6 +24,7 @@
 #include "Core/Domain/Interfaces/Repositories/ISensorTypeRepository.h"
 #include "Core/Domain/Interfaces/Adapters/Sensors/ISensorReader.h"
 #include "Infrastructure/Adapters/SPIFFS/ISpiffsAdapter.h"
+#include "Core/Domain/Interfaces/Adapters/Json/IJsonConverter.h"
 
 class IModuleSetupService
 {
@@ -56,6 +57,7 @@ private:
     ISensorTypeRepository *sensorTypeRepository;
     ISensorReader *sensorReader;
     ISpiffsAdapter *spiffsAdapter;
+    IJsonConverter *jsonConverter;
 
     void log(const char *format, ...);
 
@@ -121,7 +123,8 @@ public:
         ISensorRepository *sensorRepository = nullptr,
         ISensorTypeRepository *sensorTypeRepository = nullptr,
         ISensorReader *sensorReader = nullptr,
-        ISpiffsAdapter *spiffsAdapter = nullptr);
+        ISpiffsAdapter *spiffsAdapter = nullptr,
+        IJsonConverter *jsonConverter = nullptr);
 
     void setupModule() override;
     std::unique_ptr<ILoopService> getLoopService() override;
@@ -146,7 +149,8 @@ inline ModuleSetupService::ModuleSetupService(
     ISensorRepository *sensorRepository,
     ISensorTypeRepository *sensorTypeRepository,
     ISensorReader *sensorReader,
-    ISpiffsAdapter *spiffsAdapter) : logger(logger),
+    ISpiffsAdapter *spiffsAdapter,
+    IJsonConverter *jsonConverter) : logger(logger),
                                      debugSystem(debugSystem),
                                      moduleConfig(moduleConfig),
                                      ledAdapter(ledAdapter),
@@ -162,7 +166,8 @@ inline ModuleSetupService::ModuleSetupService(
                                      sensorRepository(sensorRepository),
                                      sensorTypeRepository(sensorTypeRepository),
                                      sensorReader(sensorReader),
-                                     spiffsAdapter(spiffsAdapter)
+                                     spiffsAdapter(spiffsAdapter),
+                                     jsonConverter(jsonConverter)
 {
 }
 
@@ -170,7 +175,7 @@ inline void ModuleSetupService::log(const char *format, ...)
 {
     if (logger != nullptr && debugSystem != nullptr && debugSystem->isFeatureEnabled(DebugFeatures::SETUP_DEBUG))
     {
-        char buffer[128];
+        char buffer[1024];
         va_list args;
         va_start(args, format);
         vsnprintf(buffer, sizeof(buffer), format, args);
@@ -694,6 +699,20 @@ inline void ModuleSetupService::fillSensorModuleStructure(Node &node)
 
     for (const auto &sensorEntity : sensorEntities)
     {
+        if (jsonConverter)
+        {
+            std::string sensorJson = jsonConverter->sensorToJson(sensorEntity);
+            log("SETUP: Processing sensor entity: %s", sensorJson.c_str());
+        }
+        else
+        {
+            log("SETUP: Processing sensor entity - UID: %s, Type: %s, Protocol: %s, Status: %s", 
+                sensorEntity.uid.c_str(), 
+                sensorEntity.sensorType.c_str(), 
+                sensorEntity.protocol.c_str(),
+                getSensorStatusName(sensorEntity.status));
+        }
+        
         addSensorToStructure(node, sensorEntity);
     }
 
@@ -1038,6 +1057,7 @@ inline void ModuleSetupService::scanPinForSensorTypes(int pin, Node &node)
         char pinStr[3];
         sprintf(pinStr, "%02d", pin);
         tempSensor.uid = moduleUid + "." + pinStr;
+        tempSensor.status = SensorStatusEnum::SENSOR_STATUS_NEW;
 
         if (sensorType.isI2CSensor())
         {
@@ -1064,7 +1084,21 @@ inline void ModuleSetupService::scanPinForSensorTypes(int pin, Node &node)
 
             addSensorToStructure(node, tempSensor);
 
-            // TODO: Add sensor to repository with status not_approved
+            if (sensorRepository)
+            {
+                if (sensorRepository->createOrUpdateSensor(tempSensor))
+                {
+                    log("SETUP: Successfully saved detected sensor %s to repository with NEW status", tempSensor.uid.c_str());
+                }
+                else
+                {
+                    log("SETUP: Failed to save detected sensor %s to repository", tempSensor.uid.c_str());
+                }
+            }
+            else
+            {
+                log("SETUP: Sensor repository not available, cannot save detected sensor");
+            }
 
             break;
         }

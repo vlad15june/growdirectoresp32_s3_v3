@@ -5,6 +5,7 @@
 #include "ModbusRegisterConfig.h"
 #include "I2CRegisterConfig.h"
 #include "SensorType.h"
+#include "Core/Domain/Enums/SensorStatusEnum.h"
 
 /**
  * @brief Base sensor entity class
@@ -19,6 +20,7 @@ public:
     int pin;
     bool isActive;
     bool isError;
+    SensorStatusEnum status;
     
     int modbusDeviceAddress;
     int baudRate;
@@ -39,7 +41,8 @@ public:
     int sensorTypeId = 0;
 
     SensorEntity() : isActive(true), isError(false), modbusDeviceAddress(1), baudRate(9600), 
-               currentValue(0.0f), lastReadTime(0), multiplier(1.0f), offset(0.0f), sensorTypeId(0) {}
+               currentValue(0.0f), lastReadTime(0), multiplier(1.0f), offset(0.0f), sensorTypeId(0), 
+               status(SENSOR_STATUS_NEW) {}
 
     bool isModbusSensor() const { return protocol == "ModBus"; }
     bool isI2CSensor() const { return protocol == "I2C"; }
