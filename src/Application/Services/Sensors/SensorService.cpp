@@ -174,26 +174,6 @@ bool SensorService::readModbusSensors() {
     return allSuccess;
 }
 
-std::string SensorService::generateSensorUid(const SensorEntity& sensor, const std::string& channelName) const {
-    std::string moduleUid = moduleConfig->getModuleUid();
-    std::string baseUid = sensor.uid;
-    
-    if (sensor.protocol == "Analog") {
-        return baseUid + (channelName.empty() ? "" : "." + channelName);
-    }
-    else if (sensor.protocol == "I2C") {
-        std::string sensorNumber = "1";
-        return baseUid + "." + sensorNumber + (channelName.empty() ? "" : "." + channelName);
-    }
-    else if (sensor.protocol == "ModBus") {
-        std::string sensorAddress = std::to_string(sensor.modbusDeviceAddress);
-        std::string sensorNumber = "1";
-        return baseUid + "." + sensorAddress + "." + sensorNumber + (channelName.empty() ? "" : "." + channelName);
-    }
-    
-    return baseUid;
-}
-
 UpdateDto SensorService::createSensorUpdateDto() {
     UpdateDto dto;
     
@@ -217,7 +197,7 @@ UpdateDto SensorService::createSensorUpdateDto() {
         if (sensor.isMultiChannel()) {
             for (const auto& channelValue : sensor.channelValues) {
                 SensorDto sensorDto;
-                sensorDto.sensorUid = generateSensorUid(sensor, channelValue.first);
+                sensorDto.sensorUid = channelValue.first;
                 sensorDto.sensorType = sensor.sensorType;
                 sensorDto.model = sensor.model;
                 sensorDto.protocol = sensor.protocol;
@@ -231,7 +211,7 @@ UpdateDto SensorService::createSensorUpdateDto() {
             }
         } else {
             SensorDto sensorDto;
-            sensorDto.sensorUid = generateSensorUid(sensor);
+            sensorDto.sensorUid = sensor.uid;
             sensorDto.sensorType = sensor.sensorType;
             sensorDto.model = sensor.model;
             sensorDto.protocol = sensor.protocol;

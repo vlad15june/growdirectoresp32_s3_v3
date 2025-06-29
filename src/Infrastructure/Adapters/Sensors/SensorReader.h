@@ -130,7 +130,8 @@ public:
                 float value;
                 if (_modbusReader->readRegister(sensor.modbusDeviceAddress, registerConfig, value, portIndex))
                 {
-                    channelValues[registerConfig.channelName] = value;
+                    std::string uid = sensor.uid + "." + (registerConfig.channel < 10 ? "0" : "") + std::to_string(registerConfig.channel + 1);
+                    channelValues[uid] = value;
                     log("SensorReader: Read modbus channel %s, value: %.2f on port %d", registerConfig.channelName.c_str(), value, portIndex);
                 }
                 else
@@ -153,17 +154,8 @@ private:
 
         try
         {
-            // For analog sensors, extract pin from UID or use configuration
-            // Assuming UID format: <module_uid>.<pin>
-            int pinNumber = extractPinFromUid(sensor.uid);
-            if (pinNumber < 0)
-            {
-                log("SensorReader: Could not extract pin from UID %s", sensor.uid.c_str());
-                return false;
-            }
-
-            outValue = _analogReader->readCalibratedValue(pinNumber, sensor.multiplier, sensor.offset);
-            log("SensorReader: Read analog sensor %s, pin %d, value: %.2f", sensor.uid.c_str(), pinNumber, outValue);
+            outValue = _analogReader->readCalibratedValue(sensor.pin, sensor.multiplier, sensor.offset);
+            log("SensorReader: Read analog sensor %s, pin %d, value: %.2f", sensor.uid.c_str(), sensor.pin, outValue);
             return true;
         }
         catch (...)
@@ -223,13 +215,7 @@ private:
             return false;
         }
 
-        int pinNumber = extractPinFromUid(sensor.uid);
-        if (pinNumber < 0)
-        {
-            return false;
-        }
-
-        int rawValue = _analogReader->readRawValue(pinNumber);
+        int rawValue = _analogReader->readRawValue(sensor.pin);
         return rawValue >= 0 && rawValue <= 4095;
     }
 

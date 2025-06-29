@@ -1022,6 +1022,7 @@ public:
         sensor.createdAt = doc["createdAt"] | "";
         sensor.isActive = doc["isActive"] | true;
         sensor.isError = doc["isError"] | false;
+        sensor.pin = doc["pin"] | -1;
         
         std::string statusStr = doc["status"] | "new";
         sensor.status = getSensorStatusFromString(statusStr);
@@ -1096,6 +1097,7 @@ public:
         doc["isActive"] = sensor.isActive;
         doc["isError"] = sensor.isError;
         doc["status"] = getSensorStatusName(sensor.status);
+        doc["pin"] = sensor.pin;
         
         doc["modbusDeviceAddress"] = sensor.modbusDeviceAddress;
         doc["baudRate"] = sensor.baudRate;

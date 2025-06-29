@@ -1054,6 +1054,8 @@ public:
         sensor.createdAt = extractValue(jsonStr, "createdAt");
         sensor.isActive = extractBoolValue(jsonStr, "isActive");
         sensor.isError = extractBoolValue(jsonStr, "isError");
+        sensor.pin = extractIntValue(jsonStr, "pin");
+        if (sensor.pin == 0) sensor.pin = -1; // Default to -1 if not found
         
         std::string statusStr = extractValue(jsonStr, "status");
         if (statusStr.empty()) statusStr = "new"; // default
@@ -1121,6 +1123,7 @@ public:
         oss << ",\"isActive\":" << (sensor.isActive ? "true" : "false");
         oss << ",\"isError\":" << (sensor.isError ? "true" : "false");
         oss << ",\"status\":\"" << getSensorStatusName(sensor.status) << "\"";
+        oss << ",\"pin\":" << sensor.pin;
         oss << ",\"modbusDeviceAddress\":" << sensor.modbusDeviceAddress;
         oss << ",\"baudRate\":" << sensor.baudRate;
         oss << ",\"i2cAddress\":\"" << sensor.i2cAddress << "\"";
