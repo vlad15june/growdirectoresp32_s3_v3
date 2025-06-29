@@ -15,7 +15,7 @@ protected:
     }
 
     std::string getBasePath() const override {
-        return "/rules";
+        return "/data";
     }
 
     // JSON conversion methods

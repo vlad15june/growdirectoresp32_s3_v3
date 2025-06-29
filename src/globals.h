@@ -21,6 +21,7 @@
 #include "Core/Domain/UseCases/ModuleMode/OnChangeLocalIpUseCase.h"
 #include "Core/Domain/UseCases/DeviceControl/ProcessDeviceStateUseCaseFactory.h"
 #include "Core/Domain/UseCases/DeviceControl/DeviceCommandExecutionUseCase.h"
+#include "Core/Domain/UseCases/Sensors/SensorCommandUseCase.h"
 
 #include "Core/Domain/Data/Models/ModuleStructure.h"
 #include "Core/Domain/Data/Models/IDeviceModel.h"
@@ -54,10 +55,20 @@
 #include "Infrastructure/Controllers/API/HybridAPIService.h"
 #include "Infrastructure/Adapters/SPIFFS/SpiffsAdapter.h"
 #include "Infrastructure/Adapters/SPIFFS/SpiffsRuleDao.h"
+#include "Infrastructure/Adapters/SPIFFS/SpiffsSensorDao.h"
+#include "Infrastructure/Adapters/SPIFFS/SpiffsSensorTypeDao.h"
 #include "Infrastructure/Repositories/RuleRepository.h"
+#include "Infrastructure/Repositories/SensorRepository.h"
+#include "Infrastructure/Repositories/SensorTypeRepository.h"
 #include "Application/Services/Devices/IDeviceService.h"
 #include "Application/Services/Devices/DeviceService.h"
 #include "Application/Services/CommandService.h"
+#include "Application/Services/Sensors/ISensorService.h"
+#include "Application/Services/Sensors/SensorService.h"
+#include "Infrastructure/Adapters/Sensors/SensorReader.h"
+#include "Infrastructure/Adapters/Sensors/HardwareSensors/AnalogSensors/AnalogSensorReader.h"
+#include "Infrastructure/Adapters/Sensors/HardwareSensors/ModbusSensors/ModbusSensorReader.h"
+#include "Infrastructure/Adapters/Rs485/ModbusRS485.h"
 
 const char *mqttUser = "GrowDirectorMqtt";
 const char *mqttPassword = "lasdfh329483457sfdjhs92_w";
@@ -132,6 +143,37 @@ DeviceCommandExecutionUseCase deviceCommandExecutionUseCase(
     &mqttLogger,
     &debugSystem);
 
+SpiffsAdapter spiffsAdapter(&mqttLogger, &debugSystem);
+
+SpiffsRuleDao ruleDao(&spiffsAdapter, &jsonConverter);
+RuleRepository ruleRepository(&ruleDao);
+
+SpiffsSensorDao sensorDao(&spiffsAdapter, &jsonConverter);
+SensorRepository sensorRepository(&sensorDao);
+
+SpiffsSensorTypeDao sensorTypeDao(&spiffsAdapter, &jsonConverter);
+SensorTypeRepository sensorTypeRepository(&sensorTypeDao);
+
+HardwareSerial RS485_1(1);
+HardwareSerial RS485_2(2);
+ModbusRS485 modbusRS485_pin1(RS485_1, 19, "ModbusRS485_1", arduinoAdapter, SERIAL_8N1, 18, 16);
+ModbusRS485 modbusRS485_pin2(RS485_2, 20, "ModbusRS485_2", arduinoAdapter, SERIAL_8N1, 15, 14);
+
+// std::vector<IModbusRS485*> modbusPorts = {&modbusRS485_pin1, &modbusRS485_pin2};
+std::vector<IModbusRS485*> modbusPorts = {&modbusRS485_pin1, &modbusRS485_pin2, &modbusRS485_pin1, &modbusRS485_pin2};
+
+AnalogSensorReader analogSensorReader(arduinoAdapter);
+ModbusSensorReader modbusSensorReader(modbusPorts, arduinoAdapter, &mqttLogger, &debugSystem);
+
+SensorReader sensorReader(&analogSensorReader, &modbusSensorReader, &arduinoAdapter, &mqttLogger, &debugSystem);
+
+SensorCommandUseCase sensorCommandUseCase(
+    &moduleConfig,
+    &settings,
+    &mqttLogger,
+    &debugSystem,
+    &sensorRepository);
+
 OnChangeModuleModeUseCase moduleModeUseCase(
     arduinoAdapter,
     moduleConfig,
@@ -174,10 +216,12 @@ HybridAPIService hybridApiService(
 
 CommandService commandService(
     &deviceCommandExecutionUseCase,
+    &sensorCommandUseCase,
     &hybridApiService,
     &mqttLogger,
     &debugSystem,
-    &ntpTimeAdapter);
+    &ntpTimeAdapter,
+    &jsonConverter);
 
 DiagnosticService diagnosticService(
     &restApiService,
@@ -200,11 +244,6 @@ OnChangeLocalIpUseCase onChangeLocalIpUseCase(
     mqttLogger,
     debugSystem);
 
-SpiffsAdapter spiffsAdapter(&mqttLogger, &debugSystem);
-
-SpiffsRuleDao ruleDao(&spiffsAdapter, &jsonConverter);
-RuleRepository ruleRepository(&ruleDao);
-
 ProcessDeviceStateUseCaseFactory deviceStateUseCaseFactory(
     &mqttLogger,
     &debugSystem,
@@ -223,6 +262,17 @@ DeviceService deviceService(
     &mqttLogger,
     &debugSystem);
 
+SensorService sensorService(
+    &moduleConfig,
+    &moduleStructure,
+    &sensorRepository,
+    &sensorReader,
+    &ntpTimeAdapter,
+    &arduinoAdapter,
+    &hybridApiService,
+    &mqttLogger,
+    &debugSystem);
+
 LoopServiceFactory loopServiceFactory(
     &ledUseCases,
     &buttonUseCases,
@@ -235,7 +285,8 @@ LoopServiceFactory loopServiceFactory(
     &onChangeLocalIpUseCase,
     &mqttManager,
     &diagnosticService,
-    &deviceService);
+    &deviceService,
+    &sensorService);
 
 ModuleSetupService moduleSetupService(
     &mqttLogger,
@@ -250,7 +301,12 @@ ModuleSetupService moduleSetupService(
     &loopServiceFactory,
     &mqttManager,
     &moduleStructure,
-    &deviceService);
+    &deviceService,
+    &sensorRepository,
+    &sensorTypeRepository,
+    &sensorReader,
+    &spiffsAdapter,
+    &jsonConverter);
 
 void initDependencies()
 {

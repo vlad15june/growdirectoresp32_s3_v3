@@ -24,6 +24,7 @@ private:
     static constexpr const char* DIAGNOSTIC_TOPIC = "hardware/diagnostic/%s";
     static constexpr const char* UPDATE_TOPIC = "hardware/update/%s";
     static constexpr const char* DEVICE_COMMAND_TOPIC = "hardware/devices_command/%s";
+    static constexpr const char* COMMAND_RESULT_TOPIC = "hardware/command_result/%s";
     
     char _topicBuffer[128];
     
@@ -175,6 +176,33 @@ public:
         
         if (!_mqttManager->publish(topic, commandJson.c_str())) {
             log("MQTT: Failed to publish device command result");
+            return false;
+        }
+        
+        return true;
+    }
+    
+    bool sendCommandResult(const CommandResultDto& commandResult) override {
+        if (_mqttManager == nullptr || !_mqttManager->isConnected()) {
+            log("MQTT: sendCommandResult - MQTT Manager not available or not connected");
+            return false;
+        }
+        
+        if (_jsonConverter == nullptr) {
+            log("MQTT: sendCommandResult - JSON converter not available");
+            return false;
+        }
+        
+        const char* topic = formatTopic(COMMAND_RESULT_TOPIC);
+        if (topic == nullptr) {
+            return false;
+        }
+        
+        std::string commandResultJson = _jsonConverter->commandResultToJson(commandResult);
+        log("MQTT: Publishing command result to topic: %s", topic);
+        
+        if (!_mqttManager->publish(topic, commandResultJson.c_str())) {
+            log("MQTT: Failed to publish command result");
             return false;
         }
         

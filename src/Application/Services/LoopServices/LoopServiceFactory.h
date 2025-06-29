@@ -17,6 +17,7 @@
 #include "Core/Domain/Interfaces/Mqtt/IMqttManager.h"
 #include "Application/Interfaces/IDiagnosticService.h"
 #include "Application/Services/Devices/IDeviceService.h"
+#include "Application/Services/Sensors/ISensorService.h"
 #include <stdexcept>
 
 class LoopServiceFactory : public ILoopServiceFactory {
@@ -33,6 +34,7 @@ private:
     IMqttManager* mqttManager;
     IDiagnosticService* diagnosticService;
     IDeviceService* deviceService;
+    ISensorService* sensorService;
 
 public:
     LoopServiceFactory(
@@ -47,7 +49,8 @@ public:
         IOnChangeLocalIpUseCase* onChangeLocalIpUseCase = nullptr,
         IMqttManager* mqttManager = nullptr,
         IDiagnosticService* diagnosticService = nullptr,
-        IDeviceService* deviceService = nullptr
+        IDeviceService* deviceService = nullptr,
+        ISensorService* sensorService = nullptr
     ) : ledUseCases(ledUseCases),
         buttonUseCases(buttonUseCases),
         moduleModeUseCase(moduleModeUseCase),
@@ -59,7 +62,8 @@ public:
         onChangeLocalIpUseCase(onChangeLocalIpUseCase),
         mqttManager(mqttManager),
         diagnosticService(diagnosticService),
-        deviceService(deviceService) {}
+        deviceService(deviceService),
+        sensorService(sensorService) {}
     
     ~LoopServiceFactory() override = default;
 
@@ -83,6 +87,7 @@ public:
                 configDoneService->setMqttManager(mqttManager);
                 configDoneService->setDiagnosticService(diagnosticService);
                 configDoneService->setDeviceService(deviceService);
+                configDoneService->setSensorService(sensorService);
                 
                 // Then assign to the service unique_ptr
                 service = std::unique_ptr<LoopServiceBase>(configDoneService);
@@ -122,6 +127,11 @@ public:
     // Setter for DeviceService
     void setDeviceService(IDeviceService* service) {
         this->deviceService = service;
+    }
+
+    // Setter for SensorService
+    void setSensorService(ISensorService* service) {
+        this->sensorService = service;
     }
 };
 

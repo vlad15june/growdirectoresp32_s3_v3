@@ -20,6 +20,11 @@
 #include "Core/Domain/Enums/BootTypeEnum.h"
 #include "Core/Domain/Enums/FileSystemStatusEnum.h"
 #include "Application/Services/Devices/IDeviceService.h"
+#include "Core/Domain/Interfaces/Repositories/ISensorRepository.h"
+#include "Core/Domain/Interfaces/Repositories/ISensorTypeRepository.h"
+#include "Core/Domain/Interfaces/Adapters/Sensors/ISensorReader.h"
+#include "Infrastructure/Adapters/SPIFFS/ISpiffsAdapter.h"
+#include "Core/Domain/Interfaces/Adapters/Json/IJsonConverter.h"
 
 class IModuleSetupService
 {
@@ -48,6 +53,11 @@ private:
     IMqttManager *mqttManager;
     ModuleStructure *moduleStructure;
     IDeviceService *deviceService;
+    ISensorRepository *sensorRepository;
+    ISensorTypeRepository *sensorTypeRepository;
+    ISensorReader *sensorReader;
+    ISpiffsAdapter *spiffsAdapter;
+    IJsonConverter *jsonConverter;
 
     void log(const char *format, ...);
 
@@ -78,6 +88,21 @@ private:
     void fillDeviceModuleStructure(Node &node);
     void fillAnalogInputDeviceStructure(Node &node);
 
+    // Helper method for sensor UID generation
+    std::string generateSensorUid(const SensorEntity &sensor, const std::string &sensorNumber = "") const;
+
+    // Helper method for scanning sensors on empty pins
+    void scanEmptyPinsForSensors(Node &node, const std::vector<SensorEntity> &existingSensors);
+    bool isPinOccupied(int pin, const std::vector<SensorEntity> &sensors, const std::string &protocol);
+    void scanPinForSensorTypes(int pin, Node &node);
+
+    // Helper methods for multi-channel sensor handling
+    void addMultiChannelModbusSensor(Node &node, const SensorEntity &sensorEntity);
+    void addMultiChannelI2CSensor(Node &node, const SensorEntity &sensorEntity);
+    void addSingleChannelSensor(Node &node, const SensorEntity &sensorEntity);
+    void addSensorToStructure(Node &node, const SensorEntity &sensorEntity);
+    void removeDisconnectedNewSensorPlaceholders(Node &node, const SensorEntity &sensorEntity);
+
 public:
     friend class ModuleSetupServiceTestHelper;
     friend class FillModuleStructureTestHelper;
@@ -95,7 +120,12 @@ public:
         ILoopServiceFactory *loopServiceFactory = nullptr,
         IMqttManager *mqttManager = nullptr,
         ModuleStructure *moduleStructure = nullptr,
-        IDeviceService *deviceService = nullptr);
+        IDeviceService *deviceService = nullptr,
+        ISensorRepository *sensorRepository = nullptr,
+        ISensorTypeRepository *sensorTypeRepository = nullptr,
+        ISensorReader *sensorReader = nullptr,
+        ISpiffsAdapter *spiffsAdapter = nullptr,
+        IJsonConverter *jsonConverter = nullptr);
 
     void setupModule() override;
     std::unique_ptr<ILoopService> getLoopService() override;
@@ -116,19 +146,29 @@ inline ModuleSetupService::ModuleSetupService(
     ILoopServiceFactory *loopServiceFactory,
     IMqttManager *mqttManager,
     ModuleStructure *moduleStructure,
-    IDeviceService *deviceService) : logger(logger),
-                                    debugSystem(debugSystem),
-                                    moduleConfig(moduleConfig),
-                                    ledAdapter(ledAdapter),
-                                    ledUseCases(ledUseCases),
-                                    buttonUseCases(buttonUseCases),
-                                    wifiAdapter(wifiAdapter),
-                                    wifiManager(wifiManager),
-                                    webServerLauncher(webServerLauncher),
-                                    loopServiceFactory(loopServiceFactory),
-                                    mqttManager(mqttManager),
-                                    moduleStructure(moduleStructure),
-                                    deviceService(deviceService)
+    IDeviceService *deviceService,
+    ISensorRepository *sensorRepository,
+    ISensorTypeRepository *sensorTypeRepository,
+    ISensorReader *sensorReader,
+    ISpiffsAdapter *spiffsAdapter,
+    IJsonConverter *jsonConverter) : logger(logger),
+                                     debugSystem(debugSystem),
+                                     moduleConfig(moduleConfig),
+                                     ledAdapter(ledAdapter),
+                                     ledUseCases(ledUseCases),
+                                     buttonUseCases(buttonUseCases),
+                                     wifiAdapter(wifiAdapter),
+                                     wifiManager(wifiManager),
+                                     webServerLauncher(webServerLauncher),
+                                     loopServiceFactory(loopServiceFactory),
+                                     mqttManager(mqttManager),
+                                     moduleStructure(moduleStructure),
+                                     deviceService(deviceService),
+                                     sensorRepository(sensorRepository),
+                                     sensorTypeRepository(sensorTypeRepository),
+                                     sensorReader(sensorReader),
+                                     spiffsAdapter(spiffsAdapter),
+                                     jsonConverter(jsonConverter)
 {
 }
 
@@ -136,7 +176,7 @@ inline void ModuleSetupService::log(const char *format, ...)
 {
     if (logger != nullptr && debugSystem != nullptr && debugSystem->isFeatureEnabled(DebugFeatures::SETUP_DEBUG))
     {
-        char buffer[128];
+        char buffer[1024];
         va_list args;
         va_start(args, format);
         vsnprintf(buffer, sizeof(buffer), format, args);
@@ -548,32 +588,209 @@ inline void ModuleSetupService::createBaseNodeStructure(Node &node)
     log("SETUP: File system status: %s", node.fileSystem.c_str());
 }
 
+inline void ModuleSetupService::addMultiChannelModbusSensor(Node &node, const SensorEntity &sensorEntity)
+{
+    for (const auto &config : sensorEntity.modbusRegisterConfigs)
+    {
+        Sensor sensor;
+        sensor.uid = sensorEntity.uid + "." + (config.channel < 10 ? "0" : "") + std::to_string(config.channel + 1);
+        sensor.type = config.sensorType.empty() ? sensorEntity.sensorType : config.channelName;
+        sensor.pin = sensorEntity.pin;
+
+        // Search for existing sensor with same UID
+        bool found = false;
+        for (auto &existingSensor : node.sensors)
+        {
+            if (existingSensor.uid == sensor.uid)
+            {
+                existingSensor = sensor; // Replace existing sensor
+                found = true;
+                log("SETUP: Updated existing multi-channel ModBus sensor %s, type: %s, channel: %d, pin: %d",
+                    sensor.uid.c_str(), sensor.type.c_str(), config.channel, sensor.pin);
+                break;
+            }
+        }
+        
+        if (!found)
+        {
+            node.sensors.push_back(sensor);
+            log("SETUP: Added new multi-channel ModBus sensor %s, type: %s, channel: %d, pin: %d",
+                sensor.uid.c_str(), sensor.type.c_str(), config.channel, sensor.pin);
+        }
+    }
+}
+
+inline void ModuleSetupService::addMultiChannelI2CSensor(Node &node, const SensorEntity &sensorEntity)
+{
+    for (const auto &config : sensorEntity.i2cRegisterConfigs)
+    {
+        Sensor sensor;
+        sensor.uid = sensorEntity.uid + "." + (config.channel < 10 ? "0" : "") + std::to_string(config.channel + 1);
+        sensor.type = config.sensorType.empty() ? sensorEntity.sensorType : config.channelName;
+        sensor.pin = sensorEntity.pin;
+
+        // Search for existing sensor with same UID
+        bool found = false;
+        for (auto &existingSensor : node.sensors)
+        {
+            if (existingSensor.uid == sensor.uid)
+            {
+                existingSensor = sensor; // Replace existing sensor
+                found = true;
+                log("SETUP: Updated existing multi-channel I2C sensor %s, type: %s, channel: %d, pin: %d",
+                    sensor.uid.c_str(), sensor.type.c_str(), config.channel, sensor.pin);
+                break;
+            }
+        }
+        
+        if (!found)
+        {
+            node.sensors.push_back(sensor);
+            log("SETUP: Added new multi-channel I2C sensor %s, type: %s, channel: %d, pin: %d",
+                sensor.uid.c_str(), sensor.type.c_str(), config.channel, sensor.pin);
+        }
+    }
+}
+
+inline void ModuleSetupService::addSingleChannelSensor(Node &node, const SensorEntity &sensorEntity)
+{
+    Sensor sensor;
+    sensor.uid = sensorEntity.uid + ".01";
+    sensor.type = sensorEntity.sensorType;
+    sensor.pin = sensorEntity.pin;
+
+    // Search for existing sensor with same UID
+    bool found = false;
+    for (auto &existingSensor : node.sensors)
+    {
+        if (existingSensor.uid == sensor.uid)
+        {
+            existingSensor = sensor; // Replace existing sensor
+            found = true;
+            log("SETUP: Updated existing single-channel sensor %s, type: %s, protocol: %s, pin: %d",
+                sensor.uid.c_str(), sensor.type.c_str(), sensorEntity.protocol.c_str(), sensor.pin);
+            break;
+        }
+    }
+    
+    if (!found)
+    {
+        node.sensors.push_back(sensor);
+        log("SETUP: Added new single-channel sensor %s, type: %s, protocol: %s, pin: %d",
+            sensor.uid.c_str(), sensor.type.c_str(), sensorEntity.protocol.c_str(), sensor.pin);
+    }
+}
+
+inline void ModuleSetupService::addSensorToStructure(Node &node, const SensorEntity &sensorEntity)
+{
+    if (sensorEntity.isMultiChannel())
+    {
+        if (sensorEntity.protocol == "ModBus")
+        {
+            addMultiChannelModbusSensor(node, sensorEntity);
+        }
+        else if (sensorEntity.protocol == "I2C")
+        {
+            addMultiChannelI2CSensor(node, sensorEntity);
+        }
+        else
+        {
+            log("SETUP: Unsupported protocol for multi-channel sensor: %s", sensorEntity.protocol.c_str());
+        }
+    }
+    else
+    {
+        addSingleChannelSensor(node, sensorEntity);
+    }
+}
+
 inline void ModuleSetupService::fillSensorModuleStructure(Node &node)
 {
     log("SETUP: Preparing sensor module structure");
     node.subtype = "sensor";
 
-    std::string macAddress = node.uid;
-    int sensorPinCount = moduleConfig->getSensorPinCount();
-
-    for (int group = 0; group < sensorPinCount; group++)
+    if (!sensorRepository)
     {
-        for (int i = 0; i < 3; i++)
+        log("SETUP: Sensor repository not available, creating placeholder sensors");
+
+        // TODO: only for sensor for hydro without additional sensors
+        // TODO: read connecter sensors
+        // TODO: use setting to understand if sensor is connected, if yes use repository to get sensors with all properties
+        // TODO: try connect to sensor and figureout does sensor online or not
+
+        std::string nodeUid = node.uid;
+        int sensorPinCount = moduleConfig->getSensorPinCount();
+
+        for (int sensorPin = 0; sensorPin < sensorPinCount; sensorPin++)
         {
-            Sensor sensor;
-            sensor.pin = sensorPinCount - group;
-            sensor.type = "none";
+            for (int i = 0; i < 3; i++)
+            {
+                Sensor sensor;
+                sensor.pin = sensorPin;
+                sensor.type = "none";
 
-            char sensorId[20];
-            sprintf(sensorId, ".%02d.%02d", group, i + 1);
-            sensor.uid = macAddress + sensorId;
+                char sensorId[20];
+                sprintf(sensorId, ".%02d.%02d", sensorPin, i + 1);
+                sensor.uid = nodeUid + sensorId;
 
-            node.sensors.push_back(sensor);
+                node.sensors.push_back(sensor);
 
-            log("SETUP: Added sensor group %d index %d, type: %s, pin: %d, uid: %s",
-                group, i, sensor.type.c_str(), sensor.pin, sensor.uid.c_str());
+                log("SETUP: Added placeholder sensor group %d index %d, type: %s, pin: %d, uid: %s",
+                    sensorPin, i, sensor.type.c_str(), sensor.pin, sensor.uid.c_str());
+            }
+        }
+        return;
+    }
+
+    // Read actual sensors from repository
+    auto sensorEntities = sensorRepository->getAll();
+    log("SETUP: Found %zu sensors in repository", sensorEntities.size());
+
+    for (const auto &sensorEntity : sensorEntities)
+    {
+        if (jsonConverter)
+        {
+            std::string sensorJson = jsonConverter->sensorToJson(sensorEntity);
+            log("SETUP: Processing sensor entity: %s", sensorJson.c_str());
+        }
+        else
+        {
+            log("SETUP: Processing sensor entity - UID: %s, Type: %s, Protocol: %s, Status: %s",
+                sensorEntity.uid.c_str(),
+                sensorEntity.sensorType.c_str(),
+                sensorEntity.protocol.c_str(),
+                getSensorStatusName(sensorEntity.status));
+        }
+
+        // Check if sensor is online, if yes then add to structure, if not then mark it as type none
+        if (sensorReader && sensorReader->scanSensor(sensorEntity))
+        {
+            log("SETUP: Sensor %s is online, adding to structure", sensorEntity.uid.c_str());
+            addSensorToStructure(node, sensorEntity);
+        }
+        else
+        {
+            log("SETUP: Sensor %s is offline", sensorEntity.uid.c_str());
+
+            if (sensorEntity.status == SENSOR_STATUS_ADDED)
+            {
+                log("SETUP: Sensor %s was previously added but is now offline, updating status to ERROR", sensorEntity.uid.c_str());
+                // Add the sensor to structure with its original type (not as placeholder)
+                addSensorToStructure(node, sensorEntity);
+            }
+            else
+            {
+                log("SETUP: Sensor %s status is %s, adding placeholder with type 'none'",
+                    sensorEntity.uid.c_str(), getSensorStatusName(sensorEntity.status));
+                removeDisconnectedNewSensorPlaceholders(node, sensorEntity);
+            }
         }
     }
+
+    // Scan empty pins for additional sensors
+    scanEmptyPinsForSensors(node, sensorEntities);
+
+    log("SETUP: Sensor module structure filled with %zu sensors", node.sensors.size());
 }
 
 inline void ModuleSetupService::fillHydroModuleStructure(Node &node)
@@ -753,6 +970,16 @@ inline void ModuleSetupService::fillModuleStructure()
 
 inline void ModuleSetupService::setupModule()
 {
+    if (spiffsAdapter)
+    {
+        spiffsAdapter->initSPIFFS();
+        log("SETUP: SPIFFS initialized");
+    }
+    else
+    {
+        log("SETUP: SPIFFS adapter not available");
+    }
+
     if (!initializeModuleConfiguration())
     {
         log("SETUP: Module setup failed - unable to initialize configuration");
@@ -807,6 +1034,240 @@ inline std::unique_ptr<ILoopService> ModuleSetupService::getLoopService()
     {
         log("SETUP: Error creating loop service: %s", e.what());
         return loopServiceFactory->createLoopService(ModuleModeEnum::USER_CAN_CONFIGURE);
+    }
+}
+
+inline std::string ModuleSetupService::generateSensorUid(const SensorEntity &sensor, const std::string &sensorNumber) const
+{
+    std::string moduleUid = moduleConfig->getModuleUid();
+    std::string baseUid = sensor.uid;
+
+    if (sensor.protocol == "Analog")
+    {
+        return baseUid;
+    }
+    else if (sensor.protocol == "I2C")
+    {
+        return baseUid + "." + sensorNumber;
+    }
+    else if (sensor.protocol == "ModBus")
+    {
+        std::string sensorAddress = std::to_string(sensor.modbusDeviceAddress);
+        return baseUid + "." + sensorAddress + "." + sensorNumber;
+    }
+
+    return baseUid;
+}
+
+inline bool ModuleSetupService::isPinOccupied(int pin, const std::vector<SensorEntity> &sensors, const std::string &protocol)
+{
+    for (const auto &sensor : sensors)
+    {
+        if (sensor.protocol != protocol || sensor.status != SENSOR_STATUS_ADDED)
+            continue;        
+
+        if (sensor.pin == pin)
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
+inline void ModuleSetupService::scanPinForSensorTypes(int pin, Node &node)
+{
+    if (!sensorTypeRepository || !sensorReader)
+    {
+        log("SETUP: Cannot scan pin %d - missing dependencies", pin);
+        return;
+    }
+
+    log("SETUP: Scanning pin %d for connected sensors", pin);
+
+    // Get all sensor types for scanning
+    auto allSensorTypes = sensorTypeRepository->getAll();
+    if (allSensorTypes.empty())
+    {
+        log("SETUP: No sensor types available for scanning");
+        return;
+    }
+
+    bool isAdded = false;
+    std::string moduleUid = moduleConfig->getModuleUid();
+    for (const auto &sensorType : allSensorTypes)
+    {
+        SensorEntity tempSensor;
+        tempSensor.sensorType = sensorType.name;
+        tempSensor.model = sensorType.name;
+        tempSensor.protocol = sensorType.getProtocolString();
+        tempSensor.isActive = true;
+        tempSensor.pin = pin + 1;
+        char pinStr[3];
+        sprintf(pinStr, "%02d", pin);
+        tempSensor.uid = moduleUid + "." + pinStr;
+        tempSensor.status = SensorStatusEnum::SENSOR_STATUS_NEW;
+
+        if (sensorType.isI2CSensor())
+        {
+            tempSensor.i2cAddress = sensorType.i2cAddress;
+            tempSensor.chipType = sensorType.chipType;
+            tempSensor.i2cRegisterConfigs.clear();
+            for (const auto &regConfig : sensorType.i2cRegisterConfig)
+            {
+                tempSensor.i2cRegisterConfigs.push_back(regConfig);
+            }
+        }
+        else if (sensorType.isModbusSensor())
+        {
+            tempSensor.modbusDeviceAddress = sensorType.modbusDeviceAddress;
+            tempSensor.baudRate = sensorType.baudRate;
+            tempSensor.modbusRegisterConfigs = sensorType.modbusRegisterConfig;
+        }
+
+        if (sensorReader->scanSensor(tempSensor))
+        {
+            log("SETUP: Detected %s sensor on pin %d", sensorType.name.c_str(), pin);
+
+            isAdded = true;
+
+            addSensorToStructure(node, tempSensor);
+
+            if (sensorRepository)
+            {
+                if (sensorRepository->createOrUpdateSensor(tempSensor))
+                {
+                    log("SETUP: Successfully saved detected sensor %s to repository with NEW status", tempSensor.uid.c_str());
+                }
+                else
+                {
+                    log("SETUP: Failed to save detected sensor %s to repository", tempSensor.uid.c_str());
+                }
+            }
+            else
+            {
+                log("SETUP: Sensor repository not available, cannot save detected sensor");
+            }
+
+            break;
+        }
+    }
+
+    if (isAdded == false)
+    {
+        for (int i = 0; i < 3; i++)
+        {
+            Sensor sensor;
+            sensor.pin = pin;
+            sensor.type = "none";
+
+            char sensorId[20];
+            sprintf(sensorId, ".%02d.%02d", pin, i + 1);
+            sensor.uid = node.uid + sensorId;
+
+            node.sensors.push_back(sensor);
+
+            log("SETUP: Added placeholder sensor group %d index %d, type: %s, pin: %d, uid: %s",
+                pin, i, sensor.type.c_str(), sensor.pin, sensor.uid.c_str());
+        }
+    }
+}
+
+inline void ModuleSetupService::scanEmptyPinsForSensors(Node &node, const std::vector<SensorEntity> &existingSensors)
+{
+    if (!sensorTypeRepository || !sensorReader)
+    {
+        log("SETUP: Cannot scan for sensors - missing sensor type repository or reader");
+        return;
+    }
+
+    int sensorPinCount = moduleConfig->getSensorPinCount();
+    log("SETUP: Scanning %d pins for undetected sensors", sensorPinCount);
+
+    // Check each available pin
+    for (int pin = 0; pin < sensorPinCount; pin++)
+    {
+        bool pinOccupied = false;
+
+        // Check if pin is occupied by analog sensors
+        if (isPinOccupied(pin, existingSensors, "Analog"))
+        {
+            pinOccupied = true;
+        }
+
+        // Check if pin is occupied by I2C sensors (less common to use pin numbers)
+        if (!pinOccupied && isPinOccupied(pin, existingSensors, "I2C"))
+        {
+            pinOccupied = true;
+        }
+
+        // Check if pin is occupied by ModBus sensors
+        if (!pinOccupied && isPinOccupied(pin, existingSensors, "ModBus"))
+        {
+            pinOccupied = true;
+        }
+
+        if (!pinOccupied)
+        {
+            log("SETUP: Pin %d is empty, scanning for sensors", pin);
+            scanPinForSensorTypes(pin, node);
+        }
+        else
+        {
+            log("SETUP: Pin %d is occupied by existing sensor", pin);
+        }
+    }
+}
+
+inline void ModuleSetupService::removeDisconnectedNewSensorPlaceholders(Node &node, const SensorEntity &sensorEntity)
+{
+    if (sensorEntity.isMultiChannel())
+    {
+        if (sensorEntity.protocol == "ModBus")
+        {
+            for (const auto &config : sensorEntity.modbusRegisterConfigs)
+            {
+                Sensor sensor;
+                sensor.uid = sensorEntity.uid + "." + (config.channel < 10 ? "0" : "") + std::to_string(config.channel + 1);
+                sensor.type = "none";
+                sensor.pin = sensorEntity.pin;
+
+                node.sensors.push_back(sensor);
+
+                log("SETUP: Added offline ModBus sensor placeholder %s, type: none, channel: %d, pin: %d",
+                    sensor.uid.c_str(), config.channel, sensor.pin);
+            }
+        }
+        else if (sensorEntity.protocol == "I2C")
+        {
+            for (const auto &config : sensorEntity.i2cRegisterConfigs)
+            {
+                Sensor sensor;
+                sensor.uid = sensorEntity.uid + "." + (config.channel < 10 ? "0" : "") + std::to_string(config.channel + 1);
+                sensor.type = "none";
+                sensor.pin = sensorEntity.pin;
+
+                node.sensors.push_back(sensor);
+
+                log("SETUP: Added offline I2C sensor placeholder %s, type: none, channel: %d, pin: %d",
+                    sensor.uid.c_str(), config.channel, sensor.pin);
+            }
+        }
+        else
+        {
+            log("SETUP: Unsupported protocol for offline multi-channel sensor: %s", sensorEntity.protocol.c_str());
+        }
+    }
+    else
+    {
+        Sensor sensor;
+        sensor.uid = sensorEntity.uid + ".01";
+        sensor.type = "none";
+        sensor.pin = sensorEntity.pin;
+
+        node.sensors.push_back(sensor);
+
+        log("SETUP: Added offline single-channel sensor placeholder %s, type: none, protocol: %s, pin: %d",
+            sensor.uid.c_str(), sensorEntity.protocol.c_str(), sensor.pin);
     }
 }
 

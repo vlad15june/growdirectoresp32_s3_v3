@@ -6,8 +6,10 @@
 #include "Application/DTOs/DiagnosticDto.h"
 #include "Application/DTOs/UpdateDto.h"
 #include "Application/DTOs/CommandDto.h"
+#include "Application/DTOs/CommandResultDto.h"
 #include "Application/DTOs/DeviceCommandUpdateDto.h"
 #include "Application/DTOs/DeviceCommandDto.h"
+#include "Core/Domain/Enums/SensorStatusEnum.h"
 #include <string>
 #include <sstream>
 #include <algorithm>
@@ -20,12 +22,9 @@ static std::string extractValue(const std::string &src, const std::string &key)
     auto colon = src.find(':', keyPos);
     if (colon == std::string::npos)
         return "";
-
-    // Skip spaces after colon
     size_t valueStart = colon + 1;
     while (valueStart < src.size() && std::isspace(src[valueStart]))
         ++valueStart;
-
     if (valueStart < src.size() && src[valueStart] == '"')
     {
         auto start = valueStart;
@@ -34,16 +33,13 @@ static std::string extractValue(const std::string &src, const std::string &key)
             return "";
         return src.substr(start + 1, end - start - 1);
     }
-
     if (src.substr(valueStart, 4) == "null")
     {
         return "";
     }
-
     return "";
 }
 
-// Helper function to extract array section
 static std::string extractArray(const std::string &src, const std::string &key)
 {
     auto keyPos = src.find("\"" + key + "\"");
@@ -65,7 +61,6 @@ static std::string extractArray(const std::string &src, const std::string &key)
     return src.substr(start, end - start);
 }
 
-// Helper function to split array items (top-level only)
 static std::vector<std::string> splitObjects(const std::string &arrayStr)
 {
     std::vector<std::string> result;
@@ -91,7 +86,6 @@ static std::vector<std::string> splitObjects(const std::string &arrayStr)
     return result;
 }
 
-// Helper function to extract int value
 static int extractIntValue(const std::string &src, const std::string &key)
 {
     auto keyPos = src.find("\"" + key + "\"");
@@ -100,34 +94,27 @@ static int extractIntValue(const std::string &src, const std::string &key)
     auto colon = src.find(':', keyPos);
     if (colon == std::string::npos)
         return 0;
-
-    // Skip spaces after colon
     size_t valueStart = colon + 1;
     while (valueStart < src.size() && std::isspace(src[valueStart]))
         ++valueStart;
-
     if (valueStart + 4 <= src.size() && src.substr(valueStart, 4) == "null")
     {
         return 0;
     }
-
     auto start = valueStart;
     if (start < src.size() && src[start] == '-')
     {
-        ++start; // Skip the minus sign
+        ++start;
     }
-
     if (start >= src.size() || !std::isdigit(src[start]))
     {
         return 0;
     }
-
     auto end = src.find_first_not_of("0123456789", start);
     if (end == std::string::npos)
     {
         end = src.size();
     }
-
     try
     {
         std::string numStr = src.substr(valueStart, end - valueStart);
@@ -139,7 +126,6 @@ static int extractIntValue(const std::string &src, const std::string &key)
     }
 }
 
-// Helper function to extract double value
 static double extractDoubleValue(const std::string &src, const std::string &key)
 {
     auto keyPos = src.find("\"" + key + "\"");
@@ -157,7 +143,6 @@ static double extractDoubleValue(const std::string &src, const std::string &key)
     return std::stod(src.substr(start, end - start));
 }
 
-// Helper function to extract bool value
 static bool extractBoolValue(const std::string &src, const std::string &key)
 {
     auto keyPos = src.find("\"" + key + "\"");
@@ -166,12 +151,9 @@ static bool extractBoolValue(const std::string &src, const std::string &key)
     auto colon = src.find(':', keyPos);
     if (colon == std::string::npos)
         return false;
-
-    // Skip spaces after colon
     size_t valueStart = colon + 1;
     while (valueStart < src.size() && std::isspace(src[valueStart]))
         ++valueStart;
-
     return src.substr(valueStart, 4) == "true";
 }
 
@@ -827,6 +809,8 @@ public:
     {
         commandDto.growDirectorUid = extractValue(jsonStr, "growDirectorUid");
         commandDto.type = extractValue(jsonStr, "type");
+        commandDto.createdAt = extractValue(jsonStr, "createdAt");
+        commandDto.commandUid = extractValue(jsonStr, "commandUid");
 
         // DeviceCommandNotification fields
         if (commandDto.isDeviceCommand())
@@ -856,6 +840,11 @@ public:
         {
             commandDto.sensorUid = extractValue(jsonStr, "sensorUid");
             commandDto.sensorType = extractValue(jsonStr, "sensorType");
+            commandDto.model = extractValue(jsonStr, "model");
+            commandDto.command = extractValue(jsonStr, "command");
+            
+            // Extract options object as JSON string (simplified)
+            commandDto.options = extractJsonObject(jsonStr, "options");
         }
 
         return true;
@@ -867,6 +856,16 @@ public:
         oss << "{";
         oss << "\"growDirectorUid\":\"" << commandDto.growDirectorUid << "\"";
         oss << ",\"type\":\"" << commandDto.type << "\"";
+        
+        if (!commandDto.createdAt.empty())
+        {
+            oss << ",\"createdAt\":\"" << commandDto.createdAt << "\"";
+        }
+        
+        if (!commandDto.commandUid.empty())
+        {
+            oss << ",\"commandUid\":\"" << commandDto.commandUid << "\"";
+        }
 
         // DeviceCommandNotification fields
         if (commandDto.isDeviceCommand())
@@ -896,10 +895,50 @@ public:
         {
             oss << ",\"sensorUid\":\"" << commandDto.sensorUid << "\"";
             oss << ",\"sensorType\":\"" << commandDto.sensorType << "\"";
+            
+            if (!commandDto.model.empty())
+            {
+                oss << ",\"model\":\"" << commandDto.model << "\"";
+            }
+            
+            if (!commandDto.command.empty())
+            {
+                oss << ",\"command\":\"" << commandDto.command << "\"";
+            }
+            
+            if (!commandDto.options.empty())
+            {
+                oss << ",\"options\":" << commandDto.options;
+            }
         }
 
         oss << "}";
         return oss.str();
+    }
+
+    std::string commandResultToJson(const CommandResultDto &commandResultDto) override
+    {
+        std::ostringstream oss;
+        oss << "{";
+        oss << "\"status\":\"" << commandResultDto.status << "\"";
+        oss << ",\"command\":\"" << commandResultDto.command << "\"";
+        
+        if (!commandResultDto.message.empty())
+        {
+            oss << ",\"message\":\"" << commandResultDto.message << "\"";
+        }
+        
+        oss << "}";
+        return oss.str();
+    }
+
+    bool commandResultFromJson(const std::string &jsonStr, CommandResultDto &commandResultDto) override
+    {
+        commandResultDto.status = extractValue(jsonStr, "status");
+        commandResultDto.command = extractValue(jsonStr, "command");
+        commandResultDto.message = extractValue(jsonStr, "message");
+
+        return !commandResultDto.status.empty() && !commandResultDto.command.empty();
     }
 
     std::string deviceCommandUpdateToJson(const DeviceCommandUpdateDto& commandUpdateDto) override
@@ -1123,6 +1162,437 @@ public:
         }
 
         return !ruleStateUpdate.rules.empty() || jsonStr.find("\"rules\":[]") != std::string::npos;
+    }
+
+    bool sensorFromJson(const std::string &jsonStr, SensorEntity &sensor) override
+    {
+        sensor.uid = extractValue(jsonStr, "uid");
+        sensor.sensorType = extractValue(jsonStr, "sensorType");
+        sensor.model = extractValue(jsonStr, "model");
+        sensor.protocol = extractValue(jsonStr, "protocol");
+        sensor.createdAt = extractValue(jsonStr, "createdAt");
+        sensor.isActive = extractBoolValue(jsonStr, "isActive");
+        sensor.isError = extractBoolValue(jsonStr, "isError");
+        sensor.pin = extractIntValue(jsonStr, "pin");
+        if (sensor.pin == 0) sensor.pin = -1; // Default to -1 if not found
+        
+        std::string statusStr = extractValue(jsonStr, "status");
+        if (statusStr.empty()) statusStr = "new"; // default
+        sensor.status = getSensorStatusFromString(statusStr);
+        
+        sensor.modbusDeviceAddress = extractIntValue(jsonStr, "modbusDeviceAddress");
+        sensor.baudRate = extractIntValue(jsonStr, "baudRate");
+        sensor.i2cAddress = extractValue(jsonStr, "i2cAddress");
+        sensor.chipType = extractValue(jsonStr, "chipType");
+        
+        sensor.currentValue = static_cast<float>(extractDoubleValue(jsonStr, "currentValue"));
+        sensor.lastReadTime = static_cast<uint32_t>(extractIntValue(jsonStr, "lastReadTime"));
+
+        // Simple channel values parsing (basic implementation)
+        sensor.channelValues.clear();
+        // Note: This is a simplified implementation. A full implementation would parse the channelValues object
+
+        // Parse modbus register configs
+        sensor.modbusRegisterConfigs.clear();
+        std::string modbusConfigsArr = extractArray(jsonStr, "modbusRegisterConfigs");
+        auto modbusConfigObjs = splitObjects(modbusConfigsArr);
+        for (const auto &configStr : modbusConfigObjs)
+        {
+            ModbusRegisterConfig config;
+            config.functionCode = static_cast<uint8_t>(extractIntValue(configStr, "functionCode"));
+            config.startRegister = static_cast<uint16_t>(extractIntValue(configStr, "startRegister"));
+            config.numRegisters = static_cast<uint16_t>(extractIntValue(configStr, "numRegisters"));
+            config.multiplier = static_cast<float>(extractDoubleValue(configStr, "multiplier"));
+            config.offset = static_cast<float>(extractDoubleValue(configStr, "offset"));
+            config.channelName = extractValue(configStr, "channel_name");
+            config.channel = static_cast<uint8_t>(extractIntValue(configStr, "channel"));
+            config.sensorType = extractValue(configStr, "sensorType");
+            sensor.modbusRegisterConfigs.push_back(config);
+        }
+
+        // Parse i2c register configs
+        sensor.i2cRegisterConfigs.clear();
+        std::string i2cConfigsArr = extractArray(jsonStr, "i2cRegisterConfigs");
+        auto i2cConfigObjs = splitObjects(i2cConfigsArr);
+        for (const auto &configStr : i2cConfigObjs)
+        {
+            I2CRegisterConfig config;
+            config.registerAddr = static_cast<uint16_t>(extractIntValue(configStr, "register"));
+            config.length = static_cast<uint8_t>(extractIntValue(configStr, "length"));
+            config.multiplier = static_cast<float>(extractDoubleValue(configStr, "multiplier"));
+            config.offset = static_cast<float>(extractDoubleValue(configStr, "offset"));
+            config.channelName = extractValue(configStr, "channel_name");
+            config.channel = static_cast<uint8_t>(extractIntValue(configStr, "channel"));
+            config.sensorType = extractValue(configStr, "sensorType");
+            sensor.i2cRegisterConfigs.push_back(config);
+        }
+
+        return true;
+    }
+
+    std::string sensorToJson(const SensorEntity &sensor) override
+    {
+        std::ostringstream oss;
+        oss << "{";
+        oss << "\"uid\":\"" << sensor.uid << "\"";
+        oss << ",\"sensorType\":\"" << sensor.sensorType << "\"";
+        oss << ",\"model\":\"" << sensor.model << "\"";
+        oss << ",\"protocol\":\"" << sensor.protocol << "\"";
+        oss << ",\"createdAt\":\"" << sensor.createdAt << "\"";
+        oss << ",\"isActive\":" << (sensor.isActive ? "true" : "false");
+        oss << ",\"isError\":" << (sensor.isError ? "true" : "false");
+        oss << ",\"status\":\"" << getSensorStatusName(sensor.status) << "\"";
+        oss << ",\"pin\":" << sensor.pin;
+        oss << ",\"modbusDeviceAddress\":" << sensor.modbusDeviceAddress;
+        oss << ",\"baudRate\":" << sensor.baudRate;
+        oss << ",\"i2cAddress\":\"" << sensor.i2cAddress << "\"";
+        oss << ",\"chipType\":\"" << sensor.chipType << "\"";
+        oss << ",\"currentValue\":" << sensor.currentValue;
+        oss << ",\"lastReadTime\":" << sensor.lastReadTime;
+
+        // Add channel values
+        if (!sensor.channelValues.empty())
+        {
+            oss << ",\"channelValues\":{";
+            for (size_t i = 0; i < sensor.channelValues.size(); ++i)
+            {
+                const auto& pair = sensor.channelValues[i];
+                oss << "\"" << pair.first << "\":" << pair.second;
+                if (i + 1 < sensor.channelValues.size())
+                    oss << ",";
+            }
+            oss << "}";
+        }
+
+        // Add modbus register configs
+        if (!sensor.modbusRegisterConfigs.empty())
+        {
+            oss << ",\"modbusRegisterConfigs\":[";
+            for (size_t i = 0; i < sensor.modbusRegisterConfigs.size(); ++i)
+            {
+                const auto& config = sensor.modbusRegisterConfigs[i];
+                oss << "{";
+                oss << "\"functionCode\":" << static_cast<int>(config.functionCode);
+                oss << ",\"startRegister\":" << config.startRegister;
+                oss << ",\"numRegisters\":" << config.numRegisters;
+                oss << ",\"multiplier\":" << config.multiplier;
+                oss << ",\"offset\":" << config.offset;
+                oss << ",\"channel_name\":\"" << config.channelName << "\"";
+                oss << ",\"channel\":" << static_cast<int>(config.channel);
+                oss << ",\"sensorType\":\"" << config.sensorType << "\"";
+                oss << "}";
+                if (i + 1 < sensor.modbusRegisterConfigs.size())
+                    oss << ",";
+            }
+            oss << "]";
+        }
+
+        // Add i2c register configs
+        if (!sensor.i2cRegisterConfigs.empty())
+        {
+            oss << ",\"i2cRegisterConfigs\":[";
+            for (size_t i = 0; i < sensor.i2cRegisterConfigs.size(); ++i)
+            {
+                const auto& config = sensor.i2cRegisterConfigs[i];
+                oss << "{";
+                oss << "\"register\":" << config.registerAddr;
+                oss << ",\"length\":" << static_cast<int>(config.length);
+                oss << ",\"multiplier\":" << config.multiplier;
+                oss << ",\"offset\":" << config.offset;
+                oss << ",\"channel_name\":\"" << config.channelName << "\"";
+                oss << ",\"channel\":" << static_cast<int>(config.channel);
+                oss << ",\"sensorType\":\"" << config.sensorType << "\"";
+                oss << "}";
+                if (i + 1 < sensor.i2cRegisterConfigs.size())
+                    oss << ",";
+            }
+            oss << "]";
+        }
+
+        oss << "}";
+        return oss.str();
+    }
+
+    bool sensorsFromJson(const std::string &jsonStr, std::vector<SensorEntity> &sensors) override
+    {
+        sensors.clear();
+        auto sensorObjs = splitObjects(jsonStr);
+        for (const auto &sensorStr : sensorObjs)
+        {
+            SensorEntity sensor;
+            if (sensorFromJson(sensorStr, sensor))
+            {
+                sensors.push_back(sensor);
+            }
+        }
+        return !sensors.empty();
+    }
+
+    std::string sensorsToJson(const std::vector<SensorEntity> &sensors) override
+    {
+        std::ostringstream oss;
+        oss << "[";
+        for (size_t i = 0; i < sensors.size(); ++i)
+        {
+            oss << sensorToJson(sensors[i]);
+            if (i + 1 < sensors.size())
+                oss << ",";
+        }
+        oss << "]";
+        return oss.str();
+    }
+
+    bool modbusRegisterConfigFromJson(const std::string &jsonStr, ModbusRegisterConfig &config) override
+    {
+        config.functionCode = extractIntValue(jsonStr, "functionCode");
+        config.startRegister = static_cast<uint16_t>(extractIntValue(jsonStr, "startRegister"));
+        config.numRegisters = static_cast<uint16_t>(extractIntValue(jsonStr, "numRegisters"));
+        config.multiplier = static_cast<float>(extractDoubleValue(jsonStr, "multiplier"));
+        config.offset = static_cast<float>(extractDoubleValue(jsonStr, "offset"));
+        config.channelName = extractValue(jsonStr, "channel_name");
+        config.channel = static_cast<uint8_t>(extractIntValue(jsonStr, "channel"));
+        config.sensorType = extractValue(jsonStr, "sensorType");
+
+        return !config.channelName.empty();
+    }
+
+    std::string modbusRegisterConfigToJson(const ModbusRegisterConfig &config) override
+    {
+        std::ostringstream oss;
+        oss << "{";
+        oss << "\"functionCode\":" << static_cast<int>(config.functionCode);
+        oss << ",\"startRegister\":" << config.startRegister;
+        oss << ",\"numRegisters\":" << config.numRegisters;
+        oss << ",\"multiplier\":" << config.multiplier;
+        oss << ",\"offset\":" << config.offset;
+        oss << ",\"channel_name\":\"" << config.channelName << "\"";
+        oss << ",\"channel\":" << static_cast<int>(config.channel);
+        oss << ",\"sensorType\":\"" << config.sensorType << "\"";
+        oss << "}";
+        return oss.str();
+    }
+
+    bool modbusRegisterConfigsFromJson(const std::string &jsonStr, std::vector<ModbusRegisterConfig> &configs) override
+    {
+        configs.clear();
+        auto configObjs = splitObjects(jsonStr);
+        for (const auto &configStr : configObjs)
+        {
+            ModbusRegisterConfig config;
+            if (modbusRegisterConfigFromJson(configStr, config))
+            {
+                configs.push_back(config);
+            }
+        }
+        return !configs.empty();
+    }
+
+    std::string modbusRegisterConfigsToJson(const std::vector<ModbusRegisterConfig> &configs) override
+    {
+        std::ostringstream oss;
+        oss << "[";
+        for (size_t i = 0; i < configs.size(); ++i)
+        {
+            oss << modbusRegisterConfigToJson(configs[i]);
+            if (i + 1 < configs.size())
+                oss << ",";
+        }
+        oss << "]";
+        return oss.str();
+    }
+
+    bool i2cRegisterConfigFromJson(const std::string &jsonStr, I2CRegisterConfig &config) override
+    {
+        config.registerAddr = static_cast<uint16_t>(extractIntValue(jsonStr, "register"));
+        config.length = static_cast<uint8_t>(extractIntValue(jsonStr, "length"));
+        config.multiplier = static_cast<float>(extractDoubleValue(jsonStr, "multiplier"));
+        config.offset = static_cast<float>(extractDoubleValue(jsonStr, "offset"));
+        config.channelName = extractValue(jsonStr, "channel_name");
+        config.channel = static_cast<uint8_t>(extractIntValue(jsonStr, "channel"));
+        config.sensorType = extractValue(jsonStr, "sensorType");
+
+        return true;
+    }
+
+    std::string i2cRegisterConfigToJson(const I2CRegisterConfig &config) override
+    {
+        std::ostringstream oss;
+        oss << "{";
+        oss << "\"register\":" << config.registerAddr;
+        oss << ",\"length\":" << static_cast<int>(config.length);
+        oss << ",\"multiplier\":" << config.multiplier;
+        oss << ",\"offset\":" << config.offset;
+        oss << "}";
+        return oss.str();
+    }
+
+    bool i2cRegisterConfigsFromJson(const std::string &jsonStr, std::vector<I2CRegisterConfig> &configs) override
+    {
+        configs.clear();
+        auto configObjs = splitObjects(jsonStr);
+        for (const auto &configStr : configObjs)
+        {
+            I2CRegisterConfig config;
+            if (i2cRegisterConfigFromJson(configStr, config))
+            {
+                // Extract channel name and channel from the config JSON
+                config.channelName = extractValue(configStr, "channel_name");
+                config.channel = static_cast<uint8_t>(extractIntValue(configStr, "channel"));
+                config.sensorType = extractValue(configStr, "sensorType");
+                configs.push_back(config);
+            }
+        }
+        return !configs.empty();
+    }
+
+    std::string i2cRegisterConfigsToJson(const std::vector<I2CRegisterConfig> &configs) override
+    {
+        std::ostringstream oss;
+        oss << "[";
+        for (size_t i = 0; i < configs.size(); ++i)
+        {
+            const auto& config = configs[i];
+            oss << "{";
+            oss << "\"register\":" << config.registerAddr;
+            oss << ",\"length\":" << static_cast<int>(config.length);
+            oss << ",\"multiplier\":" << config.multiplier;
+            oss << ",\"offset\":" << config.offset;
+            oss << ",\"channel_name\":\"" << config.channelName << "\"";
+            oss << ",\"channel\":" << static_cast<int>(config.channel);
+            oss << ",\"sensorType\":\"" << config.sensorType << "\"";
+            oss << "}";
+            if (i + 1 < configs.size())
+                oss << ",";
+        }
+        oss << "]";
+        return oss.str();
+    }
+
+private:
+    /**
+     * @brief Extract JSON object as string
+     * @param json Source JSON string
+     * @param key Key to extract
+     * @return JSON object as string
+     */
+    std::string extractJsonObject(const std::string& json, const std::string& key)
+    {
+        std::string searchKey = "\"" + key + "\"";
+        size_t keyPos = json.find(searchKey);
+        if (keyPos == std::string::npos) return "";
+        
+        size_t colonPos = json.find(":", keyPos);
+        if (colonPos == std::string::npos) return "";
+        
+        size_t valueStart = colonPos + 1;
+        while (valueStart < json.size() && std::isspace(json[valueStart])) valueStart++;
+        if (valueStart < json.size() && json[valueStart] == '{')
+        {
+            int braceCount = 1;
+            size_t valueEnd = valueStart + 1;
+            while (valueEnd < json.size() && braceCount > 0)
+            {
+                if (json[valueEnd] == '{') braceCount++;
+                else if (json[valueEnd] == '}') braceCount--;
+                valueEnd++;
+            }
+            if (braceCount == 0)
+            {
+                return json.substr(valueStart, valueEnd - valueStart);
+            }
+        }
+        return "";
+    }
+
+    // SensorType conversion methods
+    bool sensorTypeFromJson(const std::string &jsonStr, SensorType &sensorType) override
+    {
+        sensorType.id = extractIntValue(jsonStr, "id");
+        sensorType.name = extractValue(jsonStr, "name");
+        sensorType.displayName = extractValue(jsonStr, "displayName");
+        sensorType.isAnalog = extractBoolValue(jsonStr, "isAnalog");
+        sensorType.canCalibrate = extractBoolValue(jsonStr, "canCalibrate");
+        sensorType.validCalibrationPeriodDays = extractIntValue(jsonStr, "validCalibrationPeriodDays");
+        sensorType.calibrationTimeInSeconds = extractIntValue(jsonStr, "calibrationTimeInSeconds");
+        sensorType.minValue = static_cast<float>(extractDoubleValue(jsonStr, "minValue"));
+        sensorType.maxValue = static_cast<float>(extractDoubleValue(jsonStr, "maxValue"));
+        sensorType.limitMinValue = static_cast<float>(extractDoubleValue(jsonStr, "limitMinValue"));
+        sensorType.limitMaxValue = static_cast<float>(extractDoubleValue(jsonStr, "limitMaxValue"));
+        sensorType.unit = extractValue(jsonStr, "unit");
+        sensorType.step = static_cast<float>(extractDoubleValue(jsonStr, "step"));
+        sensorType.precisionPercent = static_cast<float>(extractDoubleValue(jsonStr, "precisionPercent"));
+        sensorType.precisionValue = static_cast<float>(extractDoubleValue(jsonStr, "precisionValue"));
+        
+        std::string protocolStr = extractValue(jsonStr, "protocol");
+        sensorType.setProtocolFromString(protocolStr);
+        
+        sensorType.i2cAddress = extractValue(jsonStr, "i2cAddress");
+        sensorType.chipType = extractValue(jsonStr, "chipType");
+        sensorType.modbusDeviceAddress = extractIntValue(jsonStr, "modbusDeviceAddress");
+        sensorType.baudRate = extractIntValue(jsonStr, "baudRate");
+
+        // Parse arrays (simplified implementation)
+        sensorType.i2cRegisterConfig.clear();
+        sensorType.modbusRegisterConfig.clear();
+
+        return !sensorType.name.empty();
+    }
+
+    std::string sensorTypeToJson(const SensorType &sensorType) override
+    {
+        std::ostringstream oss;
+        oss << "{";
+        oss << "\"id\":" << sensorType.id;
+        oss << ",\"name\":\"" << sensorType.name << "\"";
+        oss << ",\"displayName\":\"" << sensorType.displayName << "\"";
+        oss << ",\"isAnalog\":" << (sensorType.isAnalog ? "true" : "false");
+        oss << ",\"canCalibrate\":" << (sensorType.canCalibrate ? "true" : "false");
+        oss << ",\"validCalibrationPeriodDays\":" << sensorType.validCalibrationPeriodDays;
+        oss << ",\"calibrationTimeInSeconds\":" << sensorType.calibrationTimeInSeconds;
+        oss << ",\"minValue\":" << sensorType.minValue;
+        oss << ",\"maxValue\":" << sensorType.maxValue;
+        oss << ",\"limitMinValue\":" << sensorType.limitMinValue;
+        oss << ",\"limitMaxValue\":" << sensorType.limitMaxValue;
+        oss << ",\"unit\":\"" << sensorType.unit << "\"";
+        oss << ",\"step\":" << sensorType.step;
+        oss << ",\"precisionPercent\":" << sensorType.precisionPercent;
+        oss << ",\"precisionValue\":" << sensorType.precisionValue;
+        oss << ",\"protocol\":\"" << sensorType.getProtocolString() << "\"";
+        oss << ",\"i2cAddress\":\"" << sensorType.i2cAddress << "\"";
+        oss << ",\"chipType\":\"" << sensorType.chipType << "\"";
+        oss << ",\"modbusDeviceAddress\":" << sensorType.modbusDeviceAddress;
+        oss << ",\"baudRate\":" << sensorType.baudRate;
+        oss << "}";
+        return oss.str();
+    }
+
+    bool sensorTypesFromJson(const std::string &jsonStr, std::vector<SensorType> &sensorTypes) override
+    {
+        sensorTypes.clear();
+        auto typeObjs = splitObjects(jsonStr);
+        for (const auto &typeStr : typeObjs)
+        {
+            SensorType sensorType;
+            if (sensorTypeFromJson(typeStr, sensorType))
+            {
+                sensorTypes.push_back(sensorType);
+            }
+        }
+        return !sensorTypes.empty();
+    }
+
+    std::string sensorTypesToJson(const std::vector<SensorType> &sensorTypes) override
+    {
+        std::ostringstream oss;
+        oss << "[";
+        for (size_t i = 0; i < sensorTypes.size(); ++i)
+        {
+            oss << sensorTypeToJson(sensorTypes[i]);
+            if (i + 1 < sensorTypes.size())
+                oss << ",";
+        }
+        oss << "]";
+        return oss.str();
     }
 };
 

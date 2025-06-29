@@ -3,9 +3,11 @@
 #include "Core/Domain/Interfaces/Adapters/Json/IJsonConverter.h"
 #include "Application/DTOs/UpdateDto.h"
 #include "Application/DTOs/CommandDto.h"
+#include "Application/DTOs/CommandResultDto.h"
 #include "Application/DTOs/DeviceCommandUpdateDto.h"
 #include "Application/DTOs/DeviceCommandDto.h"
 #include "Application/DTOs/RuleStateUpdateDto.h"
+#include "Core/Domain/Enums/SensorStatusEnum.h"
 #include <ArduinoJson.h>
 
 class ArduinoJsonConverter : public IJsonConverter
@@ -733,6 +735,8 @@ public:
 
         commandDto.growDirectorUid = doc["growDirectorUid"] | "";
         commandDto.type = doc["type"] | "";
+        commandDto.createdAt = doc["createdAt"] | "";
+        commandDto.commandUid = doc["commandUid"] | "";
 
         // DeviceCommandNotification fields
         if (commandDto.isDeviceCommand())
@@ -762,6 +766,16 @@ public:
         {
             commandDto.sensorUid = doc["sensorUid"] | "";
             commandDto.sensorType = doc["sensorType"] | "";
+            commandDto.model = doc["model"] | "";
+            commandDto.command = doc["command"] | "";
+            
+            // Serialize options object back to JSON string for later parsing
+            if (doc.containsKey("options"))
+            {
+                std::string optionsJson;
+                serializeJson(doc["options"], optionsJson);
+                commandDto.options = optionsJson;
+            }
         }
 
         return true;
@@ -773,6 +787,16 @@ public:
 
         doc["growDirectorUid"] = commandDto.growDirectorUid;
         doc["type"] = commandDto.type;
+        
+        if (!commandDto.createdAt.empty())
+        {
+            doc["createdAt"] = commandDto.createdAt;
+        }
+        
+        if (!commandDto.commandUid.empty())
+        {
+            doc["commandUid"] = commandDto.commandUid;
+        }
 
         // DeviceCommandNotification fields
         if (commandDto.isDeviceCommand())
@@ -802,11 +826,63 @@ public:
         {
             doc["sensorUid"] = commandDto.sensorUid;
             doc["sensorType"] = commandDto.sensorType;
+            
+            if (!commandDto.model.empty())
+            {
+                doc["model"] = commandDto.model;
+            }
+            
+            if (!commandDto.command.empty())
+            {
+                doc["command"] = commandDto.command;
+            }
+            
+            // Parse options JSON string back to object
+            if (!commandDto.options.empty())
+            {
+                DynamicJsonDocument optionsDoc(2048);
+                DeserializationError optionsError = deserializeJson(optionsDoc, commandDto.options);
+                if (!optionsError)
+                {
+                    doc["options"] = optionsDoc;
+                }
+            }
         }
 
         std::string output;
         serializeJson(doc, output);
         return output;
+    }
+
+    std::string commandResultToJson(const CommandResultDto &commandResultDto) override
+    {
+        DynamicJsonDocument doc(512);
+        
+        doc["status"] = commandResultDto.status;
+        doc["command"] = commandResultDto.command;
+        
+        if (!commandResultDto.message.empty())
+        {
+            doc["message"] = commandResultDto.message;
+        }
+
+        std::string output;
+        serializeJson(doc, output);
+        return output;
+    }
+
+    bool commandResultFromJson(const std::string &jsonStr, CommandResultDto &commandResultDto) override
+    {
+        DynamicJsonDocument doc(512);
+        DeserializationError error = deserializeJson(doc, jsonStr);
+        if (error)
+            return false;
+
+        commandResultDto.status = doc["status"] | "";
+        commandResultDto.command = doc["command"] | "";
+        commandResultDto.message = doc["message"] | "";
+
+        return true;
     }
 
     std::string deviceCommandUpdateToJson(const DeviceCommandUpdateDto& commandUpdateDto) override
@@ -1042,5 +1118,560 @@ public:
         }
 
         return true;
+    }
+    
+    bool sensorFromJson(const std::string &jsonStr, SensorEntity &sensor) override
+    {
+        DynamicJsonDocument doc(4096);
+        DeserializationError error = deserializeJson(doc, jsonStr);
+        if (error)
+            return false;
+
+        sensor.uid = doc["uid"] | "";
+        sensor.sensorType = doc["sensorType"] | "";
+        sensor.model = doc["model"] | "";
+        sensor.protocol = doc["protocol"] | "";
+        sensor.createdAt = doc["createdAt"] | "";
+        sensor.isActive = doc["isActive"] | true;
+        sensor.isError = doc["isError"] | false;
+        sensor.pin = doc["pin"] | -1;
+        
+        std::string statusStr = doc["status"] | "new";
+        sensor.status = getSensorStatusFromString(statusStr);
+        
+        sensor.modbusDeviceAddress = doc["modbusDeviceAddress"] | 1;
+        sensor.baudRate = doc["baudRate"] | 9600;
+        sensor.i2cAddress = doc["i2cAddress"] | "";
+        sensor.chipType = doc["chipType"] | "";
+        
+        sensor.currentValue = doc["currentValue"] | 0.0f;
+        sensor.lastReadTime = doc["lastReadTime"] | 0;
+
+        // Parse channel values
+        sensor.channelValues.clear();
+        if (doc.containsKey("channelValues"))
+        {
+            for (JsonPair kv : doc["channelValues"].as<JsonObject>())
+            {
+                sensor.channelValues.push_back({kv.key().c_str(), kv.value().as<float>()});
+            }
+        }
+
+        // Parse modbus register configs
+        sensor.modbusRegisterConfigs.clear();
+        if (doc.containsKey("modbusRegisterConfigs"))
+        {
+            for (JsonObject configObj : doc["modbusRegisterConfigs"].as<JsonArray>())
+            {
+                ModbusRegisterConfig config;
+                config.functionCode = configObj["functionCode"] | 3;
+                config.startRegister = configObj["startRegister"] | 0;
+                config.numRegisters = configObj["numRegisters"] | 1;
+                config.multiplier = configObj["multiplier"] | 1.0f;
+                config.offset = configObj["offset"] | 0.0f;
+                config.channelName = configObj["channel_name"] | "";
+                config.channel = configObj["channel"] | 0;
+                config.sensorType = configObj["sensorType"] | "";
+                sensor.modbusRegisterConfigs.push_back(config);
+            }
+        }
+
+        // Parse i2c register configs
+        sensor.i2cRegisterConfigs.clear();
+        if (doc.containsKey("i2cRegisterConfigs"))
+        {
+            for (JsonObject configObj : doc["i2cRegisterConfigs"].as<JsonArray>())
+            {
+                I2CRegisterConfig config;
+                config.registerAddr = configObj["register"] | 0;
+                config.length = configObj["length"] | 1;
+                config.multiplier = configObj["multiplier"] | 1.0f;
+                config.offset = configObj["offset"] | 0.0f;
+                config.channelName = configObj["channel_name"] | "";
+                config.channel = configObj["channel"] | 0;
+                config.sensorType = configObj["sensorType"] | "";
+                sensor.i2cRegisterConfigs.push_back(config);
+            }
+        }
+
+        return true;
+    }
+
+    std::string sensorToJson(const SensorEntity &sensor) override
+    {
+        DynamicJsonDocument doc(4096);
+        
+        doc["uid"] = sensor.uid;
+        doc["sensorType"] = sensor.sensorType;
+        doc["model"] = sensor.model;
+        doc["protocol"] = sensor.protocol;
+        doc["createdAt"] = sensor.createdAt;
+        doc["isActive"] = sensor.isActive;
+        doc["isError"] = sensor.isError;
+        doc["status"] = getSensorStatusName(sensor.status);
+        doc["pin"] = sensor.pin;
+        
+        doc["modbusDeviceAddress"] = sensor.modbusDeviceAddress;
+        doc["baudRate"] = sensor.baudRate;
+        doc["i2cAddress"] = sensor.i2cAddress;
+        doc["chipType"] = sensor.chipType;
+        
+        doc["currentValue"] = sensor.currentValue;
+        doc["lastReadTime"] = sensor.lastReadTime;
+
+        // Add channel values
+        if (!sensor.channelValues.empty())
+        {
+            JsonObject channelObj = doc.createNestedObject("channelValues");
+            for (const auto& pair : sensor.channelValues)
+            {
+                channelObj[pair.first] = pair.second;
+            }
+        }
+
+        // Add modbus register configs
+        if (!sensor.modbusRegisterConfigs.empty())
+        {
+            JsonArray modbusConfigArr = doc.createNestedArray("modbusRegisterConfigs");
+            for (const auto& config : sensor.modbusRegisterConfigs)
+            {
+                JsonObject configObj = modbusConfigArr.createNestedObject();
+                configObj["functionCode"] = config.functionCode;
+                configObj["startRegister"] = config.startRegister;
+                configObj["numRegisters"] = config.numRegisters;
+                configObj["multiplier"] = config.multiplier;
+                configObj["offset"] = config.offset;
+                configObj["channel_name"] = config.channelName;
+                configObj["channel"] = config.channel;
+                configObj["sensorType"] = config.sensorType;
+            }
+        }
+
+        // Add i2c register configs
+        if (!sensor.i2cRegisterConfigs.empty())
+        {
+            JsonArray i2cConfigArr = doc.createNestedArray("i2cRegisterConfigs");
+            for (const auto& config : sensor.i2cRegisterConfigs)
+            {
+                JsonObject configObj = i2cConfigArr.createNestedObject();
+                configObj["register"] = config.registerAddr;
+                configObj["length"] = config.length;
+                configObj["multiplier"] = config.multiplier;
+                configObj["offset"] = config.offset;
+                configObj["channel_name"] = config.channelName;
+                configObj["channel"] = config.channel;
+                configObj["sensorType"] = config.sensorType;
+            }
+        }
+
+        std::string output;
+        serializeJson(doc, output);
+        return output;
+    }
+
+    bool sensorsFromJson(const std::string &jsonStr, std::vector<SensorEntity> &sensors) override
+    {
+        DynamicJsonDocument doc(16384); // Larger capacity for array
+        DeserializationError error = deserializeJson(doc, jsonStr);
+        if (error)
+            return false;
+
+        sensors.clear();
+        for (JsonObject sensorObj : doc.as<JsonArray>())
+        {
+            SensorEntity sensor;
+
+            // Copy to a separate document for individual processing
+            DynamicJsonDocument sensorDoc(4096);
+            JsonObject destObj = sensorDoc.to<JsonObject>();
+
+            // Copy all properties from the array element
+            for (JsonPair kv : sensorObj)
+            {
+                destObj[kv.key()] = kv.value();
+            }
+
+            // Serialize and then parse this single sensor
+            std::string sensorJson;
+            serializeJson(sensorDoc, sensorJson);
+
+            if (sensorFromJson(sensorJson, sensor))
+            {
+                sensors.push_back(sensor);
+            }
+        }
+
+        return !sensors.empty();
+    }
+
+    std::string sensorsToJson(const std::vector<SensorEntity> &sensors) override
+    {
+        DynamicJsonDocument doc(16384); // Larger capacity for array
+        JsonArray sensorsArr = doc.to<JsonArray>();
+
+        for (const SensorEntity &sensor : sensors)
+        {
+            sensorsArr.add(serialized(sensorToJson(sensor)));
+        }
+
+        std::string output;
+        serializeJson(doc, output);
+        return output;
+    }
+
+    bool modbusRegisterConfigFromJson(const std::string &jsonStr, ModbusRegisterConfig &config) override
+    {
+        DynamicJsonDocument doc(1024);
+        DeserializationError error = deserializeJson(doc, jsonStr);
+        if (error)
+            return false;
+
+        config.functionCode = doc["functionCode"] | 3;
+        config.startRegister = doc["startRegister"] | 0;
+        config.numRegisters = doc["numRegisters"] | 1;
+        config.multiplier = doc["multiplier"] | 1.0f;
+        config.offset = doc["offset"] | 0.0f;
+        config.channelName = doc["channel_name"] | "";
+        config.channel = doc["channel"] | 0;
+        config.sensorType = doc["sensorType"] | "";
+
+        return true;
+    }
+
+    std::string modbusRegisterConfigToJson(const ModbusRegisterConfig &config) override
+    {
+        DynamicJsonDocument doc(1024);
+
+        doc["functionCode"] = config.functionCode;
+        doc["startRegister"] = config.startRegister;
+        doc["numRegisters"] = config.numRegisters;
+        doc["multiplier"] = config.multiplier;
+        doc["offset"] = config.offset;
+        doc["channel_name"] = config.channelName;
+        doc["channel"] = config.channel;
+        doc["sensorType"] = config.sensorType;
+
+        std::string output;
+        serializeJson(doc, output);
+        return output;
+    }
+
+    bool modbusRegisterConfigsFromJson(const std::string &jsonStr, std::vector<ModbusRegisterConfig> &configs) override
+    {
+        DynamicJsonDocument doc(4096);
+        DeserializationError error = deserializeJson(doc, jsonStr);
+        if (error)
+            return false;
+
+        configs.clear();
+        
+        if (doc.is<JsonArray>())
+        {
+            for (JsonObject configObj : doc.as<JsonArray>())
+            {
+                ModbusRegisterConfig config;
+                config.functionCode = configObj["functionCode"] | 3;
+                config.startRegister = configObj["startRegister"] | 0;
+                config.numRegisters = configObj["numRegisters"] | 1;
+                config.multiplier = configObj["multiplier"] | 1.0f;
+                config.offset = configObj["offset"] | 0.0f;
+                config.channelName = configObj["channel_name"] | "";
+                config.channel = configObj["channel"] | 0;
+                config.sensorType = configObj["sensorType"] | "";
+                
+                configs.push_back(config);
+            }
+        }
+
+        return !configs.empty();
+    }
+
+    std::string modbusRegisterConfigsToJson(const std::vector<ModbusRegisterConfig> &configs) override
+    {
+        DynamicJsonDocument doc(4096);
+        JsonArray configsArr = doc.to<JsonArray>();
+
+        for (const ModbusRegisterConfig &config : configs)
+        {
+            JsonObject configObj = configsArr.createNestedObject();
+            configObj["functionCode"] = config.functionCode;
+            configObj["startRegister"] = config.startRegister;
+            configObj["numRegisters"] = config.numRegisters;
+            configObj["multiplier"] = config.multiplier;
+            configObj["offset"] = config.offset;
+            configObj["channel_name"] = config.channelName;
+            configObj["channel"] = config.channel;
+            configObj["sensorType"] = config.sensorType;
+        }
+
+        std::string output;
+        serializeJson(doc, output);
+        return output;
+    }
+
+    bool i2cRegisterConfigFromJson(const std::string &jsonStr, I2CRegisterConfig &config) override
+    {
+        DynamicJsonDocument doc(512);
+        DeserializationError error = deserializeJson(doc, jsonStr);
+        if (error)
+            return false;
+
+        config.registerAddr = doc["register"] | 0;
+        config.length = doc["length"] | 1;
+        config.multiplier = doc["multiplier"] | 1.0f;
+        config.offset = doc["offset"] | 0.0f;
+        config.channelName = doc["channel_name"] | "";
+        config.channel = doc["channel"] | 0;
+        config.sensorType = doc["sensorType"] | "";
+
+        return true;
+    }
+
+    std::string i2cRegisterConfigToJson(const I2CRegisterConfig &config) override
+    {
+        DynamicJsonDocument doc(512);
+
+        doc["register"] = config.registerAddr;
+        doc["length"] = config.length;
+        doc["multiplier"] = config.multiplier;
+        doc["offset"] = config.offset;
+        doc["channel_name"] = config.channelName;
+        doc["channel"] = config.channel;
+        doc["sensorType"] = config.sensorType;
+
+        std::string output;
+        serializeJson(doc, output);
+        return output;
+    }
+
+    bool i2cRegisterConfigsFromJson(const std::string &jsonStr, std::vector<I2CRegisterConfig> &configs) override
+    {
+        DynamicJsonDocument doc(2048);
+        DeserializationError error = deserializeJson(doc, jsonStr);
+        if (error)
+            return false;
+
+        configs.clear();
+        
+        if (doc.is<JsonArray>())
+        {
+            for (JsonObject configObj : doc.as<JsonArray>())
+            {
+                I2CRegisterConfig config;
+                config.registerAddr = configObj["register"] | 0;
+                config.length = configObj["length"] | 1;
+                config.multiplier = configObj["multiplier"] | 1.0f;
+                config.offset = configObj["offset"] | 0.0f;
+                config.channelName = configObj["channel_name"] | "";
+                config.channel = configObj["channel"] | 0;
+                config.sensorType = configObj["sensorType"] | "";
+                
+                configs.push_back(config);
+            }
+        }
+
+        return !configs.empty();
+    }
+
+    std::string i2cRegisterConfigsToJson(const std::vector<I2CRegisterConfig> &configs) override
+    {
+        DynamicJsonDocument doc(2048);
+        JsonArray configsArr = doc.to<JsonArray>();
+
+        for (const auto &config : configs)
+        {
+            JsonObject configObj = configsArr.createNestedObject();
+            configObj["register"] = config.registerAddr;
+            configObj["length"] = config.length;
+            configObj["multiplier"] = config.multiplier;
+            configObj["offset"] = config.offset;
+            configObj["channel_name"] = config.channelName;
+            configObj["channel"] = config.channel;
+            configObj["sensorType"] = config.sensorType;
+        }
+
+        std::string output;
+        serializeJson(doc, output);
+        return output;
+    }
+
+    bool sensorTypeFromJson(const std::string &jsonStr, SensorType &sensorType) override
+    {
+        DynamicJsonDocument doc(2048);
+        DeserializationError error = deserializeJson(doc, jsonStr);
+        if (error)
+            return false;
+
+        sensorType.id = doc["id"] | 0;
+        sensorType.name = doc["name"] | "";
+        sensorType.displayName = doc["displayName"] | "";
+        sensorType.isAnalog = doc["isAnalog"] | false;
+        sensorType.canCalibrate = doc["canCalibrate"] | false;
+        sensorType.validCalibrationPeriodDays = doc["validCalibrationPeriodDays"] | 0;
+        sensorType.calibrationTimeInSeconds = doc["calibrationTimeInSeconds"] | 0;
+        sensorType.minValue = doc["minValue"] | 0.0f;
+        sensorType.maxValue = doc["maxValue"] | 0.0f;
+        sensorType.limitMinValue = doc["limitMinValue"] | 0.0f;
+        sensorType.limitMaxValue = doc["limitMaxValue"] | 0.0f;
+        sensorType.unit = doc["unit"] | "";
+        sensorType.step = doc["step"] | 0.0f;
+        sensorType.precisionPercent = doc["precisionPercent"] | 0.0f;
+        sensorType.precisionValue = doc["precisionValue"] | 0.0f;
+        
+        std::string protocolStr = doc["protocol"] | "";
+        sensorType.setProtocolFromString(protocolStr);
+        
+        sensorType.i2cAddress = doc["i2cAddress"] | "";
+        sensorType.chipType = doc["chipType"] | "";
+        sensorType.modbusDeviceAddress = doc["modbusDeviceAddress"] | 1;
+        sensorType.baudRate = doc["baudRate"] | 9600;
+
+        // Parse I2C register config
+        sensorType.i2cRegisterConfig.clear();
+        if (doc.containsKey("i2cRegisterConfig"))
+        {
+            for (JsonObject configObj : doc["i2cRegisterConfig"].as<JsonArray>())
+            {
+                I2CRegisterConfig config;
+                config.registerAddr = configObj["register"] | 0;
+                config.length = configObj["length"] | 1;
+                config.multiplier = configObj["multiplier"] | 1.0f;
+                config.offset = configObj["offset"] | 0.0f;
+                sensorType.i2cRegisterConfig.push_back(config);
+            }
+        }
+
+        // Parse Modbus register config
+        sensorType.modbusRegisterConfig.clear();
+        if (doc.containsKey("modbusRegisterConfig"))
+        {
+            for (JsonObject configObj : doc["modbusRegisterConfig"].as<JsonArray>())
+            {
+                ModbusRegisterConfig config;
+                config.functionCode = configObj["functionCode"] | 3;
+                config.startRegister = configObj["startRegister"] | 0;
+                config.numRegisters = configObj["numRegisters"] | 1;
+                config.multiplier = configObj["multiplier"] | 1.0f;
+                config.offset = configObj["offset"] | 0.0f;
+                config.channelName = configObj["channel_name"] | "";
+                config.channel = configObj["channel"] | 0;
+                config.sensorType = configObj["sensorType"] | "";
+                sensorType.modbusRegisterConfig.push_back(config);
+            }
+        }
+
+        return true;
+    }
+
+    std::string sensorTypeToJson(const SensorType &sensorType) override
+    {
+        DynamicJsonDocument doc(2048);
+        
+        doc["id"] = sensorType.id;
+        doc["name"] = sensorType.name;
+        doc["displayName"] = sensorType.displayName;
+        doc["isAnalog"] = sensorType.isAnalog;
+        doc["canCalibrate"] = sensorType.canCalibrate;
+        doc["validCalibrationPeriodDays"] = sensorType.validCalibrationPeriodDays;
+        doc["calibrationTimeInSeconds"] = sensorType.calibrationTimeInSeconds;
+        doc["minValue"] = sensorType.minValue;
+        doc["maxValue"] = sensorType.maxValue;
+        doc["limitMinValue"] = sensorType.limitMinValue;
+        doc["limitMaxValue"] = sensorType.limitMaxValue;
+        doc["unit"] = sensorType.unit;
+        doc["step"] = sensorType.step;
+        doc["precisionPercent"] = sensorType.precisionPercent;
+        doc["precisionValue"] = sensorType.precisionValue;
+        doc["protocol"] = sensorType.getProtocolString();
+        doc["i2cAddress"] = sensorType.i2cAddress;
+        doc["chipType"] = sensorType.chipType;
+        doc["modbusDeviceAddress"] = sensorType.modbusDeviceAddress;
+        doc["baudRate"] = sensorType.baudRate;
+
+        // Add I2C register config
+        if (!sensorType.i2cRegisterConfig.empty())
+        {
+            JsonArray i2cConfigArr = doc.createNestedArray("i2cRegisterConfig");
+            for (const auto& config : sensorType.i2cRegisterConfig)
+            {
+                JsonObject configObj = i2cConfigArr.createNestedObject();
+                configObj["register"] = config.registerAddr;
+                configObj["length"] = config.length;
+                configObj["multiplier"] = config.multiplier;
+                configObj["offset"] = config.offset;
+            }
+        }
+
+        // Add Modbus register config
+        if (!sensorType.modbusRegisterConfig.empty())
+        {
+            JsonArray modbusConfigArr = doc.createNestedArray("modbusRegisterConfig");
+            for (const auto& config : sensorType.modbusRegisterConfig)
+            {
+                JsonObject configObj = modbusConfigArr.createNestedObject();
+                configObj["functionCode"] = config.functionCode;
+                configObj["startRegister"] = config.startRegister;
+                configObj["numRegisters"] = config.numRegisters;
+                configObj["multiplier"] = config.multiplier;
+                configObj["offset"] = config.offset;
+                configObj["channel_name"] = config.channelName;
+                configObj["channel"] = config.channel;
+                configObj["sensorType"] = config.sensorType;
+            }
+        }
+
+        std::string output;
+        serializeJson(doc, output);
+        return output;
+    }
+
+    bool sensorTypesFromJson(const std::string &jsonStr, std::vector<SensorType> &sensorTypes) override
+    {
+        DynamicJsonDocument doc(8192);
+        DeserializationError error = deserializeJson(doc, jsonStr);
+        if (error)
+            return false;
+
+        sensorTypes.clear();
+        for (JsonObject typeObj : doc.as<JsonArray>())
+        {
+            SensorType sensorType;
+
+            // Copy to a separate document for individual processing
+            DynamicJsonDocument typeDoc(2048);
+            JsonObject destObj = typeDoc.to<JsonObject>();
+
+            // Copy all properties from the array element
+            for (JsonPair kv : typeObj)
+            {
+                destObj[kv.key()] = kv.value();
+            }
+
+            // Serialize and then parse this single sensor type
+            std::string typeJson;
+            serializeJson(typeDoc, typeJson);
+
+            if (sensorTypeFromJson(typeJson, sensorType))
+            {
+                sensorTypes.push_back(sensorType);
+            }
+        }
+
+        return !sensorTypes.empty();
+    }
+
+    std::string sensorTypesToJson(const std::vector<SensorType> &sensorTypes) override
+    {
+        DynamicJsonDocument doc(8192);
+        JsonArray typesArr = doc.to<JsonArray>();
+
+        for (const SensorType &sensorType : sensorTypes)
+        {
+            typesArr.add(serialized(sensorTypeToJson(sensorType)));
+        }
+
+        std::string output;
+        serializeJson(doc, output);
+        return output;
     }
 };

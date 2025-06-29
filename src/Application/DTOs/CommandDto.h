@@ -9,6 +9,8 @@ class CommandDto
 {
 public:
     std::string growDirectorUid; // Grow director unique identifier
+    std::string createdAt;       // Command creation timestamp
+    std::string commandUid;      // Command unique identifier
     std::string type;            // Command type (DeviceCommandNotification, RuleCommandNotification, etc.)
 
     // DeviceCommandNotification fields
@@ -21,13 +23,15 @@ public:
     std::string rulesPayload; // JSON payload with rules
 
     // ModuleCommandNotification fields
-    std::string command; // Command name (UpdateFirmware)
+    std::string command; // Command name (UpdateFirmware, AddSensor, ScanSensor, RemoveSensor)
     std::string version; // Firmware version
     std::string url;     // Download URL
 
     // SensorTypeCommandNotification fields
     std::string sensorUid;  // Sensor unique identifier
-    std::string sensorType; // Sensor type (soil_moisture, etc.)
+    std::string sensorType; // Sensor type (soil_moisture, ph, air_temp, etc.)
+    std::string model;      // Model identifier (atlas_ph_v1, modbus_soil_sensor_v1, etc.)
+    std::string options;    // JSON string containing sensor configuration options
 
     CommandDto() : commandId(0) {}
 
@@ -36,4 +40,9 @@ public:
     bool isRuleCommand() const { return type == "RuleCommandNotification"; }
     bool isModuleCommand() const { return type == "ModuleCommandNotification"; }
     bool isSensorTypeCommand() const { return type == "SensorTypeCommandNotification"; }
+    
+    // Helper methods for sensor commands
+    bool isAddSensorCommand() const { return isSensorTypeCommand() && command == "AddSensor"; }
+    bool isScanSensorCommand() const { return isSensorTypeCommand() && command == "ScanSensor"; }
+    bool isRemoveSensorCommand() const { return isSensorTypeCommand() && command == "RemoveSensor"; }
 };

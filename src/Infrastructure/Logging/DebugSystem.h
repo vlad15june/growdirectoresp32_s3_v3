@@ -52,6 +52,7 @@ private:
         registerFeature(DebugFeatures::ANALOG_INPUT_DEVICE_COMMAND_DEBUG, "analog_input_device_command", true);
         registerFeature(DebugFeatures::SETUP_SENSOR_DEBUG, "setup_sensor", true);
         registerFeature(DebugFeatures::SENSOR_ERROR_DEBUG, "sensor_error", false);
+        registerFeature(DebugFeatures::SENSOR_DATA_DEBUG, "sensor_data", true);
         registerFeature(DebugFeatures::DATA_DEBUG, "data", false);
         registerFeature(DebugFeatures::SETTINGS_DEBUG, "settings", true);
         registerFeature(DebugFeatures::SETUP_DEBUG, "setup", true);
@@ -65,7 +66,7 @@ private:
         registerFeature(DebugFeatures::MQTT_CALLBACK_DEBUG, "mqtt_callback", true);
         registerFeature(DebugFeatures::BUTTON_DEBUG, "button", false);
         registerFeature(DebugFeatures::LED_DEBUG, "led", false);
-        registerFeature(DebugFeatures::SPIFFS_DEBUG, "spiffs", false);
+        registerFeature(DebugFeatures::SPIFFS_DEBUG, "spiffs", true);
         registerFeature(DebugFeatures::UPDATE_FIRMWARE_DEBUG, "update_firmware", true);
         registerFeature(DebugFeatures::LOOP_SERVICE_DEBUG, "loop_service", false);
         registerFeature(DebugFeatures::CONFIG_WEB_SERVER, "config_web_server", true);

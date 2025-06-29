@@ -94,3 +94,7 @@ public:
 // Force explicit template instantiation for Rule
 #include "Core/Domain/Data/Entities/Rule.h"
 template class SpiffsDao<Rule>;
+
+// Force explicit template instantiation for SensorEntity
+#include "Core/Domain/Data/Entities/Sensor/Sensor.h"
+template class SpiffsDao<SensorEntity>;

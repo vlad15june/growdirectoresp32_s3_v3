@@ -44,6 +44,7 @@ namespace DebugFeatures {
     constexpr const char* SETUP_SENSOR_DEBUG = "SETUP_SENSOR";
     constexpr const char* SENSOR_ERROR_DEBUG = "SENSOR_ERROR";
     constexpr const char* REMOTE_SENSOR_RECEIVE_DEBUG = "REMOTE_SENSOR_RECEIVE";
+    constexpr const char* SENSOR_DATA_DEBUG = "SENSOR_DATA";
     
     // Network communication debug features
     constexpr const char* UDP_RECEIVE_DEBUG = "UDP_RECEIVE";
