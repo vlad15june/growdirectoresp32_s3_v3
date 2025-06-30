@@ -93,9 +93,10 @@ private:
     }
 
 public:
-    RestAPIService(IModuleConfig *moduleConfig, ILogger *logger = nullptr, IDebugSystem *debugSystem = nullptr, IJsonConverter *jsonConverter = nullptr)
+    RestAPIService(IModuleConfig *moduleConfig, ISettings *settings, ILogger *logger = nullptr, IDebugSystem *debugSystem = nullptr, IJsonConverter *jsonConverter = nullptr)
         : _httpClient(createNewHttpClient()),
           _moduleConfig(moduleConfig),
+          _settings(settings),
           _logger(logger),
           _debugSystem(debugSystem),
           _jsonConverter(jsonConverter),
@@ -117,28 +118,16 @@ public:
 
     bool init() override
     {
-        if (_moduleConfig)
+        if (_moduleConfig && _settings)
         {
-            _settings = _moduleConfig->getSettings();
-            if (_settings)
-            {
-                _settings->getServerUrl(_serverUrl, BUFSIZE);
-                _settings->getToken(_token, BUFSIZE);
-                log("RestAPIService: Initialized with server URL: %s", _serverUrl);
-                return true;
-            }
-            else
-            {
-                log("RestAPIService: Warning - Settings not available");
-                strcpy(_serverUrl, "");
-                strcpy(_token, "");
-                return false;
-            }
+            _settings->getServerUrl(_serverUrl, BUFSIZE);
+            _settings->getToken(_token, BUFSIZE);
+            log("RestAPIService: Initialized with server URL: %s", _serverUrl);
+            return true;
         }
         else
         {
-            log("RestAPIService: Warning - ModuleConfig not provided");
-            _settings = nullptr;
+            log("RestAPIService: Warning - ModuleConfig or Settings not available");
             strcpy(_serverUrl, "");
             strcpy(_token, "");
             return false;

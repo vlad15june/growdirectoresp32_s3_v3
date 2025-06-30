@@ -7,6 +7,7 @@
 #include <FS.h>
 #include <SPIFFS.h>
 #include <stdarg.h>
+#include <string>
 
 class SpiffsAdapter : public ISpiffsAdapter {
 public:
@@ -44,7 +45,7 @@ public:
         }
     }
 
-    String readSPIFFSstr(const char* filePath) override {
+    std::string readSPIFFSstr(const char* filePath) override {
         File file = SPIFFS.open(filePath, "r");
         if (!file) {
             log("Failed to open file for reading: %s", filePath);
@@ -53,7 +54,7 @@ public:
         String content = file.readString();
         file.close();
         log("Read file: %s, length: %d", filePath, content.length());
-        return content;
+        return std::string(content.c_str());
     }
 
     void RemoveFile(const char* filePath) override {

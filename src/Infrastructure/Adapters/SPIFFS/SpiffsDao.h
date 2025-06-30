@@ -85,9 +85,9 @@ public:
 
     bool getAll(std::vector<T>& entities) override {
         if (filePath.empty()) initialize();
-        String content = spiffsAdapter->readSPIFFSstr(filePath.c_str());
+        std::string content = spiffsAdapter->readSPIFFSstr(filePath.c_str());
         if (content.length() == 0) return false;
-        return jsonToEntities(content.c_str(), entities);
+        return jsonToEntities(content, entities);
     }
 };
 

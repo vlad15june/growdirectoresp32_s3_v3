@@ -6,6 +6,7 @@
 #include "Core/Domain/Data/Entities/Sensor/SensorType.h"
 #include <functional>
 #include <algorithm>
+#include <string>
 
 class SpiffsSensorTypeDao : public ISpiffsSensorTypeDao {
 protected:
@@ -119,9 +120,9 @@ public:
 
     bool getAll(std::vector<SensorType>& entities) override {
         if (filePath.empty()) initialize();
-        String content = spiffsAdapter->readSPIFFSstr(filePath.c_str());
+        std::string content = spiffsAdapter->readSPIFFSstr(filePath.c_str());
         if (content.length() == 0) return false;
-        return jsonToEntities(content.c_str(), entities);
+        return jsonToEntities(content, entities);
     }
 
     bool getSensorTypesByProtocol(SensorProtocol protocol, std::vector<SensorType>& sensorTypes) override {

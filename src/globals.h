@@ -98,7 +98,7 @@ void mqttCallback(char *topic, byte *payload, unsigned int length)
 WiFiClient wifiClient;
 PubSubClient mqttClient(mqttBroker, 1883, mqttCallback, wifiClient);
 
-MqttLogger mqttLogger(mqttClient, mqttDefaultTopic, MqttLoggerMode::MqttAndSerial);
+MqttLogger mqttLogger(mqttClient, mqttDefaultTopic, MqttLoggerMode::SerialOnly);
 
 DebugSystem debugSystem;
 
@@ -201,7 +201,7 @@ WebServerLauncher webServerLauncher(
     &debugSystem,
     moduleConfigurationWebServer);
 
-RestAPIService restApiService(&moduleConfig, &mqttLogger, &debugSystem, &jsonConverter);
+RestAPIService restApiService(&moduleConfig, &settings, &mqttLogger, &debugSystem, &jsonConverter);
 
 MqttApiService mqttApiService(
     &mqttManager,
