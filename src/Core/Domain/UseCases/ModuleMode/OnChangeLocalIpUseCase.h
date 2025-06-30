@@ -12,6 +12,7 @@
 #include "Core/Domain/Interfaces/API/IHybridAPIService.h"
 #include "Core/Domain/Interfaces/IDebugSystem.h"
 #include "Core/Domain/Interfaces/IModuleConfig.h"
+#include "Core/Domain/Interfaces/UseCases/Rules/ISyncRulesUseCase.h"
 #include <string.h>
 
 class OnChangeLocalIpUseCase : public IOnChangeLocalIpUseCase
@@ -24,6 +25,7 @@ private:
     ModuleStructure &_moduleStructure;
     IHybridAPIService &_apiService;
     IModuleConfig &_moduleConfig;
+    ISyncRulesUseCase &_syncRulesUseCase;
     char _oldIpStr[16]; // Store previous IP address
 
 public:
@@ -33,6 +35,7 @@ public:
         ModuleStructure &moduleStructure,
         IHybridAPIService &apiService,
         IModuleConfig &moduleConfig,
+        ISyncRulesUseCase &syncRulesUseCase,
         ILogger &loggerInstance,
         IDebugSystem &debugSystemInstance)
         : _wifiAdapter(wifiAdapter),
@@ -40,6 +43,7 @@ public:
           _moduleStructure(moduleStructure),
           _apiService(apiService),
           _moduleConfig(moduleConfig),
+          _syncRulesUseCase(syncRulesUseCase),
           _logger(loggerInstance),
           _debugSystem(debugSystemInstance)
     {
@@ -107,6 +111,10 @@ public:
                     log("NET: Failed to send structure after 3 attempts, restarting...");
                     _moduleConfig.setRequestedModuleMode(ModuleModeEnum::CONFIGURED_NEED_RESTART);
                 }
+
+                // Sync rules after IP change
+                log("OnChangeLocalIpUseCase: Triggering rule synchronization after IP change");
+                _syncRulesUseCase.forceSync();
 
                 // Process additional server communications
                 log("OnChangeLocalIpUseCase: Processing delete command and restoring account info");

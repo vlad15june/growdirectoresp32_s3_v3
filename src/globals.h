@@ -239,15 +239,6 @@ DiagnosticService diagnosticService(
     &mqttManager,
     &hybridApiService);
 
-OnChangeLocalIpUseCase onChangeLocalIpUseCase(
-    wifiAdapter,
-    wifiManager,
-    moduleStructure,
-    hybridApiService,
-    moduleConfig,
-    mqttLogger,
-    debugSystem);
-
 ProcessDeviceStateUseCaseFactory deviceStateUseCaseFactory(
     &mqttLogger,
     &debugSystem,
@@ -293,6 +284,16 @@ SyncRulesUseCase syncRulesUseCase(
     &jsonConverter,
     &mqttLogger,
     &debugSystem);
+
+OnChangeLocalIpUseCase onChangeLocalIpUseCase(
+    wifiAdapter,
+    wifiManager,
+    moduleStructure,
+    hybridApiService,
+    moduleConfig,
+    syncRulesUseCase,
+    mqttLogger,
+    debugSystem);
 
 RuleService ruleService(
     &evaluateRulesUseCase,
