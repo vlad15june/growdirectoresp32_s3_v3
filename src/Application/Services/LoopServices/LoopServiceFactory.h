@@ -18,6 +18,7 @@
 #include "Application/Interfaces/IDiagnosticService.h"
 #include "Application/Services/Devices/IDeviceService.h"
 #include "Application/Services/Sensors/ISensorService.h"
+#include "Application/Services/Rules/IRuleService.h"
 #include <stdexcept>
 
 class LoopServiceFactory : public ILoopServiceFactory {
@@ -35,6 +36,7 @@ private:
     IDiagnosticService* diagnosticService;
     IDeviceService* deviceService;
     ISensorService* sensorService;
+    IRuleService* ruleService;
 
 public:
     LoopServiceFactory(
@@ -50,7 +52,8 @@ public:
         IMqttManager* mqttManager = nullptr,
         IDiagnosticService* diagnosticService = nullptr,
         IDeviceService* deviceService = nullptr,
-        ISensorService* sensorService = nullptr
+        ISensorService* sensorService = nullptr,
+        IRuleService* ruleService = nullptr
     ) : ledUseCases(ledUseCases),
         buttonUseCases(buttonUseCases),
         moduleModeUseCase(moduleModeUseCase),
@@ -63,7 +66,8 @@ public:
         mqttManager(mqttManager),
         diagnosticService(diagnosticService),
         deviceService(deviceService),
-        sensorService(sensorService) {}
+        sensorService(sensorService),
+        ruleService(ruleService) {}
     
     ~LoopServiceFactory() override = default;
 
@@ -88,6 +92,7 @@ public:
                 configDoneService->setDiagnosticService(diagnosticService);
                 configDoneService->setDeviceService(deviceService);
                 configDoneService->setSensorService(sensorService);
+                configDoneService->setRuleService(ruleService);
                 
                 // Then assign to the service unique_ptr
                 service = std::unique_ptr<LoopServiceBase>(configDoneService);
@@ -132,6 +137,11 @@ public:
     // Setter for SensorService
     void setSensorService(ISensorService* service) {
         this->sensorService = service;
+    }
+
+    // Setter for RuleService
+    void setRuleService(IRuleService* service) {
+        this->ruleService = service;
     }
 };
 

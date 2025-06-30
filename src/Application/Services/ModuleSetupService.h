@@ -20,6 +20,7 @@
 #include "Core/Domain/Enums/BootTypeEnum.h"
 #include "Core/Domain/Enums/FileSystemStatusEnum.h"
 #include "Application/Services/Devices/IDeviceService.h"
+#include "Application/Services/Rules/IRuleService.h"
 #include "Core/Domain/Interfaces/Repositories/ISensorRepository.h"
 #include "Core/Domain/Interfaces/Repositories/ISensorTypeRepository.h"
 #include "Core/Domain/Interfaces/Adapters/Sensors/ISensorReader.h"
@@ -53,6 +54,7 @@ private:
     IMqttManager *mqttManager;
     ModuleStructure *moduleStructure;
     IDeviceService *deviceService;
+    IRuleService *ruleService;
     ISensorRepository *sensorRepository;
     ISensorTypeRepository *sensorTypeRepository;
     ISensorReader *sensorReader;
@@ -121,6 +123,7 @@ public:
         IMqttManager *mqttManager = nullptr,
         ModuleStructure *moduleStructure = nullptr,
         IDeviceService *deviceService = nullptr,
+        IRuleService *ruleService = nullptr,
         ISensorRepository *sensorRepository = nullptr,
         ISensorTypeRepository *sensorTypeRepository = nullptr,
         ISensorReader *sensorReader = nullptr,
@@ -147,6 +150,7 @@ inline ModuleSetupService::ModuleSetupService(
     IMqttManager *mqttManager,
     ModuleStructure *moduleStructure,
     IDeviceService *deviceService,
+    IRuleService *ruleService,
     ISensorRepository *sensorRepository,
     ISensorTypeRepository *sensorTypeRepository,
     ISensorReader *sensorReader,
@@ -164,6 +168,7 @@ inline ModuleSetupService::ModuleSetupService(
                                      mqttManager(mqttManager),
                                      moduleStructure(moduleStructure),
                                      deviceService(deviceService),
+                                     ruleService(ruleService),
                                      sensorRepository(sensorRepository),
                                      sensorTypeRepository(sensorTypeRepository),
                                      sensorReader(sensorReader),
@@ -318,6 +323,16 @@ inline void ModuleSetupService::ConfigureDoneModeConfigure()
     else
     {
         log("SETUP: Device service not available");
+    }
+
+    if (ruleService)
+    {
+        ruleService->init();
+        log("SETUP: Rule service initialized");
+    }
+    else
+    {
+        log("SETUP: Rule service not available");
     }
 
     log("SETUP: Module prepared for operation");

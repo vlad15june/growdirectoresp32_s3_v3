@@ -45,20 +45,12 @@ private:
     }
     
     // Enhanced sync methods
-    bool syncRulesFromServer();
-    bool processServerRules(const std::vector<Rule>& serverRules);
     bool processMqttRuleUpdates(const std::vector<Rule>& mqttRules);
     bool validateAndStoreRules(const std::vector<Rule>& rules);
-    RuleStateUpdateDto generateRuleStateUpdate(const std::vector<Rule>& rules, const std::vector<RuleValidationResult>& validationResults);
-    bool sendRuleStateUpdate(const RuleStateUpdateDto& stateUpdate);
     
     // Rule comparison and merging
     bool shouldUpdateRule(const Rule& existingRule, const Rule& newRule);
     Rule mergeRuleUpdates(const Rule& existingRule, const Rule& newRule);
-    
-    // Enhanced error handling
-    bool handleSyncFailure();
-    void trackSyncAttempt(bool success);
 
 public:
     SyncRulesUseCase(

@@ -7,6 +7,7 @@
 #include "Application/Interfaces/IDiagnosticService.h"
 #include "Application/Services/Devices/IDeviceService.h"
 #include "Application/Services/Sensors/ISensorService.h"
+#include "Application/Services/Rules/IRuleService.h"
 
 class LoopServiceConfigureDone : public LoopServiceBase {
 private:
@@ -15,6 +16,7 @@ private:
     IDiagnosticService* diagnosticService;
     IDeviceService* deviceService;
     ISensorService* sensorService;
+    IRuleService* ruleService;
     
     // Diagnostic timer variables
     unsigned long lastDiagnosticTime = 0;
@@ -27,7 +29,8 @@ public:
           mqttManager(nullptr),
           diagnosticService(nullptr),
           deviceService(nullptr),
-          sensorService(nullptr) {}
+          sensorService(nullptr),
+          ruleService(nullptr) {}
     
     ~LoopServiceConfigureDone() override = default;
     
@@ -40,6 +43,10 @@ public:
 
         if (sensorService) {
             sensorService->loop();
+        }
+
+        if (ruleService) {
+            ruleService->loop();
         }
         
         if (buttonUseCases) {
@@ -88,6 +95,10 @@ public:
     
     virtual void setSensorService(ISensorService* service) {
         this->sensorService = service;
+    }
+    
+    virtual void setRuleService(IRuleService* service) {
+        this->ruleService = service;
     }
 };
 

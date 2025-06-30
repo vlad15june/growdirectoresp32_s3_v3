@@ -46,11 +46,6 @@ private:
         }
     }
     
-    RuleEvaluationResult evaluateScheduleRule(const Rule& rule, RuleEvaluationResult& result);
-    bool evaluateSensorRule(const Rule& rule);
-    bool evaluateStepRule(const Rule& rule);
-    bool evaluateTimeConditions(const Rule& rule);
-    double getSensorValue(const std::string& sensorUid);
     bool executeDeviceAction(const std::string& deviceUid, const RuleEvaluationResult& evaluationResult) {
         if (!_deviceModel) {
             log("EVALUATE_RULES: Device model not available");
@@ -428,6 +423,93 @@ private:
         }
         
         return result;
+    }
+    
+    bool evaluateSensorRule(const Rule& rule) {
+        log("EVALUATE_RULES: Evaluating sensor rule %s", rule.uid.c_str());
+        
+        if (rule.sensorUid.empty()) {
+            log("EVALUATE_RULES: Sensor rule %s has no sensor UID", rule.uid.c_str());
+            return false;
+        }
+        
+        double sensorValue = getSensorValue(rule.sensorUid);
+        
+        // Check if sensor value is within the rule's range
+        if (sensorValue >= rule.valueLow && sensorValue <= rule.valueHigh) {
+            log("EVALUATE_RULES: Sensor rule %s condition MET - value %.2f in range [%.2f, %.2f]", 
+                rule.uid.c_str(), sensorValue, rule.valueLow, rule.valueHigh);
+            return true;
+        } else {
+            log("EVALUATE_RULES: Sensor rule %s condition NOT MET - value %.2f outside range [%.2f, %.2f]", 
+                rule.uid.c_str(), sensorValue, rule.valueLow, rule.valueHigh);
+            return false;
+        }
+    }
+    
+    bool evaluateStepRule(const Rule& rule) {
+        log("EVALUATE_RULES: Evaluating step rule %s", rule.uid.c_str());
+        
+        if (rule.sensorUid.empty()) {
+            log("EVALUATE_RULES: Step rule %s has no sensor UID", rule.uid.c_str());
+            return false;
+        }
+        
+        double sensorValue = getSensorValue(rule.sensorUid);
+        
+        // Get device to check current cycle
+        Device* device = nullptr;
+        if (_deviceModel) {
+            device = _deviceModel->getDeviceByUid(rule.deviceUid.c_str());
+        }
+        
+        int currentCycle = 0;
+        if (device && device->deviceType != DeviceTypeEnum::DEVICE_TYPE_ANALOG) {
+            DeviceDigitalOut* digitalDevice = static_cast<DeviceDigitalOut*>(device);
+            currentCycle = digitalDevice->currentCycle;
+        }
+        
+        // Check if we've reached the target cycles and sensor value is within range
+        bool cyclesReached = currentCycle >= rule.cyclesToSetPoint;
+        bool valueInRange = sensorValue >= rule.valueLow && sensorValue <= rule.valueHigh;
+        
+        log("EVALUATE_RULES: Step rule %s - cycles: %d/%d, value: %.2f [%.2f-%.2f], condition: %s", 
+            rule.uid.c_str(), currentCycle, rule.cyclesToSetPoint, sensorValue, 
+            rule.valueLow, rule.valueHigh, (cyclesReached && valueInRange) ? "MET" : "NOT MET");
+        
+        return cyclesReached && valueInRange;
+    }
+    
+    bool evaluateTimeConditions(const Rule& rule) {
+        log("EVALUATE_RULES: Evaluating time conditions for rule %s", rule.uid.c_str());
+        
+        if (!_ntpTimeAdapter) {
+            log("EVALUATE_RULES: NTP time adapter not available for time conditions");
+            return false;
+        }
+        
+        // Get current time
+        time_t currentTime = _ntpTimeAdapter->getEpochTime();
+        struct tm timeinfo;
+        if (!gmtime_r(&currentTime, &timeinfo)) {
+            log("EVALUATE_RULES: Failed to get current time for rule evaluation");
+            return false;
+        }
+        
+        // For now, just return true as time conditions would depend on specific rule implementation
+        // This would need to be expanded based on specific time-based rule requirements
+        return true;
+    }
+    
+    double getSensorValue(const std::string& sensorUid) {
+        log("EVALUATE_RULES: Getting sensor value for %s", sensorUid.c_str());
+        
+        // TODO: This would need to be implemented to get actual sensor values
+        // For now, return a default value
+        // This would typically interact with a sensor service or sensor model
+        
+        log("EVALUATE_RULES: Sensor value retrieval not yet implemented, returning default value");
+        return 0.0;
     }
 };
 

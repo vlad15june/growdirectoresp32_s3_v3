@@ -22,6 +22,8 @@
 #include "Core/Domain/UseCases/DeviceControl/ProcessDeviceStateUseCaseFactory.h"
 #include "Core/Domain/UseCases/DeviceControl/DeviceCommandExecutionUseCase.h"
 #include "Core/Domain/UseCases/Sensors/SensorCommandUseCase.h"
+#include "Core/Domain/UseCases/Rules/EvaluateRulesUseCase.h"
+#include "Core/Domain/UseCases/Rules/SyncRulesUseCase.h"
 
 #include "Core/Domain/Data/Models/ModuleStructure.h"
 #include "Core/Domain/Data/Models/IDeviceModel.h"
@@ -65,6 +67,8 @@
 #include "Application/Services/CommandService.h"
 #include "Application/Services/Sensors/ISensorService.h"
 #include "Application/Services/Sensors/SensorService.h"
+#include "Application/Services/Rules/RuleService.h"
+
 #include "Infrastructure/Adapters/Sensors/SensorReader.h"
 #include "Infrastructure/Adapters/Sensors/HardwareSensors/AnalogSensors/AnalogSensorReader.h"
 #include "Infrastructure/Adapters/Sensors/HardwareSensors/ModbusSensors/ModbusSensorReader.h"
@@ -273,6 +277,30 @@ SensorService sensorService(
     &mqttLogger,
     &debugSystem);
 
+EvaluateRulesUseCase evaluateRulesUseCase(
+    &deviceModel,
+    &ruleRepository,
+    &arduinoAdapter,
+    &ntpTimeAdapter,
+    &mqttLogger,
+    &debugSystem);
+
+SyncRulesUseCase syncRulesUseCase(
+    &hybridApiService,
+    &ruleRepository,
+    &arduinoAdapter,
+    &ntpTimeAdapter,
+    &jsonConverter,
+    &mqttLogger,
+    &debugSystem);
+
+RuleService ruleService(
+    &evaluateRulesUseCase,
+    &syncRulesUseCase,
+    &deviceModel,
+    &mqttLogger,
+    &debugSystem);
+
 LoopServiceFactory loopServiceFactory(
     &ledUseCases,
     &buttonUseCases,
@@ -286,7 +314,8 @@ LoopServiceFactory loopServiceFactory(
     &mqttManager,
     &diagnosticService,
     &deviceService,
-    &sensorService);
+    &sensorService,
+    &ruleService);
 
 ModuleSetupService moduleSetupService(
     &mqttLogger,
@@ -302,6 +331,7 @@ ModuleSetupService moduleSetupService(
     &mqttManager,
     &moduleStructure,
     &deviceService,
+    &ruleService,
     &sensorRepository,
     &sensorTypeRepository,
     &sensorReader,

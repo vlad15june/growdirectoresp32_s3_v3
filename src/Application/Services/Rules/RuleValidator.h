@@ -308,7 +308,7 @@ public:
         }
         
         if (rule.valueLow == 0.0 && rule.valueHigh == 0.0) {
-            log("RULE_VALIDATION: Average Sensor rule %s has no value thresholds", rule.uid c_str());
+            log("RULE_VALIDATION: Average Sensor rule %s has no value thresholds", rule.uid.c_str());
             return RuleValidationResult(false, "wrong_format", "Average Sensor rule must have value thresholds");
         }
         
