@@ -1,5 +1,6 @@
 #pragma once
 #include <string>
+#include "Core/Domain/Enums/FileSystemStatusEnum.h"
 
 class ISpiffsAdapter {
 public:
@@ -11,4 +12,5 @@ public:
     virtual void RewriteToFile(const char* filePath, const char* body) = 0;
     virtual bool directoryExists(const char* path) = 0;
     virtual bool createDirectory(const char* path) = 0;
+    virtual FileSystemStatusEnum getFileSystemStatus() = 0;
 };

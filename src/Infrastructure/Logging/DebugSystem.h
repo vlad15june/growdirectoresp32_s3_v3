@@ -41,7 +41,7 @@ private:
         registerFeature(DebugFeatures::TIME_SYNC_DEBUG, "time_sync", false);
         registerFeature(DebugFeatures::NET_DEBUG, "net", true);
         registerFeature(DebugFeatures::CONTROL_DEBUG, "control", false);
-        registerFeature(DebugFeatures::RULE_DEBUG, "rule", false);
+        registerFeature(DebugFeatures::RULE_DEBUG, "rule", true);
         registerFeature(DebugFeatures::RULE_SYNC_DEBUG, "rule_sync", true);
         registerFeature(DebugFeatures::RULE_ON_DEBUG, "rule_on", true);
         registerFeature(DebugFeatures::RULE_SENSOR_VALUE_DEBUG, "rule_sensor_value", false);

@@ -90,9 +90,6 @@ private:
     void fillDeviceModuleStructure(Node &node);
     void fillAnalogInputDeviceStructure(Node &node);
 
-    // Helper method for sensor UID generation
-    std::string generateSensorUid(const SensorEntity &sensor, const std::string &sensorNumber = "") const;
-
     // Helper method for scanning sensors on empty pins
     void scanEmptyPinsForSensors(Node &node, const std::vector<SensorEntity> &existingSensors);
     bool isPinOccupied(int pin, const std::vector<SensorEntity> &sensors, const std::string &protocol);
@@ -598,8 +595,7 @@ inline void ModuleSetupService::createBaseNodeStructure(Node &node)
     log("SETUP: Boot type: %d, name: %s", bootTypeVal, node.bootType.c_str());
     settings->setBootType(BOOT_TYPE_POWER_ON);
 
-    FileSystemStatusEnum fsStatus = FILE_SYSTEM_STATUS_NONE;
-    node.fileSystem = getFileSystemStatusName(fsStatus);
+    node.fileSystem = spiffsAdapter ? getFileSystemStatusName(spiffsAdapter->getFileSystemStatus()) : "none";
     log("SETUP: File system status: %s", node.fileSystem.c_str());
 }
 
@@ -1050,28 +1046,6 @@ inline std::unique_ptr<ILoopService> ModuleSetupService::getLoopService()
         log("SETUP: Error creating loop service: %s", e.what());
         return loopServiceFactory->createLoopService(ModuleModeEnum::USER_CAN_CONFIGURE);
     }
-}
-
-inline std::string ModuleSetupService::generateSensorUid(const SensorEntity &sensor, const std::string &sensorNumber) const
-{
-    std::string moduleUid = moduleConfig->getModuleUid();
-    std::string baseUid = sensor.uid;
-
-    if (sensor.protocol == "Analog")
-    {
-        return baseUid;
-    }
-    else if (sensor.protocol == "I2C")
-    {
-        return baseUid + "." + sensorNumber;
-    }
-    else if (sensor.protocol == "ModBus")
-    {
-        std::string sensorAddress = std::to_string(sensor.modbusDeviceAddress);
-        return baseUid + "." + sensorAddress + "." + sensorNumber;
-    }
-
-    return baseUid;
 }
 
 inline bool ModuleSetupService::isPinOccupied(int pin, const std::vector<SensorEntity> &sensors, const std::string &protocol)

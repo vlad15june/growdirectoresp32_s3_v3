@@ -48,6 +48,11 @@ bool SensorService::init() {
 }
 
 void SensorService::loop() {
+    auto activeSensors = sensorRepository->getActiveSensors();
+    if (activeSensors.empty()) {
+        return;
+    }
+    
     unsigned long currentTime = arduinoAdapter->millis();
     
     if (currentTime - lastSensorReadTime >= SENSOR_READ_INTERVAL) {
@@ -130,6 +135,10 @@ bool SensorService::readSensor(SensorEntity sensor) {
 
 bool SensorService::readAnalogSensors() {
     auto analogSensors = sensorRepository->getSensorsByProtocol("ANALOG");
+    if (analogSensors.empty()) {
+        return true; // No sensors to read, consider it successful
+    }
+    
     bool allSuccess = true;
     
     for (const auto& sensor : analogSensors) {
@@ -145,6 +154,10 @@ bool SensorService::readAnalogSensors() {
 
 bool SensorService::readI2CSensors() {
     auto i2cSensors = sensorRepository->getI2CSensors();
+    if (i2cSensors.empty()) {
+        return true; // No sensors to read, consider it successful
+    }
+    
     bool allSuccess = true;
     
     for (const auto& sensor : i2cSensors) {
@@ -161,6 +174,10 @@ bool SensorService::readI2CSensors() {
 bool SensorService::readModbusSensors() {
     auto modbusSensors = sensorRepository->getModbusSensors();
     log("SensorService: Found %zu Modbus sensors", modbusSensors.size());
+    if (modbusSensors.empty()) {
+        return true; // No sensors to read, consider it successful
+    }
+    
     bool allSuccess = true;
     
     for (const auto& sensor : modbusSensors) {

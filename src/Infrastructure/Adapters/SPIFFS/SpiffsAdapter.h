@@ -13,9 +13,10 @@ class SpiffsAdapter : public ISpiffsAdapter {
 public:
     ILogger *logger;
     IDebugSystem *debugSystem;
+    FileSystemStatusEnum fileSystemStatus;
 
     SpiffsAdapter(ILogger *logger = nullptr, IDebugSystem *debugSystem = nullptr)
-        : logger(logger), debugSystem(debugSystem) {}
+        : logger(logger), debugSystem(debugSystem), fileSystemStatus(FILE_SYSTEM_STATUS_NONE) {}
 
     void setLogger(ILogger *loggerInstance) {
         logger = loggerInstance;
@@ -40,8 +41,10 @@ public:
     void initSPIFFS() override {
         if (!SPIFFS.begin(true)) {
             log("SPIFFS Mount Failed");
+            fileSystemStatus = FILE_SYSTEM_STATUS_FAIL;
         } else {
             log("SPIFFS Mounted successfully");
+            fileSystemStatus = FILE_SYSTEM_STATUS_DONE;
         }
     }
 
@@ -103,5 +106,10 @@ public:
         }
         log("Failed to create directory: %s", path);
         return false;
+    }
+
+    FileSystemStatusEnum getFileSystemStatus() override {
+        log("SPIFFS status: %s", getFileSystemStatusName(fileSystemStatus));
+        return fileSystemStatus;
     }
 };

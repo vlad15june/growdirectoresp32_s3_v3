@@ -32,7 +32,7 @@ private:
     std::map<std::string, unsigned long> _delayTimers;
     
     // Evaluation interval in milliseconds
-    const int EVALUATION_INTERVAL_MS = 5000;
+    const int EVALUATION_INTERVAL_MS = 1000;
     unsigned long _lastEvaluationTime;
     
     void log(const char* format, ...) {
@@ -134,19 +134,23 @@ public:
     
     void loop() override {
         if (!_arduinoAdapter) {
+            log("EVALUATE_RULES: Arduino adapter not available in loop");
             return;
         }
         
         unsigned long now = _arduinoAdapter->millis();
         unsigned long elapsed = now - _lastEvaluationTime;
         
-        if (elapsed < EVALUATION_INTERVAL_MS) {
+        if (elapsed < EVALUATION_INTERVAL_MS) {            
             return;
         }
+
+        log("EVALUATE_RULES: Starting rule evaluation cycle at %lu ms", now);
         
         _lastEvaluationTime = now;
         
         if (!_ruleRepository) {
+            log("EVALUATE_RULES: Rule repository not available in loop");
             return;
         }
         
@@ -229,7 +233,7 @@ public:
         }
         
         bool conditionMet = false;
-        DeviceStateEnum resultState = DEVICE_STATE_OFF;
+        DeviceStateEnum resultState = DEVICE_STATE_OFF; //TODO: resultState - not used, remove it?
         
         switch (rule.ruleType) {
             case RuleType::SCHEDULE:
@@ -273,17 +277,17 @@ public:
         log("EVALUATE_RULES: Executing actions for rule %s", rule.uid.c_str());
         
         RuleEvaluationResult currentState = _ruleActiveStates[rule.uid];
-        RuleEvaluationResult shouldBeActive = evaluateRule(rule);
+        RuleEvaluationResult evaluationResult = evaluateRule(rule);
         
-        if (currentState.state == shouldBeActive.state) {
+        if (currentState.state == evaluationResult.state) {
             return true; // No change needed
         }
         
-        bool success = executeDeviceAction(rule.deviceUid, shouldBeActive);
+        bool success = executeDeviceAction(rule.deviceUid, evaluationResult);
         if (success) {
-            _ruleActiveStates[rule.uid] = shouldBeActive;
+            _ruleActiveStates[rule.uid] = evaluationResult;
             log("EVALUATE_RULES: Rule %s action executed - device state %s", 
-                rule.uid.c_str(), getDeviceStateName(shouldBeActive.state));
+                rule.uid.c_str(), getDeviceStateName(evaluationResult.state));
         } else {
             log("EVALUATE_RULES: Failed to execute action for rule %s", rule.uid.c_str());
         }
