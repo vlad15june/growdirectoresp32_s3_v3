@@ -29,7 +29,7 @@ public:
     void log(const char *format, ...) {
         if (logger != nullptr &&
             (debugSystem == nullptr || debugSystem->isFeatureEnabled(DebugFeatures::SPIFFS_DEBUG))) {
-            char buffer[128];
+            char buffer[1024];
             va_list args;
             va_start(args, format);
             vsnprintf(buffer, sizeof(buffer), format, args);
@@ -56,7 +56,12 @@ public:
         }
         String content = file.readString();
         file.close();
+
         log("Read file: %s, length: %d", filePath, content.length());
+        #ifdef DEBUG
+        log("File content: %s", content.c_str());
+        #endif
+        
         return std::string(content.c_str());
     }
 
