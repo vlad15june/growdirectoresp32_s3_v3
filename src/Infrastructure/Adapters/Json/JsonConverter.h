@@ -362,12 +362,11 @@ public:
 
         // Parse mode
         std::string modeStr = extractValue(jsonStr, "mode");
+        rule.mode = RuleMode::OFF;
         if (modeStr == "On")
             rule.mode = RuleMode::ON;
-        else if (modeStr == "Off")
-            rule.mode = RuleMode::OFF;
-        else if (modeStr == "Auto")
-            rule.mode = RuleMode::AUTO;
+        else if (modeStr == "WaitingForUserConfirm")
+            rule.mode = RuleMode::RULE_MODE_WAITING_FOR_USER_CONFIRM;
 
         rule.modeReason = extractValue(jsonStr, "modeReason");
         rule.protectiveShutdown = jsonStr.find("\"protectiveShutdown\":true") != std::string::npos;

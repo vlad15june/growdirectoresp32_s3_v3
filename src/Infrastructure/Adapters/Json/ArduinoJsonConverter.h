@@ -183,6 +183,9 @@ public:
 
     bool ruleFromJson(const std::string &jsonStr, Rule &rule) override
     {
+        // Debug: Log the JSON string being parsed
+        printf("Parsing rule JSON: %s\n", jsonStr.c_str());
+
         DynamicJsonDocument doc(4096);
         DeserializationError error = deserializeJson(doc, jsonStr);
         if (error)
@@ -204,12 +207,11 @@ public:
 
         // Parse mode
         std::string modeStr = doc["mode"] | "";
+        rule.mode = RuleMode::OFF;
         if (modeStr == "On")
             rule.mode = RuleMode::ON;
-        else if (modeStr == "Off")
-            rule.mode = RuleMode::OFF;
-        else if (modeStr == "Auto")
-            rule.mode = RuleMode::AUTO;
+        else if (modeStr == "WaitingForUserConfirm")
+            rule.mode = RuleMode::RULE_MODE_WAITING_FOR_USER_CONFIRM;
 
         if (doc.containsKey("modeReason") && !doc["modeReason"].isNull())
         {

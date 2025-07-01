@@ -226,7 +226,7 @@ public:
                     
                     // Preserve local mode if needed
                     Rule updatedRule = incomingRule;
-                    if (existingRule->mode != RuleMode::AUTO && existingRule->state != RuleState::UNSYNCHRONIZED) {
+                    if (existingRule->state != RuleState::UNSYNCHRONIZED) {
                         updatedRule.mode = existingRule->mode;
                         updatedRule.modeReason = existingRule->modeReason;
                     }
@@ -275,7 +275,7 @@ public:
         time_t now;
         time(&now);
         struct tm timeinfo;
-        localtime_r(&now, &timeinfo);
+        localtime_r(&now, &timeinfo); //TODO: use _ntpTimeAdapter if available
         
         // Filter rules that are active
         for (const auto& rule : allRules) {
@@ -286,12 +286,7 @@ public:
                 continue;
             }
             
-            // Check rule mode - must be ON or AUTO for rules to be active
-            if (rule.mode == RuleMode::ON) {
-                isRuleOn = true;
-            } else if (rule.mode == RuleMode::AUTO) {
-                // In AUTO mode, need to check if today is a valid day to execute
-                
+            if (rule.mode == RuleMode::ON) {                
                 // Check day of week
                 if (!rule.daysOfWeek.empty()) {
                     int today = timeinfo.tm_wday; // 0 is Sunday
