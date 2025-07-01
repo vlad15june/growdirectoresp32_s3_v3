@@ -36,4 +36,12 @@ public:
      * @return true if the operation was successful, false otherwise
      */
     virtual bool sendCommandResult(const CommandResultDto& commandResult) = 0;
+
+    /**
+     * @brief Send rule state command via MQTT
+     * @param msg The rule state message to send
+     * @param priority The API priority (unused in MQTT implementation but kept for interface consistency)
+     * @return true if the operation was successful, false otherwise
+     */
+    virtual bool sendRuleStateCommand(const char* msg) = 0;
 };

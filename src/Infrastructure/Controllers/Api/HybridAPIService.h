@@ -245,16 +245,105 @@ public:
         return success;
     }
 
-    bool sendRuleStateCommand(const char *msg) override
+    bool sendRuleStateCommand(const char *msg, ApiPriority priority = ApiPriority::UNDEFINED) override
     {
-        if (_restApiService == nullptr)
+        ApiPriority effectivePriority = (priority == ApiPriority::UNDEFINED) ? _apiPriority : priority;
+        bool success = false;
+
+        switch (effectivePriority)
         {
-            log("HYBRID API: sendRuleStateCommand - REST API not available");
-            return false;
+        case ApiPriority::REST_ONLY:
+            if (_restApiService != nullptr)
+            {
+                success = _restApiService->sendRuleStateCommand(msg);
+                if (!success)
+                    trackApiSendFailure(true);
+            }
+            else
+            {
+                log("HYBRID API: REST_ONLY mode but REST API is not available");
+            }
+            break;
+
+        case ApiPriority::MQTT_ONLY:
+            if (_mqttApiService != nullptr)
+            {
+                success = _mqttApiService->sendRuleStateCommand(msg);
+                if (!success)
+                    trackApiSendFailure(false);
+            }
+            else
+            {
+                log("HYBRID API: MQTT_ONLY mode but MQTT API is not available");
+            }
+            break;
+
+        case ApiPriority::REST_PREFERRED:
+            if (_restApiService != nullptr)
+            {
+                success = _restApiService->sendRuleStateCommand(msg);
+                if (!success && _mqttApiService != nullptr)
+                {
+                    trackApiSendFailure(true);
+                    log("HYBRID API: REST failed, trying MQTT for rule state command");
+                    success = _mqttApiService->sendRuleStateCommand(msg);
+                    if (!success)
+                        trackApiSendFailure(false);
+                }
+            }
+            else if (_mqttApiService != nullptr)
+            {
+                success = _mqttApiService->sendRuleStateCommand(msg);
+                if (!success)
+                    trackApiSendFailure(false);
+            }
+            break;
+
+        case ApiPriority::MQTT_PREFERRED:
+            if (_mqttApiService != nullptr)
+            {
+                success = _mqttApiService->sendRuleStateCommand(msg);
+                if (!success && _restApiService != nullptr)
+                {
+                    trackApiSendFailure(false);
+                    log("HYBRID API: MQTT failed, trying REST for rule state command");
+                    success = _restApiService->sendRuleStateCommand(msg);
+                    if (!success)
+                        trackApiSendFailure(true);
+                }
+            }
+            else if (_restApiService != nullptr)
+            {
+                success = _restApiService->sendRuleStateCommand(msg);
+                if (!success)
+                    trackApiSendFailure(true);
+            }
+            break;
+
+        case ApiPriority::BOTH:
+        {
+            bool restSuccess = false;
+            bool mqttSuccess = false;
+            if (_restApiService != nullptr)
+            {
+                restSuccess = _restApiService->sendRuleStateCommand(msg);
+                if (!restSuccess)
+                    trackApiSendFailure(true);
+            }
+            if (_mqttApiService != nullptr)
+            {
+                mqttSuccess = _mqttApiService->sendRuleStateCommand(msg);
+                if (!mqttSuccess)
+                    trackApiSendFailure(false);
+            }
+            success = restSuccess || mqttSuccess;
+            break;
         }
-        bool success = _restApiService->sendRuleStateCommand(msg);
-        if (!success)
-            trackApiSendFailure(true);
+        default:
+            break;
+        }
+
+        log("HYBRID API: Rule state command sent - success: %s", success ? "true" : "false");
         return success;
     }
 

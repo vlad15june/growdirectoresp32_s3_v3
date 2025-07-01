@@ -25,6 +25,7 @@ private:
     static constexpr const char* UPDATE_TOPIC = "hardware/update/%s";
     static constexpr const char* DEVICE_COMMAND_TOPIC = "hardware/devices_command/%s";
     static constexpr const char* COMMAND_RESULT_TOPIC = "hardware/command_result/%s";
+    static constexpr const char* RULE_STATE_TOPIC = "hardware/rules/state/%s";
     
     char _topicBuffer[128];
     
@@ -203,6 +204,27 @@ public:
         
         if (!_mqttManager->publish(topic, commandResultJson.c_str())) {
             log("MQTT: Failed to publish command result");
+            return false;
+        }
+        
+        return true;
+    }
+    
+    bool sendRuleStateCommand(const char* msg) override {
+        if (_mqttManager == nullptr || !_mqttManager->isConnected()) {
+            log("MQTT: sendRuleStateCommand - MQTT Manager not available or not connected");
+            return false;
+        }
+        
+        const char* topic = formatTopic(RULE_STATE_TOPIC);
+        if (topic == nullptr) {
+            return false;
+        }
+        
+        log("MQTT: Publishing rule state command to topic: %s", topic);
+        
+        if (!_mqttManager->publish(topic, msg)) {
+            log("MQTT: Failed to publish rule state command");
             return false;
         }
         

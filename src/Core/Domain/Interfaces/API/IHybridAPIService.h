@@ -66,7 +66,7 @@ public:
      * @param msg The message containing the rule state
      * @return true if the operation was successful, false otherwise
      */
-    virtual bool sendRuleStateCommand(const char* msg) = 0;
+    virtual bool sendRuleStateCommand(const char* msg, ApiPriority priority = ApiPriority::UNDEFINED) = 0;
     
     /**
      * Send rule state command for a specific rule UID
