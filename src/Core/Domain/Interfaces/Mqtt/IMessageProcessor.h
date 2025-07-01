@@ -1,7 +1,6 @@
 #ifndef I_MESSAGE_PROCESSOR_H
 #define I_MESSAGE_PROCESSOR_H
 
-#include <cstdint>
 #include "ITopicHandler.h"
 
 class IMessageProcessor {

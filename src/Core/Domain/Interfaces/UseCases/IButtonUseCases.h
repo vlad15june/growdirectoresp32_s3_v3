@@ -1,8 +1,6 @@
 #ifndef I_BUTTON_USE_CASES_H
 #define I_BUTTON_USE_CASES_H
 
-#include <stdint.h>
-
 // Interface for Button use cases
 class IButtonUseCases {
 public:

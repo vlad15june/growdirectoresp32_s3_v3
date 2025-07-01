@@ -4,8 +4,6 @@
 #include "ISpiffsAdapter.h"
 #include "Core/Domain/Interfaces/Adapters/Json/IJsonConverter.h"
 #include "Core/Domain/Data/Entities/Sensor/SensorType.h"
-#include <functional>
-#include <algorithm>
 #include <string>
 
 class SpiffsSensorTypeDao : public ISpiffsSensorTypeDao {

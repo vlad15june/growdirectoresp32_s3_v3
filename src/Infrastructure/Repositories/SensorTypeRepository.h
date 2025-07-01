@@ -4,7 +4,6 @@
 #include "Infrastructure/Adapters/SPIFFS/ISpiffsSensorTypeDao.h"
 #include <string>
 #include <vector>
-#include <algorithm>
 
 class SensorTypeRepository : public ISensorTypeRepository {
 private:

@@ -1,7 +1,6 @@
 #ifndef RULE_EVALUATION_RESULT_H
 #define RULE_EVALUATION_RESULT_H
 
-#include <cstdint>
 #include <string>
 #include "Core/Domain/Enums/DeviceStateEnum.h"
 #include "Core/Domain/Enums/RuleEnums.h"

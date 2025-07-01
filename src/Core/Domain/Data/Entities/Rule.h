@@ -3,7 +3,6 @@
 
 #include <string>
 #include <vector>
-#include <ctime>
 #include "Core/Domain/Enums/RuleEnums.h"
 
 class RuleCondition;

@@ -3,7 +3,6 @@
 
 #include "../../../../../Core/Domain/Interfaces/Adapters/Sensors/IAnalogSensorReader.h"
 #include "../../../../../Core/Domain/Interfaces/Adapters/IArduinoAdapter.h"
-#include <stdint.h>
 
 class AnalogSensorReader : public IAnalogSensorReader
 {

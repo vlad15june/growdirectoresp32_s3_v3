@@ -29,8 +29,6 @@ For example, see the structure of the following example libraries `Foo` and `Bar
 
 Example contents of `src/main.c` using Foo and Bar:
 ```
-#include <Foo.h>
-#include <Bar.h>
 
 int main (void)
 {

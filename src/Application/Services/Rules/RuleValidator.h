@@ -7,8 +7,6 @@
 #include "Core/Domain/Interfaces/IDebugSystem.h"
 #include <string>
 #include <vector>
-#include <memory>
-#include <regex>
 
 struct RuleValidationResult {
     bool isValid = true;
@@ -213,9 +211,7 @@ public:
         auto result = ECRuleValidator::validate(rule);
         if (!result.isValid) {
             // Update error messages for PH context
-            if (result.errorMessage.find("EC rule") != std::string::npos) {
-                result.errorMessage = std::regex_replace(result.errorMessage, std::regex("EC rule"), "PH rule");
-            }
+            //TODO: use PH validator instead ECRuleValidator
         }
         return result;
     }

@@ -1,8 +1,6 @@
 #ifndef MODULE_SETUP_SERVICE_H
 #define MODULE_SETUP_SERVICE_H
 
-#include <stdlib.h>
-
 #include "Core/Domain/Interfaces/ILogger.h"
 #include "Core/Domain/Interfaces/IDebugSystem.h"
 #include "Core/Domain/Interfaces/IModuleConfig.h"

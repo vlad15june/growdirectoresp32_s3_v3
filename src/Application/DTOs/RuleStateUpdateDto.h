@@ -2,11 +2,7 @@
 
 #include <string>
 #include <vector>
-#include <ctime>
 
-/**
- * @brief Data Transfer Object for individual rule state
- */
 class RuleStateDto {
 public:
     std::string uid;

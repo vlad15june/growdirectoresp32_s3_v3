@@ -1,9 +1,6 @@
 #ifndef IMODBUS_RS485_H
 #define IMODBUS_RS485_H
 
-#include <cstdint>
-#include <cstddef>
-
 // Interface for Modbus RS-485 communication
 class IModbusRS485
 {

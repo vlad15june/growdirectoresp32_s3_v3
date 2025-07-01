@@ -2,7 +2,6 @@
 #define ON_CHANGE_LOCAL_IP_USE_CASE_H
 
 #include <cstdarg>
-#include <cstdio>
 #include "Core/Domain/Interfaces/UseCases/IOnChangeLocalIpUseCase.h"
 #include "Core/Domain/Interfaces/Adapters/IWifiAdapter.h"
 #include "Core/Domain/Interfaces/IWifiManager.h"

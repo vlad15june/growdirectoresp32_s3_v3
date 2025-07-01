@@ -3,7 +3,6 @@
 #include "SpiffsDao.h"
 #include "ISpiffsSensorDao.h"
 #include "Core/Domain/Data/Entities/Sensor/Sensor.h"
-#include <functional>
 
 /**
  * @brief Implementation of Sensor-specific DAO using SPIFFS storage

@@ -1,6 +1,5 @@
 #pragma once
 
-#include <cstdint>
 #include <string>
 #include "Core/Domain/Enums/DeviceStateEnum.h"
 #include "Core/Domain/Enums/DeviceTypeEnum.h"

@@ -1,6 +1,5 @@
 #include "SensorService.h"
 #include <cstring>
-#include <algorithm>
 
 SensorService::SensorService(IModuleConfig* moduleConfig, 
                             ModuleStructure* moduleStructure,

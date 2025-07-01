@@ -5,7 +5,6 @@
 #include "Infrastructure/Adapters/SPIFFS/ISpiffsSensorDao.h"
 #include <string>
 #include <vector>
-#include <algorithm>
 
 /**
  * @brief Implementation of sensor repository using SPIFFS storage

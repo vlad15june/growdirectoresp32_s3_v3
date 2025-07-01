@@ -5,7 +5,6 @@
 #include "Infrastructure/Adapters/SPIFFS/ISpiffsRuleDao.h"
 #include <string>
 #include <vector>
-#include <algorithm>
 #include <unordered_map>
 
 /**

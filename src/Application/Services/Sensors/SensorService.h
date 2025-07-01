@@ -1,8 +1,6 @@
 #pragma once
 
 #include <vector>
-#include <memory>
-#include <ctime>
 #include <cstdarg>
 #include "ISensorService.h"
 #include "Core/Domain/Interfaces/IModuleConfig.h"

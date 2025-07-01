@@ -1,7 +1,6 @@
 #pragma once
 
 #include <vector>
-#include <algorithm>
 #include <cstring>
 #include "IDeviceModel.h"
 #include "Core/Domain/Data/Entities/Device.h"

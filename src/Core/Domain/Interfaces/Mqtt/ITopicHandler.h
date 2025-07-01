@@ -2,7 +2,6 @@
 #define I_TOPIC_HANDLERS_H
 
 #include <vector>
-#include <cstdint>
 #include "Core/Domain/Interfaces/ILogger.h"
 #include "Core/Domain/Interfaces/IDebugSystem.h"
 

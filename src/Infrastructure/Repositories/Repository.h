@@ -4,7 +4,6 @@
 #include "Infrastructure/Adapters/SPIFFS/ISpiffsDao.h"
 #include <string>
 #include <vector>
-#include <memory>
 
 /**
  * @brief Generic repository implementation using SpiffsDao for data access

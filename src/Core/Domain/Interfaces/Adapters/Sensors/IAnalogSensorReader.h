@@ -1,8 +1,6 @@
 #ifndef I_ANALOG_SENSOR_READER_H
 #define I_ANALOG_SENSOR_READER_H
 
-#include <stdint.h>
-
 class IAnalogSensorReader
 {
 public:

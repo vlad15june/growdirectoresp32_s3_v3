@@ -13,7 +13,6 @@
 #include "Core/Domain/Enums/SensorTypeEnum.h"
 #include <string>
 #include <cstdarg>
-#include <cstdio>
 
 class SensorCommandUseCase : public ISensorCommandUseCase
 {

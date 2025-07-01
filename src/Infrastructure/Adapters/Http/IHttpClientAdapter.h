@@ -1,7 +1,6 @@
 #pragma once
 
 #include <Arduino.h>
-#include <WString.h>
 
 /**
  * @brief Interface for HTTP client operations

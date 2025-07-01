@@ -19,7 +19,6 @@
 #include "Application/Services/Devices/IDeviceService.h"
 #include "Application/Services/Sensors/ISensorService.h"
 #include "Application/Services/Rules/IRuleService.h"
-#include <stdexcept>
 
 class LoopServiceFactory : public ILoopServiceFactory {
 private:

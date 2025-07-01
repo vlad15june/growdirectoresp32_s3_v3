@@ -11,8 +11,6 @@
 #include "Core/Domain/Interfaces/ILogger.h"
 #include "Core/Domain/Interfaces/IDebugSystem.h"
 #include "Infrastructure/Adapters/Time/INTPTimeAdapter.h"
-#include <cstdarg>
-#include <cstdio>
 
 class CommandService : public ICommandService
 {

@@ -3,7 +3,6 @@
 
 #include "../../../Core/Domain/Enums/ModuleModeEnum.h"
 #include "ILoopService.h"
-#include <memory>
 
 class ILoopServiceFactory {
 public:

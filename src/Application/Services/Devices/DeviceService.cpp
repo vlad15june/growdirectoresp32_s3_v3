@@ -1,6 +1,4 @@
 #include "DeviceService.h"
-#include <cstring>
-#include <algorithm>
 #include "Core/Domain/UseCases/DeviceControl/ProcessDeviceStateUseCaseFactory.h"
 
 DeviceService::DeviceService(IModuleConfig* moduleConfig, 
