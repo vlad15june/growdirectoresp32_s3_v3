@@ -150,7 +150,7 @@ DeviceCommandExecutionUseCase deviceCommandExecutionUseCase(
 SpiffsAdapter spiffsAdapter(&mqttLogger, &debugSystem);
 
 SpiffsRuleDao ruleDao(&spiffsAdapter, &jsonConverter);
-RuleRepository ruleRepository(&ruleDao);
+RuleRepository ruleRepository(&ruleDao, &ntpTimeAdapter);
 
 SpiffsSensorDao sensorDao(&spiffsAdapter, &jsonConverter);
 SensorRepository sensorRepository(&sensorDao);

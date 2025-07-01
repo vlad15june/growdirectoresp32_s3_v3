@@ -157,6 +157,44 @@ static bool extractBoolValue(const std::string &src, const std::string &key)
     return src.substr(valueStart, 4) == "true";
 }
 
+// Replace the parseTimeToMinutes function with parseISOTimeToTimeT
+static time_t parseISOTimeToTimeT(const std::string& isoTimeStr) {
+    if (isoTimeStr.length() < 19) return 0; // Invalid format
+    
+    // Extract time part: "HH:MM:SS" from "YYYY-MM-DDTHH:MM:SS+00:00"
+    size_t timeStart = isoTimeStr.find('T');
+    if (timeStart == std::string::npos) return 0;
+    
+    timeStart++; // Skip 'T'
+    if (timeStart + 8 > isoTimeStr.length()) return 0;
+    
+    try {
+        int hours = std::stoi(isoTimeStr.substr(timeStart, 2));
+        int minutes = std::stoi(isoTimeStr.substr(timeStart + 3, 2));
+        int seconds = std::stoi(isoTimeStr.substr(timeStart + 6, 2));
+        
+        // Convert to seconds since midnight
+        return static_cast<time_t>(hours * 3600 + minutes * 60 + seconds);
+    } catch (const std::exception&) {
+        return 0;
+    }
+}
+
+static std::string timeToISOString(time_t secondsSinceMidnight) {
+    if (secondsSinceMidnight <= 0) return "00:00:00";
+    
+    int hours = secondsSinceMidnight / 3600;
+    int minutes = (secondsSinceMidnight % 3600) / 60;
+    int seconds = secondsSinceMidnight % 60;
+    
+    // Format as HH:MM:SS - simplified without full date/timezone
+    char timeStr[16];
+    snprintf(timeStr, sizeof(timeStr), "%02d:%02d:%02d", hours, minutes, seconds);
+    
+    // For schedule rules, we typically use today's date with the time
+    return "2025-01-01T" + std::string(timeStr) + "+00:00";
+}
+
 class JsonConverter : public IJsonConverter
 {
 public:
@@ -478,8 +516,7 @@ public:
             {
                 ScheduleItem item;
                 std::string startAtStr = extractValue(scheduleItemStr, "startAt");
-                // Simple time parsing (this should be improved for real implementation)
-                item.startAt = 0; // Should parse ISO time string
+                item.startAt = parseISOTimeToTimeT(startAtStr);
                 item.duration = extractIntValue(scheduleItemStr, "duration");
                 rule.schedule.push_back(item);
             }
@@ -656,8 +693,7 @@ public:
             {
                 const ScheduleItem &item = rule.schedule[i];
                 oss << "{";
-                // Should format to ISO time string
-                oss << "\"startAt\":\"" << item.startAt << "\"";
+                oss << "\"startAt\":\"" << timeToISOString(item.startAt) << "\"";
                 oss << ",\"duration\":" << item.duration;
                 oss << "}";
                 if (i + 1 < rule.schedule.size())

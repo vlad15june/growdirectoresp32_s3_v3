@@ -3,6 +3,7 @@
 #include "Repository.h"
 #include "Core/Domain/Interfaces/Repositories/IRuleRepository.h"
 #include "Infrastructure/Adapters/SPIFFS/ISpiffsRuleDao.h"
+#include "Infrastructure/Adapters/Time/INTPTimeAdapter.h"
 #include <string>
 #include <vector>
 #include <unordered_map>
@@ -14,6 +15,7 @@ class RuleRepository : public Repository<Rule>, public IRuleRepository {
 
 private:
     ISpiffsRuleDao* ruleDao;
+    INTPTimeAdapter* _ntpTimeAdapter;
 
 public:
     ~RuleRepository() noexcept override = default;
@@ -21,9 +23,10 @@ public:
     /**
      * @brief Constructor for RuleRepository
      * @param dao Data access object for Rule entities
+     * @param ntpTimeAdapter NTP time adapter for time operations
      */
-    RuleRepository(ISpiffsRuleDao* dao) 
-        : Repository<Rule>(dao), ruleDao(dao) {
+    RuleRepository(ISpiffsRuleDao* dao, INTPTimeAdapter* ntpTimeAdapter = nullptr) 
+        : Repository<Rule>(dao), ruleDao(dao), _ntpTimeAdapter(ntpTimeAdapter) {
         if (!dao) {
             throw std::invalid_argument("DAO cannot be null");
         }
@@ -271,11 +274,18 @@ public:
         std::vector<Rule> allRules = Repository<Rule>::getAll();
         std::vector<Rule> activeRules;
         
-        // Current time information - will be needed for time-based filters
-        time_t now;
-        time(&now);
-        struct tm timeinfo;
-        localtime_r(&now, &timeinfo); //TODO: use _ntpTimeAdapter if available
+        // Current time information
+        struct tm timeinfo = {0};
+        if (_ntpTimeAdapter) {
+            // Use NTP time adapter to get current time
+            time_t now = _ntpTimeAdapter->getEpochTime();
+            localtime_r(&now, &timeinfo);
+        } else {
+            // Fallback to system time if NTP adapter not available
+            time_t now;
+            time(&now);
+            localtime_r(&now, &timeinfo);
+        }
         
         // Filter rules that are active
         for (const auto& rule : allRules) {
