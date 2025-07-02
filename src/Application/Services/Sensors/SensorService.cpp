@@ -213,29 +213,17 @@ UpdateDto SensorService::createSensorUpdateDto() {
         if (sensor.isMultiChannel()) {
             for (const auto& channelValue : sensor.channelValues) {
                 SensorDto sensorDto;
-                sensorDto.sensorUid = channelValue.first;
-                sensorDto.sensorType = sensor.sensorType;
-                sensorDto.model = sensor.model;
-                sensorDto.protocol = sensor.protocol;
-                sensorDto.createdAt = sensor.createdAt;
-                sensorDto.isActive = sensor.isActive;
-                sensorDto.isError = sensor.isError;
-                sensorDto.currentValue = channelValue.second;
-                sensorDto.lastReadTime = sensor.lastReadTime;
+                sensorDto.uid = channelValue.first;
+                sensorDto.value = channelValue.second;
+                sensorDto.state = sensor.isError ? "error" : (sensor.isActive ? "online" : "offline");
                 
                 dto.sensors.push_back(sensorDto);
             }
         } else {
             SensorDto sensorDto;
-            sensorDto.sensorUid = sensor.uid;
-            sensorDto.sensorType = sensor.sensorType;
-            sensorDto.model = sensor.model;
-            sensorDto.protocol = sensor.protocol;
-            sensorDto.createdAt = sensor.createdAt;
-            sensorDto.isActive = sensor.isActive;
-            sensorDto.isError = sensor.isError;
-            sensorDto.currentValue = sensor.currentValue;
-            sensorDto.lastReadTime = sensor.lastReadTime;
+            sensorDto.uid = sensor.uid;
+            sensorDto.value = sensor.currentValue;
+            sensorDto.state = sensor.isError ? "error" : (sensor.isActive ? "online" : "offline");
             
             dto.sensors.push_back(sensorDto);
         }

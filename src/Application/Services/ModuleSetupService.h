@@ -602,7 +602,7 @@ inline void ModuleSetupService::addMultiChannelModbusSensor(Node &node, const Se
     for (const auto &config : sensorEntity.modbusRegisterConfigs)
     {
         Sensor sensor;
-        sensor.uid = sensorEntity.uid + "." + (config.channel < 10 ? "0" : "") + std::to_string(config.channel + 1);
+        sensor.uid = sensorEntity.uid + "." + (config.channel < 10 ? "0" : "") + std::to_string(config.channel);
         sensor.type = config.sensorType.empty() ? sensorEntity.sensorType : config.channelName;
         sensor.pin = sensorEntity.pin;
 
@@ -634,7 +634,7 @@ inline void ModuleSetupService::addMultiChannelI2CSensor(Node &node, const Senso
     for (const auto &config : sensorEntity.i2cRegisterConfigs)
     {
         Sensor sensor;
-        sensor.uid = sensorEntity.uid + "." + (config.channel < 10 ? "0" : "") + std::to_string(config.channel + 1);
+        sensor.uid = sensorEntity.uid + "." + (config.channel < 10 ? "0" : "") + std::to_string(config.channel);
         sensor.type = config.sensorType.empty() ? sensorEntity.sensorType : config.channelName;
         sensor.pin = sensorEntity.pin;
 
@@ -730,9 +730,9 @@ inline void ModuleSetupService::fillSensorModuleStructure(Node &node)
         std::string nodeUid = node.uid;
         int sensorPinCount = moduleConfig->getSensorPinCount();
 
-        for (int sensorPin = 0; sensorPin < sensorPinCount; sensorPin++)
+        for (int sensorPin = 1; sensorPin <= sensorPinCount; sensorPin++)
         {
-            for (int i = 0; i < 3; i++)
+            for (int i = 0; i < 3; i++) //NOTE: to support old sensors with 3 channels
             {
                 Sensor sensor;
                 sensor.pin = sensorPin;
@@ -811,10 +811,10 @@ inline void ModuleSetupService::fillHydroModuleStructure(Node &node)
     int sensorPinCount = moduleConfig->getSensorPinCount();
     int deviceCount = moduleConfig->getDeviceCount();
 
-    for (int i = 0; i < sensorPinCount; i++)
+    for (int i = 1; i <= sensorPinCount; i++)
     {
         Sensor sensor;
-        sensor.pin = i + 1;
+        sensor.pin = i;
         sensor.type = "none";
 
         char sensorId[10];
@@ -1088,7 +1088,7 @@ inline void ModuleSetupService::scanPinForSensorTypes(int pin, Node &node)
         tempSensor.model = sensorType.name;
         tempSensor.protocol = sensorType.getProtocolString();
         tempSensor.isActive = true;
-        tempSensor.pin = pin + 1;
+        tempSensor.pin = pin;
         char pinStr[3];
         sprintf(pinStr, "%02d", pin);
         tempSensor.uid = moduleUid + "." + pinStr;
@@ -1214,7 +1214,7 @@ inline void ModuleSetupService::removeDisconnectedNewSensorPlaceholders(Node &no
             for (const auto &config : sensorEntity.modbusRegisterConfigs)
             {
                 Sensor sensor;
-                sensor.uid = sensorEntity.uid + "." + (config.channel < 10 ? "0" : "") + std::to_string(config.channel + 1);
+                sensor.uid = sensorEntity.uid + "." + (config.channel < 10 ? "0" : "") + std::to_string(config.channel);
                 sensor.type = "none";
                 sensor.pin = sensorEntity.pin;
 
@@ -1229,7 +1229,7 @@ inline void ModuleSetupService::removeDisconnectedNewSensorPlaceholders(Node &no
             for (const auto &config : sensorEntity.i2cRegisterConfigs)
             {
                 Sensor sensor;
-                sensor.uid = sensorEntity.uid + "." + (config.channel < 10 ? "0" : "") + std::to_string(config.channel + 1);
+                sensor.uid = sensorEntity.uid + "." + (config.channel < 10 ? "0" : "") + std::to_string(config.channel);
                 sensor.type = "none";
                 sensor.pin = sensorEntity.pin;
 

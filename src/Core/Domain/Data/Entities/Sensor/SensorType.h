@@ -14,6 +14,11 @@ enum class SensorProtocol {
 class SensorType {
 public:
     int id;
+    bool canScan;
+    SensorProtocol protocol;
+    bool isSupported;
+
+    //NOTE: from sensorTypeTable - need or not????
     std::string name;
     std::string displayName;
     bool isAnalog;
@@ -29,7 +34,7 @@ public:
     float precisionPercent;
     float precisionValue;
     
-    SensorProtocol protocol;
+    
     
     std::string i2cAddress;
     std::string chipType;

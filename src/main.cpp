@@ -30,6 +30,9 @@ void createTestSensorTypes() {
     // Create Temperature/Humidity Modbus sensor type
     SensorType tempHumiditySensorType;
     tempHumiditySensorType.id = 1;
+    tempHumiditySensorType.canScan = true;
+    tempHumiditySensorType.isSupported = true;
+
     tempHumiditySensorType.name = "temp_humidity_modbus";
     tempHumiditySensorType.displayName = "Temperature & Humidity Sensor (Modbus)";
     tempHumiditySensorType.isAnalog = false;
@@ -44,6 +47,8 @@ void createTestSensorTypes() {
     tempHumiditySensorType.step = 0.1f;
     tempHumiditySensorType.precisionPercent = 2.0f;
     tempHumiditySensorType.precisionValue = 0.5f;
+
+    // Set protocol and Modbus parameters
     tempHumiditySensorType.protocol = SensorProtocol::MODBUS_PROTOCOL;
     tempHumiditySensorType.modbusDeviceAddress = 1;
     tempHumiditySensorType.baudRate = 9600;
@@ -57,7 +62,7 @@ void createTestSensorTypes() {
     tempConfig.offset = 0.0f;
     tempConfig.channelName = "air_temp";
     tempConfig.sensorType = "air_temp";
-    tempConfig.channel = 0;
+    tempConfig.channel = 1;
     tempHumiditySensorType.modbusRegisterConfig.push_back(tempConfig);
 
     ModbusRegisterConfig humidityConfig;

@@ -130,7 +130,7 @@ public:
                 float value;
                 if (_modbusReader->readRegister(sensor.modbusDeviceAddress, registerConfig, value, portIndex))
                 {
-                    std::string uid = sensor.uid + "." + (registerConfig.channel < 10 ? "0" : "") + std::to_string(registerConfig.channel + 1);
+                    std::string uid = sensor.uid + "." + (registerConfig.channel < 10 ? "0" : "") + std::to_string(registerConfig.channel);
                     channelValues[uid] = value;
                     log("SensorReader: Read modbus channel %s, value: %.2f on port %d", registerConfig.channelName.c_str(), value, portIndex);
                 }
