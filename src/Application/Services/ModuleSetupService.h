@@ -100,6 +100,10 @@ private:
     void addSensorToStructure(Node &node, const SensorEntity &sensorEntity);
     void removeDisconnectedNewSensorPlaceholders(Node &node, const SensorEntity &sensorEntity);
 
+    // Helper methods for hydro module structure
+    void addHydroSensors(Node &node);
+    void addHydroPumps(Node &node);
+
 public:
     friend class ModuleSetupServiceTestHelper;
     friend class FillModuleStructureTestHelper;
@@ -807,9 +811,14 @@ inline void ModuleSetupService::fillHydroModuleStructure(Node &node)
     log("SETUP: Preparing hydro module structure");
     node.subtype = "hydro";
 
+    addHydroSensors(node);
+    addHydroPumps(node);
+}
+
+inline void ModuleSetupService::addHydroSensors(Node &node)
+{
     std::string macAddress = node.uid;
     int sensorPinCount = moduleConfig->getSensorPinCount();
-    int deviceCount = moduleConfig->getDeviceCount();
 
     for (int i = 1; i <= sensorPinCount; i++)
     {
@@ -826,6 +835,12 @@ inline void ModuleSetupService::fillHydroModuleStructure(Node &node)
         log("SETUP: Added sensor %d, type: %s, pin: %d, uid: %s",
             i, sensor.type.c_str(), sensor.pin, sensor.uid.c_str());
     }
+}
+
+inline void ModuleSetupService::addHydroPumps(Node &node)
+{
+    std::string macAddress = node.uid;
+    int deviceCount = moduleConfig->getDeviceCount();
 
     for (int i = 0; i < deviceCount; i++)
     {
