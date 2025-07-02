@@ -623,7 +623,7 @@ inline void ModuleSetupService::addMultiChannelModbusSensor(Node &node, const Se
                 break;
             }
         }
-        
+
         if (!found)
         {
             node.sensors.push_back(sensor);
@@ -655,7 +655,7 @@ inline void ModuleSetupService::addMultiChannelI2CSensor(Node &node, const Senso
                 break;
             }
         }
-        
+
         if (!found)
         {
             node.sensors.push_back(sensor);
@@ -685,7 +685,7 @@ inline void ModuleSetupService::addSingleChannelSensor(Node &node, const SensorE
             break;
         }
     }
-    
+
     if (!found)
     {
         node.sensors.push_back(sensor);
@@ -736,7 +736,7 @@ inline void ModuleSetupService::fillSensorModuleStructure(Node &node)
 
         for (int sensorPin = 1; sensorPin <= sensorPinCount; sensorPin++)
         {
-            for (int i = 0; i < 3; i++) //NOTE: to support old sensors with 3 channels
+            for (int i = 0; i < 3; i++) // NOTE: to support old sensors with 3 channels
             {
                 Sensor sensor;
                 sensor.pin = sensorPin;
@@ -820,20 +820,132 @@ inline void ModuleSetupService::addHydroSensors(Node &node)
     std::string macAddress = node.uid;
     int sensorPinCount = moduleConfig->getSensorPinCount();
 
-    for (int i = 1; i <= sensorPinCount; i++)
+    if (sensorTypeRepository && sensorReader)
     {
-        Sensor sensor;
-        sensor.pin = i;
-        sensor.type = "none";
+        log("SETUP: Scanning for hydro-specific analog sensors");
 
-        char sensorId[10];
-        sprintf(sensorId, ".%02d", i);
-        sensor.uid = macAddress + sensorId;
+        // Get all sensor types for hydro module
+        auto allSensorTypes = sensorTypeRepository->getAll();
+        std::vector<SensorType> hydroSensorTypes;
 
-        node.sensors.push_back(sensor);
+        // Filter for hydro-specific analog protocols
+        for (const auto &sensorType : allSensorTypes)
+        {
+            if (sensorType.protocol == SensorProtocol::ANALOG_BNC_PROTOCOL ||
+                sensorType.protocol == SensorProtocol::ANALOG_EC2CH_PROTOCOL ||
+                sensorType.protocol == SensorProtocol::ANALOG_PH_PROTOCOL)
+            {
+                hydroSensorTypes.push_back(sensorType);
+                log("SETUP: Found hydro sensor type: %s, protocol: %s",
+                    sensorType.name.c_str(), sensorType.getProtocolString().c_str());
+            }
+        }
 
-        log("SETUP: Added sensor %d, type: %s, pin: %d, uid: %s",
-            i, sensor.type.c_str(), sensor.pin, sensor.uid.c_str());
+        std::string moduleUid = moduleConfig->getModuleUid();
+        std::vector<bool> pinUsed(sensorPinCount + 1, false);
+
+        for (const auto &sensorType : hydroSensorTypes)
+        {
+            if (!sensorType.analogPinConfig.empty())
+            {
+                for (const auto &analogConfig : sensorType.analogPinConfig)
+                {
+                    int pin = analogConfig.pin;
+
+                    // Validate pin is within range and not already used
+                    if (pin >= 1 && pin <= sensorPinCount && !pinUsed[pin])
+                    {
+                        SensorEntity tempSensor;
+                        tempSensor.sensorType = analogConfig.sensorType.empty() ? sensorType.name : analogConfig.sensorType;
+                        tempSensor.model = sensorType.name;
+                        tempSensor.protocol = sensorType.getProtocolString();
+                        tempSensor.isActive = true;
+                        tempSensor.pin = pin;
+                        char pinStr[3];
+                        sprintf(pinStr, "%02d", pin);
+                        tempSensor.uid = moduleUid + "." + pinStr;
+                        tempSensor.status = SensorStatusEnum::SENSOR_STATUS_NEW;
+                        tempSensor.multiplier = analogConfig.multiplier;
+                        tempSensor.offset = analogConfig.offset;
+
+                        if (sensorReader->scanSensor(tempSensor))
+                        {
+                            log("SETUP: Detected %s sensor on pin %d (from AnalogPinConfig) with multiplier: %.3f, offset: %.3f",
+                                tempSensor.sensorType.c_str(), pin, tempSensor.multiplier, tempSensor.offset);
+
+                            addSensorToStructure(node, tempSensor);
+                            pinUsed[pin] = true;
+
+                            if (sensorRepository)
+                            {
+                                if (sensorRepository->createOrUpdateSensor(tempSensor))
+                                {
+                                    log("SETUP: Successfully saved detected hydro sensor %s to repository", tempSensor.uid.c_str());
+                                }
+                                else
+                                {
+                                    log("SETUP: Failed to save detected hydro sensor %s to repository", tempSensor.uid.c_str());
+                                }
+                            }
+                        }
+                        else
+                        {
+                            log("SETUP: No response from %s sensor on pin %d (from AnalogPinConfig)",
+                                tempSensor.sensorType.c_str(), pin);
+                        }
+                    }
+                    else
+                    {
+                        log("SETUP: Pin %d from AnalogPinConfig is out of range or already used", pin);
+                    }
+                }
+            }
+            else
+            {
+                log("SETUP: Sensor type %s has no AnalogPinConfig, will use default scanning", sensorType.name.c_str());
+            }
+        }
+
+        // Then scan remaining pins for any undetected sensors or set to none
+        for (int pin = 1; pin <= sensorPinCount; pin++)
+        {
+            if (!pinUsed[pin])
+            {
+                Sensor sensor;
+                sensor.pin = pin;
+                sensor.type = "none";
+
+                char sensorId[10];
+                sprintf(sensorId, ".%02d", pin);
+                sensor.uid = macAddress + sensorId;
+
+                node.sensors.push_back(sensor);
+
+                log("SETUP: Added placeholder sensor %d, type: %s, pin: %d, uid: %s",
+                    pin, sensor.type.c_str(), sensor.pin, sensor.uid.c_str());
+            }
+        }
+    }
+    else
+    {
+        log("SETUP: SensorTypeRepository or SensorReader not available, creating placeholder sensors");
+
+        // Fallback to creating placeholder sensors
+        for (int i = 1; i <= sensorPinCount; i++)
+        {
+            Sensor sensor;
+            sensor.pin = i;
+            sensor.type = "none";
+
+            char sensorId[10];
+            sprintf(sensorId, ".%02d", i);
+            sensor.uid = macAddress + sensorId;
+
+            node.sensors.push_back(sensor);
+
+            log("SETUP: Added placeholder sensor %d, type: %s, pin: %d, uid: %s",
+                i, sensor.type.c_str(), sensor.pin, sensor.uid.c_str());
+        }
     }
 }
 
@@ -1066,7 +1178,7 @@ inline bool ModuleSetupService::isPinOccupied(int pin, const std::vector<SensorE
     for (const auto &sensor : sensors)
     {
         if (sensor.protocol != protocol || sensor.status != SENSOR_STATUS_ADDED)
-            continue;        
+            continue;
 
         if (sensor.pin == pin)
         {

@@ -4,6 +4,7 @@
 #include <vector>
 #include "ModbusRegisterConfig.h"
 #include "I2CRegisterConfig.h"
+#include "AnalogPinConfig.h"
 
 enum class SensorProtocol {
     ANALOG_PROTOCOL,
@@ -46,6 +47,8 @@ public:
     int modbusDeviceAddress;
     int baudRate;
     std::vector<ModbusRegisterConfig> modbusRegisterConfig;
+    
+    std::vector<AnalogPinConfig> analogPinConfig;
 
     SensorType() : 
         id(0),
