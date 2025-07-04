@@ -26,8 +26,8 @@ private:
     ILogger* logger;
     IDebugSystem* debugSystem;
     
-    const unsigned long SENSOR_READ_INTERVAL = 5000;
-    const unsigned long SENSOR_UPDATE_INTERVAL = 30000;
+    const unsigned long SENSOR_READ_INTERVAL = 15000;
+    const unsigned long SENSOR_UPDATE_INTERVAL = 15000;
     unsigned long lastSensorReadTime = 0;
     unsigned long lastSensorUpdateTime = 0;
     

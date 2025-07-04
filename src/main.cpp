@@ -73,7 +73,7 @@ void createTestSensorTypes() {
     humidityConfig.offset = 0.0f;
     humidityConfig.channelName = "humidity";
     humidityConfig.sensorType = "humidity";
-    humidityConfig.channel = 1;
+    humidityConfig.channel = 2;
     tempHumiditySensorType.modbusRegisterConfig.push_back(humidityConfig);
 
     // Save to repository
@@ -129,9 +129,9 @@ void setup()
   // settings.setConfigured(ModuleModeEnum::USER_CAN_CONFIGURE);
 
   spiffsAdapter.initSPIFFS();
-  // spiffsAdapter.RemoveFile("/data/sensorTypes.json");
-  // spiffsAdapter.RemoveFile("/data/sensors.json");
-  // spiffsAdapter.RemoveFile("/sensors/sensors.json");
+  spiffsAdapter.RemoveFile("/data/sensorTypes.json");
+  spiffsAdapter.RemoveFile("/data/sensors.json");
+  spiffsAdapter.RemoveFile("/sensors/sensors.json");
   // Create and store test sensor types
   createTestSensorTypes();
 

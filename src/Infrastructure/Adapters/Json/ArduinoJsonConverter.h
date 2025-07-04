@@ -721,6 +721,15 @@ public:
             }
         }
 
+        JsonArray sensorsArr = doc.createNestedArray("sensors");
+        for (const auto &sensor : updateData.sensors)
+        {
+            JsonObject sensorObj = sensorsArr.createNestedObject();
+            sensorObj["uid"] = sensor.uid;
+            sensorObj["value"] = sensor.value;
+            sensorObj["state"] = sensor.state;
+        }
+
         std::string output;
         serializeJson(doc, output);
         return output;

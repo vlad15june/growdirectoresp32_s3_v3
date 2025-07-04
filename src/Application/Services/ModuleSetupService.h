@@ -734,7 +734,7 @@ inline void ModuleSetupService::fillSensorModuleStructure(Node &node)
         std::string nodeUid = node.uid;
         int sensorPinCount = moduleConfig->getSensorPinCount();
 
-        for (int sensorPin = 1; sensorPin <= sensorPinCount; sensorPin++)
+        for (int sensorPin = 0; sensorPin < sensorPinCount; sensorPin++)
         {
             for (int i = 0; i < 3; i++) // NOTE: to support old sensors with 3 channels
             {
@@ -907,7 +907,7 @@ inline void ModuleSetupService::addHydroSensors(Node &node)
         }
 
         // Then scan remaining pins for any undetected sensors or set to none
-        for (int pin = 1; pin <= sensorPinCount; pin++)
+        for (int pin = 0; pin < sensorPinCount; pin++)
         {
             if (!pinUsed[pin])
             {

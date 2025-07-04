@@ -800,6 +800,21 @@ public:
                 oss << ",";
         }
         oss << "]";
+
+        oss << ",\"sensors\":[";
+        for (size_t i = 0; i < updateData.sensors.size(); ++i)
+        {
+            const auto &sensor = updateData.sensors[i];
+            oss << "{";
+            oss << "\"uid\":\"" << sensor.uid << "\"";
+            oss << ",\"value\":" << sensor.value;
+            oss << ",\"state\":\"" << sensor.state << "\"";
+            oss << "}";
+            if (i + 1 < updateData.sensors.size())
+                oss << ",";
+        }
+        oss << "]";
+
         oss << "}";
 
         return oss.str();
