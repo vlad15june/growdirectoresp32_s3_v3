@@ -56,9 +56,11 @@ public:
      * @brief Constructor for SpiffsSensorDao
      * @param spiffsAdapter SPIFFS adapter for file operations
      * @param jsonConverter JSON converter for serialization/deserialization
+     * @param debugSystem Debug system for logging (optional)
+     * @param logger Logger for output (optional)
      */
-    SpiffsSensorDao(ISpiffsAdapter* spiffsAdapter, IJsonConverter* jsonConverter)
-        : SpiffsDao<SensorEntity>(spiffsAdapter, jsonConverter) {
+    SpiffsSensorDao(ISpiffsAdapter* spiffsAdapter, IJsonConverter* jsonConverter, IDebugSystem* debugSystem = nullptr, ILogger* logger = nullptr)
+        : SpiffsDao<SensorEntity>(spiffsAdapter, jsonConverter, debugSystem, logger) {
         initialize(); // Initialize after object creation
     }
 

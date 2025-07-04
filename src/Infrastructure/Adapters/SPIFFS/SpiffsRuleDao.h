@@ -56,9 +56,11 @@ public:
      * @brief Constructor for SpiffsRuleDao
      * @param spiffsAdapter SPIFFS adapter for file operations
      * @param jsonConverter JSON converter for serialization/deserialization
+     * @param debugSystem Debug system for logging (optional)
+     * @param logger Logger for output (optional)
      */
-    SpiffsRuleDao(ISpiffsAdapter* spiffsAdapter, IJsonConverter* jsonConverter)
-        : SpiffsDao<Rule>(spiffsAdapter, jsonConverter) {
+    SpiffsRuleDao(ISpiffsAdapter* spiffsAdapter, IJsonConverter* jsonConverter, IDebugSystem* debugSystem = nullptr, ILogger* logger = nullptr)
+        : SpiffsDao<Rule>(spiffsAdapter, jsonConverter, debugSystem, logger) {
         initialize(); // Initialize after object creation
     }
 

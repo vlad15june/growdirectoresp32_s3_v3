@@ -151,13 +151,13 @@ DeviceCommandExecutionUseCase deviceCommandExecutionUseCase(
 
 SpiffsAdapter spiffsAdapter(&mqttLogger, &debugSystem);
 
-SpiffsRuleDao ruleDao(&spiffsAdapter, &jsonConverter);
+SpiffsRuleDao ruleDao(&spiffsAdapter, &jsonConverter, &debugSystem, &mqttLogger);
 RuleRepository ruleRepository(&ruleDao, &debugSystem, &mqttLogger);
 
-SpiffsSensorDao sensorDao(&spiffsAdapter, &jsonConverter);
+SpiffsSensorDao sensorDao(&spiffsAdapter, &jsonConverter, &debugSystem, &mqttLogger);
 SensorRepository sensorRepository(&sensorDao, &debugSystem, &mqttLogger);
 
-SpiffsSensorTypeDao sensorTypeDao(&spiffsAdapter, &jsonConverter);
+SpiffsSensorTypeDao sensorTypeDao(&spiffsAdapter, &jsonConverter, &debugSystem, &mqttLogger);
 SensorTypeRepository sensorTypeRepository(&sensorTypeDao);
 
 HardwareSerial RS485_1(1);
