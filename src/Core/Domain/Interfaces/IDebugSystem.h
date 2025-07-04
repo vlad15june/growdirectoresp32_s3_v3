@@ -55,7 +55,8 @@ namespace DebugFeatures {
     constexpr const char* MQTT_COMMAND_DEBUG = "MQTT_COMMAND";
     constexpr const char* MQTT_CALLBACK_DEBUG = "MQTT_CALLBACK";
     
-    // Other debug features
+    // Other debug features    
+    constexpr const char* REPOSITORY_DEBUG = "REPOSITORY";
     constexpr const char* HISTORY_DEBUG = "HISTORY";
     constexpr const char* CONTROL_DEBUG = "CONTROL";
     constexpr const char* DATA_DEBUG = "DATA";

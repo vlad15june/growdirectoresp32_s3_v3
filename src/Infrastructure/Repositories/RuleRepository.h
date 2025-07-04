@@ -21,9 +21,11 @@ public:
     /**
      * @brief Constructor for RuleRepository
      * @param dao Data access object for Rule entities
+     * @param debugSystem Debug system for logging (optional)
+     * @param logger Logger for output (optional)
      */
-    RuleRepository(ISpiffsRuleDao* dao) 
-        : Repository<Rule>(dao), ruleDao(dao) {
+    RuleRepository(ISpiffsRuleDao* dao, IDebugSystem *debugSystem = nullptr, ILogger *logger = nullptr) 
+        : Repository<Rule>(dao, debugSystem, logger), ruleDao(dao) {
         if (!dao) {
             throw std::invalid_argument("DAO cannot be null");
         }

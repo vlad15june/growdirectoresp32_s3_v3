@@ -2,8 +2,12 @@
 
 #include "Core/Domain/Interfaces/Repositories/IRepository.h"
 #include "Infrastructure/Adapters/SPIFFS/ISpiffsDao.h"
+#include "Core/Domain/Interfaces/IDebugSystem.h"
+#include "Core/Domain/Interfaces/ILogger.h"
 #include <string>
 #include <vector>
+#include <unordered_map>
+#include <stdarg.h>
 
 /**
  * @brief Generic repository implementation using SpiffsDao for data access
@@ -13,16 +17,84 @@ template <typename T>
 class Repository : public IRepository<T> {
 private:
     ISpiffsDao<T>* dao;
+    mutable std::unordered_map<std::string, T> cache;
+    mutable bool isCacheValid;
+
+protected:
+    IDebugSystem *debugSystem;
+    ILogger *logger;
+
+    /**
+     * @brief Log method for repository operations
+     */
+    void log(const char *format, ...) const {
+        if (logger != nullptr && 
+            (debugSystem == nullptr || debugSystem->isFeatureEnabled(DebugFeatures::REPOSITORY_DEBUG))) {
+            char buffer[128];
+            va_list args;
+            va_start(args, format);
+            vsnprintf(buffer, sizeof(buffer), format, args);
+            va_end(args);
+            logger->println(DebugFeatures::REPOSITORY_DEBUG, buffer);
+        }
+    }
+
+    /**
+     * @brief Load all entities into cache if not already loaded
+     */
+    void loadCache() const {
+        #ifdef DEBUG_LOGGING_CODE_ON
+        log("Repository: loadCache");
+        #endif
+        if (!isCacheValid) {
+            #ifdef DEBUG_LOGGING_CODE_ON
+            log("Repository: Loading cache from storage");
+            #endif
+            cache.clear();
+            std::vector<T> entities;
+            if (dao->getAll(entities)) {
+                for (const auto& entity : entities) {
+                    cache[entity.uid] = entity;
+                }
+            }
+            isCacheValid = true;
+        }
+    }
+
+    /**
+     * @brief Clear cache and mark as invalid
+     */
+    void invalidateCache() const {
+        cache.clear();
+        isCacheValid = false;
+    }
 
 public:
     /**
      * @brief Construct repository with SpiffsDao implementation
      * @param dao Data access object for entity type T
+     * @param debugSystem Debug system for logging (optional)
+     * @param logger Logger for output (optional)
      */
-    Repository(ISpiffsDao<T>* dao) : dao(dao) {
+    Repository(ISpiffsDao<T>* dao, IDebugSystem *debugSystem = nullptr, ILogger *logger = nullptr) 
+        : dao(dao), isCacheValid(false), debugSystem(debugSystem), logger(logger) {
         if (!dao) {
             throw std::invalid_argument("DAO cannot be null");
         }
+    }
+
+    /**
+     * @brief Set debug system for logging
+     */
+    void setDebugSystem(IDebugSystem *debugSystemInstance) {
+        debugSystem = debugSystemInstance;
+    }
+
+    /**
+     * @brief Set logger for output
+     */
+    void setLogger(ILogger *loggerInstance) {
+        logger = loggerInstance;
     }
 
     /**
@@ -32,10 +104,15 @@ public:
      */
     Utils::Optional<T> get(const char* uid) override {
         if (!uid) return Utils::nullopt<T>();
-        T entity;
-        if (dao->getById(uid, entity)) {
-            return Utils::Optional<T>(entity);
+        
+        log("Repository: Getting entity with UID: %s", uid);
+        loadCache();
+        auto it = cache.find(uid);
+        if (it != cache.end()) {
+            log("Repository: Entity found in cache");
+            return Utils::Optional<T>(it->second);
         }
+        log("Repository: Entity not found");
         return Utils::nullopt<T>();
     }
 
@@ -44,8 +121,14 @@ public:
      * @return Vector of all entities
      */
     std::vector<T> getAll() override {
+        log("Repository: Getting all entities");
+        loadCache();
         std::vector<T> entities;
-        dao->getAll(entities);
+        entities.reserve(cache.size());
+        for (const auto& pair : cache) {
+            entities.push_back(pair.second);
+        }
+        log("Repository: Returning %d entities", entities.size());
         return entities;
     }
 
@@ -55,8 +138,15 @@ public:
      * @return true if operation was successful, false otherwise
      */
     bool save(const T& entity) override {
-        // Assuming entity has a 'uid' field
-        return dao->save(entity, entity.uid);
+        log("Repository: Saving entity with UID: %s", entity.uid.c_str());
+        bool result = dao->save(entity, entity.uid);
+        if (result) {
+            log("Repository: Entity saved successfully, invalidating cache");
+            invalidateCache();
+        } else {
+            log("Repository: Failed to save entity");
+        }
+        return result;
     }
 
     /**
@@ -65,7 +155,9 @@ public:
      * @return Number of successfully saved entities
      */
     int saveAll(const std::vector<T>& entities) override {
-        if (dao->saveAll(entities)) {
+        bool result = dao->saveAll(entities);
+        if (result) {
+            invalidateCache();
             return entities.size();
         }
         return 0;
@@ -77,7 +169,15 @@ public:
      * @return true if operation was successful, false otherwise
      */
     bool remove(const char* uid) override {
-        return dao->remove(uid);
+        log("Repository: Removing entity with UID: %s", uid);
+        bool result = dao->remove(uid);
+        if (result) {
+            log("Repository: Entity removed successfully, invalidating cache");
+            invalidateCache();
+        } else {
+            log("Repository: Failed to remove entity");
+        }
+        return result;
     }
 
     /**
@@ -87,6 +187,7 @@ public:
     int removeAll() override {
         int count = this->count();
         dao->saveAll(std::vector<T>());  // Save empty vector to clear all entities
+        invalidateCache();
         return count;
     }
 
@@ -95,11 +196,10 @@ public:
      * @return Number of entities
      */
     int count() override {
-        std::vector<T> entities;
-        if (dao->getAll(entities)) {
-            return entities.size();
-        }
-        return 0;
+        loadCache();
+        int entityCount = cache.size();
+        log("Repository: Entity count: %d", entityCount);
+        return entityCount;
     }
 
     /**
@@ -108,8 +208,9 @@ public:
      * @return true if entity exists, false otherwise
      */
     bool exists(const char* uid) override {
-        T entity;
-        return dao->getById(uid, entity);
+        if (!uid) return false;
+        loadCache();
+        return cache.find(uid) != cache.end();
     }
 
     /**
@@ -118,5 +219,22 @@ public:
      */
     ISpiffsDao<T>* getDao() {
         return dao;
+    }
+
+    /**
+     * @brief Manually refresh cache from storage
+     */
+    void refreshCache() {
+        log("Repository: Manually refreshing cache");
+        invalidateCache();
+        loadCache();
+    }
+
+    /**
+     * @brief Check if cache is currently valid
+     * @return true if cache is valid, false otherwise
+     */
+    bool isCacheCurrent() const {
+        return isCacheValid;
     }
 };

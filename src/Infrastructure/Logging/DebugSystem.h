@@ -70,6 +70,7 @@ private:
         registerFeature(DebugFeatures::UPDATE_FIRMWARE_DEBUG, "update_firmware", true);
         registerFeature(DebugFeatures::LOOP_SERVICE_DEBUG, "loop_service", false);
         registerFeature(DebugFeatures::CONFIG_WEB_SERVER, "config_web_server", true);
+        registerFeature(DebugFeatures::REPOSITORY_DEBUG, "config_web_server", true);        
     }
 
 public:

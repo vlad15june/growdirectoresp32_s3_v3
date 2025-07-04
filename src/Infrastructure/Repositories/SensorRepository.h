@@ -20,9 +20,11 @@ public:
     /**
      * @brief Constructor for SensorRepository
      * @param dao Data access object for SensorEntity entities
+     * @param debugSystem Debug system for logging (optional)
+     * @param logger Logger for output (optional)
      */
-    SensorRepository(ISpiffsSensorDao* dao) 
-        : Repository<SensorEntity>(dao), sensorDao(dao) {
+    SensorRepository(ISpiffsSensorDao* dao, IDebugSystem *debugSystem = nullptr, ILogger *logger = nullptr) 
+        : Repository<SensorEntity>(dao, debugSystem, logger), sensorDao(dao) {
         if (!dao) {
             throw std::invalid_argument("DAO cannot be null");
         }

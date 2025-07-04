@@ -1,6 +1,8 @@
 #ifndef GLOBALS_H
 #define GLOBALS_H
 
+#define DEBUG_LOGGING_CODE_ON
+
 #include <Arduino.h>
 #include <WiFiClient.h>
 #include <WiFi.h>
@@ -150,10 +152,10 @@ DeviceCommandExecutionUseCase deviceCommandExecutionUseCase(
 SpiffsAdapter spiffsAdapter(&mqttLogger, &debugSystem);
 
 SpiffsRuleDao ruleDao(&spiffsAdapter, &jsonConverter);
-RuleRepository ruleRepository(&ruleDao);
+RuleRepository ruleRepository(&ruleDao, &debugSystem, &mqttLogger);
 
 SpiffsSensorDao sensorDao(&spiffsAdapter, &jsonConverter);
-SensorRepository sensorRepository(&sensorDao);
+SensorRepository sensorRepository(&sensorDao, &debugSystem, &mqttLogger);
 
 SpiffsSensorTypeDao sensorTypeDao(&spiffsAdapter, &jsonConverter);
 SensorTypeRepository sensorTypeRepository(&sensorTypeDao);
