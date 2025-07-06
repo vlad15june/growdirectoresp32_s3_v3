@@ -137,11 +137,12 @@ public:
     bool updateSensorStatus(const char* uid, bool isActive, bool isError) override {
         if (!uid) return false;
 
-        SensorEntity sensor;
-        if (!sensorDao->getSensor(uid, sensor)) {
+        auto sensorOpt = Repository<SensorEntity>::get(uid);
+        if (!sensorOpt.has_value()) {
             return false;
         }
 
+        SensorEntity sensor = sensorOpt.value();
         sensor.isActive = isActive;
         sensor.isError = isError;
         
@@ -151,11 +152,12 @@ public:
     bool updateSensorValue(const char* uid, float value, uint32_t readTime) override {
         if (!uid) return false;
 
-        SensorEntity sensor;
-        if (!sensorDao->getSensor(uid, sensor)) {
+        auto sensorOpt = Repository<SensorEntity>::get(uid);
+        if (!sensorOpt.has_value()) {
             return false;
         }
 
+        SensorEntity sensor = sensorOpt.value();
         sensor.currentValue = value;
         sensor.lastReadTime = readTime;
         
@@ -165,11 +167,12 @@ public:
     bool updateChannelValue(const char* uid, const char* channelName, float value) override {
         if (!uid || !channelName) return false;
 
-        SensorEntity sensor;
-        if (!sensorDao->getSensor(uid, sensor)) {
+        auto sensorOpt = Repository<SensorEntity>::get(uid);
+        if (!sensorOpt.has_value()) {
             return false;
         }
 
+        SensorEntity sensor = sensorOpt.value();
         sensor.setChannelValue(channelName, value);
         
         return Repository<SensorEntity>::save(sensor);
@@ -182,11 +185,12 @@ public:
     bool updateSensorStatusEnum(const char* uid, SensorStatusEnum status) override {
         if (!uid) return false;
 
-        SensorEntity sensor;
-        if (!sensorDao->getSensor(uid, sensor)) {
+        auto sensorOpt = Repository<SensorEntity>::get(uid);
+        if (!sensorOpt.has_value()) {
             return false;
         }
 
+        SensorEntity sensor = sensorOpt.value();
         sensor.status = status;
         
         return Repository<SensorEntity>::save(sensor);
