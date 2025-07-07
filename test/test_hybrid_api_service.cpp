@@ -374,19 +374,7 @@ void test_rest_only_methods() {
     hybrid_api_service_setup();
 
     g_mockRestApi.reset();
-    g_mockRestApi.sendRuleStateCommandReturnValue = true;
-    bool result = g_hybridApiService->sendRuleStateCommand("test-rule-state");
-    TEST_ASSERT_TRUE(result);
-    TEST_ASSERT_TRUE(g_mockRestApi.sendRuleStateCommandCalled);
-    TEST_ASSERT_EQUAL_STRING("test-rule-state", g_mockRestApi.lastRuleStateCommand);
-
-    g_mockRestApi.reset();
-    g_mockRestApi.sendRuleStateCommandReturnValue = false;
-    result = g_hybridApiService->sendRuleStateCommand("test-rule-state");
-    TEST_ASSERT_FALSE(result);
-
-    g_mockRestApi.reset();
-    result = g_hybridApiService->sendByUidRuleStateCommand("test-uid", "test-rule-state");
+    bool result = g_hybridApiService->sendByUidRuleStateCommand("test-uid", "test-rule-state");
     TEST_ASSERT_TRUE(result);
     TEST_ASSERT_TRUE(g_mockRestApi.sendByUidRuleStateCommandCalled);
 
@@ -532,6 +520,156 @@ void test_device_command_execution_result_with_different_priorities() {
     hybrid_api_service_teardown();
 }
 
+void test_send_rule_state_command_with_different_priorities() {
+    hybrid_api_service_setup();
+    
+    const char* testRuleStateMsg = "test-rule-state-message";
+    
+    // Test with REST_ONLY priority - success case
+    g_mockRestApi.reset();
+    g_mockMqttApi.reset();
+    g_hybridApiService->setApiPriority(ApiPriority::REST_ONLY);
+    g_mockRestApi.sendRuleStateCommandReturnValue = true;
+    
+    bool result = g_hybridApiService->sendRuleStateCommand(testRuleStateMsg);
+    TEST_ASSERT_TRUE(result);
+    TEST_ASSERT_TRUE(g_mockRestApi.sendRuleStateCommandCalled);
+    TEST_ASSERT_FALSE(g_mockMqttApi.sendRuleStateCommandCalled);
+    
+    // Test with REST_ONLY priority - failure case
+    g_mockRestApi.reset();
+    g_mockMqttApi.reset();
+    g_mockRestApi.sendRuleStateCommandReturnValue = false;
+    
+    result = g_hybridApiService->sendRuleStateCommand(testRuleStateMsg);
+    TEST_ASSERT_FALSE(result);
+    TEST_ASSERT_TRUE(g_mockRestApi.sendRuleStateCommandCalled);
+    TEST_ASSERT_FALSE(g_mockMqttApi.sendRuleStateCommandCalled);
+    
+    // Test with MQTT_ONLY priority - success case
+    g_mockRestApi.reset();
+    g_mockMqttApi.reset();
+    g_hybridApiService->setApiPriority(ApiPriority::MQTT_ONLY);
+    g_mockMqttApi.sendRuleStateCommandReturnValue = true;
+    
+    result = g_hybridApiService->sendRuleStateCommand(testRuleStateMsg);
+    TEST_ASSERT_TRUE(result);
+    TEST_ASSERT_FALSE(g_mockRestApi.sendRuleStateCommandCalled);
+    TEST_ASSERT_TRUE(g_mockMqttApi.sendRuleStateCommandCalled);
+    
+    // Test with MQTT_ONLY priority - failure case
+    g_mockRestApi.reset();
+    g_mockMqttApi.reset();
+    g_mockMqttApi.sendRuleStateCommandReturnValue = false;
+    
+    result = g_hybridApiService->sendRuleStateCommand(testRuleStateMsg);
+    TEST_ASSERT_FALSE(result);
+    TEST_ASSERT_FALSE(g_mockRestApi.sendRuleStateCommandCalled);
+    TEST_ASSERT_TRUE(g_mockMqttApi.sendRuleStateCommandCalled);
+    
+    // Test with REST_PREFERRED priority - REST succeeds
+    g_mockRestApi.reset();
+    g_mockMqttApi.reset();
+    g_hybridApiService->setApiPriority(ApiPriority::REST_PREFERRED);
+    g_mockRestApi.sendRuleStateCommandReturnValue = true;
+    
+    result = g_hybridApiService->sendRuleStateCommand(testRuleStateMsg);
+    TEST_ASSERT_TRUE(result);
+    TEST_ASSERT_TRUE(g_mockRestApi.sendRuleStateCommandCalled);
+    TEST_ASSERT_FALSE(g_mockMqttApi.sendRuleStateCommandCalled);
+    
+    // Test with REST_PREFERRED priority - REST fails, MQTT succeeds
+    g_mockRestApi.reset();
+    g_mockMqttApi.reset();
+    g_mockRestApi.sendRuleStateCommandReturnValue = false;
+    g_mockMqttApi.sendRuleStateCommandReturnValue = true;
+    
+    result = g_hybridApiService->sendRuleStateCommand(testRuleStateMsg);
+    TEST_ASSERT_TRUE(result);
+    TEST_ASSERT_TRUE(g_mockRestApi.sendRuleStateCommandCalled);
+    TEST_ASSERT_TRUE(g_mockMqttApi.sendRuleStateCommandCalled);
+    
+    // Test with REST_PREFERRED priority - both fail
+    g_mockRestApi.reset();
+    g_mockMqttApi.reset();
+    g_mockRestApi.sendRuleStateCommandReturnValue = false;
+    g_mockMqttApi.sendRuleStateCommandReturnValue = false;
+    
+    result = g_hybridApiService->sendRuleStateCommand(testRuleStateMsg);
+    TEST_ASSERT_FALSE(result);
+    TEST_ASSERT_TRUE(g_mockRestApi.sendRuleStateCommandCalled);
+    TEST_ASSERT_TRUE(g_mockMqttApi.sendRuleStateCommandCalled);
+    
+    // Test with MQTT_PREFERRED priority - MQTT succeeds
+    g_mockRestApi.reset();
+    g_mockMqttApi.reset();
+    g_hybridApiService->setApiPriority(ApiPriority::MQTT_PREFERRED);
+    g_mockMqttApi.sendRuleStateCommandReturnValue = true;
+    
+    result = g_hybridApiService->sendRuleStateCommand(testRuleStateMsg);
+    TEST_ASSERT_TRUE(result);
+    TEST_ASSERT_FALSE(g_mockRestApi.sendRuleStateCommandCalled);
+    TEST_ASSERT_TRUE(g_mockMqttApi.sendRuleStateCommandCalled);
+    
+    // Test with MQTT_PREFERRED priority - MQTT fails, REST succeeds
+    g_mockRestApi.reset();
+    g_mockMqttApi.reset();
+    g_mockMqttApi.sendRuleStateCommandReturnValue = false;
+    g_mockRestApi.sendRuleStateCommandReturnValue = true;
+    
+    result = g_hybridApiService->sendRuleStateCommand(testRuleStateMsg);
+    TEST_ASSERT_TRUE(result);
+    TEST_ASSERT_TRUE(g_mockMqttApi.sendRuleStateCommandCalled);
+    TEST_ASSERT_TRUE(g_mockRestApi.sendRuleStateCommandCalled);
+    
+    // Test with MQTT_PREFERRED priority - both fail
+    g_mockRestApi.reset();
+    g_mockMqttApi.reset();
+    g_mockMqttApi.sendRuleStateCommandReturnValue = false;
+    g_mockRestApi.sendRuleStateCommandReturnValue = false;
+    
+    result = g_hybridApiService->sendRuleStateCommand(testRuleStateMsg);
+    TEST_ASSERT_FALSE(result);
+    TEST_ASSERT_TRUE(g_mockMqttApi.sendRuleStateCommandCalled);
+    TEST_ASSERT_TRUE(g_mockRestApi.sendRuleStateCommandCalled);
+    
+    // Test with BOTH priority - both succeed
+    g_mockRestApi.reset();
+    g_mockMqttApi.reset();
+    g_hybridApiService->setApiPriority(ApiPriority::BOTH);
+    g_mockRestApi.sendRuleStateCommandReturnValue = true;
+    g_mockMqttApi.sendRuleStateCommandReturnValue = true;
+    
+    result = g_hybridApiService->sendRuleStateCommand(testRuleStateMsg);
+    TEST_ASSERT_TRUE(result);
+    TEST_ASSERT_TRUE(g_mockRestApi.sendRuleStateCommandCalled);
+    TEST_ASSERT_TRUE(g_mockMqttApi.sendRuleStateCommandCalled);
+    
+    // Test with BOTH priority - both fail
+    g_mockRestApi.reset();
+    g_mockMqttApi.reset();
+    g_mockRestApi.sendRuleStateCommandReturnValue = false;
+    g_mockMqttApi.sendRuleStateCommandReturnValue = false;
+    
+    result = g_hybridApiService->sendRuleStateCommand(testRuleStateMsg);
+    TEST_ASSERT_FALSE(result);
+    TEST_ASSERT_TRUE(g_mockRestApi.sendRuleStateCommandCalled);
+    TEST_ASSERT_TRUE(g_mockMqttApi.sendRuleStateCommandCalled);
+    
+    // Test with priority override parameter
+    g_mockRestApi.reset();
+    g_mockMqttApi.reset();
+    g_hybridApiService->setApiPriority(ApiPriority::REST_ONLY);
+    g_mockMqttApi.sendRuleStateCommandReturnValue = true;
+    
+    result = g_hybridApiService->sendRuleStateCommand(testRuleStateMsg, ApiPriority::MQTT_ONLY);
+    TEST_ASSERT_TRUE(result);
+    TEST_ASSERT_FALSE(g_mockRestApi.sendRuleStateCommandCalled);
+    TEST_ASSERT_TRUE(g_mockMqttApi.sendRuleStateCommandCalled);
+    
+    hybrid_api_service_teardown();
+}
+
 extern "C" int run_hybrid_api_service_tests(void) {
     UNITY_BEGIN();
     
@@ -539,6 +677,7 @@ extern "C" int run_hybrid_api_service_tests(void) {
     RUN_TEST(test_is_module_online_with_both_apis);
     RUN_TEST(test_send_to_server_module_structure_with_different_priorities);
     RUN_TEST(test_send_diagnostic_data_with_different_priorities);
+    RUN_TEST(test_send_rule_state_command_with_different_priorities);
     RUN_TEST(test_failure_tracking);
     RUN_TEST(test_rest_only_methods);
     RUN_TEST(test_device_command_execution_result_with_different_priorities);

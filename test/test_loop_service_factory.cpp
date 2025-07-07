@@ -1,4 +1,6 @@
 #include <unity.h>
+#include <memory>
+#include <stdexcept>
 #include "Core/Domain/Enums/ModuleModeEnum.h"
 #include "Application/Interfaces/LoopServices/ILoopService.h"
 #include "Application/Interfaces/LoopServices/ILoopServiceFactory.h"

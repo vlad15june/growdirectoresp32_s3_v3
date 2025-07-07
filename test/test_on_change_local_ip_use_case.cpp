@@ -7,6 +7,7 @@
 #include "Mock/Infrastructure/Api/MockHybridAPIService.h"
 #include "Core/Domain/Data/Models/ModuleStructure.h"
 #include "Mock/Infrastructure/Configuration/MockModuleConfig.h"
+#include "Mock/UseCases/Rules/MockSyncRulesUseCase.h"
 #include "Application/DTOs/DeviceCommandUpdateDto.h"
 
 // Global test variables
@@ -16,6 +17,7 @@ static MockWifiAdapter g_mockWifiAdapter;
 static MockWiFiManager g_mockWifiManager;
 static MockHybridAPIService g_mockApiService;
 static MockModuleConfig g_mockModuleConfig;
+static MockSyncRulesUseCase g_mockSyncRulesUseCase;
 static ModuleStructure g_moduleStructure;
 static OnChangeLocalIpUseCase* g_onChangeLocalIpUseCase;
 
@@ -27,6 +29,7 @@ void on_change_local_ip_use_case_setup(void) {
     g_mockWifiManager.reset();
     g_mockApiService.reset();
     g_mockModuleConfig.reset();
+    g_mockSyncRulesUseCase.reset();
     
     // Enable network debugging for log messages
     g_mockDebugSystem.featureEnabled = true;
@@ -52,6 +55,7 @@ void on_change_local_ip_use_case_setup(void) {
         g_moduleStructure, 
         g_mockApiService, 
         g_mockModuleConfig,
+        g_mockSyncRulesUseCase,
         g_mockLogger, 
         g_mockDebugSystem);
 }

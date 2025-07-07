@@ -22,6 +22,7 @@ public:
     bool resetApiStatisticsCalled = false;
     bool getDeviceCommandCalled = false;
     bool sendCommandResultCalled = false;
+    bool getRuleListCalled = false;
     
     // Return values
     bool initReturnValue = true;
@@ -38,6 +39,7 @@ public:
     bool sendCommandResultReturnValue = true;
     DeviceCommandDto deviceCommandReturnValue;
     std::vector<DeviceCommandDto> deviceCommandsReturnValue;
+    std::vector<Rule> ruleListReturnValue;
     
     // Parameter storage
     ApiPriority currentApiPriority = ApiPriority::REST_PREFERRED;
@@ -45,6 +47,7 @@ public:
     const ModuleStructure* lastModuleStructure = nullptr;
     ApiPriority lastModuleStructurePriority = ApiPriority::UNDEFINED;
     const char* lastRuleStateCommand = nullptr;
+    ApiPriority lastRuleStateCommandPriority = ApiPriority::UNDEFINED;
     const char* lastRuleUid = nullptr;
     const char* lastByUidRuleStateCommand = nullptr;
     DeviceCommandUpdateDto lastDeviceCommandUpdate;
@@ -78,6 +81,7 @@ public:
         resetApiStatisticsCalled = false;
         getDeviceCommandCalled = false;
         sendCommandResultCalled = false;
+        getRuleListCalled = false;
         
         initReturnValue = true;
         isModuleOnlineReturnValue = true;
@@ -93,6 +97,7 @@ public:
         sendCommandResultReturnValue = true;
         deviceCommandReturnValue = DeviceCommandDto();
         deviceCommandsReturnValue.clear();
+        ruleListReturnValue.clear();
         
         currentApiPriority = ApiPriority::REST_PREFERRED;
         lastSetApiPriority = ApiPriority::UNDEFINED;
@@ -106,6 +111,7 @@ public:
         lastDiagnosticDataPriority = ApiPriority::UNDEFINED;
         lastUpdateDataPriority = ApiPriority::UNDEFINED;
         lastCommandResultPriority = ApiPriority::UNDEFINED;
+        lastRuleStateCommandPriority = ApiPriority::UNDEFINED;
         
         restApiSendFailsValue = 0;
         mqttApiSendFailsValue = 0;
@@ -140,9 +146,10 @@ public:
         return sendModuleStructureReturnValue;
     }
     
-    bool sendRuleStateCommand(const char* msg) override {
+    bool sendRuleStateCommand(const char* msg, ApiPriority priority = ApiPriority::UNDEFINED) override {
         sendRuleStateCommandCalled = true;
         lastRuleStateCommand = msg;
+        lastRuleStateCommandPriority = priority;
         return sendRuleStateCommandReturnValue;
     }
     
@@ -200,6 +207,11 @@ public:
     std::vector<DeviceCommandDto> getDeviceCommand() override {
         getDeviceCommandCalled = true;
         return deviceCommandsReturnValue;
+    }
+    
+    std::vector<Rule> getRuleList() override {
+        getRuleListCalled = true;
+        return ruleListReturnValue;
     }
     
     int getRestApiSendFails() const override {

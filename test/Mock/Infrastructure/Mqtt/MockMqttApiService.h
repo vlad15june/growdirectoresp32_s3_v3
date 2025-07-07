@@ -15,6 +15,7 @@ public:
     bool sendModuleUpdateDataCalled = false;
     bool sendDeviceCommandExecutionResultCalled = false;
     bool sendCommandResultCalled = false;
+    bool sendRuleStateCommandCalled = false;
     
     const ModuleStructure* lastModuleStructure = nullptr;
     DiagnosticDto lastDiagnosticData;
@@ -27,6 +28,8 @@ public:
     bool sendToServerModuleStructureReturnValue = true;
     bool sendDeviceCommandExecutionResultReturnValue = true;
     bool sendCommandResultReturnValue = true;
+    bool sendRuleStateCommandReturnValue = true;
+    const char* lastRuleStateCommand = nullptr;
     
     void reset() {
         isModuleOnlineCalled = false;
@@ -35,13 +38,16 @@ public:
         sendModuleUpdateDataCalled = false;
         sendDeviceCommandExecutionResultCalled = false;
         sendCommandResultCalled = false;
+        sendRuleStateCommandCalled = false;
         lastModuleStructure = nullptr;
+        lastRuleStateCommand = nullptr;
         isModuleOnlineReturnValue = true;
         sendDiagnosticDataReturnValue = true;
         sendModuleUpdateDataReturnValue = true;
         sendToServerModuleStructureReturnValue = true;
         sendDeviceCommandExecutionResultReturnValue = true;
         sendCommandResultReturnValue = true;
+        sendRuleStateCommandReturnValue = true;
     }
     
     // IMqttApiService interface implementation
@@ -78,6 +84,12 @@ public:
         sendCommandResultCalled = true;
         lastCommandResult = commandResult;
         return sendCommandResultReturnValue;
+    }
+    
+    bool sendRuleStateCommand(const char* msg) override {
+        sendRuleStateCommandCalled = true;
+        lastRuleStateCommand = msg;
+        return sendRuleStateCommandReturnValue;
     }
 };
 

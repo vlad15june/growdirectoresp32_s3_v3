@@ -20,6 +20,7 @@ public:
     bool sendDiagnosticDataCalled = false;
     bool sendModuleUpdateDataCalled = false;
     bool getDeviceCommandCalled = false;
+    bool getRuleListCalled = false;
     
     // Return values
     bool isModuleOnlineReturnValue = true;
@@ -39,6 +40,7 @@ public:
     bool sendDiagnosticDataReturnValue = true;
     bool sendModuleUpdateDataReturnValue = true;
     std::vector<DeviceCommandDto> deviceCommandsReturnValue;
+    std::vector<Rule> ruleListReturnValue;
     
     int networkFails = 0;
     int apiSendFails = 0;
@@ -67,7 +69,9 @@ public:
         sendAnalogInputDeviceCommandExecutionResultReturnValue = true;
         sendModuleCommandExecutionResultReturnValue = true;
         getDeviceCommandCalled = false;
+        getRuleListCalled = false;
         deviceCommandsReturnValue.clear();
+        ruleListReturnValue.clear();
         
         lastModuleStructure = nullptr;
         lastRuleStateCommand = nullptr;
@@ -145,6 +149,11 @@ public:
     std::vector<DeviceCommandDto> getDeviceCommand() override {
         getDeviceCommandCalled = true;
         return deviceCommandsReturnValue;
+    }
+    
+    std::vector<Rule> getRuleList() override {
+        getRuleListCalled = true;
+        return ruleListReturnValue;
     }
     
     int getApiSendFails() const override { return apiSendFails; }
