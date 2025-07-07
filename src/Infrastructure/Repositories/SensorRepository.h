@@ -149,35 +149,6 @@ public:
         return Repository<SensorEntity>::save(sensor);
     }
 
-    bool updateSensorValue(const char* uid, float value, uint32_t readTime) override {
-        if (!uid) return false;
-
-        auto sensorOpt = Repository<SensorEntity>::get(uid);
-        if (!sensorOpt.has_value()) {
-            return false;
-        }
-
-        SensorEntity sensor = sensorOpt.value();
-        sensor.currentValue = value;
-        sensor.lastReadTime = readTime;
-        
-        return Repository<SensorEntity>::save(sensor);
-    }
-
-    bool updateChannelValue(const char* uid, const char* channelName, float value) override {
-        if (!uid || !channelName) return false;
-
-        auto sensorOpt = Repository<SensorEntity>::get(uid);
-        if (!sensorOpt.has_value()) {
-            return false;
-        }
-
-        SensorEntity sensor = sensorOpt.value();
-        sensor.setChannelValue(channelName, value);
-        
-        return Repository<SensorEntity>::save(sensor);
-    }
-
     bool createOrUpdateSensor(const SensorEntity& sensor) override {
         return Repository<SensorEntity>::save(sensor);
     }

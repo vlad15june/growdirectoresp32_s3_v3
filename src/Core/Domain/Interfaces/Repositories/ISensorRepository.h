@@ -78,24 +78,6 @@ public:
     virtual bool updateSensorStatus(const char* uid, bool isActive, bool isError) = 0;
 
     /**
-     * @brief Update sensor value
-     * @param uid UID of the sensor to update
-     * @param value New sensor value
-     * @param readTime Time when the value was read
-     * @return true if operation was successful, false otherwise
-     */
-    virtual bool updateSensorValue(const char* uid, float value, uint32_t readTime) = 0;
-
-    /**
-     * @brief Update sensor channel value
-     * @param uid UID of the sensor to update
-     * @param channelName Name of the channel
-     * @param value New channel value
-     * @return true if operation was successful, false otherwise
-     */
-    virtual bool updateChannelValue(const char* uid, const char* channelName, float value) = 0;
-
-    /**
      * @brief Create or update sensor with status handling
      * @param sensor Sensor entity to save
      * @return true if operation was successful, false otherwise

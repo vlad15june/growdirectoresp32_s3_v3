@@ -5,6 +5,7 @@ SensorService::SensorService(IModuleConfig* moduleConfig,
                             ModuleStructure* moduleStructure,
                             ISensorRepository* sensorRepository,
                             ISensorReader* sensorReader,
+                            ISensorValueModel* sensorValueModel,
                             INTPTimeAdapter* timeAdapter,
                             IArduinoAdapter* arduinoAdapter,
                             IHybridAPIService* hybridApiService,
@@ -14,6 +15,7 @@ SensorService::SensorService(IModuleConfig* moduleConfig,
       moduleStructure(moduleStructure),
       sensorRepository(sensorRepository),
       sensorReader(sensorReader),
+      sensorValueModel(sensorValueModel),
       timeAdapter(timeAdapter),
       arduinoAdapter(arduinoAdapter),
       hybridApiService(hybridApiService),
@@ -36,6 +38,16 @@ bool SensorService::init() {
     
     if (!sensorReader) {
         log("SensorService: Sensor reader is null");
+        return false;
+    }
+    
+    if (!sensorValueModel) {
+        log("SensorService: Sensor value model is null");
+        return false;
+    }
+    
+    if (!sensorValueModel->init()) {
+        log("SensorService: Failed to initialize sensor value model");
         return false;
     }
     
@@ -104,10 +116,13 @@ bool SensorService::readSensor(SensorEntity sensor) {
     uint32_t currentTime = arduinoAdapter->millis();
     
     if (sensor.isMultiChannel()) {
+        // Mark sensor as multi-channel in the value model
+        sensorValueModel->setSensorMultiChannel(sensor.uid, true);
+        
         std::map<std::string, float> channelValues;
         if (sensorReader->readMultiChannelSensor(sensor, channelValues)) {
             for (const auto& pair : channelValues) {
-                sensorRepository->updateChannelValue(sensor.uid.c_str(), pair.first.c_str(), pair.second);
+                sensorValueModel->setChannelValue(sensor.uid, pair.first, pair.second);
             }
             sensorRepository->updateSensorStatus(sensor.uid.c_str(), true, false);
             log("SensorService: Read multi-channel sensor %s", sensor.uid.c_str());
@@ -118,9 +133,13 @@ bool SensorService::readSensor(SensorEntity sensor) {
             return false;
         }
     } else {
+        // Mark sensor as single-channel in the value model
+        sensorValueModel->setSensorMultiChannel(sensor.uid, false);
+        
         float value;
         if (sensorReader->readSensor(sensor, value)) {
-            sensorRepository->updateSensorValue(sensor.uid.c_str(), value, currentTime);
+            // For single-channel sensors, use setSensorValue
+            sensorValueModel->setSensorValue(sensor.uid, value);
             sensorRepository->updateSensorStatus(sensor.uid.c_str(), true, false);
             log("SensorService: Read sensor %s, value: %.2f", sensor.uid.c_str(), value);
             return true;
@@ -210,8 +229,9 @@ UpdateDto SensorService::createSensorUpdateDto() {
     
     auto sensors = sensorRepository->getActiveSensors();
     for (const auto& sensor : sensors) {
-        if (sensor.isMultiChannel()) {
-            for (const auto& channelValue : sensor.channelValues) {
+        if (sensor.isMultiChannel() && sensorValueModel->hasChannelValues(sensor.uid)) {
+            auto channelValues = sensorValueModel->getChannelValues(sensor.uid);
+            for (const auto& channelValue : channelValues) {
                 SensorDto sensorDto;
                 sensorDto.uid = channelValue.first;
                 sensorDto.value = channelValue.second;
@@ -222,7 +242,8 @@ UpdateDto SensorService::createSensorUpdateDto() {
         } else {
             SensorDto sensorDto;
             sensorDto.uid = sensor.uid;
-            sensorDto.value = sensor.currentValue;
+            // Get value from SensorValueModel for single-channel sensors
+            sensorDto.value = sensorValueModel->getSensorValue(sensor.uid);
             sensorDto.state = sensor.isError ? "error" : (sensor.isActive ? "online" : "offline");
             
             dto.sensors.push_back(sensorDto);

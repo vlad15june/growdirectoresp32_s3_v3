@@ -5,6 +5,7 @@
 #include "ISensorService.h"
 #include "Core/Domain/Interfaces/IModuleConfig.h"
 #include "Core/Domain/Data/Models/ModuleStructure.h"
+#include "Core/Domain/Data/Models/ISensorValueModel.h"
 #include "Core/Domain/Interfaces/Repositories/ISensorRepository.h"
 #include "Core/Domain/Interfaces/Adapters/Sensors/ISensorReader.h"
 #include "Application/DTOs/UpdateDto.h"
@@ -20,6 +21,7 @@ private:
     ModuleStructure* moduleStructure;
     ISensorRepository* sensorRepository;
     ISensorReader* sensorReader;
+    ISensorValueModel* sensorValueModel;
     INTPTimeAdapter* timeAdapter;
     IArduinoAdapter* arduinoAdapter;
     IHybridAPIService* hybridApiService;
@@ -56,6 +58,7 @@ public:
                   ModuleStructure* moduleStructure,
                   ISensorRepository* sensorRepository,
                   ISensorReader* sensorReader,
+                  ISensorValueModel* sensorValueModel,
                   INTPTimeAdapter* timeAdapter,
                   IArduinoAdapter* arduinoAdapter,
                   IHybridAPIService* hybridApiService = nullptr,

@@ -32,7 +32,6 @@ public:
     
     float currentValue;
     uint32_t lastReadTime;
-    std::vector<std::pair<std::string, float>> channelValues;
     
     // Analog sensor calibration values
     float multiplier = 1.0f;
@@ -48,23 +47,4 @@ public:
     bool isI2CSensor() const { return protocol == "I2C"; }
     bool isAtlasSensor() const { return model.find("atlas_") == 0; }
     bool isMultiChannel() const { return !modbusRegisterConfigs.empty() || !i2cRegisterConfigs.empty(); }
-    
-    float getChannelValue(const std::string& channelName) const {
-        for (const auto& pair : channelValues) {
-            if (pair.first == channelName) {
-                return pair.second;
-            }
-        }
-        return currentValue;
-    }
-    
-    void setChannelValue(const std::string& channelName, float value) {
-        for (auto& pair : channelValues) {
-            if (pair.first == channelName) {
-                pair.second = value;
-                return;
-            }
-        }
-        channelValues.push_back({channelName, value});
-    }
 };
