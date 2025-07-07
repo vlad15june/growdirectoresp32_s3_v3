@@ -60,6 +60,18 @@ public:
         uint8_t response[64];
         int bytesRead = modbus->readAvailable(response, sizeof(response));
         log("ModbusSensorReader: Read %d bytes from device %d on port %d", bytesRead, deviceAddress, portIndex);
+        
+        #ifdef DEBUG_LOGGING_CODE_ON
+        if (bytesRead > 0 && _debugSystem && _logger) {
+            char hexBuffer[256] = "";
+            for (int i = 0; i < bytesRead && i < 32; i++) {
+                char temp[4];
+                snprintf(temp, sizeof(temp), "%02X ", response[i]);
+                strcat(hexBuffer, temp);
+            }
+            log("ModbusSensorReader: Raw bytes: %s", hexBuffer);
+        }
+        #endif
 
         if (bytesRead >= 5 && response[1] == config.functionCode)
         {

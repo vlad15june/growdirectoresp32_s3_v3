@@ -128,7 +128,29 @@ public:
             for (const auto &registerConfig : sensor.modbusRegisterConfigs)
             {
                 float value;
-                if (_modbusReader->readRegister(sensor.modbusDeviceAddress, registerConfig, value, portIndex))
+                bool success = false;
+
+                // Try up to 3 times
+                for (int attempt = 1; attempt <= 3; attempt++)
+                {
+                    if (_modbusReader->readRegister(sensor.modbusDeviceAddress, registerConfig, value, portIndex))
+                    {
+                        success = true;
+                        break;
+                    }
+
+                    if (attempt < 3)
+                    {
+                        log("SensorReader: Failed to read modbus channel %s on port %d (attempt %d/3), retrying...",
+                            registerConfig.channelName.c_str(), portIndex, attempt);
+                        if (_arduino)
+                        {
+                            _arduino->delay(100); // Small delay between retries
+                        }
+                    }
+                }
+
+                if (success)
                 {
                     std::string uid = sensor.uid + "." + (registerConfig.channel < 10 ? "0" : "") + std::to_string(registerConfig.channel);
                     channelValues[uid] = value;
@@ -136,7 +158,7 @@ public:
                 }
                 else
                 {
-                    log("SensorReader: Failed to read modbus channel %s on port %d", registerConfig.channelName.c_str(), portIndex);
+                    log("SensorReader: Failed to read modbus channel %s on port %d after 3 attempts", registerConfig.channelName.c_str(), portIndex);
                 }
             }
         }
@@ -234,10 +256,34 @@ private:
         int portIndex = sensor.pin;
         float dummyValue;
         _modbusReader->init(sensor.baudRate);
+        
         for (const auto &config : sensor.modbusRegisterConfigs)
         {
-            if (!_modbusReader->readRegister(sensor.modbusDeviceAddress, config, dummyValue, portIndex))
+            bool success = false;
+            
+            // Try up to 3 times
+            for (int attempt = 1; attempt <= 3; attempt++)
             {
+                if (_modbusReader->readRegister(sensor.modbusDeviceAddress, config, dummyValue, portIndex))
+                {
+                    success = true;
+                    break;
+                }
+                
+                if (attempt < 3)
+                {
+                    log("SensorReader: Failed to scan modbus register on port %d (attempt %d/3), retrying...", 
+                        portIndex, attempt);
+                    if (_arduino)
+                    {
+                        _arduino->delay(100); // Small delay between retries
+                    }
+                }
+            }
+            
+            if (!success)
+            {
+                log("SensorReader: Failed to scan modbus register on port %d after 3 attempts", portIndex);
                 return false;
             }
         }
