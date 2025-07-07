@@ -1334,6 +1334,19 @@ inline void ModuleSetupService::scanEmptyPinsForSensors(Node &node, const std::v
 
 inline void ModuleSetupService::removeDisconnectedNewSensorPlaceholders(Node &node, const SensorEntity &sensorEntity)
 {
+    if (sensorEntity.status == SENSOR_STATUS_NEW && sensorRepository)
+    {
+        log("SETUP: Sensor %s was auto-detected but is now disconnected, removing from repository", sensorEntity.uid.c_str());
+        if (sensorRepository->remove(sensorEntity.uid.c_str()))
+        {
+            log("SETUP: Successfully removed disconnected sensor %s from repository", sensorEntity.uid.c_str());
+        }
+        else
+        {
+            log("SETUP: Failed to remove disconnected sensor %s from repository", sensorEntity.uid.c_str());
+        }
+    }
+
     if (sensorEntity.isMultiChannel())
     {
         if (sensorEntity.protocol == "ModBus")
