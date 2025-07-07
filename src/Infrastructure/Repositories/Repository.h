@@ -43,9 +43,6 @@ protected:
      * @brief Load all entities into cache if not already loaded
      */
     void loadCache() const {
-        #ifdef DEBUG_LOGGING_CODE_ON
-        log("Repository: loadCache");
-        #endif
         if (!isCacheValid) {
             #ifdef DEBUG_LOGGING_CODE_ON
             log("Repository: Loading cache from storage");
@@ -121,14 +118,12 @@ public:
      * @return Vector of all entities
      */
     std::vector<T> getAll() override {
-        log("Repository: Getting all entities");
         loadCache();
         std::vector<T> entities;
         entities.reserve(cache.size());
         for (const auto& pair : cache) {
             entities.push_back(pair.second);
         }
-        log("Repository: Returning %d entities", entities.size());
         return entities;
     }
 

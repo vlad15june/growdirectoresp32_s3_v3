@@ -67,36 +67,71 @@ public:
     std::vector<SensorEntity> getSensorsByProtocol(const char* protocol) override {
         if (!protocol) return {};
 
+        std::vector<SensorEntity> allSensors = Repository<SensorEntity>::getAll();
         std::vector<SensorEntity> sensors;
-        sensorDao->getSensorsByProtocol(protocol, sensors);
+
+        for (const auto& sensor : allSensors) {
+            if (sensor.protocol == protocol) {
+                sensors.push_back(sensor);
+            }
+        }
+
         return sensors;
     }
 
     std::vector<SensorEntity> getSensorsByType(const char* sensorType) override {
         if (!sensorType) return {};
 
+        std::vector<SensorEntity> allSensors = Repository<SensorEntity>::getAll();
         std::vector<SensorEntity> sensors;
-        sensorDao->getSensorsByType(sensorType, sensors);
+
+        for (const auto& sensor : allSensors) {
+            if (sensor.sensorType == sensorType) {
+                sensors.push_back(sensor);
+            }
+        }
+
         return sensors;
     }
 
     std::vector<SensorEntity> getSensorsByModel(const char* model) override {
         if (!model) return {};
 
+        std::vector<SensorEntity> allSensors = Repository<SensorEntity>::getAll();
         std::vector<SensorEntity> sensors;
-        sensorDao->getSensorsByModel(model, sensors);
+
+        for (const auto& sensor : allSensors) {
+            if (sensor.model == model) {
+                sensors.push_back(sensor);
+            }
+        }
+
         return sensors;
     }
 
     std::vector<SensorEntity> getActiveSensors() override {
+        std::vector<SensorEntity> allSensors = Repository<SensorEntity>::getAll();
         std::vector<SensorEntity> sensors;
-        sensorDao->getActiveSensors(sensors);
+
+        for (const auto& sensor : allSensors) {
+            if (sensor.isActive) {
+                sensors.push_back(sensor);
+            }
+        }
+
         return sensors;
     }
 
     std::vector<SensorEntity> getSensorsWithErrors() override {
+        std::vector<SensorEntity> allSensors = Repository<SensorEntity>::getAll();
         std::vector<SensorEntity> sensors;
-        sensorDao->getSensorsWithErrors(sensors);
+
+        for (const auto& sensor : allSensors) {
+            if (sensor.isError) {
+                sensors.push_back(sensor);
+            }
+        }
+
         return sensors;
     }
 
@@ -143,6 +178,11 @@ public:
         }
 
         SensorEntity sensor = sensorOpt.value();
+        
+        if (sensor.isActive == isActive && sensor.isError == isError) {
+            return true;
+        }
+        
         sensor.isActive = isActive;
         sensor.isError = isError;
         
@@ -162,6 +202,11 @@ public:
         }
 
         SensorEntity sensor = sensorOpt.value();
+        
+        if (sensor.status == status) {
+            return true;
+        }
+        
         sensor.status = status;
         
         return Repository<SensorEntity>::save(sensor);
