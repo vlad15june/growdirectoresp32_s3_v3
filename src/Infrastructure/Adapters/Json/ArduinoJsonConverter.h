@@ -1156,15 +1156,7 @@ public:
         sensor.currentValue = doc["currentValue"] | 0.0f;
         sensor.lastReadTime = doc["lastReadTime"] | 0;
 
-        // Parse channel values
-        sensor.channelValues.clear();
-        if (doc.containsKey("channelValues"))
-        {
-            for (JsonPair kv : doc["channelValues"].as<JsonObject>())
-            {
-                sensor.channelValues.push_back({kv.key().c_str(), kv.value().as<float>()});
-            }
-        }
+        // Note: channelValues are now handled by SensorValueModel, not stored in SensorEntity
 
         // Parse modbus register configs
         sensor.modbusRegisterConfigs.clear();
@@ -1228,15 +1220,7 @@ public:
         doc["currentValue"] = sensor.currentValue;
         doc["lastReadTime"] = sensor.lastReadTime;
 
-        // Add channel values
-        if (!sensor.channelValues.empty())
-        {
-            JsonObject channelObj = doc.createNestedObject("channelValues");
-            for (const auto& pair : sensor.channelValues)
-            {
-                channelObj[pair.first] = pair.second;
-            }
-        }
+        // Note: channelValues are now handled by SensorValueModel and not serialized here
 
         // Add modbus register configs
         if (!sensor.modbusRegisterConfigs.empty())

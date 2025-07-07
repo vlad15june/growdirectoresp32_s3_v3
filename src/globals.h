@@ -30,6 +30,8 @@
 #include "Core/Domain/Data/Models/ModuleStructure.h"
 #include "Core/Domain/Data/Models/IDeviceModel.h"
 #include "Core/Domain/Data/Models/DeviceModel.h"
+#include "Core/Domain/Data/Models/ISensorValueModel.h"
+#include "Core/Domain/Data/Models/SensorValueModel.h"
 
 #include "Infrastructure/Adapters/eepromAdapter.h"
 #include "Infrastructure/Logging/MqttLogger.h"
@@ -259,11 +261,14 @@ DeviceService deviceService(
     &mqttLogger,
     &debugSystem);
 
+SensorValueModel sensorValueModel;
+
 SensorService sensorService(
     &moduleConfig,
     &moduleStructure,
     &sensorRepository,
     &sensorReader,
+    &sensorValueModel,
     &ntpTimeAdapter,
     &arduinoAdapter,
     &hybridApiService,

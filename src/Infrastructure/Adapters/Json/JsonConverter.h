@@ -1203,9 +1203,7 @@ public:
         sensor.currentValue = static_cast<float>(extractDoubleValue(jsonStr, "currentValue"));
         sensor.lastReadTime = static_cast<uint32_t>(extractIntValue(jsonStr, "lastReadTime"));
 
-        // Simple channel values parsing (basic implementation)
-        sensor.channelValues.clear();
-        // Note: This is a simplified implementation. A full implementation would parse the channelValues object
+        // Note: channelValues are now handled by SensorValueModel, not stored in SensorEntity
 
         // Parse modbus register configs
         sensor.modbusRegisterConfigs.clear();
@@ -1265,19 +1263,7 @@ public:
         oss << ",\"currentValue\":" << sensor.currentValue;
         oss << ",\"lastReadTime\":" << sensor.lastReadTime;
 
-        // Add channel values
-        if (!sensor.channelValues.empty())
-        {
-            oss << ",\"channelValues\":{";
-            for (size_t i = 0; i < sensor.channelValues.size(); ++i)
-            {
-                const auto& pair = sensor.channelValues[i];
-                oss << "\"" << pair.first << "\":" << pair.second;
-                if (i + 1 < sensor.channelValues.size())
-                    oss << ",";
-            }
-            oss << "}";
-        }
+        // Note: channelValues are now handled by SensorValueModel and not serialized here
 
         // Add modbus register configs
         if (!sensor.modbusRegisterConfigs.empty())
