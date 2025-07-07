@@ -4,7 +4,7 @@
 #include <vector>
 #include <string>
 #include "ISensorValueModel.h"
-#include "SensorValue.h"
+#include "Core/Domain/Data/Entities/Sensor/SensorValue.h"
 
 /**
  * @brief Implementation of the sensor value model
