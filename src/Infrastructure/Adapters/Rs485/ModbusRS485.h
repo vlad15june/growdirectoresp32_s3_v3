@@ -13,13 +13,16 @@ private:
     uint32_t _config;      // Serial configuration
     int _rxPin;           // RX pin
     int _txPin;           // TX pin
+    int _sensorPowerPin;  // Sensor power pin
 
 public:
-    ModbusRS485(HardwareSerial &port, int controlPin, const char *portName, IArduinoAdapter &arduino, uint32_t config, int rxPin, int txPin)
-        : _port(port), _controlPin(controlPin), _portName(portName), _arduino(arduino), _config(config), _rxPin(rxPin), _txPin(txPin)
+    ModbusRS485(HardwareSerial &port, int controlPin, const char *portName, IArduinoAdapter &arduino, uint32_t config, int rxPin, int txPin, int sensorPowerPin)
+        : _port(port), _controlPin(controlPin), _portName(portName), _arduino(arduino), _config(config), _rxPin(rxPin), _txPin(txPin), _sensorPowerPin(sensorPowerPin)
     {
         _arduino.pinMode(_controlPin, _arduino.getPinModeOutput());
         _arduino.digitalWrite(_controlPin, _arduino.getDigitalLow());
+        _arduino.pinMode(_sensorPowerPin, _arduino.getPinModeOutput());
+        _arduino.digitalWrite(_sensorPowerPin, _arduino.getDigitalHigh());
     }
 
     // Initialize RS-485 port
