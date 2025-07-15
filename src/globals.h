@@ -170,8 +170,8 @@ SensorTypeRepository sensorTypeRepository(&sensorTypeDao);
 
 HardwareSerial RS485_1(1);
 HardwareSerial RS485_2(2);
-ModbusRS485 modbusRS485_pin1(RS485_1, 19, "ModbusRS485_1", arduinoAdapter, SERIAL_8N1, 17, 18, SENSOR_POWER_1);
-ModbusRS485 modbusRS485_pin2(RS485_1, 20, "ModbusRS485_2", arduinoAdapter, SERIAL_8N1, 17, 18, SENSOR_POWER_2);
+ModbusRS485 modbusRS485_pin1(RS485_1, 19, "ModbusRS485_1", arduinoAdapter, SERIAL_8N1, 18, 17, SENSOR_POWER_1);
+ModbusRS485 modbusRS485_pin2(RS485_1, 20, "ModbusRS485_2", arduinoAdapter, SERIAL_8N1, 18, 17, SENSOR_POWER_2);
 ModbusRS485 modbusRS485_pin3(RS485_2, 19, "ModbusRS485_1", arduinoAdapter, SERIAL_8N1, 15, 14, SENSOR_POWER_3);
 ModbusRS485 modbusRS485_pin4(RS485_2, 20, "ModbusRS485_2", arduinoAdapter, SERIAL_8N1, 15, 14, SENSOR_POWER_4);
 
