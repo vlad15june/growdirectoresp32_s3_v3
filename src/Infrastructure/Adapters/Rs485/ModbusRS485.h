@@ -22,7 +22,7 @@ public:
         _arduino.pinMode(_controlPin, _arduino.getPinModeOutput());
         _arduino.digitalWrite(_controlPin, _arduino.getDigitalLow());
         _arduino.pinMode(_sensorPowerPin, _arduino.getPinModeOutput());
-        _arduino.digitalWrite(_sensorPowerPin, _arduino.getDigitalHigh());
+        _arduino.digitalWrite(_sensorPowerPin, _arduino.getDigitalLow());
     }
 
     // Initialize RS-485 port
@@ -57,7 +57,8 @@ public:
     void sendData(uint8_t *data, uint8_t length) override
     {
         _arduino.digitalWrite(_controlPin, _arduino.getDigitalHigh());
-        _arduino.delay(100);
+        _arduino.digitalWrite(_sensorPowerPin, _arduino.getDigitalHigh());
+        _arduino.delay(500);
 
         Serial.printf("[%s] Sending request: ", _portName);
         for (int i = 0; i < length; i++)
@@ -69,6 +70,7 @@ public:
         Serial.println(" | Request sent.");
 
         _arduino.digitalWrite(_controlPin, _arduino.getDigitalLow());
+        _arduino.digitalWrite(_sensorPowerPin, _arduino.getDigitalLow());
     }
 
     int readAvailable(uint8_t *buffer, size_t maxLength) override
