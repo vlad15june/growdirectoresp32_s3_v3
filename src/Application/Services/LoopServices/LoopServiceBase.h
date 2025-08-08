@@ -9,6 +9,7 @@
 #include "Core/Domain/Interfaces/IDebugSystem.h"
 #include "Core/Domain/Interfaces/IModuleConfig.h"
 #include "Core/Domain/Interfaces/Adapters/IArduinoAdapter.h"
+#include "Core/Domain/Interfaces/BoardTesting/IBoardTest.h"
 #include "Application/Interfaces/WebServices/IWebServerLooper.h"
 #include <stdarg.h>
 
@@ -22,6 +23,7 @@ protected:
     IWebServerLooper* webServer;
     IModuleConfig* moduleConfig;
     IArduinoAdapter* arduinoAdapter;
+    IBoardTest* boardTest;
     
     LoopServiceBase(
         ILedUseCases* ledUseCases = nullptr,
@@ -31,7 +33,8 @@ protected:
         IDebugSystem* debugSystem = nullptr,
         IWebServerLooper* webServer = nullptr,
         IModuleConfig* moduleConfig = nullptr,
-        IArduinoAdapter* arduinoAdapter = nullptr
+        IArduinoAdapter* arduinoAdapter = nullptr,
+        IBoardTest* boardTest = nullptr
     ) : ledUseCases(ledUseCases),
         buttonUseCases(buttonUseCases),
         onChangeModuleModeUseCase(moduleModeUseCase),
@@ -39,7 +42,8 @@ protected:
         debugSystem(debugSystem),
         webServer(webServer),
         moduleConfig(moduleConfig),
-        arduinoAdapter(arduinoAdapter) {}
+        arduinoAdapter(arduinoAdapter),
+        boardTest(boardTest) {}
     
     void log(const char* format, ...) {
         if (logger != nullptr && debugSystem != nullptr && 
@@ -117,6 +121,11 @@ public:
     // Method to set Arduino adapter
     virtual void setArduinoAdapter(IArduinoAdapter* adapter) {
         this->arduinoAdapter = adapter;
+    }
+    
+    // Method to set board test
+    virtual void setBoardTest(IBoardTest* test) {
+        this->boardTest = test;
     }
 };
 

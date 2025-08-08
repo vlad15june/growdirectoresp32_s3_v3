@@ -24,6 +24,7 @@
 #include "Core/Domain/Interfaces/Adapters/Sensors/ISensorReader.h"
 #include "Infrastructure/Adapters/SPIFFS/ISpiffsAdapter.h"
 #include "Core/Domain/Interfaces/Adapters/Json/IJsonConverter.h"
+#include "Core/Domain/Interfaces/BoardTesting/IBoardTest.h"
 
 class IModuleSetupService
 {
@@ -58,12 +59,14 @@ private:
     ISensorReader *sensorReader;
     ISpiffsAdapter *spiffsAdapter;
     IJsonConverter *jsonConverter;
+    IBoardTest *boardTest;
 
     void log(const char *format, ...);
 
     bool initializeModuleConfiguration();
     bool setupLeds();
     void handleModuleMode();
+    void ApTestModeModeConfigure();
     void UserCanConfigModeConfigure();
     void UserReConfigModeConfigure();
     void ConfigureDoneModeConfigure();
@@ -127,7 +130,8 @@ public:
         ISensorTypeRepository *sensorTypeRepository = nullptr,
         ISensorReader *sensorReader = nullptr,
         ISpiffsAdapter *spiffsAdapter = nullptr,
-        IJsonConverter *jsonConverter = nullptr);
+        IJsonConverter *jsonConverter = nullptr,
+        IBoardTest *boardTest = nullptr);
 
     void setupModule() override;
     std::unique_ptr<ILoopService> getLoopService() override;
@@ -154,7 +158,8 @@ inline ModuleSetupService::ModuleSetupService(
     ISensorTypeRepository *sensorTypeRepository,
     ISensorReader *sensorReader,
     ISpiffsAdapter *spiffsAdapter,
-    IJsonConverter *jsonConverter) : logger(logger),
+    IJsonConverter *jsonConverter,
+    IBoardTest *boardTest) : logger(logger),
                                      debugSystem(debugSystem),
                                      moduleConfig(moduleConfig),
                                      ledAdapter(ledAdapter),
@@ -172,7 +177,8 @@ inline ModuleSetupService::ModuleSetupService(
                                      sensorTypeRepository(sensorTypeRepository),
                                      sensorReader(sensorReader),
                                      spiffsAdapter(spiffsAdapter),
-                                     jsonConverter(jsonConverter)
+                                     jsonConverter(jsonConverter),
+                                     boardTest(boardTest)
 {
 }
 
@@ -268,6 +274,7 @@ inline void ModuleSetupService::handleModuleMode()
     else if (isConfigured == ModuleModeEnum::AP_TEST_MODE)
     {
         log("SETUP: Module is in AP_TEST_MODE");
+        ApTestModeModeConfigure();
     }
     else if (isConfigured == ModuleModeEnum::USER_CAN_CONFIGURE)
     {
@@ -289,6 +296,20 @@ inline void ModuleSetupService::handleModuleMode()
     else
     {
         log("SETUP: Unknown module mode");
+    }
+}
+
+inline void ModuleSetupService::ApTestModeModeConfigure()
+{
+    log("SETUP: Module is in AP_TEST_MODE - configuring for board testing");
+    
+    // Setup test devices for board testing
+    if (boardTest) {
+        log("SETUP: Setting up devices for test mode");
+        boardTest->setupDevicesForTest();
+        log("SETUP: Test devices setup completed");
+    } else {
+        log("SETUP: BoardTest not available for test mode setup");
     }
 }
 
