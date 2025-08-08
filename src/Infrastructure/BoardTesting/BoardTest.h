@@ -31,7 +31,7 @@ private:
     uint8_t* PUMP_HYDRO;
     uint8_t* DIM_OFF;
     uint8_t* V_DIM;
-    uint8_t BUTTON_PIN;
+    uint8_t buttonPin;
     uint8_t DO_ORP;
     uint8_t EC_SDN;
     
@@ -79,6 +79,7 @@ private:
     int extractIntParameter(const std::string& cmd, const std::string& param);
     bool testButton(uint8_t timeoutSeconds);
     void initializePinArrays();
+    void initializeLedArrays();
 
 public:
     BoardTest(
@@ -116,7 +117,7 @@ inline BoardTest::BoardTest(
     PUMP_HYDRO(nullptr),
     DIM_OFF(nullptr),
     V_DIM(nullptr),
-    BUTTON_PIN(0),
+    buttonPin(0),
     DO_ORP(0),
     EC_SDN(0) {
     initializePinArrays();
@@ -124,6 +125,43 @@ inline BoardTest::BoardTest(
 
 inline BoardTest::~BoardTest() {
     // Clean up pin arrays if allocated
+    if (LED_R) {
+        delete[] LED_R;
+        LED_R = nullptr;
+    }
+    if (LED_G) {
+        delete[] LED_G;
+        LED_G = nullptr;
+    }
+    if (pin) {
+        delete[] pin;
+        pin = nullptr;
+    }
+    // Add cleanup for other pin arrays as needed
+    if (pin_TST_SNS) {
+        delete[] pin_TST_SNS;
+        pin_TST_SNS = nullptr;
+    }
+    if (adcPin) {
+        delete[] adcPin;
+        adcPin = nullptr;
+    }
+    if (pin_SENSOR_PS) {
+        delete[] pin_SENSOR_PS;
+        pin_SENSOR_PS = nullptr;
+    }
+    if (PUMP_HYDRO) {
+        delete[] PUMP_HYDRO;
+        PUMP_HYDRO = nullptr;
+    }
+    if (DIM_OFF) {
+        delete[] DIM_OFF;
+        DIM_OFF = nullptr;
+    }
+    if (V_DIM) {
+        delete[] V_DIM;
+        V_DIM = nullptr;
+    }
 }
 
 inline bool BoardTest::hasTestCommandsAvailable() {
@@ -352,48 +390,76 @@ inline void BoardTest::setupDevicesForTest(IModuleConfig* config) {
         arduinoAdapter->serialPrintln("-------setupDevicesForTest---------");
     }
     
-    // Initialize button pin
-    if (BUTTON_PIN > 0) {
-        arduinoAdapter->pinMode(BUTTON_PIN, arduinoAdapter->getPinModeInput());
+    // Initialize LED arrays from moduleConfig
+    initializeLedArrays();
+    
+    // Initialize all pin arrays from moduleConfig
+    initializePinArrays();
+    
+    // Initialize button pin from moduleConfig
+    buttonPin = moduleConfig->getButtonPin();
+    if (buttonPin > 0) {
+        arduinoAdapter->pinMode(buttonPin, arduinoAdapter->getPinModeInput());
     }
+}
+
+inline void BoardTest::initializePinArrays() {
+    if (!moduleConfig || !arduinoAdapter) return;
     
     int moduleType = moduleConfig->getModuleType();
     int moduleSubType = moduleConfig->getModuleSubType();
     
-    // Setup based on module type
-    if (moduleType == MODULE_TYPE_SENSOR || moduleType == MODULE_TYPE_HYDRO) {
-        // Setup sensor testing pins
-        for (int i = 0; i < 4; i++) {
-            if (pin_SENSOR_PS && pin_SENSOR_PS[i] > 0) {
-                arduinoAdapter->pinMode(pin_SENSOR_PS[i], arduinoAdapter->getPinModeOutput());
-            }
-            if (pin_TST_SNS && pin_TST_SNS[i] > 0) {
-                arduinoAdapter->pinMode(pin_TST_SNS[i], arduinoAdapter->getPinModeOutput());
-                arduinoAdapter->digitalWrite(pin_TST_SNS[i], arduinoAdapter->getDigitalHigh());
+    if (moduleType == MODULE_TYPE_DEVICE) {
+        int deviceCount = moduleConfig->getDeviceCount();
+        
+        // Initialize relay pins from moduleConfig
+        if (pin) {
+            delete[] pin;
+        }
+        pin = new uint8_t[deviceCount];
+        uint8_t* relayPins = moduleConfig->getRelayPins();
+        
+        if (relayPins) {
+            for (int i = 0; i < deviceCount && i < 4; i++) {
+                pin[i] = relayPins[i];
+                arduinoAdapter->pinMode(pin[i], arduinoAdapter->getPinModeOutput());
             }
         }
     }
+}
+
+inline void BoardTest::initializeLedArrays() {
+    if (!moduleConfig || !arduinoAdapter) return;
     
-    if (moduleType == MODULE_TYPE_DEVICE) {
-        int deviceCount = moduleConfig->getDeviceCount();
-        for (int i = 0; i < deviceCount && i < 4; i++) {
-            if (pin && pin[i] > 0) {
-                arduinoAdapter->pinMode(pin[i], arduinoAdapter->getPinModeOutput());
-            }
-            if (LED_R && LED_R[i] > 0) {
+    uint8_t ledsCount = moduleConfig->getLedsCount();
+    if (ledsCount > 0) {
+        // Clean up existing arrays
+        if (LED_R) {
+            delete[] LED_R;
+        }
+        if (LED_G) {
+            delete[] LED_G;
+        }
+        
+        // Allocate new arrays
+        LED_R = new uint8_t[ledsCount];
+        LED_G = new uint8_t[ledsCount];
+        
+        // Copy LED pins from moduleConfig
+        uint8_t* redLeds = moduleConfig->getRedLeds();
+        uint8_t* greenLeds = moduleConfig->getGreenLeds();
+        
+        if (redLeds && greenLeds) {
+            for (int i = 0; i < ledsCount; i++) {
+                LED_R[i] = redLeds[i];
+                LED_G[i] = greenLeds[i];
+                
+                // Set LED pins as outputs
                 arduinoAdapter->pinMode(LED_R[i], arduinoAdapter->getPinModeOutput());
-            }
-            if (LED_G && LED_G[i] > 0) {
                 arduinoAdapter->pinMode(LED_G[i], arduinoAdapter->getPinModeOutput());
             }
         }
-    }    
-}
-
-inline void BoardTest::initializePinArrays() {
-    // Initialize pin arrays based on module configuration
-    // This would typically be done based on actual hardware configuration
-    // For now, we'll leave them as nullptr and handle the null checks
+    }
 }
 
 inline void BoardTest::handleSetRefVoltage(const std::string& cmd) {
@@ -544,9 +610,29 @@ inline void BoardTest::handleSetRelay(const std::string& cmd) {
 }
 
 inline void BoardTest::handleLedControl(const std::string& cmd, bool isRed) {
-    // Stub: LED control
-    if (arduinoAdapter) {
-        arduinoAdapter->serialPrintln(isRed ? "led_r_stub" : "led_g_stub");
+    int channel = extractIntParameter(cmd, "-ch");
+    int value = extractIntParameter(cmd, "-v");
+    
+    if (!moduleConfig || !arduinoAdapter) {
+        if (arduinoAdapter) {
+            arduinoAdapter->serialPrintln("led_error_no_config");
+        }
+        return;
+    }
+    
+    uint8_t ledsCount = moduleConfig->getLedsCount();
+    if (channel >= 0 && channel < ledsCount && LED_R && LED_G) {
+        uint8_t pin = isRed ? LED_R[channel] : LED_G[channel];
+        value = (value != 1) ? 0 : 1;
+        arduinoAdapter->digitalWrite(pin, value);
+        
+        char response[32];
+        snprintf(response, sizeof(response), "%s_ch%d=%d", 
+                isRed ? "led_r" : "led_g", channel, 
+                arduinoAdapter->digitalRead(pin));
+        arduinoAdapter->serialPrintln(response);
+    } else {
+        arduinoAdapter->serialPrintln(isRed ? "led_r_error" : "led_g_error");
     }
 }
 

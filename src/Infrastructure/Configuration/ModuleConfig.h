@@ -20,6 +20,7 @@
 #define LED_SENSOR_SIZE 1
 
 #define SENSOR_PIN_COUNT 4
+#define BUTTON_PIN 9
 
 class ModuleConfig : public IModuleConfig
 {
@@ -52,6 +53,9 @@ private:
     static uint8_t LED_G_DIMMER[2];
     static uint8_t LED_R_Sensor;
     static uint8_t LED_G_Sensor;
+    
+    // Relay pin definitions
+    static uint8_t RELAY_PINS[4];
 
     void log(const char *format, ...)
     {
@@ -343,6 +347,14 @@ public:
         // For other module types, return 0 since they don't have sensors
         return 0;
     }
+    
+    uint8_t getButtonPin() const override {
+        return BUTTON_PIN;
+    }
+    
+    uint8_t* getRelayPins() const override {
+        return RELAY_PINS;
+    }
 };
 
 // Define static members
@@ -360,5 +372,7 @@ uint8_t ModuleConfig::LED_G_DIMMER[2] = {40, 39};
 
 uint8_t ModuleConfig::LED_R_Sensor = 12;
 uint8_t ModuleConfig::LED_G_Sensor = 13;
+
+uint8_t ModuleConfig::RELAY_PINS[4] = {39, 40, 41, 42};
 
 #endif // MODULE_CONFIG_H
