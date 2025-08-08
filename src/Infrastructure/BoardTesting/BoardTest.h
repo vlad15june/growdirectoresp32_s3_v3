@@ -8,13 +8,12 @@
 #include "Core/Domain/Interfaces/IDebugSystem.h"
 #include "Core/Domain/Interfaces/Adapters/IWifiAdapter.h"
 #include <string>
+#include <cstring>
 
 class BoardTest : public IBoardTest {
 private:
     IArduinoAdapter* arduinoAdapter;
     IModuleConfig* moduleConfig;
-    ILogger* logger;
-    IDebugSystem* debugSystem;
     IWifiAdapter* wifiAdapter;
     
     // Command buffer for serial input
@@ -36,7 +35,6 @@ private:
     uint8_t DO_ORP;
     uint8_t EC_SDN;
     
-    void log(const char* format, ...);
     void processCommand(const std::string& command);
     
     // Command handlers
@@ -85,37 +83,27 @@ private:
 public:
     BoardTest(
         IArduinoAdapter* arduinoAdapter = nullptr,
-        IModuleConfig* moduleConfig = nullptr,
-        ILogger* logger = nullptr,
-        IDebugSystem* debugSystem = nullptr,
         IWifiAdapter* wifiAdapter = nullptr
     );
     
     ~BoardTest() override;
     
     void processTestCommands() override;
-    void setupDevicesForTest() override;
+    void setupDevicesForTest(IModuleConfig* moduleConfig) override;
     bool hasTestCommandsAvailable() override;
     
     // Setters for dependency injection
     void setArduinoAdapter(IArduinoAdapter* adapter);
     void setModuleConfig(IModuleConfig* config);
-    void setLogger(ILogger* logger);
-    void setDebugSystem(IDebugSystem* debugSystem);
     void setWifiAdapter(IWifiAdapter* wifiAdapter);
 };
 
 // Implementation
 inline BoardTest::BoardTest(
     IArduinoAdapter* arduinoAdapter,
-    IModuleConfig* moduleConfig,
-    ILogger* logger,
-    IDebugSystem* debugSystem,
     IWifiAdapter* wifiAdapter
 ) : arduinoAdapter(arduinoAdapter),
-    moduleConfig(moduleConfig),
-    logger(logger),
-    debugSystem(debugSystem),
+    moduleConfig(nullptr),
     wifiAdapter(wifiAdapter),
     indBuf(0),
     resultTestButton(false),
@@ -136,18 +124,6 @@ inline BoardTest::BoardTest(
 
 inline BoardTest::~BoardTest() {
     // Clean up pin arrays if allocated
-}
-
-inline void BoardTest::log(const char* format, ...) {
-    if (logger && debugSystem && debugSystem->isFeatureEnabled(DebugFeatures::BOARD_TEST_DEBUG)) {
-        char buffer[256];
-        va_list args;
-        va_start(args, format);
-        vsnprintf(buffer, sizeof(buffer), format, args);
-        va_end(args);
-        
-        logger->println(DebugFeatures::BOARD_TEST_DEBUG, buffer);
-    }
 }
 
 inline bool BoardTest::hasTestCommandsAvailable() {
@@ -186,8 +162,6 @@ inline void BoardTest::processTestCommands() {
 }
 
 inline void BoardTest::processCommand(const std::string& cmd) {
-    log("Processing test command: %s", cmd.c_str());
-    
     // 0. #restart%
     if (cmd.find("#restart") == 0) {
         handleRestart();
@@ -370,10 +344,9 @@ inline void BoardTest::handleCheckFileSystem() {
     }
 }
 
-inline void BoardTest::setupDevicesForTest() {
+inline void BoardTest::setupDevicesForTest(IModuleConfig* config) {
+    moduleConfig = config;
     if (!arduinoAdapter || !moduleConfig) return;
-    
-    log("Setting up devices for test mode");
     
     if (arduinoAdapter) {
         arduinoAdapter->serialPrintln("-------setupDevicesForTest---------");
@@ -414,9 +387,7 @@ inline void BoardTest::setupDevicesForTest() {
                 arduinoAdapter->pinMode(LED_G[i], arduinoAdapter->getPinModeOutput());
             }
         }
-    }
-    
-    log("Device setup for test mode completed");
+    }    
 }
 
 inline void BoardTest::initializePinArrays() {

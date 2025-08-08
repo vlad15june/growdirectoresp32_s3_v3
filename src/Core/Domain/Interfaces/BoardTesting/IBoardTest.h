@@ -9,7 +9,7 @@ public:
     virtual void processTestCommands() = 0;
     
     // Setup devices for testing
-    virtual void setupDevicesForTest() = 0;
+    virtual void setupDevicesForTest(IModuleConfig* moduleConfig) = 0;
     
     // Check if test commands are available
     virtual bool hasTestCommandsAvailable() = 0;

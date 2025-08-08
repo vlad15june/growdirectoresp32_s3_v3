@@ -306,7 +306,7 @@ inline void ModuleSetupService::ApTestModeModeConfigure()
     // Setup test devices for board testing
     if (boardTest) {
         log("SETUP: Setting up devices for test mode");
-        boardTest->setupDevicesForTest();
+        boardTest->setupDevicesForTest(moduleConfig);
         log("SETUP: Test devices setup completed");
     } else {
         log("SETUP: BoardTest not available for test mode setup");

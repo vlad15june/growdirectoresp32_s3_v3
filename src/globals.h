@@ -83,6 +83,7 @@
 #include "Infrastructure/Adapters/Sensors/HardwareSensors/AnalogSensors/AnalogSensorReader.h"
 #include "Infrastructure/Adapters/Sensors/HardwareSensors/ModbusSensors/ModbusSensorReader.h"
 #include "Infrastructure/Adapters/Rs485/ModbusRS485.h"
+#include "Infrastructure/BoardTesting/BoardTest.h"
 
 const char *mqttUser = "GrowDirectorMqtt";
 const char *mqttPassword = "lasdfh329483457sfdjhs92_w";
@@ -317,6 +318,10 @@ RuleService ruleService(
     &mqttLogger,
     &debugSystem);
 
+BoardTest boardTest(
+    &arduinoAdapter,
+    &wifiAdapter);
+
 LoopServiceFactory loopServiceFactory(
     &ledUseCases,
     &buttonUseCases,
@@ -352,7 +357,8 @@ ModuleSetupService moduleSetupService(
     &sensorTypeRepository,
     &sensorReader,
     &spiffsAdapter,
-    &jsonConverter);
+    &jsonConverter,
+    &boardTest);
 
 void initDependencies()
 {
