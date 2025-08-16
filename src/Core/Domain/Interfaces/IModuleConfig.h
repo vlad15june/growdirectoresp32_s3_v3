@@ -37,6 +37,7 @@ public:
     virtual int getSensorPinCount() const = 0;  // New method for sensor pin count
     virtual uint8_t getButtonPin() const = 0;   // New method for button pin
     virtual uint8_t* getRelayPins() const = 0;  // New method for relay pins
+    virtual uint8_t* getSensorPowerPins() const = 0;  // New method for sensor power pins
     virtual ~IModuleConfig() = default;
 };
 

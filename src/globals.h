@@ -3,12 +3,6 @@
 
 #define DEBUG_LOGGING_CODE_ON
 
-// Питание датчиков
-#define SENSOR_POWER_1 42
-#define SENSOR_POWER_2 41
-#define SENSOR_POWER_3 40
-#define SENSOR_POWER_4 39
-
 #include <Arduino.h>
 #include <WiFiClient.h>
 #include <WiFi.h>

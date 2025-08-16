@@ -22,6 +22,11 @@
 #define SENSOR_PIN_COUNT 4
 #define BUTTON_PIN 9
 
+#define SENSOR_POWER_1 42
+#define SENSOR_POWER_2 41
+#define SENSOR_POWER_3 40
+#define SENSOR_POWER_4 39
+
 class ModuleConfig : public IModuleConfig
 {
 private:
@@ -56,6 +61,9 @@ private:
     
     // Relay pin definitions
     static uint8_t RELAY_PINS[4];
+    
+    // Sensor power pin definitions
+    static uint8_t SENSOR_POWER_PINS[4];
 
     void log(const char *format, ...)
     {
@@ -355,6 +363,10 @@ public:
     uint8_t* getRelayPins() const override {
         return RELAY_PINS;
     }
+    
+    uint8_t* getSensorPowerPins() const override {
+        return SENSOR_POWER_PINS;
+    }
 };
 
 // Define static members
@@ -375,4 +387,5 @@ uint8_t ModuleConfig::LED_G_Sensor = 13;
 
 uint8_t ModuleConfig::RELAY_PINS[4] = {39, 40, 41, 42};
 
+uint8_t ModuleConfig::SENSOR_POWER_PINS[4] = {SENSOR_POWER_1, SENSOR_POWER_2, SENSOR_POWER_3, SENSOR_POWER_4};
 #endif // MODULE_CONFIG_H
