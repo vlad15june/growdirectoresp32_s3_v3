@@ -196,6 +196,11 @@ int WifiAdapter::getRSSI()
     return WiFi.RSSI();
 }
 
+int WifiAdapter::getStatus()
+{
+    return WiFi.status();
+}
+
 int WifiAdapter::scanNetworks()
 {
     return WiFi.scanNetworks();

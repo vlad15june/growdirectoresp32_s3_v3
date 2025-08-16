@@ -25,6 +25,7 @@ public:
     virtual const char* getLocalIP() = 0;
     virtual const char* getMACAddress() = 0;
     virtual int getRSSI() = 0;
+    virtual int getStatus() = 0;  // New method for WiFi status
     
     // WiFi scanning
     virtual int scanNetworks() = 0;

@@ -78,6 +78,7 @@ private:
     // Helper methods
     std::string extractParameter(const std::string &cmd, const std::string &param);
     int extractIntParameter(const std::string &cmd, const std::string &param);
+    std::string extractStringParameter(const std::string &cmd, const std::string &param);
     bool testButton(uint8_t timeoutSeconds);
     void initializePinArrays();
     void initializeLedArrays();
@@ -705,10 +706,22 @@ inline void BoardTest::handlePowerSupplyEnable(const std::string &cmd)
 
 inline void BoardTest::handleReadWifiRSSI()
 {
-    // Stub: WiFi RSSI reading
     if (arduinoAdapter && wifiAdapter)
     {
-        arduinoAdapter->serialPrintln("-45");
+        if (wifiAdapter->isConnected())
+        {
+            int rssi = wifiAdapter->getRSSI();
+            char response[16];
+            snprintf(response, sizeof(response), "%d", rssi);
+            arduinoAdapter->serialPrintln(response);
+        }
+        else
+        {
+            int wifiStatus = wifiAdapter->getStatus();
+            char response[32];
+            snprintf(response, sizeof(response), "read_wifi_rssi_error %d", wifiStatus);
+            arduinoAdapter->serialPrintln(response);
+        }
     }
     else if (arduinoAdapter)
     {
@@ -718,10 +731,24 @@ inline void BoardTest::handleReadWifiRSSI()
 
 inline void BoardTest::handleConnectToWifi(const std::string &cmd)
 {
-    // Stub: WiFi connection
-    if (arduinoAdapter)
-    {
+    if (!arduinoAdapter || !wifiAdapter) {
+        if (arduinoAdapter) {
+            arduinoAdapter->serialPrintln("wifi_error_no_adapter");
+        }
+        return;
+    }
+
+    // Extract SSID and password from command using helper methods
+    std::string ssidTest = extractStringParameter(cmd, "-u");
+    std::string passwordTest = extractStringParameter(cmd, "-p");
+
+    // Attempt to connect to WiFi
+    bool connected = wifiAdapter->connect(ssidTest.c_str(), passwordTest.c_str(), 8000); // 40 * 200ms = 8000ms timeout
+    
+    if (connected) {
         arduinoAdapter->serialPrintln("ok");
+    } else {
+        arduinoAdapter->serialPrintln("read_wifi_rssi_error");
     }
 }
 
@@ -909,6 +936,20 @@ inline int BoardTest::extractIntParameter(const std::string &cmd, const std::str
         return std::stoi(valueStr);
     }
     return -1;
+}
+
+inline std::string BoardTest::extractStringParameter(const std::string &cmd, const std::string &param)
+{
+    size_t pos = cmd.find(param);
+    if (pos != std::string::npos) {
+        pos += param.length() + 1; // Skip parameter and space
+        size_t endPos = cmd.find(' ', pos);
+        if (endPos == std::string::npos) endPos = cmd.find('%', pos);
+        if (endPos == std::string::npos) endPos = cmd.length();
+        
+        return cmd.substr(pos, endPos - pos);
+    }
+    return "";
 }
 
 inline bool BoardTest::testButton(uint8_t timeoutSeconds)

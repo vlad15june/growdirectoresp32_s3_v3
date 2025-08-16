@@ -30,6 +30,7 @@ public:
     const char* getLocalIP() override;
     const char* getMACAddress() override;
     int getRSSI() override;
+    int getStatus() override;  // Add this method declaration
     
     // WiFi scanning
     int scanNetworks() override;
