@@ -83,6 +83,8 @@ private:
     void initializePinArrays();
     void initializeLedArrays();
 
+    static constexpr uint8_t BUTTON_PRESSED = 0; // Assuming button pressed = LOW
+
 public:
     BoardTest(
         IArduinoAdapter *arduinoAdapter = nullptr,
@@ -283,15 +285,15 @@ inline void BoardTest::processCommand(const std::string &cmd)
     {
         handleConnectToWifi(cmd);
     }
-    else if (cmd.find("#clear_all_file_log") == 0) // 12. #clear_all_file_log%
+    else if (cmd.find("#clear_all_file_log") == 0) // - 12. #clear_all_file_log%
     {
         handleClearAllFileLog();
     }
-    else if (cmd.find("#write_diagnostic") == 0) // 13. #write_diagnostic%
+    else if (cmd.find("#write_diagnostic") == 0) // - 13. #write_diagnostic%
     {
         handleWriteDiagnostic();
     }
-    else if (cmd.find("#read_startup_log") == 0) // 14. #read_startup_log%
+    else if (cmd.find("#read_startup_log") == 0) // - 14. #read_startup_log%
     {
         handleReadStartupLog();
     }
@@ -319,31 +321,31 @@ inline void BoardTest::processCommand(const std::string &cmd)
     {
         handleLedControl(cmd, false);
     }
-    else if (cmd.find("#read_pump") == 0) // 21. #read_pump -ch 0%
+    else if (cmd.find("#read_pump") == 0) // - 21. #read_pump -ch 0%
     {
         handleReadPump(cmd);
     }
-    else if (cmd.find("#set_pump") == 0) // 22. #set_pump -ch 0 -v 1%
+    else if (cmd.find("#set_pump") == 0) // - 22. #set_pump -ch 0 -v 1%
     {
         handleSetPump(cmd);
     }
-    else if (cmd.find("#do_orp") == 0) // 23. #do_orp -v 1%
+    else if (cmd.find("#do_orp") == 0) // - 23. #do_orp -v 1%
     {
         handleDoOrp(cmd);
     }
-    else if (cmd.find("#ec_sdn") == 0) // 24. #ec_sdn -v 1%
+    else if (cmd.find("#ec_sdn") == 0) // - 24. #ec_sdn -v 1%
     {
         handleEcSdn(cmd);
     }
-    else if (cmd.find("#read_dimmer") == 0) // 25. #read_dimmer -ch 0%
+    else if (cmd.find("#read_dimmer") == 0) // - 25. #read_dimmer -ch 0%
     {
         handleReadDimmer(cmd);
     }
-    else if (cmd.find("#on_dimmer") == 0) // 26. #on_dimmer -ch 0 -v 1%
+    else if (cmd.find("#on_dimmer") == 0) // - 26. #on_dimmer -ch 0 -v 1%
     {
         handleOnDimmer(cmd);
     }
-    else if (cmd.find("#set_dimmer") == 0) // 27. #set_dimmer -ch 0 -v 254%
+    else if (cmd.find("#set_dimmer") == 0) // - 27. #set_dimmer -ch 0 -v 254%
     {
         handleSetDimmer(cmd);
     }
@@ -421,6 +423,8 @@ inline void BoardTest::handleSetTestSuccess()
         {
             settings->setConfigured(ModuleModeEnum::USER_CAN_CONFIGURE);
             arduinoAdapter->serialPrintln("ok");
+            arduinoAdapter->delay(500);
+            arduinoAdapter->restart();
         }
     }
 }
@@ -434,6 +438,9 @@ inline void BoardTest::handleSetToTest()
         {
             arduinoAdapter->serialPrintln("set_to_test");
             settings->setConfigured(ModuleModeEnum::AP_TEST_MODE);
+            arduinoAdapter->serialPrintln("ok");
+            arduinoAdapter->delay(500);
+            arduinoAdapter->restart();
         }
     }
 }
@@ -782,12 +789,29 @@ inline void BoardTest::handleReadStartupLog()
 inline void BoardTest::handleReadRelay(const std::string &cmd)
 {
     int channel = extractIntParameter(cmd, "-ch");
-    if (pin && arduinoAdapter && channel >= 0 && channel < 4)
+    
+    if (!moduleConfig || !arduinoAdapter) {
+        if (arduinoAdapter) {
+            arduinoAdapter->serialPrintln("read_relay_error_no_config");
+        }
+        return;
+    }
+    
+    uint8_t* relayPins = moduleConfig->getRelayPins();
+    int deviceCount = moduleConfig->getDeviceCount();
+    
+    if (relayPins && channel >= 0 && channel < deviceCount)
     {
-        int value = arduinoAdapter->digitalRead(pin[channel]);
+        int value = arduinoAdapter->digitalRead(relayPins[channel]);
         char response[32];
         snprintf(response, sizeof(response), "ch%d=%d", channel, value);
         arduinoAdapter->serialPrintln(response);
+    }
+    else
+    {
+        if (arduinoAdapter) {
+            arduinoAdapter->serialPrintln("read_relay_error_invalid_channel");
+        }
     }
 }
 
@@ -795,13 +819,30 @@ inline void BoardTest::handleSetRelay(const std::string &cmd)
 {
     int channel = extractIntParameter(cmd, "-ch");
     int value = extractIntParameter(cmd, "-v");
-    if (pin && arduinoAdapter && channel >= 0 && channel < 4)
+    
+    if (!moduleConfig || !arduinoAdapter) {
+        if (arduinoAdapter) {
+            arduinoAdapter->serialPrintln("set_relay_error_no_config");
+        }
+        return;
+    }
+    
+    uint8_t* relayPins = moduleConfig->getRelayPins();
+    int deviceCount = moduleConfig->getDeviceCount();
+    
+    if (relayPins && channel >= 0 && channel < deviceCount)
     {
         value = (value != 1) ? 0 : 1;
-        arduinoAdapter->digitalWrite(pin[channel], value);
+        arduinoAdapter->digitalWrite(relayPins[channel], value);
         char response[32];
-        snprintf(response, sizeof(response), "ch%d=%d", channel, arduinoAdapter->digitalRead(pin[channel]));
+        snprintf(response, sizeof(response), "ch%d=%d", channel, arduinoAdapter->digitalRead(relayPins[channel]));
         arduinoAdapter->serialPrintln(response);
+    }
+    else
+    {
+        if (arduinoAdapter) {
+            arduinoAdapter->serialPrintln("set_relay_error_invalid_channel");
+        }
     }
 }
 
@@ -820,9 +861,12 @@ inline void BoardTest::handleLedControl(const std::string &cmd, bool isRed)
     }
 
     uint8_t ledsCount = moduleConfig->getLedsCount();
-    if (channel >= 0 && channel < ledsCount && LED_R && LED_G)
+    uint8_t* redLeds = moduleConfig->getRedLeds();
+    uint8_t* greenLeds = moduleConfig->getGreenLeds();
+    
+    if (channel >= 0 && channel < ledsCount && redLeds && greenLeds)
     {
-        uint8_t pin = isRed ? LED_R[channel] : LED_G[channel];
+        uint8_t pin = isRed ? redLeds[channel] : greenLeds[channel];
         value = (value != 1) ? 0 : 1;
         arduinoAdapter->digitalWrite(pin, value);
 
@@ -903,12 +947,41 @@ inline void BoardTest::handleSetDimmer(const std::string &cmd)
 
 inline void BoardTest::handleSetTestButton(const std::string &cmd)
 {
-    if (arduinoAdapter)
-    {
-        arduinoAdapter->serialPrintln("Ok");
-        // Extract timeout and start button test
-        resultTestButton = false; // Stub: would call testButton(timeout)
+    if (!moduleConfig || !arduinoAdapter) {
+        if (arduinoAdapter) {
+            arduinoAdapter->serialPrintln("set_test_button_error_no_config");
+        }
+        return;
     }
+
+    // Extract timeout parameter (format: #set_test_button 10%)
+    int timeout = extractIntParameter(cmd, "");  // Extract the number directly after command
+    if (timeout == -1) {
+        // Try to extract number from the command string
+        size_t pos = cmd.find("#set_test_button");
+        if (pos != std::string::npos) {
+            pos += strlen("#set_test_button");
+            while (pos < cmd.length() && cmd[pos] == ' ') pos++; // Skip spaces
+            size_t endPos = cmd.find('%', pos);
+            if (endPos == std::string::npos) endPos = cmd.length();
+            
+            if (pos < endPos) {
+                std::string timeoutStr = cmd.substr(pos, endPos - pos);
+                try {
+                    timeout = std::stoi(timeoutStr);
+                } catch (...) {
+                    timeout = 10; // Default timeout
+                }
+            }
+        }
+    }
+    
+    if (timeout <= 0) {
+        timeout = 10; // Default timeout
+    }
+
+    arduinoAdapter->serialPrintln("Ok");
+    resultTestButton = testButton(timeout);
 }
 
 inline void BoardTest::handleGetTestButton()
@@ -954,8 +1027,33 @@ inline std::string BoardTest::extractStringParameter(const std::string &cmd, con
 
 inline bool BoardTest::testButton(uint8_t timeoutSeconds)
 {
-    // Stub: Button testing implementation
-    return false;
+    if (!moduleConfig || !arduinoAdapter) {
+        return false;
+    }
+
+    uint8_t buttonPin = moduleConfig->getButtonPin();
+    if (buttonPin == 0) {
+        return false; // Invalid pin
+    }
+
+    unsigned long startTime = arduinoAdapter->millis();
+    bool buttonPressed = false;
+
+    // If button is already pressed, return false (we want to detect a press event)
+    if (arduinoAdapter->digitalRead(buttonPin) == BUTTON_PRESSED) {
+        return false;
+    }
+
+    // Wait for button press within timeout period
+    while ((arduinoAdapter->millis() - startTime) < timeoutSeconds * 1000) {
+        if (arduinoAdapter->digitalRead(buttonPin) == BUTTON_PRESSED) {
+            buttonPressed = true;
+            break;
+        }
+        arduinoAdapter->delay(10); // Small delay to prevent busy waiting
+    }
+
+    return buttonPressed;
 }
 
 #endif // BOARD_TEST_H
