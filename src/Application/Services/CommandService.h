@@ -6,6 +6,7 @@
 #include "Application/DTOs/DeviceCommandUpdateDto.h"
 #include "Application/DTOs/CommandResultDto.h"
 #include "Core/Domain/Interfaces/UseCases/IDeviceCommandExecutionUseCase.h"
+#include "Core/Domain/Interfaces/UseCases/IModuleCommandExecutionUseCase.h"
 #include "Core/Domain/Interfaces/UseCases/ISensorCommandUseCase.h"
 #include "Core/Domain/Interfaces/API/IHybridAPIService.h"
 #include "Core/Domain/Interfaces/ILogger.h"
@@ -16,6 +17,7 @@ class CommandService : public ICommandService
 {
 private:
     IDeviceCommandExecutionUseCase *deviceCommandUseCase;
+    IModuleCommandExecutionUseCase *moduleCommandUseCase;
     ISensorCommandUseCase *sensorCommandUseCase;
     IHybridAPIService *hybridApiService;
     ILogger *logger;
@@ -27,6 +29,7 @@ private:
 public:
     CommandService(
         IDeviceCommandExecutionUseCase *deviceCommandUseCase,
+        IModuleCommandExecutionUseCase *moduleCommandUseCase,
         ISensorCommandUseCase *sensorCommandUseCase,
         IHybridAPIService *hybridApiService,
         ILogger *logger,
@@ -34,6 +37,7 @@ public:
         INTPTimeAdapter *timeAdapter = nullptr,
         IJsonConverter *jsonConverter = nullptr)
         : deviceCommandUseCase(deviceCommandUseCase),
+          moduleCommandUseCase(moduleCommandUseCase),
           sensorCommandUseCase(sensorCommandUseCase),
           hybridApiService(hybridApiService),
           logger(logger),
@@ -332,6 +336,16 @@ private:
         {
             logInfo("CommandService: Firmware update requested - version: %s, url: %s",
                     command.version.c_str(), command.url.c_str());
+        }
+
+        if (moduleCommandUseCase)
+        {
+            return moduleCommandUseCase->execute(command.command, command.options, command.commandId, command.createdAt);
+        }
+        else
+        {
+            logError("CommandService: ModuleCommandExecutionUseCase not available");
+            return false;
         }
 
         return true;

@@ -23,6 +23,7 @@
 #include "Core/Domain/UseCases/ModuleMode/OnChangeLocalIpUseCase.h"
 #include "Core/Domain/UseCases/DeviceControl/ProcessDeviceStateUseCaseFactory.h"
 #include "Core/Domain/UseCases/DeviceControl/DeviceCommandExecutionUseCase.h"
+#include "Core/Domain/UseCases/ModuleCommand/ModuleCommandExecutionUseCase.h"
 #include "Core/Domain/UseCases/Sensors/SensorCommandUseCase.h"
 #include "Core/Domain/UseCases/Rules/EvaluateRulesUseCase.h"
 #include "Core/Domain/UseCases/Rules/SyncRulesUseCase.h"
@@ -152,6 +153,8 @@ DeviceCommandExecutionUseCase deviceCommandExecutionUseCase(
     &mqttLogger,
     &debugSystem);
 
+ModuleCommandExecutionUseCase moduleCommandExecutionUseCase;
+
 SpiffsAdapter spiffsAdapter(&mqttLogger, &debugSystem);
 
 SpiffsRuleDao ruleDao(&spiffsAdapter, &jsonConverter, &debugSystem, &mqttLogger);
@@ -227,6 +230,7 @@ HybridAPIService hybridApiService(
 
 CommandService commandService(
     &deviceCommandExecutionUseCase,
+    &moduleCommandExecutionUseCase,
     &sensorCommandUseCase,
     &hybridApiService,
     &mqttLogger,
