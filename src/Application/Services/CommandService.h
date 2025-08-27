@@ -373,143 +373,36 @@ private:
 
         bool allCommandsSuccessful = true;
 
-        // Execute each command one by one
-        for (const auto& moduleCommand : moduleCommands)
+        if (moduleCommandUseCase)
         {
-            log(DebugFeatures::MODULE_COMMAND_DEBUG,
-                "CommandService: Processing module command - command: %s, commandUid: %s",
-                moduleCommand.command.c_str(), moduleCommand.uid.c_str());
-
-            std::string status = "Error";
-            std::string errorMessage = "Unknown command";
-            bool isExpired = false;
-
-            // Check if command is expired
-            if (!moduleCommand.createdAt.empty())
+            // Delegate to use case for command execution
+            std::vector<ModuleCommandExecutionResult> results = moduleCommandUseCase->executeCommands(moduleCommands);
+            
+            // Send results back to API
+            for (const auto& result : results)
             {
+                ModuleCommandUpdateDto updateDto;
+                updateDto.uid = result.uid;
+                updateDto.status = result.status;
+                if (result.status == "Error")
+                {
+                    updateDto.errorMessage = result.errorMessage;
+                    allCommandsSuccessful = false;
+                }
+                hybridApiService->sendModuleCommandExecutionResult(updateDto);
+
                 log(DebugFeatures::MODULE_COMMAND_DEBUG,
-                    "CommandService: Checking command time - createdAt: %s", moduleCommand.createdAt.c_str());
-                isExpired = !checkCommandTime(moduleCommand.createdAt);
+                    "CommandService: Sent result - uid: %s, status: %s, error: %s",
+                    result.uid.c_str(), result.status.c_str(), result.errorMessage.c_str());
             }
-
-            if (isExpired)
-            {
-                status = "Error";
-                errorMessage = "Command is expired";
-                allCommandsSuccessful = false;
-            }
-            else
-            {
-                // Process specific commands
-                if (moduleCommand.command == "AddWifi")
-                {
-                    auto result = processAddWifiCommand(moduleCommand);
-                    status = result.first;
-                    errorMessage = result.second;
-                    if (status != "Done") allCommandsSuccessful = false;
-                }
-                else if (moduleCommand.command == "UpdateFirmware")
-                {
-                    auto result = processUpdateFirmwareCommand(moduleCommand);
-                    status = result.first;
-                    errorMessage = result.second;
-                    if (status == "Error") allCommandsSuccessful = false;
-                }
-                else
-                {
-                    // Try to execute through use case for other commands
-                    if (moduleCommandUseCase)
-                    {
-                        bool executionResult = moduleCommandUseCase->execute(
-                            moduleCommand.command, 
-                            moduleCommand.options, 
-                            moduleCommand.uid, 
-                            moduleCommand.createdAt
-                        );
-                        
-                        status = executionResult ? "Done" : "Error";
-                        errorMessage = executionResult ? "" : "Module command execution failed";
-                        if (!executionResult) allCommandsSuccessful = false;
-                    }
-                    else
-                    {
-                        allCommandsSuccessful = false;
-                    }
-                }
-            }
-
-            log(DebugFeatures::MODULE_COMMAND_DEBUG,
-                "CommandService: Module command execution result - command: %s, status: %s, error: %s",
-                moduleCommand.command.c_str(), status.c_str(), errorMessage.c_str());
-
-            // Send execution result back to API
-            ModuleCommandUpdateDto updateDto;
-            updateDto.uid = moduleCommand.uid;
-            updateDto.status = status;
-            if (status == "Error")
-            {
-                updateDto.errorMessage = errorMessage;
-            }
-            hybridApiService->sendModuleCommandExecutionResult(updateDto);
+        }
+        else
+        {
+            logError("CommandService: ModuleCommandExecutionUseCase not available");
+            allCommandsSuccessful = false;
         }
 
         return allCommandsSuccessful;
-    }
-
-    std::pair<std::string, std::string> processAddWifiCommand(const ModuleCommandDto& moduleCommand)
-    {
-        if (moduleCommand.options.empty())
-        {
-            return {"Error", "Missing options"};
-        }
-
-        std::string ssid = extractJsonValue(moduleCommand.options, "ssid");
-        std::string password = extractJsonValue(moduleCommand.options, "password");
-
-        if (ssid.empty() || password.empty())
-        {
-            return {"Error", "Missing ssid or password in options"};
-        }
-
-        log(DebugFeatures::MODULE_COMMAND_DEBUG,
-            "CommandService: Adding WiFi - SSID: %s", ssid.c_str());
-
-        // TODO: Implement addWifiToFile functionality
-        // addWifiToFile(ssid, password);
-        
-        return {"Done", ""};
-    }
-
-    std::pair<std::string, std::string> processUpdateFirmwareCommand(const ModuleCommandDto& moduleCommand)
-    {
-        if (moduleCommand.options.empty())
-        {
-            return {"Error", "Missing options"};
-        }
-
-        std::string url = extractJsonValue(moduleCommand.options, "url");
-        std::string version = extractJsonValue(moduleCommand.options, "version");
-
-        if (url.empty() || version.empty())
-        {
-            return {"Error", "Missing url or version in options"};
-        }
-
-        log(DebugFeatures::MODULE_COMMAND_DEBUG,
-            "CommandService: Firmware update - URL: %s, Version: %s, UID: %s",
-            url.c_str(), version.c_str(), moduleCommand.uid.c_str());
-
-        // TODO: Implement firmware update functionality
-        // Store firmware update parameters
-        // urlFirmwareUpdate = url;
-        // versionFirmwareUpdate = version;
-        // uidFirmwareUpdate = moduleCommand.uid;
-        
-        // TODO: Schedule firmware update task
-        // userScheduler.addTask(taskFirmwareUpdate);
-        // taskFirmwareUpdate.enable();
-
-        return {"InProgress", ""};
     }
 
     bool processSensorTypeCommand(const CommandDto &command)

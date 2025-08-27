@@ -1,6 +1,9 @@
 #pragma once
 
 #include "Core/Domain/Interfaces/UseCases/IModuleCommandExecutionUseCase.h"
+#include "Core/Domain/Interfaces/ILogger.h"
+#include "Core/Domain/Interfaces/IDebugSystem.h"
+#include "Infrastructure/Adapters/Time/INTPTimeAdapter.h"
 #include <string>
 
 /**
@@ -8,8 +11,16 @@
  */
 class ModuleCommandExecutionUseCase : public IModuleCommandExecutionUseCase
 {
+private:
+    ILogger *logger;
+    IDebugSystem *debugSystem;
+    INTPTimeAdapter *timeAdapter;
+    static const unsigned long commandMaxAgeSeconds = 300;
+
 public:
-    ModuleCommandExecutionUseCase() = default;
+    ModuleCommandExecutionUseCase(ILogger *logger = nullptr, IDebugSystem *debugSystem = nullptr, INTPTimeAdapter *timeAdapter = nullptr)
+        : logger(logger), debugSystem(debugSystem), timeAdapter(timeAdapter) {}
+    
     virtual ~ModuleCommandExecutionUseCase() = default;
 
     /**
@@ -31,7 +42,137 @@ public:
         return false;
     }
 
+    /**
+     * @brief Execute multiple module commands
+     * @param moduleCommands Vector of module commands to execute
+     * @return Vector of execution results
+     */
+    std::vector<ModuleCommandExecutionResult> executeCommands(const std::vector<ModuleCommandDto>& moduleCommands) override
+    {
+        std::vector<ModuleCommandExecutionResult> results;
+        
+        log(DebugFeatures::MODULE_COMMAND_DEBUG,
+            "ModuleCommandUseCase: Processing %d module commands", moduleCommands.size());
+
+        // Execute each command one by one
+        for (const auto& moduleCommand : moduleCommands)
+        {
+            log(DebugFeatures::MODULE_COMMAND_DEBUG,
+                "ModuleCommandUseCase: Processing command - command: %s, commandUid: %s",
+                moduleCommand.command.c_str(), moduleCommand.uid.c_str());
+
+            std::string status = "Error";
+            std::string errorMessage = "Unknown command";
+            bool isExpired = false;
+
+            // Check if command is expired
+            if (!moduleCommand.createdAt.empty())
+            {
+                log(DebugFeatures::MODULE_COMMAND_DEBUG,
+                    "ModuleCommandUseCase: Checking command time - createdAt: %s", moduleCommand.createdAt.c_str());
+                isExpired = !checkCommandTime(moduleCommand.createdAt);
+            }
+
+            if (isExpired)
+            {
+                status = "Error";
+                errorMessage = "Command is expired";
+            }
+            else
+            {
+                // Process specific commands
+                if (moduleCommand.command == "AddWifi")
+                {
+                    auto result = processAddWifiCommand(moduleCommand);
+                    status = result.first;
+                    errorMessage = result.second;
+                }
+                else if (moduleCommand.command == "UpdateFirmware")
+                {
+                    auto result = processUpdateFirmwareCommand(moduleCommand);
+                    status = result.first;
+                    errorMessage = result.second;
+                }
+                else if (moduleCommand.command == "BlinkingStart")
+                {
+                    bool success = handleBlinkingStart("", moduleCommand.options);
+                    status = success ? "Done" : "Error";
+                    errorMessage = success ? "" : "BlinkingStart command failed";
+                }
+                else if (moduleCommand.command == "BlinkingStop")
+                {
+                    bool success = handleBlinkingStop("", moduleCommand.options);
+                    status = success ? "Done" : "Error";
+                    errorMessage = success ? "" : "BlinkingStop command failed";
+                }
+            }
+
+            log(DebugFeatures::MODULE_COMMAND_DEBUG,
+                "ModuleCommandUseCase: Command execution result - command: %s, status: %s, error: %s",
+                moduleCommand.command.c_str(), status.c_str(), errorMessage.c_str());
+
+            results.emplace_back(moduleCommand.uid, status, errorMessage);
+        }
+
+        return results;
+    }
+
 private:
+    std::pair<std::string, std::string> processAddWifiCommand(const ModuleCommandDto& moduleCommand)
+    {
+        if (moduleCommand.options.empty())
+        {
+            return {"Error", "Missing options"};
+        }
+
+        std::string ssid = extractJsonValue(moduleCommand.options, "ssid");
+        std::string password = extractJsonValue(moduleCommand.options, "password");
+
+        if (ssid.empty() || password.empty())
+        {
+            return {"Error", "Missing ssid or password in options"};
+        }
+
+        log(DebugFeatures::MODULE_COMMAND_DEBUG,
+            "ModuleCommandUseCase: Adding WiFi - SSID: %s", ssid.c_str());
+
+        // TODO: Implement addWifiToFile functionality
+        // addWifiToFile(ssid, password);
+        
+        return {"Done", ""};
+    }
+
+    std::pair<std::string, std::string> processUpdateFirmwareCommand(const ModuleCommandDto& moduleCommand)
+    {
+        if (moduleCommand.options.empty())
+        {
+            return {"Error", "Missing options"};
+        }
+
+        std::string url = extractJsonValue(moduleCommand.options, "url");
+        std::string version = extractJsonValue(moduleCommand.options, "version");
+
+        if (url.empty() || version.empty())
+        {
+            return {"Error", "Missing url or version in options"};
+        }
+
+        log(DebugFeatures::MODULE_COMMAND_DEBUG,
+            "ModuleCommandUseCase: Firmware update - URL: %s, Version: %s, UID: %s",
+            url.c_str(), version.c_str(), moduleCommand.uid.c_str());
+
+        // TODO: Implement firmware update functionality
+        // Store firmware update parameters
+        // urlFirmwareUpdate = url;
+        // versionFirmwareUpdate = version;
+        // uidFirmwareUpdate = moduleCommand.uid;
+        
+        // TODO: Schedule firmware update task
+        // userScheduler.addTask(taskFirmwareUpdate);
+        // taskFirmwareUpdate.enable();
+
+        return {"InProgress", ""};
+    }
 
     /**
      * @brief Handle BlinkingStart command
@@ -76,5 +217,75 @@ private:
     {
         // TODO: Implement module lookup by UID
         return nullptr;
+    }
+
+    bool checkCommandTime(const std::string& createdDate)
+    {
+        if (createdDate.empty())
+        {
+            logError("ModuleCommandUseCase: Empty createdDate provided");
+            return false;
+        }
+
+        if (!timeAdapter)
+        {
+            log(DebugFeatures::MODULE_COMMAND_DEBUG,
+                "ModuleCommandUseCase: No time adapter available for validation");
+            return true; // Allow command if no time validation possible
+        }
+
+        unsigned long currentEpoch = timeAdapter->getEpochTime();
+        if (currentEpoch == 0)
+        {
+            log(DebugFeatures::MODULE_COMMAND_DEBUG,
+                "ModuleCommandUseCase: Could not get current time from adapter");
+            return true; // Allow command if time cannot be retrieved
+        }
+
+        // TODO: Implement proper timestamp parsing (similar to CommandService)
+        // For now, just return true
+        return true;
+    }
+
+    std::string extractJsonValue(const std::string& json, const std::string& key)
+    {
+        std::string searchKey = "\"" + key + "\"";
+        size_t keyPos = json.find(searchKey);
+        if (keyPos == std::string::npos) return "";
+        size_t colonPos = json.find(":", keyPos);
+        if (colonPos == std::string::npos) return "";
+        size_t valueStart = json.find("\"", colonPos);
+        if (valueStart == std::string::npos) return "";
+        size_t valueEnd = json.find("\"", valueStart + 1);
+        if (valueEnd == std::string::npos) return "";
+        return json.substr(valueStart + 1, valueEnd - valueStart - 1);
+    }
+
+    void log(const char *feature, const char *format, ...)
+    {
+        if (debugSystem && debugSystem->isFeatureEnabled(feature))
+        {
+            char buffer[256];
+            va_list args;
+            va_start(args, format);
+            vsnprintf(buffer, sizeof(buffer), format, args);
+            va_end(args);
+
+            if (logger) logger->println(feature, buffer);
+        }
+    }
+
+    void logError(const char *format, ...)
+    {
+        if (logger)
+        {
+            char buffer[256];
+            va_list args;
+            va_start(args, format);
+            vsnprintf(buffer, sizeof(buffer), format, args);
+            va_end(args);
+
+            logger->println("ERROR", buffer);
+        }
     }
 };

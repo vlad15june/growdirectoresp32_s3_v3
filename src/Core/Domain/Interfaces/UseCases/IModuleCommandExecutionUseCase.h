@@ -1,6 +1,20 @@
 #pragma once
 
 #include <string>
+#include <vector>
+#include "Application/DTOs/ModuleCommandDto.h"
+
+/**
+ * @brief Result of module command execution
+ */
+struct ModuleCommandExecutionResult {
+    std::string uid;
+    std::string status;
+    std::string errorMessage;
+    
+    ModuleCommandExecutionResult(const std::string& uid, const std::string& status, const std::string& errorMessage = "")
+        : uid(uid), status(status), errorMessage(errorMessage) {}
+};
 
 /**
  * @brief Interface for module command execution use case
@@ -11,12 +25,19 @@ public:
     virtual ~IModuleCommandExecutionUseCase() = default;
 
     /**
-     * @brief Execute module commands from JSON options
+     * @brief Execute a single module command
      * @param command Command name (e.g., "BlinkingStart")
-     * @param options JSON string containing array of module commands
+     * @param options JSON string containing command options
      * @param commandUid Command unique identifier
      * @param createdAt Timestamp when command was created
-     * @return true if all commands were executed successfully, false otherwise
+     * @return true if command was executed successfully, false otherwise
      */
     virtual bool execute(const std::string &command, const std::string &options, const std::string &commandUid, const std::string &createdAt) = 0;
+
+    /**
+     * @brief Execute multiple module commands
+     * @param moduleCommands Vector of module commands to execute
+     * @return Vector of execution results
+     */
+    virtual std::vector<ModuleCommandExecutionResult> executeCommands(const std::vector<ModuleCommandDto>& moduleCommands) = 0;
 };
