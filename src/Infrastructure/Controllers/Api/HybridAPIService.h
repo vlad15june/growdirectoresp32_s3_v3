@@ -11,6 +11,7 @@
 #include "Application/DTOs/UpdateDto.h"
 #include "Application/DTOs/DeviceCommandUpdateDto.h"
 #include "Application/DTOs/DeviceCommandDto.h"
+#include "Application/DTOs/ModuleCommandDto.h"
 #include "Core/Domain/Data/Entities/Rule.h"
 #include "Application/DTOs/CommandResultDto.h"
 
@@ -735,6 +736,24 @@ public:
         }
         
         return rules;
+    }
+    
+    std::vector<ModuleCommandDto> getModuleCommand() override
+    {
+        std::vector<ModuleCommandDto> commands;
+        
+        // This method always uses REST API only, regardless of priority setting
+        if (_restApiService != nullptr)
+        {
+            commands = _restApiService->getModuleCommand();
+            log("HYBRID API: Get module commands via REST - command count: %d", commands.size());
+        }
+        else
+        {
+            log("HYBRID API: REST API service not available for getModuleCommand");
+        }
+        
+        return commands;
     }
     
     bool sendCommandResult(const CommandResultDto& commandResult, ApiPriority priority = ApiPriority::UNDEFINED) override

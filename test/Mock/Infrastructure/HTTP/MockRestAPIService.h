@@ -3,6 +3,7 @@
 
 #include "Core/Domain/Interfaces/API/IRestAPIService.h"
 #include "Application/DTOs/DeviceCommandUpdateDto.h"
+#include "Application/DTOs/ModuleCommandDto.h"
 #include <vector>
 
 class MockRestAPIService : public IRestAPIService {
@@ -21,6 +22,7 @@ public:
     bool sendModuleUpdateDataCalled = false;
     bool getDeviceCommandCalled = false;
     bool getRuleListCalled = false;
+    bool getModuleCommandCalled = false;
     
     // Return values
     bool isModuleOnlineReturnValue = true;
@@ -41,6 +43,7 @@ public:
     bool sendModuleUpdateDataReturnValue = true;
     std::vector<DeviceCommandDto> deviceCommandsReturnValue;
     std::vector<Rule> ruleListReturnValue;
+    std::vector<ModuleCommandDto> moduleCommandsReturnValue;
     
     int networkFails = 0;
     int apiSendFails = 0;
@@ -70,8 +73,10 @@ public:
         sendModuleCommandExecutionResultReturnValue = true;
         getDeviceCommandCalled = false;
         getRuleListCalled = false;
+        getModuleCommandCalled = false;
         deviceCommandsReturnValue.clear();
         ruleListReturnValue.clear();
+        moduleCommandsReturnValue.clear();
         
         lastModuleStructure = nullptr;
         lastRuleStateCommand = nullptr;
@@ -154,6 +159,11 @@ public:
     std::vector<Rule> getRuleList() override {
         getRuleListCalled = true;
         return ruleListReturnValue;
+    }
+    
+    std::vector<ModuleCommandDto> getModuleCommand() override {
+        getModuleCommandCalled = true;
+        return moduleCommandsReturnValue;
     }
     
     int getApiSendFails() const override { return apiSendFails; }

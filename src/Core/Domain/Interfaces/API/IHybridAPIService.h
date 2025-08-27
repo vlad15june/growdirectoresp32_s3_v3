@@ -7,6 +7,7 @@
 #include "Application/DTOs/CommandResultDto.h"
 #include "Application/DTOs/DeviceCommandUpdateDto.h"
 #include "Application/DTOs/DeviceCommandDto.h"
+#include "Application/DTOs/ModuleCommandDto.h"
 #include <vector>
 
 /**
@@ -150,4 +151,10 @@ public:
      * @return vector of Rule containing the rule details, empty if no rules or error
      */
     virtual std::vector<Rule> getRuleList() = 0;
+
+    /**
+     * Get module commands from the server (REST only)
+     * @return vector of ModuleCommandDto containing the command details, empty if no commands or error
+     */
+    virtual std::vector<ModuleCommandDto> getModuleCommand() = 0;
 };

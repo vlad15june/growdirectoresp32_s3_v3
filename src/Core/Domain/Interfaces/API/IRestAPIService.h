@@ -5,6 +5,7 @@
 #include "Application/DTOs/UpdateDto.h"
 #include "Application/DTOs/DeviceCommandUpdateDto.h"
 #include "Application/DTOs/DeviceCommandDto.h"
+#include "Application/DTOs/ModuleCommandDto.h"
 #include "Core/Domain/Data/Entities/Rule.h"
 #include <vector>
 
@@ -50,6 +51,12 @@ public:
      * @return true if the data was sent successfully, false otherwise
      */
     virtual bool sendModuleUpdateData(const UpdateDto& updateData) = 0;
+    
+    /**
+     * @brief Get pending module commands from server
+     * @return vector of ModuleCommandDto containing the command details, empty if no commands or error
+     */
+    virtual std::vector<ModuleCommandDto> getModuleCommand() = 0;
     
     // Network diagnostic counter methods - getters and reset methods only
     virtual int getApiSendFails() const = 0;

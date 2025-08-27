@@ -2,6 +2,7 @@
 #define MOCK_HYBRID_API_SERVICE_H
 
 #include "Core/Domain/Interfaces/API/IHybridAPIService.h"
+#include "Application/DTOs/ModuleCommandDto.h"
 #include <vector>
 
 class MockHybridAPIService : public IHybridAPIService {
@@ -23,6 +24,7 @@ public:
     bool getDeviceCommandCalled = false;
     bool sendCommandResultCalled = false;
     bool getRuleListCalled = false;
+    bool getModuleCommandCalled = false;
     
     // Return values
     bool initReturnValue = true;
@@ -40,6 +42,7 @@ public:
     DeviceCommandDto deviceCommandReturnValue;
     std::vector<DeviceCommandDto> deviceCommandsReturnValue;
     std::vector<Rule> ruleListReturnValue;
+    std::vector<ModuleCommandDto> moduleCommandsReturnValue;
     
     // Parameter storage
     ApiPriority currentApiPriority = ApiPriority::REST_PREFERRED;
@@ -82,6 +85,7 @@ public:
         getDeviceCommandCalled = false;
         sendCommandResultCalled = false;
         getRuleListCalled = false;
+        getModuleCommandCalled = false;
         
         initReturnValue = true;
         isModuleOnlineReturnValue = true;
@@ -98,6 +102,7 @@ public:
         deviceCommandReturnValue = DeviceCommandDto();
         deviceCommandsReturnValue.clear();
         ruleListReturnValue.clear();
+        moduleCommandsReturnValue.clear();
         
         currentApiPriority = ApiPriority::REST_PREFERRED;
         lastSetApiPriority = ApiPriority::UNDEFINED;
@@ -212,6 +217,11 @@ public:
     std::vector<Rule> getRuleList() override {
         getRuleListCalled = true;
         return ruleListReturnValue;
+    }
+    
+    std::vector<ModuleCommandDto> getModuleCommand() override {
+        getModuleCommandCalled = true;
+        return moduleCommandsReturnValue;
     }
     
     int getRestApiSendFails() const override {

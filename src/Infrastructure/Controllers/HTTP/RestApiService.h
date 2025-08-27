@@ -11,6 +11,7 @@
 #include "Application/DTOs/DiagnosticDto.h"
 #include "Application/DTOs/DeviceCommandUpdateDto.h"
 #include "Application/DTOs/DeviceCommandDto.h"
+#include "Application/DTOs/ModuleCommandDto.h"
 #include "Core/Domain/Data/Entities/Rule.h"
 
 class RestAPIService : public IRestAPIService
@@ -656,6 +657,76 @@ public:
             else
             {
                 log("NET: Failed to parse device commands JSON");
+                commands.clear();
+            }
+        }
+        else
+        {
+            if (httpResponseCode != 200)
+                trackApiSendFailure();
+        }
+        
+        return commands;
+    }
+
+    std::vector<ModuleCommandDto> getModuleCommand() override
+    {
+        std::vector<ModuleCommandDto> commands;
+        
+        if (_moduleConfig == nullptr || _settings == nullptr)
+        {
+            log("NET: getModuleCommand - ModuleConfig or Settings not available");
+            return commands;
+        }
+
+        const char *moduleUid = _moduleConfig->getModuleUid();
+        
+        snprintf(_urlBuffer, sizeof(_urlBuffer),
+                 "%s/api/v1/HardWare/module_command?token=%s&grow_director_uid=%s&statuses=New",
+                 _serverUrl, _token, moduleUid);
+
+        log("NET: GET %s", _urlBuffer);
+
+        byte tries = 0;
+        int httpResponseCode = 0;
+        std::string responseBody;
+        
+        while (tries < 3 && httpResponseCode != 200)
+        {
+            _httpClient->setTimeout(30000);
+            _httpClient->begin(_urlBuffer);
+            
+            httpResponseCode = _httpClient->GET();
+            
+            if (httpResponseCode > 0)
+            {
+                log("NET: HTTP Response code: %d", httpResponseCode);
+                
+                // Get response body
+                responseBody = _httpClient->getString();
+                log("NET: HTTP Response: %s", responseBody.c_str());
+            }
+            else
+            {
+                log("NET: HTTP Response Error code: %d", httpResponseCode);
+            }
+            
+            _httpClient->end();
+            delay(200);
+            tries++;
+        }
+        
+        if (httpResponseCode == 200 && !responseBody.empty() && _jsonConverter != nullptr)
+        {
+            // Parse JSON response to array of ModuleCommandDto
+            if (_jsonConverter->moduleCommandsFromJson(responseBody, commands))
+            {
+                log("NET: Module commands parsed successfully - count: %d", commands.size());
+                trackApiSendSuccess();
+            }
+            else
+            {
+                log("NET: Failed to parse module commands JSON");
                 commands.clear();
             }
         }
