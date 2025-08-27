@@ -171,6 +171,10 @@ public:
         return rssi;
     }
     
+    int getStatus() override {
+        return connected ? 3 : 0; // WL_CONNECTED = 3, WL_IDLE_STATUS = 0
+    }
+    
     int scanNetworks() override {
         return 0;
     }

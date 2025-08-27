@@ -410,14 +410,23 @@ void test_rest_only_methods() {
 
     g_mockRestApi.reset();
     g_mockRestApi.sendModuleCommandExecutionResultReturnValue = true;
-    result = g_hybridApiService->sendModuleCommandExecutionResult("test-command");
+    ModuleCommandUpdateDto commandUpdate;
+    commandUpdate.uid = "test-module-uid";
+    commandUpdate.status = "completed";
+    commandUpdate.errorMessage = "";
+    result = g_hybridApiService->sendModuleCommandExecutionResult(commandUpdate);
     TEST_ASSERT_TRUE(result);
     TEST_ASSERT_TRUE(g_mockRestApi.sendModuleCommandExecutionResultCalled);
 
     g_mockRestApi.reset();
     g_mockRestApi.sendModuleCommandExecutionResultReturnValue = false;
-    result = g_hybridApiService->sendModuleCommandExecutionResult("test-command");
+    ModuleCommandUpdateDto commandUpdate2;
+    commandUpdate2.uid = "test-module-uid";
+    commandUpdate2.status = "failed";
+    commandUpdate2.errorMessage = "Test execution failed";
+    result = g_hybridApiService->sendModuleCommandExecutionResult(commandUpdate2);
     TEST_ASSERT_FALSE(result);
+    TEST_ASSERT_TRUE(g_mockRestApi.sendModuleCommandExecutionResultCalled);
 
     hybrid_api_service_teardown();
 }

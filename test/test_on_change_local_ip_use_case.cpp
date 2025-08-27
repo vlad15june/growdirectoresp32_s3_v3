@@ -2,7 +2,7 @@
 #include "Core/Domain/UseCases/ModuleMode/OnChangeLocalIpUseCase.h"
 #include "Mock/Infrastructure/Logging/MockLogger.h"
 #include "Mock/Infrastructure/Logging/MockDebugSystem.h"
-#include "Mock/Infrastructure/WiFi/MockWifiAdapter.h"
+#include "Mock/Infrastructure/Wifi/MockWifiAdapter.h"
 #include "Mock/Infrastructure/Wifi/MockWiFiManager.h"
 #include "Mock/Infrastructure/Api/MockHybridAPIService.h"
 #include "Core/Domain/Data/Models/ModuleStructure.h"

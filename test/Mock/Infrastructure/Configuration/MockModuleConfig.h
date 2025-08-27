@@ -154,6 +154,20 @@ public:
         return 0;
     }
     
+    uint8_t getButtonPin() const override { 
+        return 0; 
+    }
+    
+    uint8_t* getRelayPins() const override { 
+        static uint8_t pins[] = {1, 2, 3, 4}; 
+        return pins; 
+    }
+    
+    uint8_t* getSensorPowerPins() const override { 
+        static uint8_t pins[] = {5, 6, 7, 8}; 
+        return pins; 
+    }
+    
     void setSensorPinCount(int count) {
         _sensorPinCount = count;
         _modifiedFields["sensorPinCount"] = true;
