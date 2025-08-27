@@ -12,6 +12,7 @@
 #include "Application/DTOs/DeviceCommandUpdateDto.h"
 #include "Application/DTOs/DeviceCommandDto.h"
 #include "Application/DTOs/ModuleCommandDto.h"
+#include "Application/DTOs/ModuleCommandUpdateDto.h"
 #include "Core/Domain/Data/Entities/Rule.h"
 
 class RestAPIService : public IRestAPIService
@@ -446,16 +447,24 @@ public:
         }
     }
 
-    bool sendModuleCommandExecutionResult(const char *msg) override
+    bool sendModuleCommandExecutionResult(const ModuleCommandUpdateDto& commandUpdate) override
     {
+        if (_jsonConverter == nullptr) {
+            log("NET: sendModuleCommandExecutionResult - JSON converter not available");
+            return false;
+        }
+
         if (_moduleConfig == nullptr || _settings == nullptr)
         {
             log("NET: sendModuleCommandExecutionResult - ModuleConfig or Settings not available");
             return false;
         }
-        log("Module command result %s", msg);
 
-        if (strlen(msg) < 10)
+        // Convert ModuleCommandUpdateDto to JSON
+        std::string jsonMsg = _jsonConverter->moduleCommandUpdateToJson(commandUpdate);
+        log("NET: Module command result %s", jsonMsg.c_str());
+
+        if (jsonMsg.length() < 10)
         {
             log("NET: Module command empty");
             return false;
@@ -467,7 +476,7 @@ public:
                  "%s/api/v1/HardWare/module_command?token=%s&grow_director_uid=%s",
                  _serverUrl, _token, moduleUid);
 
-        log("NET: POST %s, Body: %s", _urlBuffer, msg);
+        log("NET: POST %s, Body: %s", _urlBuffer, jsonMsg.c_str());
 
         byte tries = 0;
         int httpResponseCode = 0;
@@ -477,7 +486,7 @@ public:
             _httpClient->begin(_urlBuffer);
             _httpClient->addHeader("Content-Type", "application/json");
 
-            httpResponseCode = _httpClient->POST(msg);
+            httpResponseCode = _httpClient->POST(jsonMsg.c_str());
 
             log("NET: HTTP response %d, try = %d", httpResponseCode, tries);
 

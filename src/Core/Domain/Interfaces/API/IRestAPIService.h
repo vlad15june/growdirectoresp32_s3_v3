@@ -6,6 +6,7 @@
 #include "Application/DTOs/DeviceCommandUpdateDto.h"
 #include "Application/DTOs/DeviceCommandDto.h"
 #include "Application/DTOs/ModuleCommandDto.h"
+#include "Application/DTOs/ModuleCommandUpdateDto.h"
 #include "Core/Domain/Data/Entities/Rule.h"
 #include <vector>
 
@@ -24,7 +25,7 @@ public:
     virtual bool sendFirmwareVersion() = 0;
     virtual bool sendDeviceCommandExecutionResult(const DeviceCommandUpdateDto& commandUpdate) = 0;
     virtual bool sendAnalogInputDeviceCommandExecutionResult(const char* msg) = 0;
-    virtual bool sendModuleCommandExecutionResult(const char* msg) = 0;
+    virtual bool sendModuleCommandExecutionResult(const ModuleCommandUpdateDto& commandUpdate) = 0;
     
     /**
      * @brief Get pending device commands from server

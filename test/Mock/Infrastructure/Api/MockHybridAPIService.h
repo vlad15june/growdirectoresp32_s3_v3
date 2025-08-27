@@ -3,6 +3,7 @@
 
 #include "Core/Domain/Interfaces/API/IHybridAPIService.h"
 #include "Application/DTOs/ModuleCommandDto.h"
+#include "Application/DTOs/ModuleCommandUpdateDto.h"
 #include <vector>
 
 class MockHybridAPIService : public IHybridAPIService {
@@ -62,6 +63,7 @@ public:
     ApiPriority lastDiagnosticDataPriority = ApiPriority::UNDEFINED;
     ApiPriority lastUpdateDataPriority = ApiPriority::UNDEFINED;
     ApiPriority lastCommandResultPriority = ApiPriority::UNDEFINED;
+    ModuleCommandUpdateDto lastModuleCommandUpdate;
     
     // Statistics
     int restApiSendFailsValue = 0;
@@ -117,6 +119,7 @@ public:
         lastUpdateDataPriority = ApiPriority::UNDEFINED;
         lastCommandResultPriority = ApiPriority::UNDEFINED;
         lastRuleStateCommandPriority = ApiPriority::UNDEFINED;
+        lastModuleCommandUpdate = ModuleCommandUpdateDto();
         
         restApiSendFailsValue = 0;
         mqttApiSendFailsValue = 0;
@@ -182,9 +185,9 @@ public:
         return sendAnalogInputDeviceCommandExecutionResultReturnValue;
     }
     
-    bool sendModuleCommandExecutionResult(const char* msg) override {
+    bool sendModuleCommandExecutionResult(const ModuleCommandUpdateDto& commandUpdate) override {
         sendModuleCommandExecutionResultCalled = true;
-        lastModuleCommandResult = msg;
+        lastModuleCommandUpdate = commandUpdate;
         return sendModuleCommandExecutionResultReturnValue;
     }
     

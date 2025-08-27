@@ -8,6 +8,7 @@
 #include "Application/DTOs/DeviceCommandUpdateDto.h"
 #include "Application/DTOs/DeviceCommandDto.h"
 #include "Application/DTOs/ModuleCommandDto.h"
+#include "Application/DTOs/ModuleCommandUpdateDto.h"
 #include <vector>
 
 /**
@@ -99,10 +100,10 @@ public:
     
     /**
      * Send module command execution result to the server
-     * @param msg The message containing the execution result
+     * @param commandUpdate The module command update containing the execution result
      * @return true if the operation was successful, false otherwise
      */
-    virtual bool sendModuleCommandExecutionResult(const char* msg) = 0;
+    virtual bool sendModuleCommandExecutionResult(const ModuleCommandUpdateDto& commandUpdate) = 0;
     
     /**
      * Send diagnostic data to the server

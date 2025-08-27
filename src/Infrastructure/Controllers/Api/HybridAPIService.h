@@ -12,6 +12,7 @@
 #include "Application/DTOs/DeviceCommandUpdateDto.h"
 #include "Application/DTOs/DeviceCommandDto.h"
 #include "Application/DTOs/ModuleCommandDto.h"
+#include "Application/DTOs/ModuleCommandUpdateDto.h"
 #include "Core/Domain/Data/Entities/Rule.h"
 #include "Application/DTOs/CommandResultDto.h"
 
@@ -489,14 +490,14 @@ public:
         return success;
     }
 
-    bool sendModuleCommandExecutionResult(const char *msg) override
+    bool sendModuleCommandExecutionResult(const ModuleCommandUpdateDto& commandUpdate) override
     {
         if (_restApiService == nullptr)
         {
             log("HYBRID API: sendModuleCommandExecutionResult - REST API not available");
             return false;
         }
-        bool success = _restApiService->sendModuleCommandExecutionResult(msg);
+        bool success = _restApiService->sendModuleCommandExecutionResult(commandUpdate);
         if (!success)
             trackApiSendFailure(true);
         return success;
