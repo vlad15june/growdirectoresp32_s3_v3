@@ -36,7 +36,7 @@ void createTestSensorTypes() {
     tempHumiditySensorType.name = "temp_humidity_modbus";
     tempHumiditySensorType.displayName = "Temperature & Humidity Sensor (Modbus)";
     tempHumiditySensorType.isAnalog = false;
-    tempHumiditySensorType.canCalibrate = true;
+    tempHumiditySensorType.canCalibrate = false;
     tempHumiditySensorType.validCalibrationPeriodDays = 365;
     tempHumiditySensorType.calibrationTimeInSeconds = 30;
     tempHumiditySensorType.minValue = -40.0f;
@@ -63,6 +63,8 @@ void createTestSensorTypes() {
     tempConfig.channelName = "air_temp";
     tempConfig.sensorType = "air_temp";
     tempConfig.channel = 1;
+    tempConfig.canConnectMinValue = 10.0f;
+    tempConfig.canConnectMaxValue = 40.0f;
     tempHumiditySensorType.modbusRegisterConfig.push_back(tempConfig);
 
     ModbusRegisterConfig humidityConfig;
@@ -74,6 +76,8 @@ void createTestSensorTypes() {
     humidityConfig.channelName = "humidity";
     humidityConfig.sensorType = "humidity";
     humidityConfig.channel = 2;
+    humidityConfig.canConnectMinValue = 30.0f;
+    humidityConfig.canConnectMaxValue = 70.0f;
     tempHumiditySensorType.modbusRegisterConfig.push_back(humidityConfig);
 
     // Save to repository
@@ -128,6 +132,8 @@ void createTestSensorTypes() {
     tempConfig.channelName = "air_temp";
     tempConfig.sensorType = "air_temp";
     tempConfig.channel = 1;
+    tempConfig.canConnectMinValue = 10.0f;
+    tempConfig.canConnectMaxValue = 40.0f;
     ryWs301SensorType.modbusRegisterConfig.push_back(tempConfig);
 
     // Humidity register config (register 1, formula: value/100)
@@ -140,6 +146,8 @@ void createTestSensorTypes() {
     humidityConfig.channelName = "humidity";
     humidityConfig.sensorType = "humidity";
     humidityConfig.channel = 2;
+    humidityConfig.canConnectMinValue = 30.0f;
+    humidityConfig.canConnectMaxValue = 70.0f;
     ryWs301SensorType.modbusRegisterConfig.push_back(humidityConfig);
 
     // Pressure register config (register 2, formula: value/10)
@@ -152,6 +160,8 @@ void createTestSensorTypes() {
     pressureConfig.channelName = "pressure";
     pressureConfig.sensorType = "pressure";
     pressureConfig.channel = 3;
+    pressureConfig.canConnectMinValue = 300.0f;
+    pressureConfig.canConnectMaxValue = 1100.0f;
     ryWs301SensorType.modbusRegisterConfig.push_back(pressureConfig);
 
     // Save to repository
