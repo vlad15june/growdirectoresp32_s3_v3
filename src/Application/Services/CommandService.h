@@ -334,69 +334,7 @@ private:
 
         if (command.command == "UpdateFirmware")
         {
-            logInfo("CommandService: Firmware update requested - version: %s, url: %s",
-                    command.version.c_str(), command.url.c_str());
-            
-            if (!hybridApiService)
-            {
-                logError("CommandService: HybridAPIService not available for UpdateFirmware");
-                return false;
-            }
-
-            // Get module commands from API
-            std::vector<ModuleCommandDto> moduleCommands = hybridApiService->getModuleCommand();
-            if (moduleCommands.empty())
-            {
-                log(DebugFeatures::MODULE_COMMAND_DEBUG,
-                    "CommandService: No module commands received from server for UpdateFirmware");
-                return true;
-            }
-
-            log(DebugFeatures::MODULE_COMMAND_DEBUG,
-                "CommandService: Received %d module commands from server for UpdateFirmware", moduleCommands.size());
-
-            bool allCommandsSuccessful = true;
-
-            // Execute each command one by one
-            for (const auto& moduleCommand : moduleCommands)
-            {
-                log(DebugFeatures::MODULE_COMMAND_DEBUG,
-                    "CommandService: Processing module command - command: %s, commandUid: %s",
-                    moduleCommand.command.c_str(), moduleCommand.uid.c_str());
-
-                bool executionResult = false;
-                if (moduleCommandUseCase)
-                {
-                    executionResult = moduleCommandUseCase->execute(
-                        moduleCommand.command, 
-                        moduleCommand.options, 
-                        moduleCommand.uid, 
-                        moduleCommand.createdAt
-                    );
-
-                    log(DebugFeatures::MODULE_COMMAND_DEBUG,
-                        "CommandService: Module command execution %s for command %s",
-                        executionResult ? "successful" : "failed", moduleCommand.uid.c_str());
-                }
-                else
-                {
-                    logError("CommandService: ModuleCommandExecutionUseCase not available");
-                    allCommandsSuccessful = false;
-                }
-
-                // Send execution result back to API
-                ModuleCommandUpdateDto updateDto;
-                updateDto.uid = moduleCommand.uid;
-                updateDto.status = executionResult ? "done" : "error";
-                if (!executionResult)
-                {
-                    updateDto.errorMessage = "Module command execution failed";
-                    allCommandsSuccessful = false;
-                }
-                hybridApiService->sendModuleCommandExecutionResult(updateDto);
-            }
-
-            return allCommandsSuccessful;
+            return processComplexModuleCommand(command);
         }
 
         if (moduleCommandUseCase)
@@ -408,6 +346,73 @@ private:
             logError("CommandService: ModuleCommandExecutionUseCase not available");
             return false;
         }
+    }
+
+    bool processComplexModuleCommand(const CommandDto &command)
+    {
+        logInfo("CommandService: Firmware update requested - version: %s, url: %s",
+                command.version.c_str(), command.url.c_str());
+        
+        if (!hybridApiService)
+        {
+            logError("CommandService: HybridAPIService not available for UpdateFirmware");
+            return false;
+        }
+
+        // Get module commands from API
+        std::vector<ModuleCommandDto> moduleCommands = hybridApiService->getModuleCommand();
+        if (moduleCommands.empty())
+        {
+            log(DebugFeatures::MODULE_COMMAND_DEBUG,
+                "CommandService: No module commands received from server for UpdateFirmware");
+            return true;
+        }
+
+        log(DebugFeatures::MODULE_COMMAND_DEBUG,
+            "CommandService: Received %d module commands from server for UpdateFirmware", moduleCommands.size());
+
+        bool allCommandsSuccessful = true;
+
+        // Execute each command one by one
+        for (const auto& moduleCommand : moduleCommands)
+        {
+            log(DebugFeatures::MODULE_COMMAND_DEBUG,
+                "CommandService: Processing module command - command: %s, commandUid: %s",
+                moduleCommand.command.c_str(), moduleCommand.uid.c_str());
+
+            bool executionResult = false;
+            if (moduleCommandUseCase)
+            {
+                executionResult = moduleCommandUseCase->execute(
+                    moduleCommand.command, 
+                    moduleCommand.options, 
+                    moduleCommand.uid, 
+                    moduleCommand.createdAt
+                );
+
+                log(DebugFeatures::MODULE_COMMAND_DEBUG,
+                    "CommandService: Module command execution %s for command %s",
+                    executionResult ? "successful" : "failed", moduleCommand.uid.c_str());
+            }
+            else
+            {
+                logError("CommandService: ModuleCommandExecutionUseCase not available");
+                allCommandsSuccessful = false;
+            }
+
+            // Send execution result back to API
+            ModuleCommandUpdateDto updateDto;
+            updateDto.uid = moduleCommand.uid;
+            updateDto.status = executionResult ? "done" : "error";
+            if (!executionResult)
+            {
+                updateDto.errorMessage = "Module command execution failed";
+                allCommandsSuccessful = false;
+            }
+            hybridApiService->sendModuleCommandExecutionResult(updateDto);
+        }
+
+        return allCommandsSuccessful;
     }
 
     bool processSensorTypeCommand(const CommandDto &command)
