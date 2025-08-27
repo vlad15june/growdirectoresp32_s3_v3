@@ -1469,6 +1469,75 @@ public:
         return oss.str();
     }
 
+    std::string moduleCommandUpdateToJson(const ModuleCommandUpdateDto& commandUpdateDto) override
+    {
+        std::ostringstream oss;
+        oss << "{";
+        oss << "\"uid\":\"" << commandUpdateDto.uid << "\"";
+        oss << ",\"status\":\"" << commandUpdateDto.status << "\"";
+        oss << ",\"errorMessage\":\"" << commandUpdateDto.errorMessage << "\"";
+        oss << "}";
+        return oss.str();
+    }
+
+    bool moduleCommandFromJson(const std::string &jsonStr, ModuleCommandDto &commandDto) override
+    {
+        commandDto.uid = extractValue(jsonStr, "uid");
+        commandDto.command = extractValue(jsonStr, "command");
+        commandDto.options = extractValue(jsonStr, "options");
+        commandDto.createdAt = extractValue(jsonStr, "createdAt");
+
+        return !commandDto.uid.empty();
+    }
+
+    std::string moduleCommandToJson(const ModuleCommandDto &commandDto) override
+    {
+        std::ostringstream oss;
+        oss << "{";
+        oss << "\"uid\":\"" << commandDto.uid << "\"";
+        oss << ",\"command\":\"" << commandDto.command << "\"";
+        oss << ",\"options\":\"" << commandDto.options << "\"";
+        
+        if (!commandDto.createdAt.empty())
+        {
+            oss << ",\"createdAt\":\"" << commandDto.createdAt << "\"";
+        }
+
+        oss << "}";
+        return oss.str();
+    }
+
+    bool moduleCommandsFromJson(const std::string &jsonStr, std::vector<ModuleCommandDto> &commands) override
+    {
+        commands.clear();
+        
+        // Simple array parsing - look for array brackets
+        if (jsonStr.front() == '[' && jsonStr.back() == ']')
+        {
+            // Parse as array
+            auto commandObjs = splitObjects(jsonStr);
+            for (const auto &commandStr : commandObjs)
+            {
+                ModuleCommandDto command;
+                if (moduleCommandFromJson(commandStr, command))
+                {
+                    commands.push_back(command);
+                }
+            }
+        }
+        else if (jsonStr.front() == '{' && jsonStr.back() == '}')
+        {
+            // Single object
+            ModuleCommandDto command;
+            if (moduleCommandFromJson(jsonStr, command))
+            {
+                commands.push_back(command);
+            }
+        }
+        
+        return !commands.empty();
+    }
+
 private:
     /**
      * @brief Extract JSON object as string

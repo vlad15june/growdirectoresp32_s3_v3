@@ -6,6 +6,8 @@
 #include "Application/DTOs/CommandResultDto.h"
 #include "Application/DTOs/DeviceCommandUpdateDto.h"
 #include "Application/DTOs/DeviceCommandDto.h"
+#include "Application/DTOs/ModuleCommandDto.h"
+#include "Application/DTOs/ModuleCommandUpdateDto.h"
 #include "Application/DTOs/RuleStateUpdateDto.h"
 #include "Core/Domain/Enums/SensorStatusEnum.h"
 #include <ArduinoJson.h>
@@ -1666,5 +1668,87 @@ public:
         std::string output;
         serializeJson(doc, output);
         return output;
+    }
+
+    std::string moduleCommandUpdateToJson(const ModuleCommandUpdateDto& commandUpdateDto) override
+    {
+        DynamicJsonDocument doc(1024);
+
+        doc["uid"] = commandUpdateDto.uid;
+        doc["status"] = commandUpdateDto.status;
+        doc["errorMessage"] = commandUpdateDto.errorMessage;
+
+        std::string output;
+        serializeJson(doc, output);
+        return output;
+    }
+
+    bool moduleCommandFromJson(const std::string &jsonStr, ModuleCommandDto &commandDto) override
+    {
+        DynamicJsonDocument doc(2048);
+        DeserializationError error = deserializeJson(doc, jsonStr);
+        if (error)
+            return false;
+
+        commandDto.uid = doc["uid"] | "";
+        commandDto.command = doc["command"] | "";
+        commandDto.options = doc["options"] | "";
+        commandDto.createdAt = doc["createdAt"] | "";
+
+        return true;
+    }
+
+    std::string moduleCommandToJson(const ModuleCommandDto &commandDto) override
+    {
+        DynamicJsonDocument doc(2048);
+
+        doc["uid"] = commandDto.uid;
+        doc["command"] = commandDto.command;
+        doc["options"] = commandDto.options;
+        
+        if (!commandDto.createdAt.empty())
+        {
+            doc["createdAt"] = commandDto.createdAt;
+        }
+
+        std::string output;
+        serializeJson(doc, output);
+        return output;
+    }
+
+    bool moduleCommandsFromJson(const std::string &jsonStr, std::vector<ModuleCommandDto> &commands) override
+    {
+        DynamicJsonDocument doc(8192); // Larger capacity for array
+        DeserializationError error = deserializeJson(doc, jsonStr);
+        if (error)
+            return false;
+
+        commands.clear();
+        
+        // Check if it's an array
+        if (doc.is<JsonArray>())
+        {
+            for (JsonObject commandObj : doc.as<JsonArray>())
+            {
+                ModuleCommandDto command;
+                command.uid = commandObj["uid"] | "";
+                command.command = commandObj["command"] | "";
+                command.options = commandObj["options"] | "";
+                command.createdAt = commandObj["createdAt"] | "";
+                
+                commands.push_back(command);
+            }
+        }
+        else if (doc.is<JsonObject>())
+        {
+            // Single object - treat as single command
+            ModuleCommandDto command;
+            if (moduleCommandFromJson(jsonStr, command))
+            {
+                commands.push_back(command);
+            }
+        }
+
+        return !commands.empty();
     }
 };

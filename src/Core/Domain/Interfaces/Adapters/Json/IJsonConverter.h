@@ -13,6 +13,8 @@
 #include "Application/DTOs/CommandResultDto.h"
 #include "Application/DTOs/DeviceCommandUpdateDto.h"
 #include "Application/DTOs/DeviceCommandDto.h"
+#include "Application/DTOs/ModuleCommandDto.h"
+#include "Application/DTOs/ModuleCommandUpdateDto.h"
 #include "Application/DTOs/RuleStateUpdateDto.h"
 
 class IJsonConverter
@@ -32,6 +34,10 @@ public:
     virtual bool deviceCommandFromJson(const std::string &jsonStr, DeviceCommandDto &commandDto) = 0;
     virtual std::string deviceCommandToJson(const DeviceCommandDto &commandDto) = 0;
     virtual bool deviceCommandsFromJson(const std::string &jsonStr, std::vector<DeviceCommandDto> &commands) = 0;
+    virtual std::string moduleCommandUpdateToJson(const ModuleCommandUpdateDto& commandUpdateDto) = 0;
+    virtual bool moduleCommandFromJson(const std::string &jsonStr, ModuleCommandDto &commandDto) = 0;
+    virtual std::string moduleCommandToJson(const ModuleCommandDto &commandDto) = 0;
+    virtual bool moduleCommandsFromJson(const std::string &jsonStr, std::vector<ModuleCommandDto> &commands) = 0;
     virtual std::string ruleStateToJson(const RuleStateDto& ruleState) = 0;
     virtual bool ruleStateFromJson(const std::string& jsonStr, RuleStateDto& ruleState) = 0;
     virtual std::string ruleStateUpdateToJson(const RuleStateUpdateDto& ruleStateUpdate) = 0;
