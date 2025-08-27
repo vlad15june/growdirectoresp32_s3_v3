@@ -16,11 +16,11 @@ public:
      * @brief Execute module commands from JSON options
      * @param command Command name (e.g., "BlinkingStart")
      * @param options JSON string containing array of module commands
-     * @param commandId Command identifier
+     * @param commandUid Command unique identifier
      * @param createdAt Timestamp when command was created
      * @return true if all commands were executed successfully, false otherwise
      */
-    bool execute(const std::string &command, const std::string &options, int commandId, const std::string &createdAt) override
+    bool execute(const std::string &command, const std::string &options, const std::string &commandUid, const std::string &createdAt) override
     {
         // TODO: Parse JSON options and execute commands
         if (command == "BlinkingStart") {
