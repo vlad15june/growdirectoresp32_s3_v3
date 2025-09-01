@@ -113,4 +113,59 @@ public:
         _client.end();
         _isConnected = false;
     }
+    
+    /**
+     * @brief Get the content length of the response
+     * 
+     * @return Content length in bytes, -1 if unknown
+     */
+    int getSize() override {
+        return _client.getSize();
+    }
+    
+    /**
+     * @brief Get a pointer to the WiFi client stream for reading data
+     * 
+     * @return Pointer to WiFiClient for streaming operations
+     */
+    WiFiClient* getStreamPtr() override {
+        return _client.getStreamPtr();
+    }
+    
+    /**
+     * @brief Check if the connection is still active
+     * 
+     * @return true if connected
+     */
+    bool connected() override {
+        return _client.connected();
+    }
+    
+    /**
+     * @brief Read data from the stream
+     * 
+     * @param buffer Buffer to store the data
+     * @param length Maximum number of bytes to read
+     * @return Number of bytes actually read
+     */
+    size_t readBytes(uint8_t* buffer, size_t length) override {
+        WiFiClient* stream = _client.getStreamPtr();
+        if (stream != nullptr) {
+            return stream->readBytes(buffer, length);
+        }
+        return 0;
+    }
+    
+    /**
+     * @brief Get the number of bytes available for reading
+     * 
+     * @return Number of available bytes
+     */
+    int available() override {
+        WiFiClient* stream = _client.getStreamPtr();
+        if (stream != nullptr) {
+            return stream->available();
+        }
+        return 0;
+    }
 };
