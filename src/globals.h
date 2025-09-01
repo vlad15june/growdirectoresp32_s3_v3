@@ -79,6 +79,7 @@
 #include "Infrastructure/Adapters/Sensors/HardwareSensors/ModbusSensors/ModbusSensorReader.h"
 #include "Infrastructure/Adapters/Rs485/ModbusRS485.h"
 #include "Infrastructure/BoardTesting/BoardTest.h"
+#include "Infrastructure/Controllers/HTTP/FirmwareRemoteUpdate.h"
 
 const char *mqttUser = "GrowDirectorMqtt";
 const char *mqttPassword = "lasdfh329483457sfdjhs92_w";
@@ -153,7 +154,9 @@ DeviceCommandExecutionUseCase deviceCommandExecutionUseCase(
     &mqttLogger,
     &debugSystem);
 
-ModuleCommandExecutionUseCase moduleCommandExecutionUseCase;
+FirmwareRemoteUpdate firmwareRemoteUpdate(&mqttLogger, &debugSystem, &settings);
+
+ModuleCommandExecutionUseCase moduleCommandExecutionUseCase(&mqttLogger, &debugSystem, &ntpTimeAdapter, &firmwareRemoteUpdate);
 
 SpiffsAdapter spiffsAdapter(&mqttLogger, &debugSystem);
 

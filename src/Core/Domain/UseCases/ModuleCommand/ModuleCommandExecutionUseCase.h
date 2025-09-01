@@ -3,6 +3,7 @@
 #include "Core/Domain/Interfaces/UseCases/IModuleCommandExecutionUseCase.h"
 #include "Core/Domain/Interfaces/ILogger.h"
 #include "Core/Domain/Interfaces/IDebugSystem.h"
+#include "Core/Domain/Interfaces/IFirmwareRemoteUpdate.h"
 #include "Infrastructure/Adapters/Time/INTPTimeAdapter.h"
 #include <string>
 
@@ -15,11 +16,12 @@ private:
     ILogger *logger;
     IDebugSystem *debugSystem;
     INTPTimeAdapter *timeAdapter;
+    IFirmwareRemoteUpdate *firmwareUpdater;
     static const unsigned long commandMaxAgeSeconds = 300;
 
 public:
-    ModuleCommandExecutionUseCase(ILogger *logger = nullptr, IDebugSystem *debugSystem = nullptr, INTPTimeAdapter *timeAdapter = nullptr)
-        : logger(logger), debugSystem(debugSystem), timeAdapter(timeAdapter) {}
+    ModuleCommandExecutionUseCase(ILogger *logger = nullptr, IDebugSystem *debugSystem = nullptr, INTPTimeAdapter *timeAdapter = nullptr, IFirmwareRemoteUpdate *firmwareUpdater = nullptr)
+        : logger(logger), debugSystem(debugSystem), timeAdapter(timeAdapter), firmwareUpdater(firmwareUpdater) {}
     
     virtual ~ModuleCommandExecutionUseCase() = default;
 
@@ -161,17 +163,28 @@ private:
             "ModuleCommandUseCase: Firmware update - URL: %s, Version: %s, UID: %s",
             url.c_str(), version.c_str(), moduleCommand.uid.c_str());
 
-        // TODO: Implement firmware update functionality
-        // Store firmware update parameters
-        // urlFirmwareUpdate = url;
-        // versionFirmwareUpdate = version;
-        // uidFirmwareUpdate = moduleCommand.uid;
-        
-        // TODO: Schedule firmware update task
-        // userScheduler.addTask(taskFirmwareUpdate);
-        // taskFirmwareUpdate.enable();
+        if (!firmwareUpdater)
+        {
+            log(DebugFeatures::MODULE_COMMAND_DEBUG,
+                "ModuleCommandUseCase: Firmware updater not available");
+            return {"Error", "Firmware updater not available"};
+        }
 
-        return {"InProgress", ""};
+        // Execute firmware update
+        bool updateResult = firmwareUpdater->updateFirmwareFromURL(url.c_str());
+        
+        if (updateResult)
+        {
+            log(DebugFeatures::MODULE_COMMAND_DEBUG,
+                "ModuleCommandUseCase: Firmware update completed successfully");
+            return {"Done", ""};
+        }
+        else
+        {
+            log(DebugFeatures::MODULE_COMMAND_DEBUG,
+                "ModuleCommandUseCase: Firmware update failed to start");
+            return {"Error", "Failed to start firmware update"};
+        }
     }
 
     /**

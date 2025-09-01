@@ -166,7 +166,6 @@ public:
         _httpClient->end();
         putUpdateStatus(FIRMWARE_UPDATE_STATE_DONE);
         
-        ESP.restart();
         return true;
     }
 };
