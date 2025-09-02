@@ -9,12 +9,16 @@
 #include "Core/Domain/Interfaces/ILogger.h"
 #include "Core/Domain/Interfaces/IDebugSystem.h"
 #include "Core/Domain/Interfaces/ISettings.h"
+#include "Infrastructure/Controllers/WebServices/TestModeWebServer.h"
+#include "Core/Domain/Interfaces/Adapters/IWifiAdapter.h"
+#include "Core/Domain/Interfaces/BoardTesting/IBoardTest.h"
 
 class WebServerLauncher : public IWebServerLauncher {
 private:
     ILogger* logger;
     IDebugSystem* debugSystem;
     ModuleConfigurationWebServer configServer;
+    TestModeWebServer testServer;
     
     void log(const char* format, ...) {
         if (logger != nullptr && debugSystem != nullptr && debugSystem->isFeatureEnabled(DebugFeatures::SETUP_DEBUG)) {
@@ -32,11 +36,13 @@ public:
     WebServerLauncher(
         ILogger* loggerInstance,
         IDebugSystem* debugSystemInstance,
-        ModuleConfigurationWebServer moduleConfigServer
+        ModuleConfigurationWebServer moduleConfigServer,
+        TestModeWebServer testModeServer
     ) : 
         logger(loggerInstance),
         debugSystem(debugSystemInstance),
-        configServer(moduleConfigServer) {
+        configServer(moduleConfigServer),
+        testServer(testModeServer) {
     }
     
     bool launchConfigurationServer() override {
@@ -56,7 +62,18 @@ public:
     }
     
     bool launchTestServer() override {
-        return false; // Not implemented
+        log("Launching test web server...");
+        
+        try {
+            testServer.setupWebServer();
+            testServer.launchServer();
+            
+            log("Test web server launched successfully");
+            return true;
+        } catch (const std::exception& e) {
+            log("Error launching test server: %s", e.what());
+            return false;
+        }
     }
         
 };
