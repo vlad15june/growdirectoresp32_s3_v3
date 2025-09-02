@@ -11,6 +11,11 @@ public:
     void executeLoopImplementation() override {
         log("Running loop for AP_TEST_MODE");
         
+        // Handle test mode web server requests
+        if (webServer) {
+            webServer->loop();
+        }
+        
         if (boardTest && boardTest->hasTestCommandsAvailable()) {
             log("Processing test commands");
             boardTest->processTestCommands();

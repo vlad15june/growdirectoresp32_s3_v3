@@ -348,7 +348,8 @@ LoopServiceFactory loopServiceFactory(
     &diagnosticService,
     &deviceService,
     &sensorService,
-    &ruleService);
+    &ruleService,
+    &testModeWebServer);
 
 ModuleSetupService moduleSetupService(
     &mqttLogger,

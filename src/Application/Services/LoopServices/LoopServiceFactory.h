@@ -29,6 +29,7 @@ private:
     ILogger* logger;
     IDebugSystem* debugSystem;
     IWebServerLooper* webServer;
+    IWebServerLooper* webTestModeServer;
     IModuleConfig* moduleConfig;
     IArduinoAdapter* arduinoAdapter;
     IMqttManager* mqttManager;
@@ -52,7 +53,8 @@ public:
         IDiagnosticService* diagnosticService = nullptr,
         IDeviceService* deviceService = nullptr,
         ISensorService* sensorService = nullptr,
-        IRuleService* ruleService = nullptr
+        IRuleService* ruleService = nullptr,
+        IWebServerLooper* webTestModeServer = nullptr
     ) : ledUseCases(ledUseCases),
         buttonUseCases(buttonUseCases),
         moduleModeUseCase(moduleModeUseCase),
@@ -66,7 +68,8 @@ public:
         diagnosticService(diagnosticService),
         deviceService(deviceService),
         sensorService(sensorService),
-        ruleService(ruleService) {}
+        ruleService(ruleService),
+        webTestModeServer(webTestModeServer) {}
     
     ~LoopServiceFactory() override = default;
 
@@ -84,7 +87,7 @@ public:
                 break;
             case ModuleModeEnum::AP_TEST_MODE:
                 service = std::unique_ptr<LoopServiceBase>(new LoopServiceTestMode());
-                //        service->setWebServer(webTestModeServer);
+                service->setWebServer(webTestModeServer);
                 break;
             case ModuleModeEnum::CONFIGURED_DONE: {
                 // Create a LoopServiceConfigureDone explicitly, then inject specialized dependencies
@@ -143,6 +146,11 @@ public:
     // Setter for RuleService
     void setRuleService(IRuleService* service) {
         this->ruleService = service;
+    }
+
+    // Setter for WebTestModeServer
+    void setWebTestModeServer(IWebServerLooper* server) {
+        this->webTestModeServer = server;
     }
 };
 
