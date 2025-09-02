@@ -78,6 +78,7 @@ private:
     char *generateSSID(const char *wifiPrefix, const char *macAddress);
     bool createAndConfigureAP(const char *ssid, const char *password, const char *localIP = "192.168.4.1", const char *gatewayIP = "192.168.4.1", const char *netmask = "255.255.255.0");
     void setupWebServer();
+    void setupTestModeWebServer();
     void setupMqttConnection();
     void setupWifiConnection();
     void fillModuleStructure();
@@ -305,7 +306,7 @@ inline void ModuleSetupService::ApTestModeModeConfigure()
     
     // Setup AP with test mode IP configuration
     setupAP(true);
-    setupWebServer();
+    setupTestModeWebServer();
     
     // Setup test devices for board testing
     if (boardTest) {
@@ -524,6 +525,25 @@ inline void ModuleSetupService::setupWebServer()
     {
         const char *ip = wifiAdapter->getLocalIP();
         log("SETUP: Configuration interface available at http://%s/", ip);
+    }
+}
+
+inline void ModuleSetupService::setupTestModeWebServer()
+{
+    if (!webServerLauncher)
+    {
+        log("SETUP: Error - Web server launcher is missing");
+        return;
+    }
+
+    log("SETUP: Starting test mode web server configuration...");
+    webServerLauncher->launchTestServer();
+    log("SETUP: Test mode web server setup completed");
+
+    if (wifiAdapter)
+    {
+        const char *ip = wifiAdapter->getLocalIP();
+        log("SETUP: Test interface available at http://%s/", ip);
     }
 }
 

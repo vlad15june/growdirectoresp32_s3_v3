@@ -76,12 +76,15 @@ public:
         switch (moduleMode) {
             case ModuleModeEnum::USER_CAN_CONFIGURE:
                 service = std::unique_ptr<LoopServiceBase>(new LoopServiceCanConfigure());
+                service->setWebServer(webServer);
                 break;
             case ModuleModeEnum::USER_CAN_RE_CONFIGURE:
                 service = std::unique_ptr<LoopServiceBase>(new LoopServiceReConfigure());
+                service->setWebServer(webServer);
                 break;
             case ModuleModeEnum::AP_TEST_MODE:
                 service = std::unique_ptr<LoopServiceBase>(new LoopServiceTestMode());
+                //        service->setWebServer(webTestModeServer);
                 break;
             case ModuleModeEnum::CONFIGURED_DONE: {
                 // Create a LoopServiceConfigureDone explicitly, then inject specialized dependencies
@@ -106,7 +109,6 @@ public:
         service->setButtonUseCases(buttonUseCases);
         service->setOnChangeModuleModeUseCase(moduleModeUseCase);
         service->setLogging(logger, debugSystem);
-        service->setWebServer(webServer);
         service->setModuleConfig(moduleConfig);
         service->setArduinoAdapter(arduinoAdapter);
         
