@@ -80,6 +80,7 @@
 #include "Infrastructure/Adapters/Rs485/ModbusRS485.h"
 #include "Infrastructure/BoardTesting/BoardTest.h"
 #include "Infrastructure/Controllers/HTTP/FirmwareRemoteUpdate.h"
+#include "Infrastructure/Controllers/WebServices/TestModeWebServer.h"
 
 const char *mqttUser = "GrowDirectorMqtt";
 const char *mqttPassword = "lasdfh329483457sfdjhs92_w";
@@ -209,10 +210,20 @@ ModuleConfigurationWebServer moduleConfigurationWebServer(
     &settings,
     &moduleConfig);
 
+TestModeWebServer testModeWebServer(
+    webServer,
+    &mqttLogger,
+    &debugSystem,
+    &settings,
+    &moduleConfig,
+    &wifiAdapter,
+    &arduinoAdapter);
+
 WebServerLauncher webServerLauncher(
     &mqttLogger,
     &debugSystem,
-    moduleConfigurationWebServer);
+    moduleConfigurationWebServer,
+    testModeWebServer);
 
 RestAPIService restApiService(&moduleConfig, &settings, &mqttLogger, &debugSystem, &jsonConverter);
 

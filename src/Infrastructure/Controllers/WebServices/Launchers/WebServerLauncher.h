@@ -10,8 +10,6 @@
 #include "Core/Domain/Interfaces/IDebugSystem.h"
 #include "Core/Domain/Interfaces/ISettings.h"
 #include "Infrastructure/Controllers/WebServices/TestModeWebServer.h"
-#include "Core/Domain/Interfaces/Adapters/IWifiAdapter.h"
-#include "Core/Domain/Interfaces/BoardTesting/IBoardTest.h"
 
 class WebServerLauncher : public IWebServerLauncher {
 private:

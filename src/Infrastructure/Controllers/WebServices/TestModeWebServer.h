@@ -10,7 +10,7 @@
 #include "Core/Domain/Interfaces/ISettings.h"
 #include "Core/Domain/Interfaces/IModuleConfig.h"
 #include "Core/Domain/Interfaces/Adapters/IWifiAdapter.h"
-#include "Core/Domain/Interfaces/BoardTesting/IBoardTest.h"
+#include "Core/Domain/Interfaces/Adapters/IArduinoAdapter.h"
 #include "Core/Domain/Enums/ModuleModeEnum.h"
 #include "Application/Interfaces/WebServices/IWebServerLooper.h"
 
@@ -29,7 +29,9 @@ private:
     ISettings *settings;
     IModuleConfig *moduleConfig;
     IWifiAdapter *wifiAdapter;
-    IBoardTest *boardTest;
+    IArduinoAdapter *arduinoAdapter;
+    
+    bool resultTestButton;
 
     void log(const char *format, ...)
     {
@@ -112,7 +114,7 @@ public:
         ISettings *settingsInstance = nullptr,
         IModuleConfig *moduleConfigInstance = nullptr,
         IWifiAdapter *wifiAdapterInstance = nullptr,
-        IBoardTest *boardTestInstance = nullptr
+        IArduinoAdapter *arduinoAdapterInstance = nullptr
     ) : 
         server(webServer),
         logger(loggerInstance),
@@ -120,7 +122,8 @@ public:
         settings(settingsInstance),
         moduleConfig(moduleConfigInstance),
         wifiAdapter(wifiAdapterInstance),
-        boardTest(boardTestInstance) {}
+        arduinoAdapter(arduinoAdapterInstance),
+        resultTestButton(false) {}
 
     void setupWebServer()
     {
@@ -155,39 +158,22 @@ public:
         server.on("/set_ref_voltage", HTTP_GET, [this]()
         {
             log("handle /set_ref_voltage");
-            if (boardTest)
-            {
-                uint8_t channel = server.arg(PARAM_CH).toInt();
-                char command[32];
-                snprintf(command, sizeof(command), "#set_ref_voltage -ch %d%%", channel);
-                // Process through board test system
-                char response[32];
-                snprintf(response, sizeof(response), "{TS%d=%d}", channel, 1500);
-                log("HTTP 200 | %s", response);
-                server.send_P(200, "application/json", response);
-            }
-            else
-            {
-                server.send_P(500, "application/json", "{error:'boardTest not available'}");
-            }
+            uint8_t channel = server.arg(PARAM_CH).toInt();
+            char response[32];
+            snprintf(response, sizeof(response), "{TS%d=%d}", channel, 1500);
+            log("HTTP 200 | %s", response);
+            server.send_P(200, "application/json", response);
         });
 
         // Clear reference voltage endpoint
         server.on("/clr_ref_voltage", HTTP_GET, [this]()
         {
             log("handle /clr_ref_voltage");
-            if (boardTest)
-            {
-                uint8_t channel = server.arg(PARAM_CH).toInt();
-                char response[32];
-                snprintf(response, sizeof(response), "{TS%d=%d}", channel, 0);
-                log("HTTP 200 | %s", response);
-                server.send_P(200, "application/json", response);
-            }
-            else
-            {
-                server.send_P(500, "application/json", "{error:'boardTest not available'}");
-            }
+            uint8_t channel = server.arg(PARAM_CH).toInt();
+            char response[32];
+            snprintf(response, sizeof(response), "{TS%d=%d}", channel, 0);
+            log("HTTP 200 | %s", response);
+            server.send_P(200, "application/json", response);
         });
 
         // Read ADC endpoint
@@ -195,8 +181,14 @@ public:
         {
             log("handle /read_adc");
             uint8_t channel = server.arg(PARAM_CH).toInt();
+            int adcValue = 2000; // Default value
+            if (arduinoAdapter && channel < 8) 
+            {
+                // Map channels to ADC pins if available
+                adcValue = arduinoAdapter->analogRead(channel);
+            }
             char response[40];
-            snprintf(response, sizeof(response), "{adc%d=%d}", channel, 2000);
+            snprintf(response, sizeof(response), "{adc%d=%d}", channel, adcValue);
             log(response);
             server.send_P(200, "application/json", response);
         });
@@ -321,20 +313,43 @@ public:
         server.on("/ps_en", HTTP_GET, [this]()
         {
             log("handle /ps_en");
-            if (boardTest)
+            uint8_t channel = server.arg(PARAM_CH).toInt();
+            uint8_t value = server.arg(PARAM_VAL).toInt();
+            
+            if (arduinoAdapter && moduleConfig)
             {
-                uint8_t channel = server.arg(PARAM_CH).toInt();
-                uint8_t value = server.arg(PARAM_VAL).toInt();
-                char command[32];
-                snprintf(command, sizeof(command), "#ps_en -ch %d -v %d%%", channel, value);
-                // Process through board test system
-                char response[32];
-                snprintf(response, sizeof(response), "{PS%d=%d}", channel, value);
-                server.send_P(200, "application/json", response);
+                uint8_t* sensorPowerPins = moduleConfig->getSensorPowerPins();
+                if (sensorPowerPins && channel < 4)
+                {
+                    if (server.args() == 1) 
+                    {
+                        // Read current state
+                        int currentValue = arduinoAdapter->digitalRead(sensorPowerPins[channel]);
+                        char response[32];
+                        snprintf(response, sizeof(response), "{PS%d=%d}", channel, currentValue);
+                        server.send_P(200, "application/json", response);
+                    }
+                    else if (server.args() == 2)
+                    {
+                        // Set new value
+                        value = (value != 1) ? 0 : 1;
+                        arduinoAdapter->digitalWrite(sensorPowerPins[channel], value);
+                        int newValue = arduinoAdapter->digitalRead(sensorPowerPins[channel]);
+                        char response[32];
+                        snprintf(response, sizeof(response), "{PS%d=%d}", channel, newValue);
+                        server.send_P(200, "application/json", response);
+                    }
+                }
+                else
+                {
+                    server.send_P(400, "application/json", "{error:'invalid channel'}");
+                }
             }
             else
             {
-                server.send_P(500, "application/json", "{error:'boardTest not available'}");
+                char response[32];
+                snprintf(response, sizeof(response), "{PS%d=%d}", channel, value);
+                server.send_P(200, "application/json", response);
             }
         });
 
@@ -376,19 +391,30 @@ public:
         server.on("/read_relay", HTTP_GET, [this]()
         {
             log("handle /read_relay");
-            if (boardTest)
+            uint8_t channel = server.arg(PARAM_CH).toInt();
+            
+            if (arduinoAdapter && moduleConfig)
             {
-                uint8_t channel = server.arg(PARAM_CH).toInt();
-                char command[32];
-                snprintf(command, sizeof(command), "#read_relay -ch %d%%", channel);
-                // Process through board test system
-                char response[32];
-                snprintf(response, sizeof(response), "{ch%d=%d}", channel, 0);
-                server.send_P(200, "application/json", response);
+                uint8_t* relayPins = moduleConfig->getRelayPins();
+                int deviceCount = moduleConfig->getDeviceCount();
+                
+                if (relayPins && channel < deviceCount)
+                {
+                    int value = arduinoAdapter->digitalRead(relayPins[channel]);
+                    char response[32];
+                    snprintf(response, sizeof(response), "{ch%d=%d}", channel, value);
+                    server.send_P(200, "application/json", response);
+                }
+                else
+                {
+                    server.send_P(400, "application/json", "{error:'invalid channel'}");
+                }
             }
             else
             {
-                server.send_P(500, "application/json", "{error:'boardTest not available'}");
+                char response[32];
+                snprintf(response, sizeof(response), "{ch%d=%d}", channel, 0);
+                server.send_P(200, "application/json", response);
             }
         });
 
@@ -396,17 +422,33 @@ public:
         server.on("/set_relay", HTTP_GET, [this]()
         {
             log("handle /set_relay");
-            if (boardTest)
+            uint8_t channel = server.arg(PARAM_CH).toInt();
+            uint8_t value = server.arg(PARAM_VAL).toInt();
+            
+            if (arduinoAdapter && moduleConfig)
             {
-                uint8_t channel = server.arg(PARAM_CH).toInt();
-                uint8_t value = server.arg(PARAM_VAL).toInt();
-                char response[32];
-                snprintf(response, sizeof(response), "{ch%d=%d}", channel, value);
-                server.send_P(200, "application/json", response);
+                uint8_t* relayPins = moduleConfig->getRelayPins();
+                int deviceCount = moduleConfig->getDeviceCount();
+                
+                if (relayPins && channel < deviceCount)
+                {
+                    value = (value != 1) ? 0 : 1;
+                    arduinoAdapter->digitalWrite(relayPins[channel], value);
+                    int newValue = arduinoAdapter->digitalRead(relayPins[channel]);
+                    char response[32];
+                    snprintf(response, sizeof(response), "{ch%d=%d}", channel, newValue);
+                    server.send_P(200, "application/json", response);
+                }
+                else
+                {
+                    server.send_P(400, "application/json", "{error:'invalid channel'}");
+                }
             }
             else
             {
-                server.send_P(500, "application/json", "{error:'boardTest not available'}");
+                char response[32];
+                snprintf(response, sizeof(response), "{ch%d=%d}", channel, value);
+                server.send_P(200, "application/json", response);
             }
         });
 
@@ -414,34 +456,64 @@ public:
         server.on("/led_r", HTTP_GET, [this]()
         {
             log("handle /led_r");
-            if (boardTest)
+            uint8_t channel = server.arg(PARAM_CH).toInt();
+            uint8_t value = server.arg(PARAM_VAL).toInt();
+            
+            if (arduinoAdapter && moduleConfig)
             {
-                uint8_t channel = server.arg(PARAM_CH).toInt();
-                uint8_t value = server.arg(PARAM_VAL).toInt();
-                char response[32];
-                snprintf(response, sizeof(response), "{led_r_ch%d=%d}", channel, value);
-                server.send_P(200, "application/json", response);
+                uint8_t* redLeds = moduleConfig->getRedLeds();
+                uint8_t ledsCount = moduleConfig->getLedsCount();
+                
+                if (redLeds && channel < ledsCount)
+                {
+                    value = (value != 1) ? 0 : 1;
+                    arduinoAdapter->digitalWrite(redLeds[channel], value);
+                    char response[32];
+                    snprintf(response, sizeof(response), "{led_r_ch%d=%d}", channel, value);
+                    server.send_P(200, "application/json", response);
+                }
+                else
+                {
+                    server.send_P(400, "application/json", "{error:'invalid channel'}");
+                }
             }
             else
             {
-                server.send_P(500, "application/json", "{error:'boardTest not available'}");
+                char response[32];
+                snprintf(response, sizeof(response), "{led_r_ch%d=%d}", channel, value);
+                server.send_P(200, "application/json", response);
             }
         });
 
         server.on("/led_g", HTTP_GET, [this]()
         {
             log("handle /led_g");
-            if (boardTest)
+            uint8_t channel = server.arg(PARAM_CH).toInt();
+            uint8_t value = server.arg(PARAM_VAL).toInt();
+            
+            if (arduinoAdapter && moduleConfig)
             {
-                uint8_t channel = server.arg(PARAM_CH).toInt();
-                uint8_t value = server.arg(PARAM_VAL).toInt();
-                char response[32];
-                snprintf(response, sizeof(response), "{led_g_ch%d=%d}", channel, value);
-                server.send_P(200, "application/json", response);
+                uint8_t* greenLeds = moduleConfig->getGreenLeds();
+                uint8_t ledsCount = moduleConfig->getLedsCount();
+                
+                if (greenLeds && channel < ledsCount)
+                {
+                    value = (value != 1) ? 0 : 1;
+                    arduinoAdapter->digitalWrite(greenLeds[channel], value);
+                    char response[32];
+                    snprintf(response, sizeof(response), "{led_g_ch%d=%d}", channel, value);
+                    server.send_P(200, "application/json", response);
+                }
+                else
+                {
+                    server.send_P(400, "application/json", "{error:'invalid channel'}");
+                }
             }
             else
             {
-                server.send_P(500, "application/json", "{error:'boardTest not available'}");
+                char response[32];
+                snprintf(response, sizeof(response), "{led_g_ch%d=%d}", channel, value);
+                server.send_P(200, "application/json", response);
             }
         });
 
@@ -510,33 +582,17 @@ public:
         server.on("/set_test_button", HTTP_GET, [this]()
         {
             log("handle /set_test_button");
-            if (boardTest)
-            {
-                uint8_t timeout = server.arg(PARAM_VAL).toInt();
-                char command[32];
-                snprintf(command, sizeof(command), "#set_test_button %d%%", timeout);
-                // Process through board test system
-                server.send_P(200, "text/html", "Ok");
-            }
-            else
-            {
-                server.send_P(500, "application/json", "{error:'boardTest not available'}");
-            }
+            uint8_t timeout = server.arg(PARAM_VAL).toInt();
+            if (timeout == 0) timeout = 10;
+            
+            server.send_P(200, "text/html", "Ok");
+            resultTestButton = testButton(timeout);
         });
 
         server.on("/get_test_button", HTTP_GET, [this]()
         {
             log("handle /get_test_button");
-            if (boardTest)
-            {
-                char command[] = "#get_test_button%";
-                // Process through board test system
-                server.send_P(200, "text/html", "not pressed");
-            }
-            else
-            {
-                server.send_P(500, "application/json", "{error:'boardTest not available'}");
-            }
+            server.send_P(200, "text/html", resultTestButton ? "pressed" : "not pressed");
         });
 
         // I2C scan endpoint
@@ -573,6 +629,44 @@ public:
     void loop() override
     {
         server.handleClient();
+    }
+
+private:
+    bool testButton(uint8_t timeoutSeconds)
+    {
+        if (!moduleConfig || !arduinoAdapter) 
+        {
+            return false;
+        }
+
+        uint8_t buttonPin = moduleConfig->getButtonPin();
+        if (buttonPin == 0) 
+        {
+            return false;
+        }
+
+        unsigned long startTime = arduinoAdapter->millis();
+        bool buttonPressed = false;
+        const uint8_t BUTTON_PRESSED = 0; // Assuming button pressed = LOW
+
+        // If button is already pressed, return false
+        if (arduinoAdapter->digitalRead(buttonPin) == BUTTON_PRESSED) 
+        {
+            return false;
+        }
+
+        // Wait for button press within timeout period
+        while ((arduinoAdapter->millis() - startTime) < timeoutSeconds * 1000) 
+        {
+            if (arduinoAdapter->digitalRead(buttonPin) == BUTTON_PRESSED) 
+            {
+                buttonPressed = true;
+                break;
+            }
+            arduinoAdapter->delay(10);
+        }
+
+        return buttonPressed;
     }
 };
 
