@@ -72,11 +72,11 @@ private:
     void ConfigureDoneModeConfigure();
     void clearAllFileLog();
     void clearStoreRules();
-    void setupAP();
+    void setupAP(bool isTestMode = false);
     bool validateWifiAdapter();
     const char *determineWifiPrefix();
     char *generateSSID(const char *wifiPrefix, const char *macAddress);
-    bool createAndConfigureAP(const char *ssid, const char *password);
+    bool createAndConfigureAP(const char *ssid, const char *password, const char *localIP = "192.168.4.1", const char *gatewayIP = "192.168.4.1", const char *netmask = "255.255.255.0");
     void setupWebServer();
     void setupMqttConnection();
     void setupWifiConnection();
@@ -303,6 +303,10 @@ inline void ModuleSetupService::ApTestModeModeConfigure()
 {
     log("SETUP: Module is in AP_TEST_MODE - configuring for board testing");
     
+    // Setup AP with test mode IP configuration
+    setupAP(true);
+    setupWebServer();
+    
     // Setup test devices for board testing
     if (boardTest) {
         log("SETUP: Setting up devices for test mode");
@@ -366,7 +370,7 @@ inline void ModuleSetupService::clearStoreRules()
 {
 }
 
-inline void ModuleSetupService::setupAP()
+inline void ModuleSetupService::setupAP(bool isTestMode)
 {
     if (!validateWifiAdapter())
     {
@@ -384,7 +388,25 @@ inline void ModuleSetupService::setupAP()
         log("SETUP: WiFi Name: %s", ssid);
 
         const char *password = "123456789";
-        if (createAndConfigureAP(ssid, password))
+        
+        const char *apLocalIp;
+        const char *apGatewayIp;
+        const char *apNetworkMask = "255.255.255.0";
+
+        if (isTestMode)
+        {
+            apLocalIp = "192.168.0.1";
+            apGatewayIp = "192.168.0.1";
+            log("SETUP: Using test mode IP configuration");
+        }
+        else
+        {
+            apLocalIp = "192.168.4.1";
+            apGatewayIp = "192.168.4.1";
+            log("SETUP: Using default IP configuration");
+        }
+
+        if (createAndConfigureAP(ssid, password, apLocalIp, apGatewayIp, apNetworkMask))
         {
             log("SETUP: WiFi Password: %s", password);
         }
@@ -467,18 +489,14 @@ inline char *ModuleSetupService::generateSSID(const char *wifiPrefix, const char
     return ssid;
 }
 
-inline bool ModuleSetupService::createAndConfigureAP(const char *ssid, const char *password)
+inline bool ModuleSetupService::createAndConfigureAP(const char *ssid, const char *password, const char *localIP, const char *gatewayIP, const char *netmask)
 {
     wifiAdapter->createAccessPoint(ssid, password, 1, false, 4);
 
     const char *initialIP = wifiAdapter->getLocalIP();
     log("SETUP: Initial AP IP address: %s", initialIP);
 
-    const char *AP_LOCAL_IP = "192.168.0.1";
-    const char *AP_GATEWAY_IP = "192.168.0.1";
-    const char *AP_NETWORK_MASK = "255.255.255.0";
-
-    if (wifiAdapter->configureAccessPoint(AP_LOCAL_IP, AP_GATEWAY_IP, AP_NETWORK_MASK) == false)
+    if (wifiAdapter->configureAccessPoint(localIP, gatewayIP, netmask) == false)
     {
         log("SETUP: AP Config Failed");
         return false;
