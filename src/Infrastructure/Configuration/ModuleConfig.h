@@ -27,6 +27,17 @@
 #define SENSOR_POWER_3 40
 #define SENSOR_POWER_4 39
 
+// Pump pin definitions
+#define PUMP_1 16
+#define PUMP_2 17
+#define PUMP_3 18
+#define PUMP_4 19
+
+#define PUMP_STATUS_1 20
+#define PUMP_STATUS_2 21
+#define PUMP_STATUS_3 22
+#define PUMP_STATUS_4 23
+
 class ModuleConfig : public IModuleConfig
 {
 private:
@@ -64,6 +75,10 @@ private:
     
     // Sensor power pin definitions
     static uint8_t SENSOR_POWER_PINS[4];
+    
+    // Pump pin definitions
+    static uint8_t PUMP_PINS[4];
+    static uint8_t PUMP_STATUS_PINS[4];
 
     void log(const char *format, ...)
     {
@@ -367,6 +382,14 @@ public:
     uint8_t* getSensorPowerPins() const override {
         return SENSOR_POWER_PINS;
     }
+    
+    uint8_t* getPumpPins() const override {
+        return PUMP_PINS;
+    }
+    
+    uint8_t* getPumpStatusPins() const override {
+        return PUMP_STATUS_PINS;
+    }
 };
 
 // Define static members
@@ -388,4 +411,9 @@ uint8_t ModuleConfig::LED_G_Sensor = 13;
 uint8_t ModuleConfig::RELAY_PINS[4] = {39, 40, 41, 42};
 
 uint8_t ModuleConfig::SENSOR_POWER_PINS[4] = {SENSOR_POWER_1, SENSOR_POWER_2, SENSOR_POWER_3, SENSOR_POWER_4};
+
+uint8_t ModuleConfig::PUMP_PINS[4] = {PUMP_1, PUMP_2, PUMP_3, PUMP_4};
+
+uint8_t ModuleConfig::PUMP_STATUS_PINS[4] = {PUMP_STATUS_1, PUMP_STATUS_2, PUMP_STATUS_3, PUMP_STATUS_4};
+
 #endif // MODULE_CONFIG_H

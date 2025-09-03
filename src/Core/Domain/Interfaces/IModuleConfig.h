@@ -38,6 +38,8 @@ public:
     virtual uint8_t getButtonPin() const = 0;   // New method for button pin
     virtual uint8_t* getRelayPins() const = 0;  // New method for relay pins
     virtual uint8_t* getSensorPowerPins() const = 0;  // New method for sensor power pins
+    virtual uint8_t* getPumpPins() const = 0;  // New method for pump pins
+    virtual uint8_t* getPumpStatusPins() const = 0;  // New method for pump status pins
     virtual ~IModuleConfig() = default;
 };
 
