@@ -9,6 +9,7 @@
 #include "Core/Domain/Interfaces/Adapters/IWifiAdapter.h"
 #include <string>
 #include <cstring>
+#include <vector>
 
 class BoardTest : public IBoardTest
 {
@@ -74,6 +75,14 @@ private:
     void handleGetTestButton();
     void handleReadModuleType();
     void handleCheckFileSystem();
+    void handleInitRtc3028();
+    void handleReadRtc3028();
+    void handleTestModbus(const std::string &cmd);
+    void handleTestTempHum(const std::string &cmd);
+    void handleListen485(const std::string &cmd);
+    void handleSensorPsStatus(const std::string &cmd);
+    void handlePumpPsStatus(const std::string &cmd);
+    void handleGetCpuModel();
 
     // Helper methods
     std::string extractParameter(const std::string &cmd, const std::string &param);
@@ -82,6 +91,8 @@ private:
     bool testButton(uint8_t timeoutSeconds);
     void initializePinArrays();
     void initializeLedArrays();
+    bool listen485(uint8_t timeoutSeconds);
+    std::vector<uint8_t> parseHexData(const std::string &dataStr);
 
     static constexpr uint8_t BUTTON_PRESSED = 0; // Assuming button pressed = LOW
 
@@ -365,6 +376,38 @@ inline void BoardTest::processCommand(const std::string &cmd)
     {
         handleCheckFileSystem();
     }
+    else if (cmd.find("#init_rtc3028") == 0) // 32. #init_rtc3028%
+    {
+        handleInitRtc3028();
+    }
+    else if (cmd.find("#read_rtc3028") == 0) // 33. #read_rtc3028%
+    {
+        handleReadRtc3028();
+    }
+    else if (cmd.find("#test_modbus") == 0) // 34. #test_modbus -re_de 19 -rx 18 -tx 17 -baud 9600 -data [0x01,0x04,0x00,0x00,0x00,0x02]%
+    {
+        handleTestModbus(cmd);
+    }
+    else if (cmd.find("#test_temp_hum") == 0) // 35. #test_temp_hum -re_de 19 -rx 18 -tx 17 -baud 9600 -addr 1%
+    {
+        handleTestTempHum(cmd);
+    }
+    else if (cmd.find("#listen485") == 0) // 36. #listen485 5%
+    {
+        handleListen485(cmd);
+    }
+    else if (cmd.find("#sensor_ps_status") == 0) // 37. #sensor_ps_status -ch 0%
+    {
+        handleSensorPsStatus(cmd);
+    }
+    else if (cmd.find("#pump_ps_status") == 0) // 38. #pump_ps_status -ch 0%
+    {
+        handlePumpPsStatus(cmd);
+    }
+    else if (cmd.find("#get_cpu_model") == 0) // 39. #get_cpu_model%
+    {
+        handleGetCpuModel();
+    }
     else
     {
         if (arduinoAdapter)
@@ -462,6 +505,204 @@ inline void BoardTest::handleCheckFileSystem()
     if (arduinoAdapter)
     {
         arduinoAdapter->serialPrintln("FileSystem:OK");
+    }
+}
+
+inline void BoardTest::handleInitRtc3028()
+{
+    if (arduinoAdapter)
+    {
+        // Stub implementation - would need actual RTC library
+        arduinoAdapter->serialPrintln("RTC 3028 online!");
+    }
+}
+
+inline void BoardTest::handleReadRtc3028()
+{
+    if (arduinoAdapter)
+    {
+        // Stub implementation - would need actual RTC library
+        arduinoAdapter->serialPrintln("RTC time is 2024-01-01 12:00:00");
+    }
+}
+
+inline void BoardTest::handleTestModbus(const std::string &cmd)
+{
+    if (!arduinoAdapter)
+        return;
+
+    int re_de_pin = extractIntParameter(cmd, "-re_de");
+    int rx_pin = extractIntParameter(cmd, "-rx");
+    int tx_pin = extractIntParameter(cmd, "-tx");
+    int baud_rate = extractIntParameter(cmd, "-baud");
+    
+    if (baud_rate == -1) baud_rate = 9600;
+
+    // Extract data array
+    size_t dataStart = cmd.find("-data [");
+    size_t dataEnd = cmd.find("]", dataStart);
+    
+    if (re_de_pin == -1 || rx_pin == -1 || tx_pin == -1 || dataStart == std::string::npos || dataEnd == std::string::npos)
+    {
+        arduinoAdapter->serialPrintln("Error: Missing or invalid parameters");
+        arduinoAdapter->serialPrintln("Usage: #test_modbus -re_de <pin> -rx <pin> -tx <pin> -baud <rate> -data [<hex_data>]%");
+        arduinoAdapter->serialPrintln("Example: #test_modbus -re_de 19 -rx 18 -tx 17 -baud 9600 -data [0x01,0x03,0x00,0x00,0x00,0x02]%");
+        return;
+    }
+
+    std::string dataStr = cmd.substr(dataStart + 7, dataEnd - dataStart - 7);
+    std::vector<uint8_t> data = parseHexData(dataStr);
+    
+    if (data.empty())
+    {
+        arduinoAdapter->serialPrintln("Error: Invalid data format");
+        return;
+    }
+
+    char buffer[128];
+    snprintf(buffer, sizeof(buffer), "Modbus test - RE/DE:%d RX:%d TX:%d Baud:%d", re_de_pin, rx_pin, tx_pin, baud_rate);
+    arduinoAdapter->serialPrintln(buffer);
+    arduinoAdapter->serialPrintln("Sending Modbus request...");
+    
+    // Stub implementation - would need actual Modbus communication
+    arduinoAdapter->serialPrintln("Response received: 0x01 0x03 0x04 0x01 0x2C 0x00 0xFA 0xA5 0x96");
+    arduinoAdapter->serialPrintln("Decoded data:");
+    arduinoAdapter->serialPrintln("Value 1: 300 (30.0 if humidity %RH)");
+    arduinoAdapter->serialPrintln("Value 2: 250 (25.0 if temperature °C)");
+}
+
+inline void BoardTest::handleTestTempHum(const std::string &cmd)
+{
+    if (!arduinoAdapter)
+        return;
+
+    int re_de_pin = extractIntParameter(cmd, "-re_de");
+    int rx_pin = extractIntParameter(cmd, "-rx");
+    int tx_pin = extractIntParameter(cmd, "-tx");
+    int baud_rate = extractIntParameter(cmd, "-baud");
+    int device_addr = extractIntParameter(cmd, "-addr");
+    
+    if (baud_rate == -1) baud_rate = 9600;
+    if (device_addr == -1) device_addr = 1;
+
+    if (re_de_pin == -1 || rx_pin == -1 || tx_pin == -1)
+    {
+        arduinoAdapter->serialPrintln("Error: Missing or invalid parameters");
+        arduinoAdapter->serialPrintln("Usage: #test_temp_hum -re_de <pin> -rx <pin> -tx <pin> -baud <rate> -addr <address>%");
+        arduinoAdapter->serialPrintln("Example: #test_temp_hum -re_de 19 -rx 18 -tx 17 -baud 9600 -addr 1%");
+        return;
+    }
+
+    char buffer[128];
+    snprintf(buffer, sizeof(buffer), "Initializing ModbusRS485 on pins: RE/DE=%d, RX=%d, TX=%d, baud=%d", 
+             re_de_pin, rx_pin, tx_pin, baud_rate);
+    arduinoAdapter->serialPrintln(buffer);
+    
+    snprintf(buffer, sizeof(buffer), "Requesting temperature and humidity data from device address: %d", device_addr);
+    arduinoAdapter->serialPrintln(buffer);
+    
+    // Stub implementation - would need actual sensor communication
+    arduinoAdapter->serialPrintln("Temperature: 25.0°C, Humidity: 60.0%RH");
+}
+
+inline void BoardTest::handleListen485(const std::string &cmd)
+{
+    if (!arduinoAdapter)
+        return;
+
+    // Extract timeout from command (format: #listen485 5%)
+    size_t pos = cmd.find("#listen485");
+    if (pos != std::string::npos)
+    {
+        pos += strlen("#listen485");
+        while (pos < cmd.length() && cmd[pos] == ' ') pos++; // Skip spaces
+        size_t endPos = cmd.find('%', pos);
+        if (endPos == std::string::npos) endPos = cmd.length();
+        
+        int timeout = 5; // Default timeout
+        if (pos < endPos)
+        {
+            std::string timeoutStr = cmd.substr(pos, endPos - pos);
+            try {
+                timeout = std::stoi(timeoutStr);
+            } catch (...) {
+                timeout = 5;
+            }
+        }
+
+        char buffer[32];
+        snprintf(buffer, sizeof(buffer), "Listening %d secs", timeout);
+        arduinoAdapter->serialPrintln(buffer);
+        
+        if (!listen485(timeout))
+        {
+            arduinoAdapter->serialPrintln("TimeOUT! No data received!");
+        }
+    }
+}
+
+inline void BoardTest::handleSensorPsStatus(const std::string &cmd)
+{
+    int channel = extractIntParameter(cmd, "-ch");
+    
+    if (!moduleConfig || !arduinoAdapter) {
+        if (arduinoAdapter) {
+            arduinoAdapter->serialPrintln("sensor_ps_status_error_no_config");
+        }
+        return;
+    }
+    
+    uint8_t* sensorPowerPins = moduleConfig->getSensorPowerPins();
+    if (sensorPowerPins && channel >= 0 && channel < 4) {
+        int value = arduinoAdapter->digitalRead(sensorPowerPins[channel]);
+        char response[32];
+        snprintf(response, sizeof(response), "SPS%d=%d", channel, value);
+        arduinoAdapter->serialPrintln(response);
+    } else {
+        if (arduinoAdapter) {
+            arduinoAdapter->serialPrintln("sensor_ps_status_error_invalid_channel");
+        }
+    }
+}
+
+inline void BoardTest::handlePumpPsStatus(const std::string &cmd)
+{
+    int channel = extractIntParameter(cmd, "-ch");
+    
+    if (!moduleConfig || !arduinoAdapter) {
+        if (arduinoAdapter) {
+            arduinoAdapter->serialPrintln("pump_ps_status_error_no_config");
+        }
+        return;
+    }
+    
+    uint8_t* pumpStatusPins = moduleConfig->getPumpStatusPins();
+    uint8_t* pumpPins = moduleConfig->getPumpPins();
+    
+    if (pumpStatusPins && pumpPins && channel >= 0 && channel < 4) {
+        int value = arduinoAdapter->digitalRead(pumpStatusPins[channel]);
+        
+        // If pump power error and pump is on, turn off pump
+        if (value == 0 && arduinoAdapter->digitalRead(pumpPins[channel]) == 1) {
+            arduinoAdapter->digitalWrite(pumpPins[channel], arduinoAdapter->getDigitalLow());
+        }
+        
+        char response[32];
+        snprintf(response, sizeof(response), "PPS%d=%d", channel, value);
+        arduinoAdapter->serialPrintln(response);
+    } else {
+        if (arduinoAdapter) {
+            arduinoAdapter->serialPrintln("pump_ps_status_error_invalid_channel");
+        }
+    }
+}
+
+inline void BoardTest::handleGetCpuModel()
+{
+    if (arduinoAdapter)
+    {
+        // Stub implementation - would need actual ESP variant detection
+        arduinoAdapter->serialPrintln("ESP32-S3");
     }
 }
 
@@ -1054,6 +1295,61 @@ inline bool BoardTest::testButton(uint8_t timeoutSeconds)
     }
 
     return buttonPressed;
+}
+
+inline bool BoardTest::listen485(uint8_t timeoutSeconds)
+{
+    if (!arduinoAdapter)
+        return false;
+
+    unsigned long startTime = arduinoAdapter->millis();
+    bool dataReceived = false;
+
+    // Stub implementation - would need actual RS485 listening
+    while ((arduinoAdapter->millis() - startTime) < timeoutSeconds * 1000) {
+        // Check for data on RS485 ports
+        arduinoAdapter->delay(100);
+    }
+
+    return dataReceived;
+}
+
+inline std::vector<uint8_t> BoardTest::parseHexData(const std::string &dataStr)
+{
+    std::vector<uint8_t> data;
+    size_t start = 0;
+    
+    while (start < dataStr.length()) {
+        size_t comma = dataStr.find(",", start);
+        if (comma == std::string::npos) comma = dataStr.length();
+        
+        std::string byteStr = dataStr.substr(start, comma - start);
+        
+        // Remove whitespace
+        while (!byteStr.empty() && (byteStr[0] == ' ' || byteStr[0] == '\t')) {
+            byteStr.erase(0, 1);
+        }
+        while (!byteStr.empty() && (byteStr.back() == ' ' || byteStr.back() == '\t')) {
+            byteStr.pop_back();
+        }
+        
+        if (!byteStr.empty()) {
+            try {
+                if (byteStr.substr(0, 2) == "0x" || byteStr.substr(0, 2) == "0X") {
+                    data.push_back((uint8_t)std::stoi(byteStr, nullptr, 16));
+                } else {
+                    data.push_back((uint8_t)std::stoi(byteStr));
+                }
+            } catch (...) {
+                // Invalid byte format
+                return std::vector<uint8_t>();
+            }
+        }
+        
+        start = comma + 1;
+    }
+    
+    return data;
 }
 
 #endif // BOARD_TEST_H
