@@ -17,7 +17,8 @@ enum class SensorProtocol {
 
 class SensorType {
 public:
-    int id;
+    int id; 
+    std::string uid; // TODO: add to convertor and in all places
     bool canScan;
     SensorProtocol protocol;
     bool isSupported;
