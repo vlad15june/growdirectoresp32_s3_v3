@@ -62,15 +62,16 @@ public:
             return false;
         }
         
-        bool result = udp.broadcastTo(data, length, port);
+        size_t result = udp.broadcastTo(data, port);
+        bool success = (result > 0);
         
         if (debugSystem && debugSystem->isFeatureEnabled(DebugFeatures::UDP_SEND_DEBUG)) {
             log("UDP_SEND: Broadcast to port %d, length: %d, result: %s", 
-                port, length, result ? "success" : "failed");
+                port, length, success ? "success" : "failed");
             log("UDP_SEND: Data: %.*s", (int)length, data);
         }
         
-        return result;
+        return success;
     }
     
     bool sendUnicast(const char* data, const char* targetIP, uint16_t port) override {

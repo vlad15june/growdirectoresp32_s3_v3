@@ -17,6 +17,10 @@
 #include "Core/Domain/Interfaces/Adapters/ILedAdapter.h"
 #include "Core/Domain/Interfaces/Adapters/IButtonAdapter.h"
 
+#include "Infrastructure/Controllers/UDP/UdpController.h"
+#include "Infrastructure/Controllers/UDP/UdpSender.h"
+#include "Infrastructure/Controllers/UDP/UpdManager.h"
+
 #include "Core/Domain/UseCases/Led/LedUseCases.h"
 #include "Core/Domain/UseCases/Buttons/ButtonUseCases.h"
 #include "Core/Domain/UseCases/ModuleMode/OnChangeModuleModeUseCase.h"
@@ -333,6 +337,8 @@ RuleService ruleService(
 BoardTest boardTest(
     &arduinoAdapter,
     &wifiAdapter);
+
+UdpManager udpManager(&mqttLogger, &debugSystem);
 
 LoopServiceFactory loopServiceFactory(
     &ledUseCases,
