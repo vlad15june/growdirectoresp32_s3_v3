@@ -2,7 +2,7 @@
 #define UDP_MANAGER_H
 
 #include <cstdarg>
-#include "Core/Domain/Interfaces/Controllers/IUdpManager.h"
+#include "Core/Domain/Interfaces/Udp/IUdpManager.h"
 #include "UdpController.h"
 #include "UdpSender.h"
 #include "Core/Domain/Interfaces/ILogger.h"

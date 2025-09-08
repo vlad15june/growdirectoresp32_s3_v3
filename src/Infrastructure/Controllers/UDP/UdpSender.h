@@ -4,7 +4,7 @@
 #include <AsyncUDP.h>
 #include <WiFi.h>
 #include <cstdarg>
-#include "Core/Domain/Interfaces/Controllers/IUdpSender.h"
+#include "Core/Domain/Interfaces/Udp/IUdpSender.h"
 #include "Core/Domain/Interfaces/ILogger.h"
 #include "Core/Domain/Interfaces/IDebugSystem.h"
 

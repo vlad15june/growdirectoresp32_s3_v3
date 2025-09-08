@@ -3,7 +3,7 @@
 
 #include <AsyncUDP.h>
 #include <cstdarg>
-#include "Core/Domain/Interfaces/Controllers/IUdpController.h"
+#include "Core/Domain/Interfaces/Udp/IUdpController.h"
 #include "Core/Domain/Interfaces/ILogger.h"
 #include "Core/Domain/Interfaces/IDebugSystem.h"
 
