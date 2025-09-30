@@ -170,6 +170,13 @@ public:
                 _lastNetworkState = DIAGNOSTICS_NETWORK_STATE_OK;
                 writeBoardStateToFile(); // when switching ok to not ok or vice versa
 
+                // When network is restored, force time synchronization
+                if (_timeAdapter != nullptr)
+                {
+                    log("DIAG: Network restored, forcing time synchronization");
+                    _timeAdapter->forceSyncTime();
+                }
+
                 log("DIAG: Network state changed to OK");
             }
         }

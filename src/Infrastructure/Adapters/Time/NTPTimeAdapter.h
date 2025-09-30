@@ -84,6 +84,8 @@ public:
     bool isCommandTimeValid(const char* createdDate, unsigned long maxAgeSeconds) override;
     void saveTimeToStorage() override;
     void restoreTimeFromStorage() override;
+    void forceSyncTime() override;
+    bool isTimeSynchronized() override;
 
     // Callback handler that will be called by the static callback
     void onTimeSynchronized();
@@ -121,17 +123,24 @@ NTPTimeAdapter::~NTPTimeAdapter()
 
 void NTPTimeAdapter::setup()
 {
-    // Set time synchronization interval (1 hour by default)
-    sntp_set_sync_interval(1 * 60 * 60 * 1000UL);
+    // Try to restore time from storage first
+    log("TIME: Attempting to restore time from storage during setup\n");
+    restoreTimeFromStorage();
+    
+    // Set more aggressive time synchronization interval for faster sync (5 minutes initially)
+    sntp_set_sync_interval(5 * 60 * 1000UL);
 
     // Register callback for time synchronization
     sntp_set_time_sync_notification_cb(timeSyncCallback);
 
-    // Configure time server
-    configTime(_utcOffsetSeconds, _daylightOffsetSeconds, _ntpServer);
+    // Configure time server with multiple servers for better reliability
+    configTime(_utcOffsetSeconds, _daylightOffsetSeconds, _ntpServer, "time.nist.gov", "time.google.com");
 
-    log("TIME: NTP time service initialized\n");
+    log("TIME: NTP time service initialized with server: %s\n", _ntpServer);
     
+    // Force an immediate NTP sync attempt
+    sntp_restart();
+    log("TIME: Forced NTP sync restart\n");
 }
 
 unsigned long NTPTimeAdapter::getEpochTime()
@@ -156,9 +165,28 @@ const char* NTPTimeAdapter::getFormattedTime()
 
     if (!getLocalTime(&timeinfo))
     {
-        snprintf(_timeBuffer, sizeof(_timeBuffer), "No time available (yet)");
-        log("TIME: No time available (yet)\n");
-        return _timeBuffer;
+        log("TIME: NTP time not available, attempting to restore from storage\n");
+        
+        // Try to restore time from storage
+        timeinfo = getTimeFromEEPROM();
+        
+        // Check if we got valid time from storage
+        if (timeinfo.tm_year > 0) // tm_year is years since 1900, so > 0 means after 1900
+        {
+            log("TIME: Using time from storage\n");
+            // Use the restored time
+        }
+        else
+        {
+            // If no valid time in storage either, return a message
+            snprintf(_timeBuffer, sizeof(_timeBuffer), "No time available (waiting for NTP sync)");
+            log("TIME: No time available from NTP or storage\n");
+            return _timeBuffer;
+        }
+    }
+    else
+    {
+        log("TIME: Got time from NTP successfully\n");
     }
 
     // Format time as ISO 8601 (YYYY-MM-DDThh:mm:ss.SSSZ)
@@ -329,6 +357,43 @@ struct tm NTPTimeAdapter::getTimeFromEEPROM()
     log("TIME: Time retrieved via settings interface\n");
     
     return timeinfo;
+}
+
+void NTPTimeAdapter::forceSyncTime()
+{
+    log("TIME: Forcing NTP synchronization\n");
+    
+    // Stop SNTP service
+    sntp_stop();
+    
+    // Restart SNTP service with aggressive settings
+    sntp_set_sync_interval(30 * 1000UL); // 30 seconds for immediate sync
+    sntp_set_time_sync_notification_cb(timeSyncCallback);
+    
+    // Reconfigure time servers
+    configTime(_utcOffsetSeconds, _daylightOffsetSeconds, _ntpServer, "time.nist.gov", "time.google.com");
+    
+    // Restart SNTP
+    sntp_restart();
+    
+    log("TIME: NTP sync forced, waiting for synchronization\n");
+}
+
+bool NTPTimeAdapter::isTimeSynchronized()
+{
+    struct tm timeinfo;
+    bool hasNtpTime = getLocalTime(&timeinfo);
+    
+    if (hasNtpTime) {
+        // Check if the year is reasonable (after 2020)
+        if (timeinfo.tm_year + 1900 > 2020) {
+            log("TIME: NTP time is synchronized\n");
+            return true;
+        }
+    }
+    
+    log("TIME: NTP time is not synchronized\n");
+    return false;
 }
 
 #endif // NTP_TIME_ADAPTER_H

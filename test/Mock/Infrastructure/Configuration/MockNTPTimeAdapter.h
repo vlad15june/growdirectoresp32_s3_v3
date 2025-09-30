@@ -54,6 +54,15 @@ public:
         _modifiedFields["restoreTime"] = true;
     }
 
+    void forceSyncTime() override {
+        _modifiedFields["forceSyncTime"] = true;
+    }
+
+    bool isTimeSynchronized() override {
+        // Default to synchronized for testing
+        return true;
+    }
+
     // Additional methods for testing
     void setEpochTime(unsigned long time) {
         _epochTime = time;
