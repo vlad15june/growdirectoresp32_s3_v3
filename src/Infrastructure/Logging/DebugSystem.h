@@ -36,6 +36,7 @@ private:
         registerFeature(DebugFeatures::REMOTE_SENSOR_RECEIVE_DEBUG, "remote_sensor_receive", false);
         registerFeature(DebugFeatures::UDP_RECEIVE_DEBUG, "udp_receive", false);
         registerFeature(DebugFeatures::UDP_SEND_DEBUG, "udp_send", false);
+        registerFeature(DebugFeatures::WIFI_DEBUG, "wifi", true);
         registerFeature(DebugFeatures::HISTORY_DEBUG, "history", false);
         registerFeature(DebugFeatures::TIME_DEBUG, "time", false);
         registerFeature(DebugFeatures::TIME_SYNC_DEBUG, "time_sync", false);

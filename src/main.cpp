@@ -219,6 +219,9 @@ void setup()
   // settings.begin();
   // settings.setConfigured(ModuleModeEnum::AP_TEST_MODE);
 
+  // settings.begin();
+  // settings.setSsid("VPN_net");
+
   spiffsAdapter.initSPIFFS();
   // spiffsAdapter.RemoveFile("/data/sensorTypes.json");
   // spiffsAdapter.RemoveFile("/data/sensors.json");

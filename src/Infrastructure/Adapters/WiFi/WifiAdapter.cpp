@@ -1,12 +1,15 @@
 #include "Infrastructure/Adapters/WiFi/WifiAdapter.h"
 #include <cstring>
+#include <cstdarg>
 
-WifiAdapter::WifiAdapter(WiFiMulti &wifiMulti) : apActive(false), wifiMulti(wifiMulti)
+WifiAdapter::WifiAdapter(WiFiMulti &wifiMulti, ILogger* logger, IDebugSystem* debugSystem) 
+    : apActive(false), wifiMulti(wifiMulti), logger(logger), debugSystem(debugSystem)
 {
     memset(ipBuffer, 0, sizeof(ipBuffer));
     memset(macBuffer, 0, sizeof(macBuffer));
     memset(ssidBuffer, 0, sizeof(ssidBuffer));
     WiFi.mode(WIFI_OFF);
+    log("WiFi adapter initialized");
 }
 
 WifiAdapter::~WifiAdapter()
@@ -16,6 +19,9 @@ WifiAdapter::~WifiAdapter()
 
 bool WifiAdapter::createAccessPoint(const char *ssid, const char *password, int channel, bool hidden, int maxConnections)
 {
+    log("Creating access point: SSID=%s, Channel=%d, Hidden=%s, MaxConnections=%d", 
+        ssid, channel, hidden ? "true" : "false", maxConnections);
+    
     WiFi.disconnect();
 
     if (WiFi.getMode() == WIFI_STA)
@@ -28,30 +34,51 @@ bool WifiAdapter::createAccessPoint(const char *ssid, const char *password, int 
     }
 
     apActive = WiFi.softAP(ssid, password, channel, hidden, maxConnections);
+    
+    if (apActive) {
+        log("Access point created successfully: %s", ssid);
+    } else {
+        log("Failed to create access point: %s", ssid);
+    }
+    
     return apActive;
 }
 
 bool WifiAdapter::configureAccessPoint(const char *localIP, const char *gateway, const char *subnet)
 {
+    log("Configuring access point: IP=%s, Gateway=%s, Subnet=%s", localIP, gateway, subnet);
+    
     IPAddress local_IP;
     IPAddress gateway_IP;
     IPAddress subnet_mask;
 
     if (!local_IP.fromString(localIP) || !gateway_IP.fromString(gateway) || !subnet_mask.fromString(subnet))
     {
+        log("Failed to parse IP configuration");
         return false;
     }
 
-    return WiFi.softAPConfig(local_IP, gateway_IP, subnet_mask);
+    bool result = WiFi.softAPConfig(local_IP, gateway_IP, subnet_mask);
+    
+    if (result) {
+        log("Access point configured successfully");
+    } else {
+        log("Failed to configure access point");
+    }
+    
+    return result;
 }
 
 bool WifiAdapter::stopAccessPoint()
 {
+    log("Stopping access point");
+    
     bool result = WiFi.softAPdisconnect(true);
 
     if (result)
     {
         apActive = false;
+        log("Access point stopped successfully");
 
         if (WiFi.getMode() == WIFI_AP_STA)
         {
@@ -61,6 +88,10 @@ bool WifiAdapter::stopAccessPoint()
         {
             WiFi.mode(WIFI_OFF);
         }
+    }
+    else
+    {
+        log("Failed to stop access point");
     }
 
     return result;
@@ -73,6 +104,8 @@ bool WifiAdapter::isAccessPointActive()
 
 bool WifiAdapter::connect(const char *ssid, const char *password, unsigned long timeout)
 {
+    log("Connecting to WiFi network: %s (timeout: %lu ms)", ssid, timeout);
+    
     if (WiFi.getMode() == WIFI_AP)
     {
         WiFi.mode(WIFI_AP_STA);
@@ -84,28 +117,41 @@ bool WifiAdapter::connect(const char *ssid, const char *password, unsigned long 
 
     WiFi.begin(ssid, password);
 
-    unsigned long startTime = millis();
+    unsigned long startTime = millis();    
     while (WiFi.status() != WL_CONNECTED && millis() - startTime < timeout)
     {
         delay(100);
     }
+    log("WiFi connection finished in (%lu ms)", millis() - startTime);
 
-    return WiFi.status() == WL_CONNECTED;
+    bool connected = WiFi.status() == WL_CONNECTED;
+    
+    if (connected) {
+        log("Successfully connected to WiFi: %s, IP: %s", ssid, getLocalIP());
+    } else {
+        log("Failed to connect to WiFi: %s", ssid);
+    }
+
+    return connected;
 }
 
 bool WifiAdapter::addNetwork(const char *ssid, const char *password)
 {
     if (ssid == nullptr || password == nullptr)
     {
+        log("Failed to add network: null SSID or password");
         return false;
     }
 
+    log("Adding WiFi network: %s", ssid);
     wifiMulti.addAP(ssid, password);
     return true;
 }
 
 bool WifiAdapter::connectToNetworks(unsigned long timeout)
 {
+    log("Connecting to available networks (timeout: %lu ms)", timeout);
+    
     if (WiFi.getMode() == WIFI_AP)
     {
         WiFi.mode(WIFI_AP_STA);
@@ -121,22 +167,42 @@ bool WifiAdapter::connectToNetworks(unsigned long timeout)
         delay(100);
     }
 
-    return WiFi.status() == WL_CONNECTED;
+    bool connected = WiFi.status() == WL_CONNECTED;
+    
+    if (connected) {
+        log("Successfully connected to network: %s, IP: %s", WiFi.SSID().c_str(), getLocalIP());
+    } else {
+        log("Failed to connect to any available networks");
+    }
+
+    return connected;
 }
 
 void WifiAdapter::clearNetworks()
 {
+    log("Clearing WiFi networks");
     // The WiFiMulti object is now managed externally, so we can't reset it here.
     // The caller would need to create a new WiFiMulti object and provide it to a new WifiAdapter.
 }
 
 bool WifiAdapter::disconnect()
 {
+    log("Disconnecting from WiFi");
+    
     bool result = WiFi.disconnect(true);
 
     if (result && !apActive)
     {
         WiFi.mode(WIFI_OFF);
+        log("WiFi disconnected successfully");
+    }
+    else if (result)
+    {
+        log("WiFi disconnected (AP still active)");
+    }
+    else
+    {
+        log("Failed to disconnect WiFi");
     }
 
     return result;
@@ -203,7 +269,10 @@ int WifiAdapter::getStatus()
 
 int WifiAdapter::scanNetworks()
 {
-    return WiFi.scanNetworks();
+    log("Scanning for WiFi networks");
+    int networkCount = WiFi.scanNetworks();
+    log("Found %d WiFi networks", networkCount);
+    return networkCount;
 }
 
 const char *WifiAdapter::getSSID(int networkIndex)
@@ -224,16 +293,33 @@ int WifiAdapter::getSignalStrength(int networkIndex)
 
 void WifiAdapter::setStationMode()
 {
+    log("Setting WiFi mode to Station");
     apActive = false;
     WiFi.mode(WIFI_STA);
 }
 
 void WifiAdapter::setAccessPointMode()
 {
+    log("Setting WiFi mode to Access Point");
     WiFi.mode(WIFI_AP);
 }
 
 void WifiAdapter::setStationAndAccessPointMode()
 {
+    log("Setting WiFi mode to Station + Access Point");
     WiFi.mode(WIFI_AP_STA);
+}
+
+void WifiAdapter::log(const char* format, ...)
+{
+    if (logger != nullptr && debugSystem != nullptr && debugSystem->isFeatureEnabled(DebugFeatures::WIFI_DEBUG))
+    {
+        char buffer[256];
+        va_list args;
+        va_start(args, format);
+        vsnprintf(buffer, sizeof(buffer), format, args);
+        va_end(args);
+
+        logger->println(DebugFeatures::WIFI_DEBUG, buffer);
+    }
 }

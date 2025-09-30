@@ -4,10 +4,12 @@
 #include <WiFi.h>
 #include <WiFiMulti.h>
 #include "Core/Domain/Interfaces/Adapters/IWifiAdapter.h"
+#include "Core/Domain/Interfaces/ILogger.h"
+#include "Core/Domain/Interfaces/IDebugSystem.h"
 
 class WifiAdapter : public IWifiAdapter {
 public:
-    WifiAdapter(WiFiMulti& wifiMulti);
+    WifiAdapter(WiFiMulti& wifiMulti, ILogger* logger = nullptr, IDebugSystem* debugSystem = nullptr);
     ~WifiAdapter() override;
 
     // Access Point (AP) functionality
@@ -23,7 +25,7 @@ public:
     
     // Multi-network functionality
     bool addNetwork(const char* ssid, const char* password) override;
-    bool connectToNetworks(unsigned long timeout = 20000) override;
+    bool connectToNetworks(unsigned long timeout = 60000) override;
     void clearNetworks() override;
     
     // Network information
@@ -48,6 +50,10 @@ private:
     char ssidBuffer[33];      // Buffer to store SSID string (max 32 chars + null terminator)
     bool apActive;            // Flag to track if AP is active
     WiFiMulti& wifiMulti;     // Reference to WiFiMulti instance
+    ILogger* logger;
+    IDebugSystem* debugSystem;
+    
+    void log(const char* format, ...);
 };
 
 #endif // WIFI_ADAPTER_H

@@ -139,7 +139,7 @@ ArduinoAdapter arduinoAdapter;
 
 ButtonAdapter buttonAdapter(&arduinoAdapter);
 
-WifiAdapter wifiAdapter(wifiMulti);
+WifiAdapter wifiAdapter(wifiMulti, &mqttLogger, &debugSystem);
 
 WiFiManager wifiManager(&wifiAdapter, &settings, &mqttLogger, &debugSystem);
 
