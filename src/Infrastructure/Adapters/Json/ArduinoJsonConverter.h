@@ -1239,6 +1239,8 @@ public:
                 configObj["channel_name"] = config.channelName;
                 configObj["channel"] = config.channel;
                 configObj["sensorType"] = config.sensorType;
+                configObj["canConnectMinValue"] = config.canConnectMinValue;
+                configObj["canConnectMaxValue"] = config.canConnectMaxValue;
             }
         }
 
