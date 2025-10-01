@@ -1220,6 +1220,8 @@ public:
             config.channelName = extractValue(configStr, "channel_name");
             config.channel = static_cast<uint8_t>(extractIntValue(configStr, "channel"));
             config.sensorType = extractValue(configStr, "sensorType");
+            config.canConnectMinValue = static_cast<float>(extractDoubleValue(configStr, "canConnectMinValue"));
+            config.canConnectMaxValue = static_cast<float>(extractDoubleValue(configStr, "canConnectMaxValue"));
             sensor.modbusRegisterConfigs.push_back(config);
         }
 
@@ -1281,6 +1283,8 @@ public:
                 oss << ",\"channel_name\":\"" << config.channelName << "\"";
                 oss << ",\"channel\":" << static_cast<int>(config.channel);
                 oss << ",\"sensorType\":\"" << config.sensorType << "\"";
+                oss << ",\"canConnectMinValue\":" << config.canConnectMinValue;
+                oss << ",\"canConnectMaxValue\":" << config.canConnectMaxValue;
                 oss << "}";
                 if (i + 1 < sensor.modbusRegisterConfigs.size())
                     oss << ",";
@@ -1353,6 +1357,8 @@ public:
         config.channelName = extractValue(jsonStr, "channel_name");
         config.channel = static_cast<uint8_t>(extractIntValue(jsonStr, "channel"));
         config.sensorType = extractValue(jsonStr, "sensorType");
+        config.canConnectMinValue = static_cast<float>(extractDoubleValue(jsonStr, "canConnectMinValue"));
+        config.canConnectMaxValue = static_cast<float>(extractDoubleValue(jsonStr, "canConnectMaxValue"));
 
         return !config.channelName.empty();
     }
@@ -1369,6 +1375,8 @@ public:
         oss << ",\"channel_name\":\"" << config.channelName << "\"";
         oss << ",\"channel\":" << static_cast<int>(config.channel);
         oss << ",\"sensorType\":\"" << config.sensorType << "\"";
+        oss << ",\"canConnectMinValue\":" << config.canConnectMinValue;
+        oss << ",\"canConnectMaxValue\":" << config.canConnectMaxValue;
         oss << "}";
         return oss.str();
     }

@@ -1329,6 +1329,8 @@ public:
         config.channelName = doc["channel_name"] | "";
         config.channel = doc["channel"] | 0;
         config.sensorType = doc["sensorType"] | "";
+        config.canConnectMinValue = doc["canConnectMinValue"] | 0.0f;
+        config.canConnectMaxValue = doc["canConnectMaxValue"] | 100.0f;
 
         return true;
     }
@@ -1345,6 +1347,8 @@ public:
         doc["channel_name"] = config.channelName;
         doc["channel"] = config.channel;
         doc["sensorType"] = config.sensorType;
+        doc["canConnectMinValue"] = config.canConnectMinValue;
+        doc["canConnectMaxValue"] = config.canConnectMaxValue;
 
         std::string output;
         serializeJson(doc, output);
@@ -1373,6 +1377,8 @@ public:
                 config.channelName = configObj["channel_name"] | "";
                 config.channel = configObj["channel"] | 0;
                 config.sensorType = configObj["sensorType"] | "";
+                config.canConnectMinValue = configObj["canConnectMinValue"] | 0.0f;
+                config.canConnectMaxValue = configObj["canConnectMaxValue"] | 100.0f;
                 
                 configs.push_back(config);
             }
@@ -1397,6 +1403,8 @@ public:
             configObj["channel_name"] = config.channelName;
             configObj["channel"] = config.channel;
             configObj["sensorType"] = config.sensorType;
+            configObj["canConnectMinValue"] = config.canConnectMinValue;
+            configObj["canConnectMaxValue"] = config.canConnectMaxValue;
         }
 
         std::string output;
@@ -1551,6 +1559,8 @@ public:
                 config.channelName = configObj["channel_name"] | "";
                 config.channel = configObj["channel"] | 0;
                 config.sensorType = configObj["sensorType"] | "";
+                config.canConnectMinValue = configObj["canConnectMinValue"] | 0.0f;
+                config.canConnectMaxValue = configObj["canConnectMaxValue"] | 100.0f;
                 sensorType.modbusRegisterConfig.push_back(config);
             }
         }
@@ -1612,6 +1622,8 @@ public:
                 configObj["channel_name"] = config.channelName;
                 configObj["channel"] = config.channel;
                 configObj["sensorType"] = config.sensorType;
+                configObj["canConnectMinValue"] = config.canConnectMinValue;
+                configObj["canConnectMaxValue"] = config.canConnectMaxValue;
             }
         }
 
