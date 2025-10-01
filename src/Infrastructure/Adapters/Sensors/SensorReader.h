@@ -263,6 +263,36 @@ private:
         log("SensorReader: Using device address %d for scanning (queried: %d, configured: %d)", 
             deviceAddressToUse, actualDeviceAddress, sensor.modbusDeviceAddress);
         
+        // First, ping the device to check if it responds at this address
+        if (_modbusReader->pingAddress(deviceAddressToUse, portIndex))
+        {
+            log("SensorReader: Device responds at address %d, proceeding with scan", deviceAddressToUse);
+        }
+        else
+        {
+            log("SensorReader: Device does not respond at address %d, trying address range 0x70-0x78", deviceAddressToUse);
+            
+            // Try addresses from 0x70 to 0x78
+            bool foundAddress = false;
+            for (uint8_t testAddress = 0x70; testAddress <= 0x78; testAddress++)
+            {
+                if (_modbusReader->pingAddress(testAddress, portIndex))
+                {
+                    deviceAddressToUse = testAddress;
+                    foundAddress = true;
+                    log("SensorReader: Found responding device at address 0x%02X", testAddress);
+                    break;
+                }
+            }
+            
+            if (!foundAddress)
+            {
+                log("SensorReader: No responding device found in address range 0x70-0x78");
+                return false;
+            }
+        }
+        
+        // Now scan all register configurations with the found address
         for (const auto &config : sensor.modbusRegisterConfigs)
         {
             bool success = false;

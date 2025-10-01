@@ -97,6 +97,55 @@ public:
         return false;
     }
 
+    bool pingAddress(uint8_t deviceAddress, int portIndex = 0) override
+    {
+        if (portIndex < 0 || portIndex >= _modbusPorts.size())
+        {
+            log("ModbusSensorReader: Invalid port index %d for ping", portIndex);
+            return false;
+        }
+
+        IModbusRS485* modbus = _modbusPorts[portIndex];
+
+        // Create a simple read holding registers request for register 0x0000
+        uint8_t request[8] = {
+            deviceAddress,
+            0x03,  // Function code: Read Holding Registers
+            0x00, 0x00,  // Starting register address (0x0000)
+            0x00, 0x01   // Number of registers to read (1)
+        };
+
+        uint16_t crc = modbus->calculateCRC(request, 6);
+        request[6] = crc & 0xFF;
+        request[7] = (crc >> 8);
+
+        modbus->sendData(request, sizeof(request));
+
+        _arduino.delay(300);
+
+        uint8_t response[64];
+        int bytesRead = modbus->readAvailable(response, sizeof(response));
+        
+        log("ModbusSensorReader: Ping device %d on port %d - received %d bytes", deviceAddress, portIndex, bytesRead);
+        
+        // Check if we got a valid response (at least 5 bytes and correct function code)
+        if (bytesRead >= 5 && response[0] == deviceAddress && response[1] == 0x03)
+        {
+            log("ModbusSensorReader: Device %d responded to ping on port %d", deviceAddress, portIndex);
+            return true;
+        }
+        else if (bytesRead > 0 && response[1] >= 0x80)
+        {
+            // Exception response (function code + 0x80), but device is responding
+            log("ModbusSensorReader: Device %d sent exception response (0x%02X) but is alive on port %d", 
+                deviceAddress, response[1], portIndex);
+            return true;
+        }
+
+        log("ModbusSensorReader: Device %d did not respond to ping on port %d", deviceAddress, portIndex);
+        return false;
+    }
+
 private:
     void log(const char* format, ...)
     {
