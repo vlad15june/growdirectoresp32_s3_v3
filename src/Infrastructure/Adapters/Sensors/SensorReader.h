@@ -243,7 +243,7 @@ private:
 
     bool scanModbusSensor(const SensorEntity &sensor)
     {
-        if (!_modbusReader || sensor.modbusDeviceAddress == 0)
+        if (!_modbusReader)
         {
             return false;
         }
@@ -254,20 +254,38 @@ private:
         }
 
         int portIndex = sensor.pin;
-        float dummyValue;
         _modbusReader->init(sensor.baudRate);
+        
+        // Try to query device address using 6EH function code first
+        uint8_t actualDeviceAddress = queryDeviceAddress(portIndex);
+        uint8_t deviceAddressToUse = (actualDeviceAddress != 0) ? actualDeviceAddress : sensor.modbusDeviceAddress;
+        
+        log("SensorReader: Using device address %d for scanning (queried: %d, configured: %d)", 
+            deviceAddressToUse, actualDeviceAddress, sensor.modbusDeviceAddress);
         
         for (const auto &config : sensor.modbusRegisterConfigs)
         {
             bool success = false;
+            float dummyValue;
             
             // Try up to 3 times
             for (int attempt = 1; attempt <= 3; attempt++)
             {
-                if (_modbusReader->readRegister(sensor.modbusDeviceAddress, config, dummyValue, portIndex))
+                if (_modbusReader->readRegister(deviceAddressToUse, config, dummyValue, portIndex))
                 {
-                    success = true;
-                    break;
+                    // Check if the read value is within the expected range for this sensor type
+                    if (dummyValue >= config.canConnectMinValue && dummyValue <= config.canConnectMaxValue)
+                    {
+                        success = true;
+                        log("SensorReader: Scan successful - read value %.2f is within range [%.2f, %.2f] for channel %s", 
+                            dummyValue, config.canConnectMinValue, config.canConnectMaxValue, config.channelName.c_str());
+                        break;
+                    }
+                    else
+                    {
+                        log("SensorReader: Read value %.2f is outside expected range [%.2f, %.2f] for channel %s", 
+                            dummyValue, config.canConnectMinValue, config.canConnectMaxValue, config.channelName.c_str());
+                    }
                 }
                 
                 if (attempt < 3)
@@ -283,11 +301,41 @@ private:
             
             if (!success)
             {
-                log("SensorReader: Failed to scan modbus register on port %d after 3 attempts", portIndex);
+                log("SensorReader: Failed to scan modbus register %s on port %d after 3 attempts or value out of range", 
+                    config.channelName.c_str(), portIndex);
                 return false;
             }
         }
         return true;
+    }
+
+    // Helper method to query device address using 6EH function code
+    uint8_t queryDeviceAddress(int portIndex)
+    {
+        if (!_modbusReader || portIndex < 0)
+        {
+            return 0;
+        }
+        
+        ModbusRegisterConfig queryConfig;
+        queryConfig.functionCode = 0x6E;
+        queryConfig.startRegister = 0x0012;
+        queryConfig.numRegisters = 1;
+        queryConfig.multiplier = 1.0f;
+        queryConfig.offset = 0.0f;
+        
+        float deviceAddressFloat;
+        if (_modbusReader->readRegister(0xFF, queryConfig, deviceAddressFloat, portIndex))
+        {
+            uint8_t deviceAddress = (uint8_t)(deviceAddressFloat) & 0xFF;  // Lower 8 bits are device address
+            log("SensorReader: Successfully queried device address: %d", deviceAddress);
+            return deviceAddress;
+        }
+        else
+        {
+            log("SensorReader: Failed to query device address using 6EH function code");
+            return 0;
+        }
     }
 
     bool scanI2CSensor(const SensorEntity &sensor)
