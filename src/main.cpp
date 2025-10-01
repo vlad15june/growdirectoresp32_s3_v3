@@ -11,22 +11,26 @@
 // Global loop service instance
 std::unique_ptr<ILoopService> loopService;
 
-void createTestSensorTypes() {
+void createTestSensorTypes()
+{
   // Check if sensor types already exist
   std::vector<SensorType> existingTypes = sensorTypeRepository.getAll();
   Serial.printf("Found %d existing sensor types\n", existingTypes.size());
-  
+
   // Check if temp_humidity_modbus already exists
   bool tempHumidityExists = false;
-  for (const auto& type : existingTypes) {
-    if (type.name == "temp_humidity_modbus") {
+  for (const auto &type : existingTypes)
+  {
+    if (type.name == "temp_humidity_modbus")
+    {
       tempHumidityExists = true;
       Serial.printf("Temperature/Humidity sensor type already exists (ID: %d)\n", type.id);
       break;
     }
   }
-  
-  if (!tempHumidityExists) {
+
+  if (!tempHumidityExists)
+  {
     // Create Temperature/Humidity Modbus sensor type
     SensorType tempHumiditySensorType;
     tempHumiditySensorType.id = 1;
@@ -87,15 +91,18 @@ void createTestSensorTypes() {
 
   // Check if RY-WS301 already exists
   bool ryWs301Exists = false;
-  for (const auto& type : existingTypes) {
-    if (type.name == "ry_ws301") {
+  for (const auto &type : existingTypes)
+  {
+    if (type.name == "ry_ws301")
+    {
       ryWs301Exists = true;
       Serial.printf("RY-WS301 sensor type already exists (ID: %d)\n", type.id);
       break;
     }
   }
-  
-  if (!ryWs301Exists) {
+
+  if (!ryWs301Exists)
+  {
     // Create RY-WS301 sensor type
     SensorType ryWs301SensorType;
     ryWs301SensorType.id = 2;
@@ -151,18 +158,18 @@ void createTestSensorTypes() {
     ryWs301SensorType.modbusRegisterConfig.push_back(humidityConfig);
 
     // Pressure register config (register 2, formula: value/10)
-    ModbusRegisterConfig pressureConfig;
-    pressureConfig.functionCode = 3;
-    pressureConfig.startRegister = 2;
-    pressureConfig.numRegisters = 1;
-    pressureConfig.multiplier = 0.1f;
-    pressureConfig.offset = 0.0f;
-    pressureConfig.channelName = "pressure";
-    pressureConfig.sensorType = "pressure";
-    pressureConfig.channel = 3;
-    pressureConfig.canConnectMinValue = 300.0f;
-    pressureConfig.canConnectMaxValue = 1100.0f;
-    ryWs301SensorType.modbusRegisterConfig.push_back(pressureConfig);
+    // ModbusRegisterConfig pressureConfig;
+    // pressureConfig.functionCode = 3;
+    // pressureConfig.startRegister = 2;
+    // pressureConfig.numRegisters = 1;
+    // pressureConfig.multiplier = 0.1f;
+    // pressureConfig.offset = 0.0f;
+    // pressureConfig.channelName = "pressure";
+    // pressureConfig.sensorType = "pressure";
+    // pressureConfig.channel = 3;
+    // pressureConfig.canConnectMinValue = 300.0f;
+    // pressureConfig.canConnectMaxValue = 1100.0f;
+    // ryWs301SensorType.modbusRegisterConfig.push_back(pressureConfig);
 
     // Save to repository
     bool saved = sensorTypeRepository.save(ryWs301SensorType);
@@ -172,8 +179,9 @@ void createTestSensorTypes() {
   // Print final summary
   std::vector<SensorType> finalTypes = sensorTypeRepository.getAll();
   Serial.printf("Total sensor types in repository: %d\n", finalTypes.size());
-  
-  for (const auto& type : finalTypes) {
+
+  for (const auto &type : finalTypes)
+  {
     Serial.printf("Sensor Type Details:\n");
     Serial.printf("  ID: %d\n", type.id);
     Serial.printf("  Name: %s\n", type.name.c_str());
@@ -194,11 +202,13 @@ void createTestSensorTypes() {
     Serial.printf("  Modbus Device Address: %d\n", type.modbusDeviceAddress);
     Serial.printf("  Baud Rate: %d\n", type.baudRate);
     Serial.printf("  Modbus Register Configs: %d\n", type.modbusRegisterConfig.size());
-    for (size_t i = 0; i < type.modbusRegisterConfig.size(); i++) {
-      const auto& config = type.modbusRegisterConfig[i];
-      Serial.printf("    Config %d: Function=%d, Start=%d, Num=%d, Multiplier=%.3f, Offset=%.3f, Channel=%s, ChannelNum=%d\n",
+    for (size_t i = 0; i < type.modbusRegisterConfig.size(); i++)
+    {
+      const auto &config = type.modbusRegisterConfig[i];
+      Serial.printf("    Config %d: Function=%d, Start=%d, Num=%d, Multiplier=%.3f, Offset=%.3f, Channel=%s, ChannelNum=%d, CanConnectMin=%.1f, CanConnectMax=%.1f\n",
                     i, config.functionCode, config.startRegister, config.numRegisters,
-                    config.multiplier, config.offset, config.channelName.c_str(), config.channel);
+                    config.multiplier, config.offset, config.channelName.c_str(), config.channel,
+                    config.canConnectMinValue, config.canConnectMaxValue);
     }
     Serial.println("---");
   }
@@ -207,7 +217,7 @@ void createTestSensorTypes() {
 void setup()
 {
   initDependencies();
-  
+
   Serial.begin(115200);
   Serial.println("System initialized.");
   Serial.print("Free heap: ");
@@ -236,8 +246,8 @@ void setup()
 
 void loop()
 {
-  if (loopService) {
+  if (loopService)
+  {
     loopService->loop();
   }
-
 }
