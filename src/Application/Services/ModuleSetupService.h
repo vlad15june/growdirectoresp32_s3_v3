@@ -939,7 +939,7 @@ inline void ModuleSetupService::fillSensorModuleStructure(Node &node)
                         sensorEntity->modbusDeviceAddress = newAddress;
                         
                         // Update sensor in repository
-                        if (sensorRepository->update(*sensorEntity))
+                        if (sensorRepository->createOrUpdateSensor(*sensorEntity))
                         {
                             log("SETUP: Successfully changed sensor %s address from 0x%02X to 0x%02X", 
                                 sensorEntity->uid.c_str(), oldAddress, newAddress);

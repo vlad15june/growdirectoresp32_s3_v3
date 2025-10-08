@@ -185,7 +185,7 @@ public:
     {
         if (portIndex >= 0 && portIndex < _modbusPorts.size())
         {
-            _modbusPorts[portIndex]->powerOnPort(portIndex);
+            _modbusPorts[portIndex]->powerOnPort();
             log("ModbusSensorReader: Powered ON port %d", portIndex);
         }
         else
@@ -198,7 +198,7 @@ public:
     {
         if (portIndex >= 0 && portIndex < _modbusPorts.size())
         {
-            _modbusPorts[portIndex]->powerOffPort(portIndex);
+            _modbusPorts[portIndex]->powerOffPort();
             log("ModbusSensorReader: Powered OFF port %d", portIndex);
         }
         else
