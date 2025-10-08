@@ -25,6 +25,7 @@
 #include "Infrastructure/Adapters/SPIFFS/ISpiffsAdapter.h"
 #include "Core/Domain/Interfaces/Adapters/Json/IJsonConverter.h"
 #include "Core/Domain/Interfaces/BoardTesting/IBoardTest.h"
+#include "Core/Domain/Interfaces/Udp/IUdpManager.h"
 
 class IModuleSetupService
 {
@@ -60,6 +61,7 @@ private:
     ISpiffsAdapter *spiffsAdapter;
     IJsonConverter *jsonConverter;
     IBoardTest *boardTest;
+    IUdpManager *udpManager;
 
     void log(const char *format, ...);
 
@@ -81,6 +83,7 @@ private:
     void setupTestModeWebServer();
     void setupMqttConnection();
     void setupWifiConnection();
+    void setupUdp();
     void fillModuleStructure();
 
     bool validateModuleStructurePrerequisites();
@@ -141,7 +144,8 @@ public:
         ISensorReader *sensorReader = nullptr,
         ISpiffsAdapter *spiffsAdapter = nullptr,
         IJsonConverter *jsonConverter = nullptr,
-        IBoardTest *boardTest = nullptr);
+        IBoardTest *boardTest = nullptr,
+        IUdpManager *udpManager = nullptr);
 
     void setupModule() override;
     std::unique_ptr<ILoopService> getLoopService() override;
@@ -169,7 +173,8 @@ inline ModuleSetupService::ModuleSetupService(
     ISensorReader *sensorReader,
     ISpiffsAdapter *spiffsAdapter,
     IJsonConverter *jsonConverter,
-    IBoardTest *boardTest) : logger(logger),
+    IBoardTest *boardTest,
+    IUdpManager *udpManager) : logger(logger),
                                      debugSystem(debugSystem),
                                      moduleConfig(moduleConfig),
                                      ledAdapter(ledAdapter),
@@ -188,7 +193,8 @@ inline ModuleSetupService::ModuleSetupService(
                                      sensorReader(sensorReader),
                                      spiffsAdapter(spiffsAdapter),
                                      jsonConverter(jsonConverter),
-                                     boardTest(boardTest)
+                                     boardTest(boardTest),
+                                     udpManager(udpManager)
 {
 }
 
@@ -345,9 +351,9 @@ inline void ModuleSetupService::ConfigureDoneModeConfigure()
 {
     setupWifiConnection();
     setupMqttConnection();
+    setupUdp();
 
     fillModuleStructure();
-    // udpSetup();
 
     if (deviceService)
     {
@@ -591,6 +597,28 @@ inline void ModuleSetupService::setupMqttConnection()
     else
     {
         log("SETUP: Failed to connect to MQTT broker");
+    }
+}
+
+inline void ModuleSetupService::setupUdp()
+{
+    if (!udpManager)
+    {
+        log("SETUP: Error - UDP manager is missing");
+        return;
+    }
+
+    // Default UDP port and multicast IP
+    uint16_t udpPort = 1234;
+    const char* multicastIP = "239.1.2.3";
+    
+    if (udpManager->initialize(udpPort, multicastIP))
+    {
+        log("SETUP: UDP initialized successfully on port %d with multicast %s", udpPort, multicastIP);
+    }
+    else
+    {
+        log("SETUP: Failed to initialize UDP on port %d", udpPort);
     }
 }
 

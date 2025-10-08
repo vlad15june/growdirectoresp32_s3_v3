@@ -14,6 +14,8 @@
 #include "Core/Domain/Interfaces/API/IHybridAPIService.h"
 #include "Core/Domain/Interfaces/ILogger.h"
 #include "Core/Domain/Interfaces/IDebugSystem.h"
+#include "Core/Domain/Interfaces/Udp/IUdpManager.h"
+#include "Core/Domain/Interfaces/Adapters/Json/IJsonConverter.h"
 
 class SensorService : public ISensorService {
 private:
@@ -27,17 +29,22 @@ private:
     IHybridAPIService* hybridApiService;
     ILogger* logger;
     IDebugSystem* debugSystem;
+    IUdpManager* udpManager;
+    IJsonConverter* jsonConverter;
     
     const unsigned long SENSOR_READ_INTERVAL = 15000;
     const unsigned long SENSOR_UPDATE_INTERVAL = 15000;
+    const unsigned long UDP_SEND_INTERVAL = 15000;
     unsigned long lastSensorReadTime = 0;
     unsigned long lastSensorUpdateTime = 0;
+    unsigned long lastUdpSendTime = 0;
     
     std::string generateSensorUid(const SensorEntity& sensor, const std::string& channelName = "") const;
     UpdateDto createSensorUpdateDto();
     bool readAnalogSensors();
     bool readI2CSensors();
     bool readModbusSensors();
+    void sendUpdateViaUdp(const UpdateDto& updateDto);
     
     void log(const char* format, ...)
     {
@@ -63,7 +70,9 @@ public:
                   IArduinoAdapter* arduinoAdapter,
                   IHybridAPIService* hybridApiService = nullptr,
                   ILogger* logger = nullptr,
-                  IDebugSystem* debugSystem = nullptr);
+                  IDebugSystem* debugSystem = nullptr,
+                  IUdpManager* udpManager = nullptr,
+                  IJsonConverter* jsonConverter = nullptr);
 
     ~SensorService();
     

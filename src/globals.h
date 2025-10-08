@@ -20,6 +20,7 @@
 #include "Infrastructure/Controllers/UDP/UdpController.h"
 #include "Infrastructure/Controllers/UDP/UdpSender.h"
 #include "Infrastructure/Controllers/UDP/UpdManager.h"
+#include "Core/Domain/Interfaces/Udp/IUdpManager.h"
 
 #include "Core/Domain/UseCases/Led/LedUseCases.h"
 #include "Core/Domain/UseCases/Buttons/ButtonUseCases.h"
@@ -288,18 +289,6 @@ DeviceService deviceService(
 
 SensorValueModel sensorValueModel;
 
-SensorService sensorService(
-    &moduleConfig,
-    &moduleStructure,
-    &sensorRepository,
-    &sensorReader,
-    &sensorValueModel,
-    &ntpTimeAdapter,
-    &arduinoAdapter,
-    &hybridApiService,
-    &mqttLogger,
-    &debugSystem);
-
 EvaluateRulesUseCase evaluateRulesUseCase(
     &deviceModel,
     &ruleRepository,
@@ -340,6 +329,20 @@ BoardTest boardTest(
 
 UdpManager udpManager(&mqttLogger, &debugSystem);
 
+SensorService sensorService(
+    &moduleConfig,
+    &moduleStructure,
+    &sensorRepository,
+    &sensorReader,
+    &sensorValueModel,
+    &ntpTimeAdapter,
+    &arduinoAdapter,
+    &hybridApiService,
+    &mqttLogger,
+    &debugSystem,
+    &udpManager,
+    &jsonConverter);
+
 LoopServiceFactory loopServiceFactory(
     &ledUseCases,
     &buttonUseCases,
@@ -377,7 +380,8 @@ ModuleSetupService moduleSetupService(
     &sensorReader,
     &spiffsAdapter,
     &jsonConverter,
-    &boardTest);
+    &boardTest,
+    &udpManager);
 
 void initDependencies()
 {

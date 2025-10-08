@@ -148,6 +148,7 @@ public:
 
     bool writeSensorAddress(int currentAddress, int newAddress, int portIndex) override
     {
+        return false;
         if (portIndex < 0 || portIndex >= _modbusPorts.size())
         {
             log("ModbusSensorReader: Invalid port index %d for address write", portIndex);

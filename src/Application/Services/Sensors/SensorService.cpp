@@ -10,7 +10,9 @@ SensorService::SensorService(IModuleConfig* moduleConfig,
                             IArduinoAdapter* arduinoAdapter,
                             IHybridAPIService* hybridApiService,
                             ILogger* logger,
-                            IDebugSystem* debugSystem) 
+                            IDebugSystem* debugSystem,
+                            IUdpManager* udpManager,
+                            IJsonConverter* jsonConverter) 
     : moduleConfig(moduleConfig), 
       moduleStructure(moduleStructure),
       sensorRepository(sensorRepository),
@@ -21,8 +23,11 @@ SensorService::SensorService(IModuleConfig* moduleConfig,
       hybridApiService(hybridApiService),
       logger(logger),
       debugSystem(debugSystem),
+      udpManager(udpManager),
+      jsonConverter(jsonConverter),
       lastSensorReadTime(0),
-      lastSensorUpdateTime(0) {
+      lastSensorUpdateTime(0),
+      lastUdpSendTime(0) {
 }
 
 SensorService::~SensorService() {
@@ -78,6 +83,14 @@ void SensorService::loop() {
         
         hybridApiService->sendModuleUpdateData(updateDto);
         lastSensorUpdateTime = currentTime;
+    }
+    
+    if (udpManager && (currentTime - lastUdpSendTime >= UDP_SEND_INTERVAL)) {
+        log("SensorService: Sending sensor update via UDP");
+        UpdateDto updateDto = createSensorUpdateDto();
+        
+        sendUpdateViaUdp(updateDto);
+        lastUdpSendTime = currentTime;
     }
 }
 
@@ -251,4 +264,46 @@ UpdateDto SensorService::createSensorUpdateDto() {
     }
     
     return dto;
+}
+
+void SensorService::sendUpdateViaUdp(const UpdateDto& updateDto) {
+    if (!udpManager || !jsonConverter) {
+        log("SensorService: UDP manager or JSON converter not available");
+        return;
+    }
+    
+    if (!udpManager->isInitialized()) {
+        log("SensorService: UDP manager not initialized");
+        return;
+    }
+    
+    // Convert UpdateDto to JSON string
+    std::string jsonString = jsonConverter->updateToJson(updateDto);
+    if (jsonString.empty()) {
+        log("SensorService: Failed to convert UpdateDto to JSON");
+        return;
+    }
+    
+    // Send via UDP broadcast
+    IUdpSender* sender = udpManager->getSender();
+    if (sender) {
+        // Use multicast for sensor data broadcast (port 1234 as default)
+        const char* multicastIP = udpManager->getMulticastIP();
+        uint16_t port = udpManager->getLocalPort();
+        
+        if (sender->sendMulticast(jsonString.c_str(), multicastIP, port)) {
+            log("SensorService: Successfully sent sensor data via UDP multicast to %s:%d", multicastIP, port);
+        } else {
+            log("SensorService: Failed to send sensor data via UDP multicast");
+            
+            // Fallback to broadcast
+            if (sender->sendBroadcast(jsonString.c_str(), port)) {
+                log("SensorService: Successfully sent sensor data via UDP broadcast on port %d", port);
+            } else {
+                log("SensorService: Failed to send sensor data via UDP broadcast");
+            }
+        }
+    } else {
+        log("SensorService: UDP sender not available");
+    }
 }
