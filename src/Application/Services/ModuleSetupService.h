@@ -879,7 +879,7 @@ inline void ModuleSetupService::fillSensorModuleStructure(Node &node)
         
         for (auto& sensorEntity : allSensorEntities)
         {
-            if (sensorEntity.protocol == "ModBus" && sensorEntity.status == SENSOR_STATUS_ADDED)
+            if (sensorEntity.protocol == "ModBus")
             {
                 int address = sensorEntity.modbusDeviceAddress;
                 

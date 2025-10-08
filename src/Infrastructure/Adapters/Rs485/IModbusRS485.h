@@ -29,8 +29,8 @@ public:
     virtual bool writeRegister(int slaveAddress, int registerAddress, uint16_t value) = 0;
 
     // Power control methods
-    virtual void powerOnPort(int portIndex) = 0;
-    virtual void powerOffPort(int portIndex) = 0;
+    virtual void powerOnPort() = 0;
+    virtual void powerOffPort() = 0;
 };
 
 #endif
