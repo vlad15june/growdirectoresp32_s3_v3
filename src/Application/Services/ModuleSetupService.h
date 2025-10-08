@@ -104,6 +104,9 @@ private:
     void addSensorToStructure(Node &node, const SensorEntity &sensorEntity);
     void removeDisconnectedNewSensorPlaceholders(Node &node, const SensorEntity &sensorEntity);
 
+    // Helper method for address management
+    int findNextAvailableAddress(const std::map<int, std::vector<SensorEntity*>>& addressMap);
+
     // Helper methods for hydro module structure
     void addHydroSensors(Node &node);
     void addHydroPumps(Node &node);
@@ -862,6 +865,113 @@ inline void ModuleSetupService::fillSensorModuleStructure(Node &node)
     // Scan empty pins for additional sensors
     scanEmptyPinsForSensors(node, sensorEntities);
 
+    // Address validation and duplicate handling for Modbus sensors
+    if (sensorRepository && sensorReader)
+    {
+        log("SETUP: Starting address validation and duplicate handling for Modbus sensors");
+        
+        // Get all sensors again to include newly detected ones
+        auto allSensorEntities = sensorRepository->getAll();
+        
+        // Collect all Modbus sensors and their addresses
+        std::map<int, std::vector<SensorEntity*>> addressMap;
+        std::vector<SensorEntity*> sensorsNeedingNewAddress;
+        
+        for (auto& sensorEntity : allSensorEntities)
+        {
+            if (sensorEntity.protocol == "ModBus" && sensorEntity.status == SENSOR_STATUS_ADDED)
+            {
+                int address = sensorEntity.modbusDeviceAddress;
+                
+                // Check if address is outside valid range (0x70-0x78)
+                if (address < 0x70 || address > 0x78)
+                {
+                    log("SETUP: Sensor %s has address 0x%02X outside valid range 0x70-0x78, needs new address", 
+                        sensorEntity.uid.c_str(), address);
+                    sensorsNeedingNewAddress.push_back(&sensorEntity);
+                }
+                else
+                {
+                    addressMap[address].push_back(&sensorEntity);
+                }
+            }
+        }
+        
+        // Find duplicates and mark for address change (keep first, change others)
+        for (const auto& pair : addressMap)
+        {
+            int address = pair.first;
+            const auto& sensors = pair.second;
+            
+            if (sensors.size() > 1)
+            {
+                log("SETUP: Found %zu sensors with duplicate address 0x%02X", sensors.size(), address);
+                
+                // Keep the first sensor, mark others for address change
+                for (size_t i = 1; i < sensors.size(); i++)
+                {
+                    sensorsNeedingNewAddress.push_back(sensors[i]);
+                    log("SETUP: Sensor %s marked for address change due to duplicate address 0x%02X", 
+                        sensors[i]->uid.c_str(), address);
+                }
+            }
+        }
+        
+        // Assign new addresses to sensors that need them
+        if (!sensorsNeedingNewAddress.empty())
+        {
+            log("SETUP: Assigning new addresses to %zu sensors", sensorsNeedingNewAddress.size());
+            
+            for (SensorEntity* sensorEntity : sensorsNeedingNewAddress)
+            {
+                // Find next available address in range 0x70-0x78
+                int newAddress = findNextAvailableAddress(addressMap);
+                
+                if (newAddress != -1)
+                {
+                    log("SETUP: Attempting to set new address 0x%02X for sensor %s (current: 0x%02X)", 
+                        newAddress, sensorEntity->uid.c_str(), sensorEntity->modbusDeviceAddress);
+                    
+                    // Write new address to sensor
+                    if (sensorReader->writeSensorAddress(*sensorEntity, newAddress))
+                    {
+                        int oldAddress = sensorEntity->modbusDeviceAddress;
+                        sensorEntity->modbusDeviceAddress = newAddress;
+                        
+                        // Update sensor in repository
+                        if (sensorRepository->update(*sensorEntity))
+                        {
+                            log("SETUP: Successfully changed sensor %s address from 0x%02X to 0x%02X", 
+                                sensorEntity->uid.c_str(), oldAddress, newAddress);
+                            
+                            // Update address map for next iterations
+                            addressMap[newAddress].push_back(sensorEntity);
+                        }
+                        else
+                        {
+                            log("SETUP: Failed to update sensor %s in repository after address change", 
+                                sensorEntity->uid.c_str());
+                        }
+                    }
+                    else
+                    {
+                        log("SETUP: Failed to write new address 0x%02X to sensor %s", 
+                            newAddress, sensorEntity->uid.c_str());
+                    }
+                }
+                else
+                {
+                    log("SETUP: No available addresses in range 0x70-0x78 for sensor %s", 
+                        sensorEntity->uid.c_str());
+                }
+            }
+        }
+        else
+        {
+            log("SETUP: No sensors need address changes");
+        }
+    }
+
     log("SETUP: Sensor module structure filled with %zu sensors", node.sensors.size());
 }
 
@@ -1274,7 +1384,7 @@ inline void ModuleSetupService::scanPinForSensorTypes(int pin, Node &node)
         tempSensor.model = sensorType.name;
         tempSensor.protocol = sensorType.getProtocolString();
         tempSensor.isActive = true;
-        tempSensor.pin = pin;
+        tempSensor.pin = pin; //NOTE: pin + 1 ?????? and after add to structure pin should be -1 ???? // OR add new property visualPin
         char pinStr[3];
         sprintf(pinStr, "%02d", pin);
         tempSensor.uid = moduleUid + "." + pinStr;
@@ -1299,6 +1409,7 @@ inline void ModuleSetupService::scanPinForSensorTypes(int pin, Node &node)
 
         if (sensorReader->scanSensor(tempSensor))
         {
+            //TODO: set new address ModBus sensors
             log("SETUP: Detected %s sensor on pin %d", sensorType.name.c_str(), pin);
 
             isAdded = true;
@@ -1455,6 +1566,22 @@ inline void ModuleSetupService::removeDisconnectedNewSensorPlaceholders(Node &no
         log("SETUP: Added offline single-channel sensor placeholder %s, type: none, protocol: %s, pin: %d",
             sensor.uid.c_str(), sensorEntity.protocol.c_str(), sensor.pin);
     }
+}
+
+inline int ModuleSetupService::findNextAvailableAddress(const std::map<int, std::vector<SensorEntity*>>& addressMap)
+{
+    // Search for next available address in range 0x70-0x78
+    for (int address = 0x70; address <= 0x78; address++)
+    {
+        if (addressMap.find(address) == addressMap.end() || addressMap.at(address).empty())
+        {
+            log("SETUP: Found available address: 0x%02X", address);
+            return address;
+        }
+    }
+    
+    log("SETUP: No available addresses found in range 0x70-0x78");
+    return -1; // No available address found
 }
 
 #endif // MODULE_SETUP_SERVICE_H

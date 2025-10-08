@@ -24,6 +24,13 @@ public:
     
     // Calculate CRC16 (Modbus)
     virtual uint16_t calculateCRC(uint8_t *data, uint8_t length) = 0;
+
+    // Write register using Modbus function code 0x10 (Preset Multiple Registers)
+    virtual bool writeRegister(int slaveAddress, int registerAddress, uint16_t value) = 0;
+
+    // Power control methods
+    virtual void powerOnPort(int portIndex) = 0;
+    virtual void powerOffPort(int portIndex) = 0;
 };
 
 #endif

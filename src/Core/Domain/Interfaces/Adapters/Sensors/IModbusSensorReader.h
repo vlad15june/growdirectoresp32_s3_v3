@@ -15,6 +15,27 @@ public:
     virtual bool readRegister(uint8_t deviceAddress, const ModbusRegisterConfig &config, float &outValue, int portIndex = 0) = 0;
     
     virtual bool pingAddress(uint8_t deviceAddress, int portIndex = 0) = 0;
+
+    /**
+     * @brief Write new address to Modbus sensor
+     * @param currentAddress Current address of the sensor
+     * @param newAddress New address to set
+     * @param portIndex Port index for communication
+     * @return true if address was written successfully, false otherwise
+     */
+    virtual bool writeSensorAddress(int currentAddress, int newAddress, int portIndex) = 0;
+
+    /**
+     * @brief Power on specific port
+     * @param portIndex Port index to power on
+     */
+    virtual void powerOnPort(int portIndex) = 0;
+
+    /**
+     * @brief Power off specific port
+     * @param portIndex Port index to power off
+     */
+    virtual void powerOffPort(int portIndex) = 0;
 };
 
 #endif

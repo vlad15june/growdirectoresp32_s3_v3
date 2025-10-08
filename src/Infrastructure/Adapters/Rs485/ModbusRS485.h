@@ -70,7 +70,7 @@ public:
         Serial.println(" | Request sent.");
 
         _arduino.digitalWrite(_controlPin, _arduino.getDigitalLow());
-        _arduino.digitalWrite(_sensorPowerPin, _arduino.getDigitalLow());
+        // _arduino.digitalWrite(_sensorPowerPin, _arduino.getDigitalLow());
     }
 
     int readAvailable(uint8_t *buffer, size_t maxLength) override
@@ -93,6 +93,66 @@ public:
     const char *getPortName() const override
     {
         return _portName;
+    }
+
+    bool writeRegister(int slaveAddress, int registerAddress, uint16_t value) override
+    {
+        // Modbus function code 0x10 (Preset Multiple Registers) for writing single register
+        uint8_t request[11] = {
+            (uint8_t)slaveAddress,
+            0x10,  // Function code: Preset Multiple Registers
+            (uint8_t)(registerAddress >> 8),    // Register address high byte
+            (uint8_t)(registerAddress & 0xFF),  // Register address low byte
+            0x00, 0x01,  // Number of registers (1)
+            0x02,        // Byte count (2 bytes for 1 register)
+            (uint8_t)(value >> 8),      // Value high byte
+            (uint8_t)(value & 0xFF)     // Value low byte
+        };
+
+        uint16_t crc = calculateCRC(request, 9);
+        request[9] = crc & 0xFF;
+        request[10] = (crc >> 8);
+
+        sendData(request, sizeof(request));
+
+        _arduino.delay(300);
+
+        uint8_t response[8];
+        int bytesRead = readAvailable(response, sizeof(response));
+        
+        Serial.printf("[%s] Write register response: %d bytes received\n", _portName, bytesRead);
+        
+        // Check if we got a valid response (at least 6 bytes for normal response)
+        if (bytesRead >= 6 && response[0] == slaveAddress && response[1] == 0x10)
+        {
+            Serial.printf("[%s] Successfully wrote register 0x%04X = 0x%04X to device %d\n", 
+                         _portName, registerAddress, value, slaveAddress);
+            return true;
+        }
+        else if (bytesRead > 0 && response[1] >= 0x80)
+        {
+            // Exception response
+            Serial.printf("[%s] Exception response (0x%02X) when writing register to device %d\n", 
+                         _portName, response[1], slaveAddress);
+            return false;
+        }
+
+        Serial.printf("[%s] Failed to write register to device %d\n", _portName, slaveAddress);
+        return false;
+    }
+
+    void powerOnPort() override
+    {
+        _arduino.digitalWrite(_sensorPowerPin, _arduino.getDigitalHigh());
+        _arduino.delay(100); // Small delay to stabilize power
+        Serial.printf("[%s] Port powered ON\n", _portName);
+    }
+
+    void powerOffPort() override
+    {
+        _arduino.digitalWrite(_sensorPowerPin, _arduino.getDigitalLow());
+        _arduino.delay(100); // Small delay to ensure power is off
+        Serial.printf("[%s] Port powered OFF\n", _portName);
     }
 };
 #endif

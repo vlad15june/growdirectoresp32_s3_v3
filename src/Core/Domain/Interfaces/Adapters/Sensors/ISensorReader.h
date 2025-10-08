@@ -44,6 +44,14 @@ public:
      * @return true if read was successful, false otherwise
      */
     virtual bool readMultiChannelSensor(const SensorEntity& sensor, std::map<std::string, float>& channelValues) = 0;
+
+    /**
+     * @brief Write new address to sensor (only for Modbus sensors)
+     * @param sensor Sensor entity containing configuration
+     * @param newAddress New address to set for the sensor
+     * @return true if address was written successfully, false otherwise
+     */
+    virtual bool writeSensorAddress(const SensorEntity& sensor, int newAddress) = 0;
 };
 
 #endif // I_SENSOR_READER_H

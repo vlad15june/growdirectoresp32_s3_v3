@@ -166,6 +166,26 @@ public:
         return !channelValues.empty();
     }
 
+    bool writeSensorAddress(const SensorEntity& sensor, int newAddress) override
+    {
+        if (sensor.protocol == "ModBus")
+        {
+            if (!_modbusReader)
+            {
+                log("SensorReader: ModBus reader not available for address write");
+                return false;
+            }
+
+            int portIndex = sensor.pin;
+            return _modbusReader->writeSensorAddress(sensor.modbusDeviceAddress, newAddress, portIndex);
+        }
+        else
+        {
+            log("SensorReader: Address writing not supported for protocol: %s", sensor.protocol.c_str());
+            return false;
+        }
+    }
+
 private:
     bool readAnalogSensor(const SensorEntity &sensor, float &outValue)
     {
@@ -256,6 +276,25 @@ private:
         int portIndex = sensor.pin;
         _modbusReader->init(sensor.baudRate);
         
+        // Power control: Turn off all ports first to avoid interference
+        log("SensorReader: Powering off all ports for clean scan");
+        for (int i = 0; i < 8; i++) // Assuming max 8 ports
+        {
+            _modbusReader->powerOffPort(i);
+        }
+        if (_arduino)
+        {
+            _arduino->delay(500); // Wait for ports to power down completely
+        }
+        
+        // Power on only the target port
+        log("SensorReader: Powering on port %d for scanning", portIndex);
+        _modbusReader->powerOnPort(portIndex);
+        if (_arduino)
+        {
+            _arduino->delay(1000); // Wait for sensor to stabilize
+        }
+        
         // Try to query device address using 6EH function code first
         uint8_t actualDeviceAddress = queryDeviceAddress(portIndex);
         uint8_t deviceAddressToUse = (actualDeviceAddress != 0) ? actualDeviceAddress : sensor.modbusDeviceAddress;
@@ -293,6 +332,7 @@ private:
         }
         
         // Now scan all register configurations with the found address
+        bool scanSuccess = true;
         for (const auto &config : sensor.modbusRegisterConfigs)
         {
             bool success = false;
@@ -333,10 +373,12 @@ private:
             {
                 log("SensorReader: Failed to scan modbus register %s on port %d after 3 attempts or value out of range", 
                     config.channelName.c_str(), portIndex);
-                return false;
+                scanSuccess = false;
+                break;
             }
         }
-        return true;
+        
+        return scanSuccess;
     }
 
     // Helper method to query device address using 6EH function code

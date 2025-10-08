@@ -146,7 +146,77 @@ public:
         return false;
     }
 
+    bool writeSensorAddress(int currentAddress, int newAddress, int portIndex) override
+    {
+        if (portIndex < 0 || portIndex >= _modbusPorts.size())
+        {
+            log("ModbusSensorReader: Invalid port index %d for address write", portIndex);
+            return false;
+        }
+
+        IModbusRS485* modbus = _modbusPorts[portIndex];
+
+        // Power off all ports first to avoid interference
+        powerOffAllPorts();
+        _arduino.delay(500);
+
+        // Power on only the target port
+        modbus->powerOnPort();
+        _arduino.delay(1000); // Wait for sensor to stabilize
+
+        // Write new address to register 0x0012 using function code 0x10
+        bool success = modbus->writeRegister(currentAddress, 0x0012, (uint16_t)newAddress);
+
+        if (success)
+        {
+            log("ModbusSensorReader: Successfully wrote new address %d to device %d on port %d", 
+                newAddress, currentAddress, portIndex);
+        }
+        else
+        {
+            log("ModbusSensorReader: Failed to write new address %d to device %d on port %d", 
+                newAddress, currentAddress, portIndex);
+        }
+
+        return success;
+    }
+
+    void powerOnPort(int portIndex) override
+    {
+        if (portIndex >= 0 && portIndex < _modbusPorts.size())
+        {
+            _modbusPorts[portIndex]->powerOnPort(portIndex);
+            log("ModbusSensorReader: Powered ON port %d", portIndex);
+        }
+        else
+        {
+            log("ModbusSensorReader: Invalid port index %d for power ON", portIndex);
+        }
+    }
+
+    void powerOffPort(int portIndex) override
+    {
+        if (portIndex >= 0 && portIndex < _modbusPorts.size())
+        {
+            _modbusPorts[portIndex]->powerOffPort(portIndex);
+            log("ModbusSensorReader: Powered OFF port %d", portIndex);
+        }
+        else
+        {
+            log("ModbusSensorReader: Invalid port index %d for power OFF", portIndex);
+        }
+    }
+
 private:
+    void powerOffAllPorts()
+    {
+        for (int i = 0; i < _modbusPorts.size(); i++)
+        {
+            powerOffPort(i);
+        }
+        log("ModbusSensorReader: All ports powered OFF");
+    }
+
     void log(const char* format, ...)
     {
         if (_debugSystem && _logger)
