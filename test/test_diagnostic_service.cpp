@@ -6,7 +6,7 @@
 #include "Mock/Infrastructure/Logging/MockDebugSystem.h"
 #include "Mock/Infrastructure/Configuration/MockSettings.h"
 #include "Mock/Infrastructure/Configuration/MockNTPTimeAdapter.h"
-#include "Mock/Infrastructure/WiFi/MockWifiAdapter.h"
+#include "Mock/Infrastructure/Wifi/MockWifiAdapter.h"
 #include "Mock/Infrastructure/MockArduinoAdapter.h"
 #include "Mock/Infrastructure/Mqtt/MockMqttManager.h"
 #include "Mock/Infrastructure/Api/MockHybridAPIService.h"

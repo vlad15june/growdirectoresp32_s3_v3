@@ -363,7 +363,7 @@ static void test_module_mode_initialization_when_invalid(void) {
     if (debug_file != nullptr) fprintf(debug_file, "getIfConfigured = %d\n", g_mockSettings.getIfConfigured());
 
     TEST_ASSERT_TRUE(invalidMode != g_mockSettings.getIfConfigured());
-    TEST_ASSERT_EQUAL(ModuleModeEnum::USER_CAN_CONFIGURE, g_mockSettings.getIfConfigured());
+    TEST_ASSERT_EQUAL(ModuleModeEnum::AP_TEST_MODE, g_mockSettings.getIfConfigured());
     
     module_setup_service_teardown();
     if (debug_file != nullptr) fprintf(debug_file, "Finished test_module_mode_initialization_when_invalid\n");
@@ -774,8 +774,8 @@ static void test_setup_ap_configures_static_ip() {
     
     // Check that configureAccessPoint was called with correct parameters
     TEST_ASSERT_TRUE(g_mockWifiAdapter.configureAccessPointCalled);
-    TEST_ASSERT_EQUAL_STRING("192.168.0.1", g_mockWifiAdapter.lastLocalIP);
-    TEST_ASSERT_EQUAL_STRING("192.168.0.1", g_mockWifiAdapter.lastGateway);
+    TEST_ASSERT_EQUAL_STRING("192.168.4.1", g_mockWifiAdapter.lastLocalIP);
+    TEST_ASSERT_EQUAL_STRING("192.168.4.1", g_mockWifiAdapter.lastGateway);
     TEST_ASSERT_EQUAL_STRING("255.255.255.0", g_mockWifiAdapter.lastSubnet);
     
     module_setup_service_teardown();

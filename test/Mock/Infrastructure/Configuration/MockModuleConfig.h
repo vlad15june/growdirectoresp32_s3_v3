@@ -168,6 +168,16 @@ public:
         return pins; 
     }
     
+    uint8_t* getPumpPins() const override { 
+        static uint8_t pins[] = {9, 10, 11, 12}; 
+        return pins; 
+    }
+    
+    uint8_t* getPumpStatusPins() const override { 
+        static uint8_t pins[] = {13, 14, 15, 16}; 
+        return pins; 
+    }
+    
     void setSensorPinCount(int count) {
         _sensorPinCount = count;
         _modifiedFields["sensorPinCount"] = true;
