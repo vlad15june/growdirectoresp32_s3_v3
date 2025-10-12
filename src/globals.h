@@ -32,6 +32,7 @@
 #include "Core/Domain/UseCases/Sensors/SensorCommandUseCase.h"
 #include "Core/Domain/UseCases/Rules/EvaluateRulesUseCase.h"
 #include "Core/Domain/UseCases/Rules/SyncRulesUseCase.h"
+#include "Core/Domain/UseCases/SensorTypes/SyncSensorTypesUseCase.h"
 
 #include "Core/Domain/Data/Models/ModuleStructure.h"
 #include "Core/Domain/Data/Models/IDeviceModel.h"
@@ -306,6 +307,15 @@ SyncRulesUseCase syncRulesUseCase(
     &mqttLogger,
     &debugSystem);
 
+SyncSensorTypesUseCase syncSensorTypesUseCase(
+    &hybridApiService,
+    &sensorTypeRepository,
+    &arduinoAdapter,
+    &ntpTimeAdapter,
+    &jsonConverter,
+    &mqttLogger,
+    &debugSystem);
+
 OnChangeLocalIpUseCase onChangeLocalIpUseCase(
     wifiAdapter,
     wifiManager,
@@ -313,6 +323,7 @@ OnChangeLocalIpUseCase onChangeLocalIpUseCase(
     hybridApiService,
     moduleConfig,
     syncRulesUseCase,
+    syncSensorTypesUseCase,
     mqttLogger,
     debugSystem);
 

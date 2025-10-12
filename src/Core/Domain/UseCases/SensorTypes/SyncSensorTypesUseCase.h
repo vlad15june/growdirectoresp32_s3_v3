@@ -31,13 +31,13 @@ private:
     bool _forceSyncRequested = false;
     
     void log(const char* format, ...) {
-        if (_logger && _debugSystem && _debugSystem->isFeatureEnabled(DebugFeatures::SENSOR_TYPE_DEBUG)) {
+        if (_logger && _debugSystem && _debugSystem->isFeatureEnabled(DebugFeatures::SENSOR_DATA_DEBUG)) {
             char buffer[512];
             va_list args;
             va_start(args, format);
             vsnprintf(buffer, sizeof(buffer), format, args);
             va_end(args);
-            _logger->println(DebugFeatures::SENSOR_TYPE_DEBUG, buffer);
+            _logger->println(DebugFeatures::SENSOR_DATA_DEBUG, buffer);
         }
     }
 
@@ -203,7 +203,7 @@ private:
         for (const auto& serverSensorType : serverSensorTypes) {
             try {
                 // Check if sensor type already exists
-                auto existingSensorType = _sensorTypeRepository->get(serverSensorType.uid);
+                auto existingSensorType = _sensorTypeRepository->get(serverSensorType.uid.c_str());
                 
                 if (existingSensorType.has_value()) {
                     // Update existing sensor type if different
