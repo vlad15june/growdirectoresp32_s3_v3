@@ -12,6 +12,7 @@
 #include "Core/Domain/Interfaces/IDebugSystem.h"
 #include "Core/Domain/Interfaces/IModuleConfig.h"
 #include "Core/Domain/Interfaces/UseCases/Rules/ISyncRulesUseCase.h"
+#include "Core/Domain/Interfaces/UseCases/SensorTypes/ISyncSensorTypesUseCase.h"
 #include <string.h>
 
 class OnChangeLocalIpUseCase : public IOnChangeLocalIpUseCase
@@ -25,6 +26,7 @@ private:
     IHybridAPIService &_apiService;
     IModuleConfig &_moduleConfig;
     ISyncRulesUseCase &_syncRulesUseCase;
+    ISyncSensorTypesUseCase &_syncSensorTypesUseCase;
     char _oldIpStr[16]; // Store previous IP address
 
 public:
@@ -35,6 +37,7 @@ public:
         IHybridAPIService &apiService,
         IModuleConfig &moduleConfig,
         ISyncRulesUseCase &syncRulesUseCase,
+        ISyncSensorTypesUseCase &syncSensorTypesUseCase,
         ILogger &loggerInstance,
         IDebugSystem &debugSystemInstance)
         : _wifiAdapter(wifiAdapter),
@@ -43,6 +46,7 @@ public:
           _apiService(apiService),
           _moduleConfig(moduleConfig),
           _syncRulesUseCase(syncRulesUseCase),
+          _syncSensorTypesUseCase(syncSensorTypesUseCase),
           _logger(loggerInstance),
           _debugSystem(debugSystemInstance)
     {
@@ -114,6 +118,10 @@ public:
                 // Sync rules after IP change
                 log("OnChangeLocalIpUseCase: Triggering rule synchronization after IP change");
                 _syncRulesUseCase.forceSync();
+
+                // Sync sensor types after IP change
+                log("OnChangeLocalIpUseCase: Triggering sensor types synchronization after IP change");
+                _syncSensorTypesUseCase.forceSync();
 
                 // Process additional server communications
                 log("OnChangeLocalIpUseCase: Processing delete command and restoring account info");

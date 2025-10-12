@@ -739,6 +739,24 @@ public:
         return rules;
     }
     
+    std::vector<SensorType> getSensorTypesList() override
+    {
+        std::vector<SensorType> sensorTypes;
+        
+        // This method always uses REST API only, regardless of priority setting
+        if (_restApiService != nullptr)
+        {
+            sensorTypes = _restApiService->getSensorTypesList();
+            log("HYBRID API: Get sensor types list via REST - sensor type count: %d", sensorTypes.size());
+        }
+        else
+        {
+            log("HYBRID API: REST API service not available for getSensorTypesList");
+        }
+        
+        return sensorTypes;
+    }
+    
     std::vector<ModuleCommandDto> getModuleCommand() override
     {
         std::vector<ModuleCommandDto> commands;

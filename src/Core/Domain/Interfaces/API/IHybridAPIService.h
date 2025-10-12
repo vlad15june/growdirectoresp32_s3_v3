@@ -3,6 +3,7 @@
 #include "IRestAPIService.h"
 #include "IMqttApiService.h"
 #include "Core/Domain/Data/Models/ModuleStructure.h"
+#include "Core/Domain/Data/Entities/Sensor/SensorType.h"
 #include "Application/DTOs/DiagnosticDto.h"
 #include "Application/DTOs/CommandResultDto.h"
 #include "Application/DTOs/DeviceCommandUpdateDto.h"
@@ -152,6 +153,12 @@ public:
      * @return vector of Rule containing the rule details, empty if no rules or error
      */
     virtual std::vector<Rule> getRuleList() = 0;
+
+    /**
+     * Get sensor types list from the server (REST only)
+     * @return vector of SensorType containing the sensor type definitions, empty if no sensor types or error
+     */
+    virtual std::vector<SensorType> getSensorTypesList() = 0;
 
     /**
      * Get module commands from the server (REST only)

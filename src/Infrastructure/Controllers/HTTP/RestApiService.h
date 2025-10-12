@@ -818,6 +818,76 @@ public:
         return rules;
     }
 
+    std::vector<SensorType> getSensorTypesList() override
+    {
+        std::vector<SensorType> sensorTypes;
+        
+        if (_moduleConfig == nullptr || _settings == nullptr)
+        {
+            log("NET: getSensorTypesList - ModuleConfig or Settings not available");
+            return sensorTypes;
+        }
+
+        const char *moduleUid = _moduleConfig->getModuleUid();
+        
+        snprintf(_urlBuffer, sizeof(_urlBuffer),
+                 "%s/api/v1/Hardware/sensor_models?token=%s&grow_director_uid=%s",
+                 _serverUrl, _token, moduleUid);
+
+        log("NET: GET %s", _urlBuffer);
+
+        byte tries = 0;
+        int httpResponseCode = 0;
+        std::string responseBody;
+        
+        while (tries < 3 && httpResponseCode != 200)
+        {
+            _httpClient->setTimeout(30000);
+            _httpClient->begin(_urlBuffer);
+            
+            httpResponseCode = _httpClient->GET();
+            
+            if (httpResponseCode > 0)
+            {
+                log("NET: HTTP Response code: %d", httpResponseCode);
+                
+                // Get response body
+                responseBody = _httpClient->getString();
+                log("NET: HTTP Response: %s", responseBody.c_str());
+            }
+            else
+            {
+                log("NET: HTTP Response Error code: %d", httpResponseCode);
+            }
+            
+            _httpClient->end();
+            delay(200);
+            tries++;
+        }
+        
+        if (httpResponseCode == 200 && !responseBody.empty() && _jsonConverter != nullptr)
+        {
+            // Parse JSON response to array of SensorType
+            if (_jsonConverter->sensorTypesFromJson(responseBody, sensorTypes))
+            {
+                log("NET: Sensor types parsed successfully - count: %d", sensorTypes.size());
+                trackApiSendSuccess();
+            }
+            else
+            {
+                log("NET: Failed to parse sensor types JSON");
+                sensorTypes.clear();
+            }
+        }
+        else
+        {
+            if (httpResponseCode != 200)
+                trackApiSendFailure();
+        }
+        
+        return sensorTypes;
+    }
+
     // Implementations of network diagnostic counter methods
     int getApiSendFails() const override { return _apiSendFails; }
     void resetApiSendFails() override { _apiSendFails = 0; }

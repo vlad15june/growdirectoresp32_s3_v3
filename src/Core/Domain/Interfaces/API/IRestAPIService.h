@@ -8,6 +8,7 @@
 #include "Application/DTOs/ModuleCommandDto.h"
 #include "Application/DTOs/ModuleCommandUpdateDto.h"
 #include "Core/Domain/Data/Entities/Rule.h"
+#include "Core/Domain/Data/Entities/Sensor/SensorType.h"
 #include <vector>
 
 class IRestAPIService {
@@ -38,6 +39,12 @@ public:
      * @return vector of Rule containing the rule details, empty if no rules or error
      */
     virtual std::vector<Rule> getRuleList() = 0;
+    
+    /**
+     * @brief Get sensor types list from server
+     * @return vector of SensorType containing the sensor type definitions, empty if no sensor types or error
+     */
+    virtual std::vector<SensorType> getSensorTypesList() = 0;
     
     /**
      * @brief Sends diagnostic data to the server
