@@ -17,78 +17,6 @@ void createTestSensorTypes()
   std::vector<SensorType> existingTypes = sensorTypeRepository.getAll();
   Serial.printf("Found %d existing sensor types\n", existingTypes.size());
 
-  // Check if temp_humidity_modbus already exists
-  bool tempHumidityExists = false;
-  for (const auto &type : existingTypes)
-  {
-    if (type.name == "temp_humidity_modbus")
-    {
-      tempHumidityExists = true;
-      Serial.printf("Temperature/Humidity sensor type already exists (ID: %d)\n", type.id);
-      break;
-    }
-  }
-
-  if (!tempHumidityExists)
-  {
-    // Create Temperature/Humidity Modbus sensor type
-    SensorType tempHumiditySensorType;
-    tempHumiditySensorType.id = 1;
-    tempHumiditySensorType.canScan = true;
-    tempHumiditySensorType.isSupported = true;
-
-    tempHumiditySensorType.name = "temp_humidity_modbus";
-    tempHumiditySensorType.displayName = "Temperature & Humidity Sensor (Modbus)";
-    tempHumiditySensorType.isAnalog = false;
-    tempHumiditySensorType.canCalibrate = false;
-    tempHumiditySensorType.validCalibrationPeriodDays = 365;
-    tempHumiditySensorType.calibrationTimeInSeconds = 30;
-    tempHumiditySensorType.minValue = -40.0f;
-    tempHumiditySensorType.maxValue = 80.0f;
-    tempHumiditySensorType.limitMinValue = -50.0f;
-    tempHumiditySensorType.limitMaxValue = 100.0f;
-    tempHumiditySensorType.unit = "°C/%RH";
-    tempHumiditySensorType.step = 0.1f;
-    tempHumiditySensorType.precisionPercent = 2.0f;
-    tempHumiditySensorType.precisionValue = 0.5f;
-
-    // Set protocol and Modbus parameters
-    tempHumiditySensorType.protocol = SensorProtocol::MODBUS_PROTOCOL;
-    tempHumiditySensorType.modbusDeviceAddress = 1;
-    tempHumiditySensorType.baudRate = 9600;
-
-    // Create Modbus register configurations for temperature and humidity
-    ModbusRegisterConfig tempConfig;
-    tempConfig.functionCode = 3;
-    tempConfig.startRegister = 0;
-    tempConfig.numRegisters = 1;
-    tempConfig.multiplier = 0.1f;
-    tempConfig.offset = 0.0f;
-    tempConfig.channelName = "air_temp";
-    tempConfig.sensorType = "air_temp";
-    tempConfig.channel = 1;
-    tempConfig.canConnectMinValue = 10.0f;
-    tempConfig.canConnectMaxValue = 40.0f;
-    tempHumiditySensorType.modbusRegisterConfig.push_back(tempConfig);
-
-    ModbusRegisterConfig humidityConfig;
-    humidityConfig.functionCode = 3;
-    humidityConfig.startRegister = 1;
-    humidityConfig.numRegisters = 1;
-    humidityConfig.multiplier = 0.1f;
-    humidityConfig.offset = 0.0f;
-    humidityConfig.channelName = "humidity";
-    humidityConfig.sensorType = "humidity";
-    humidityConfig.channel = 2;
-    humidityConfig.canConnectMinValue = 30.0f;
-    humidityConfig.canConnectMaxValue = 70.0f;
-    tempHumiditySensorType.modbusRegisterConfig.push_back(humidityConfig);
-
-    // Save to repository
-    bool saved = sensorTypeRepository.save(tempHumiditySensorType);
-    Serial.printf("Temperature/Humidity sensor type created: %s\n", saved ? "SUCCESS" : "FAILED");
-  }
-
   // Check if RY-WS301 already exists
   bool ryWs301Exists = false;
   for (const auto &type : existingTypes)
@@ -96,40 +24,64 @@ void createTestSensorTypes()
     if (type.name == "ry_ws301")
     {
       ryWs301Exists = true;
-      Serial.printf("RY-WS301 sensor type already exists (ID: %d)\n", type.id);
+      Serial.printf("RY-WS301 sensor type already exists (UID: %s)\n", type.uid.c_str());
       break;
     }
   }
 
   if (!ryWs301Exists)
   {
-    // Create RY-WS301 sensor type
+    // Create RY-WS301 sensor type according to new structure
     SensorType ryWs301SensorType;
-    ryWs301SensorType.id = 2;
-    ryWs301SensorType.canScan = true;
-    ryWs301SensorType.isSupported = true;
-
+    ryWs301SensorType.uid = "4719a986-a300-48d5-bd1f-e34a1329798a";
     ryWs301SensorType.name = "ry_ws301";
     ryWs301SensorType.displayName = "RY-WS301 Environmental Sensor";
-    ryWs301SensorType.isAnalog = false;
-    ryWs301SensorType.canCalibrate = true;
-    ryWs301SensorType.validCalibrationPeriodDays = 365;
-    ryWs301SensorType.calibrationTimeInSeconds = 30;
-    ryWs301SensorType.minValue = -40.0f;
-    ryWs301SensorType.maxValue = 80.0f;
-    ryWs301SensorType.limitMinValue = -50.0f;
-    ryWs301SensorType.limitMaxValue = 100.0f;
-    ryWs301SensorType.unit = "°C/%RH/hPa";
-    ryWs301SensorType.step = 0.1f;
-    ryWs301SensorType.precisionPercent = 2.0f;
-    ryWs301SensorType.precisionValue = 0.5f;
-
-    // Set protocol and Modbus parameters
+    ryWs301SensorType.canScan = true;
     ryWs301SensorType.protocol = SensorProtocol::MODBUS_PROTOCOL;
+    ryWs301SensorType.isSupported = true;
     ryWs301SensorType.modbusDeviceAddress = 255; // 0xFF
     ryWs301SensorType.baudRate = 9600;
+    ryWs301SensorType.id = 1; // Legacy compatibility
 
-    // Temperature register config (register 0, formula: value/100-40)
+    // Create air temperature sub-sensor type
+    SubSensorType airTempType;
+    airTempType.name = "air_temp";
+    airTempType.displayName = "Air temperature";
+    airTempType.isAnalog = false;
+    airTempType.canCalibrate = false;
+    airTempType.validCalibrationPeriodDays = 0;
+    airTempType.calibrationTimeInSeconds = 0;
+    airTempType.minValue = 15.0f;
+    airTempType.maxValue = 35.0f;
+    airTempType.limitMinValue = -40.0f;
+    airTempType.limitMaxValue = 75.0f;
+    airTempType.unit = "°C";
+    airTempType.step = 1.0f;
+    airTempType.precisionPercent = 5.0f;
+    airTempType.precisionValue = 5.8f;
+
+    // Create humidity sub-sensor type
+    SubSensorType humidityType;
+    humidityType.name = "humidity";
+    humidityType.displayName = "Air humidity";
+    humidityType.isAnalog = false;
+    humidityType.canCalibrate = false;
+    humidityType.validCalibrationPeriodDays = 0;
+    humidityType.calibrationTimeInSeconds = 0;
+    humidityType.minValue = 45.0f;
+    humidityType.maxValue = 60.0f;
+    humidityType.limitMinValue = 0.0f;
+    humidityType.limitMaxValue = 100.0f;
+    humidityType.unit = "%";
+    humidityType.step = 1.0f;
+    humidityType.precisionPercent = 5.0f;
+    humidityType.precisionValue = 5.0f;
+
+    // Add sub-sensor types to main sensor type
+    ryWs301SensorType.sensorTypes.push_back(airTempType);
+    ryWs301SensorType.sensorTypes.push_back(humidityType);
+
+    // Create Modbus register configurations
     ModbusRegisterConfig tempConfig;
     tempConfig.functionCode = 3;
     tempConfig.startRegister = 0;
@@ -137,13 +89,12 @@ void createTestSensorTypes()
     tempConfig.multiplier = 0.01f;
     tempConfig.offset = -40.0f;
     tempConfig.channelName = "air_temp";
-    tempConfig.sensorType = "air_temp";
     tempConfig.channel = 1;
+    tempConfig.sensorType = "air_temp";
     tempConfig.canConnectMinValue = 10.0f;
     tempConfig.canConnectMaxValue = 40.0f;
     ryWs301SensorType.modbusRegisterConfig.push_back(tempConfig);
 
-    // Humidity register config (register 1, formula: value/100)
     ModbusRegisterConfig humidityConfig;
     humidityConfig.functionCode = 3;
     humidityConfig.startRegister = 1;
@@ -151,29 +102,106 @@ void createTestSensorTypes()
     humidityConfig.multiplier = 0.01f;
     humidityConfig.offset = 0.0f;
     humidityConfig.channelName = "humidity";
-    humidityConfig.sensorType = "humidity";
     humidityConfig.channel = 2;
+    humidityConfig.sensorType = "humidity";
     humidityConfig.canConnectMinValue = 30.0f;
     humidityConfig.canConnectMaxValue = 70.0f;
     ryWs301SensorType.modbusRegisterConfig.push_back(humidityConfig);
 
-    // Pressure register config (register 2, formula: value/10)
-    // ModbusRegisterConfig pressureConfig;
-    // pressureConfig.functionCode = 3;
-    // pressureConfig.startRegister = 2;
-    // pressureConfig.numRegisters = 1;
-    // pressureConfig.multiplier = 0.1f;
-    // pressureConfig.offset = 0.0f;
-    // pressureConfig.channelName = "pressure";
-    // pressureConfig.sensorType = "pressure";
-    // pressureConfig.channel = 3;
-    // pressureConfig.canConnectMinValue = 300.0f;
-    // pressureConfig.canConnectMaxValue = 1100.0f;
-    // ryWs301SensorType.modbusRegisterConfig.push_back(pressureConfig);
+    ModbusRegisterConfig pressureConfig;
+    pressureConfig.functionCode = 3;
+    pressureConfig.startRegister = 2;
+    pressureConfig.numRegisters = 1;
+    pressureConfig.multiplier = 0.1f;
+    pressureConfig.offset = 0.0f;
+    pressureConfig.channelName = "pressure";
+    pressureConfig.channel = 3;
+    pressureConfig.sensorType = "pressure";
+    pressureConfig.canConnectMinValue = 300.0f;
+    pressureConfig.canConnectMaxValue = 1100.0f;
+    ryWs301SensorType.modbusRegisterConfig.push_back(pressureConfig);
 
     // Save to repository
     bool saved = sensorTypeRepository.save(ryWs301SensorType);
     Serial.printf("RY-WS301 sensor type created: %s\n", saved ? "SUCCESS" : "FAILED");
+  }
+
+  // Check if MP-508C already exists
+  bool mp508cExists = false;
+  for (const auto &type : existingTypes)
+  {
+    if (type.name == "mp-508c")
+    {
+      mp508cExists = true;
+      Serial.printf("MP-508C sensor type already exists (UID: %s)\n", type.uid.c_str());
+      break;
+    }
+  }
+
+  if (!mp508cExists)
+  {
+    // Create MP-508C sensor type according to new structure
+    SensorType mp508cSensorType;
+    mp508cSensorType.uid = "144f6c6d-d210-44bf-a9c3-23c5f26472fe";
+    mp508cSensorType.name = "mp-508c";
+    mp508cSensorType.displayName = "MP-508C Soil Temperature and Humidity";
+    mp508cSensorType.canScan = true;
+    mp508cSensorType.protocol = SensorProtocol::MODBUS_PROTOCOL;
+    mp508cSensorType.isSupported = true;
+    mp508cSensorType.modbusDeviceAddress = 1;
+    mp508cSensorType.baudRate = 9600;
+    mp508cSensorType.id = 2; // Legacy compatibility
+
+    // Create soil moisture sub-sensor type
+    SubSensorType soilMoistureType;
+    soilMoistureType.name = "soil_moisture";
+    soilMoistureType.displayName = "Soil Moisture";
+    soilMoistureType.isAnalog = true;
+    soilMoistureType.canCalibrate = true;
+    soilMoistureType.validCalibrationPeriodDays = 90;
+    soilMoistureType.calibrationTimeInSeconds = 120;
+    soilMoistureType.minValue = 45.0f;
+    soilMoistureType.maxValue = 65.0f;
+    soilMoistureType.limitMinValue = 0.0f;
+    soilMoistureType.limitMaxValue = 100.0f;
+    soilMoistureType.unit = "%";
+    soilMoistureType.step = 1.0f;
+    soilMoistureType.precisionPercent = 10.0f;
+    soilMoistureType.precisionValue = 10.0f;
+
+    // Add sub-sensor types to main sensor type
+    mp508cSensorType.sensorTypes.push_back(soilMoistureType);
+
+    // Create Modbus register configurations
+    ModbusRegisterConfig soilMoistureConfig;
+    soilMoistureConfig.functionCode = 3;
+    soilMoistureConfig.startRegister = 0;
+    soilMoistureConfig.numRegisters = 1;
+    soilMoistureConfig.multiplier = 0.1f;
+    soilMoistureConfig.offset = 0.0f;
+    soilMoistureConfig.channelName = "soil_moisture";
+    soilMoistureConfig.channel = 1;
+    soilMoistureConfig.sensorType = "soil_moisture";
+    soilMoistureConfig.canConnectMinValue = 0.0f;
+    soilMoistureConfig.canConnectMaxValue = 50.0f;
+    mp508cSensorType.modbusRegisterConfig.push_back(soilMoistureConfig);
+
+    ModbusRegisterConfig soilTempConfig;
+    soilTempConfig.functionCode = 3;
+    soilTempConfig.startRegister = 1;
+    soilTempConfig.numRegisters = 1;
+    soilTempConfig.multiplier = 0.01f;
+    soilTempConfig.offset = -20.0f;
+    soilTempConfig.channelName = "soil_temp";
+    soilTempConfig.channel = 2;
+    soilTempConfig.sensorType = "soil_temp";
+    soilTempConfig.canConnectMinValue = 10.0f;
+    soilTempConfig.canConnectMaxValue = 30.0f;
+    mp508cSensorType.modbusRegisterConfig.push_back(soilTempConfig);
+
+    // Save to repository
+    bool saved = sensorTypeRepository.save(mp508cSensorType);
+    Serial.printf("MP-508C sensor type created: %s\n", saved ? "SUCCESS" : "FAILED");
   }
 
   // Print final summary
@@ -183,24 +211,30 @@ void createTestSensorTypes()
   for (const auto &type : finalTypes)
   {
     Serial.printf("Sensor Type Details:\n");
-    Serial.printf("  ID: %d\n", type.id);
+    Serial.printf("  UID: %s\n", type.uid.c_str());
     Serial.printf("  Name: %s\n", type.name.c_str());
     Serial.printf("  Display Name: %s\n", type.displayName.c_str());
-    Serial.printf("  Is Analog: %s\n", type.isAnalog ? "true" : "false");
-    Serial.printf("  Can Calibrate: %s\n", type.canCalibrate ? "true" : "false");
-    Serial.printf("  Valid Calibration Period (days): %d\n", type.validCalibrationPeriodDays);
-    Serial.printf("  Calibration Time (seconds): %d\n", type.calibrationTimeInSeconds);
-    Serial.printf("  Min Value: %.2f\n", type.minValue);
-    Serial.printf("  Max Value: %.2f\n", type.maxValue);
-    Serial.printf("  Limit Min Value: %.2f\n", type.limitMinValue);
-    Serial.printf("  Limit Max Value: %.2f\n", type.limitMaxValue);
-    Serial.printf("  Unit: %s\n", type.unit.c_str());
-    Serial.printf("  Step: %.3f\n", type.step);
-    Serial.printf("  Precision Percent: %.2f\n", type.precisionPercent);
-    Serial.printf("  Precision Value: %.3f\n", type.precisionValue);
+    Serial.printf("  Can Scan: %s\n", type.canScan ? "true" : "false");
     Serial.printf("  Protocol: %s\n", type.getProtocolString().c_str());
+    Serial.printf("  Is Supported: %s\n", type.isSupported ? "true" : "false");
+    Serial.printf("  I2C Address: %s\n", type.i2cAddress.c_str());
+    Serial.printf("  Chip Type: %s\n", type.chipType.c_str());
     Serial.printf("  Modbus Device Address: %d\n", type.modbusDeviceAddress);
     Serial.printf("  Baud Rate: %d\n", type.baudRate);
+    Serial.printf("  Sub-Sensor Types: %d\n", type.sensorTypes.size());
+    
+    for (size_t i = 0; i < type.sensorTypes.size(); i++)
+    {
+      const auto &subType = type.sensorTypes[i];
+      Serial.printf("    SubSensor %d:\n", (int)i + 1);
+      Serial.printf("      Name: %s\n", subType.name.c_str());
+      Serial.printf("      Display Name: %s\n", subType.displayName.c_str());
+      Serial.printf("      Is Analog: %s\n", subType.isAnalog ? "true" : "false");
+      Serial.printf("      Can Calibrate: %s\n", subType.canCalibrate ? "true" : "false");
+      Serial.printf("      Min/Max Value: %.1f/%.1f\n", subType.minValue, subType.maxValue);
+      Serial.printf("      Unit: %s\n", subType.unit.c_str());
+    }
+    
     Serial.printf("  Modbus Register Configs: %d\n", type.modbusRegisterConfig.size());
     for (size_t i = 0; i < type.modbusRegisterConfig.size(); i++)
     {

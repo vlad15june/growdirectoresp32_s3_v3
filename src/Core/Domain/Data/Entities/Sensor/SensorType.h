@@ -15,15 +15,11 @@ enum class SensorProtocol {
     MODBUS_PROTOCOL
 };
 
-class SensorType {
+/**
+ * @brief Individual sensor type definition (used in sensorTypes array)
+ */
+class SubSensorType {
 public:
-    int id; 
-    std::string uid; // TODO: add to convertor and in all places
-    bool canScan;
-    SensorProtocol protocol;
-    bool isSupported;
-
-    //NOTE: from sensorTypeTable - need or not????
     std::string name;
     std::string displayName;
     bool isAnalog;
@@ -38,21 +34,8 @@ public:
     float step;
     float precisionPercent;
     float precisionValue;
-    
-    
-    
-    std::string i2cAddress;
-    std::string chipType;
-    std::vector<I2CRegisterConfig> i2cRegisterConfig;
-    
-    int modbusDeviceAddress;
-    int baudRate;
-    std::vector<ModbusRegisterConfig> modbusRegisterConfig;
-    
-    std::vector<AnalogPinConfig> analogPinConfig;
 
-    SensorType() : 
-        id(0),
+    SubSensorType() : 
         isAnalog(false),
         canCalibrate(false),
         validCalibrationPeriodDays(0),
@@ -63,10 +46,43 @@ public:
         limitMaxValue(0.0f),
         step(0.0f),
         precisionPercent(0.0f),
-        precisionValue(0.0f),
+        precisionValue(0.0f) {}
+};
+
+class SensorType {
+public:
+    // Core identification
+    std::string uid;
+    std::string name;
+    std::string displayName;
+    bool canScan;
+    SensorProtocol protocol;
+    bool isSupported;
+    
+    // Array of individual sensor types
+    std::vector<SubSensorType> sensorTypes;
+    
+    // Communication protocol settings
+    std::string i2cAddress;
+    std::string chipType;
+    std::vector<I2CRegisterConfig> i2cRegisterConfig;
+    
+    int modbusDeviceAddress;
+    int baudRate;
+    std::vector<ModbusRegisterConfig> modbusRegisterConfig;
+    
+    std::vector<AnalogPinConfig> analogPinConfig;
+
+    // Legacy compatibility - keeping id for backward compatibility
+    int id; 
+
+    SensorType() : 
+        canScan(true),
         protocol(SensorProtocol::ANALOG_PROTOCOL),
+        isSupported(true),
         modbusDeviceAddress(1),
-        baudRate(9600) {}
+        baudRate(9600),
+        id(0) {}
 
     bool isAnalogSensor() const { return protocol == SensorProtocol::ANALOG_PROTOCOL; }
     bool isAnalogBncSensor() const { return protocol == SensorProtocol::ANALOG_BNC_PROTOCOL; }
@@ -74,6 +90,39 @@ public:
     bool isAnalogPhSensor() const { return protocol == SensorProtocol::ANALOG_PH_PROTOCOL; }
     bool isI2CSensor() const { return protocol == SensorProtocol::I2C_PROTOCOL; }
     bool isModbusSensor() const { return protocol == SensorProtocol::MODBUS_PROTOCOL; }
+    
+    // Helper methods for the new structure
+    bool hasAnalogSensorTypes() const {
+        for (const auto& sensorType : sensorTypes) {
+            if (sensorType.isAnalog) return true;
+        }
+        return false;
+    }
+    
+    bool hasCalibratableSensorTypes() const {
+        for (const auto& sensorType : sensorTypes) {
+            if (sensorType.canCalibrate) return true;
+        }
+        return false;
+    }
+    
+    SubSensorType* getSensorTypeByName(const std::string& sensorTypeName) {
+        for (auto& sensorType : sensorTypes) {
+            if (sensorType.name == sensorTypeName) {
+                return &sensorType;
+            }
+        }
+        return nullptr;
+    }
+    
+    const SubSensorType* getSensorTypeByName(const std::string& sensorTypeName) const {
+        for (const auto& sensorType : sensorTypes) {
+            if (sensorType.name == sensorTypeName) {
+                return &sensorType;
+            }
+        }
+        return nullptr;
+    }
     
     std::string getProtocolString() const {
         switch (protocol) {

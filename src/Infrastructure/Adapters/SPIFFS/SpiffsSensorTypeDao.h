@@ -106,16 +106,15 @@ public:
         logger = loggerInstance;
     }
 
-    // ISpiffsDao implementation using id instead of uid
-    bool save(const SensorType& entity, const std::string& id) override {
-        log("SpiffsSensorTypeDao: Saving sensor type with ID: %s", id.c_str());
+    // ISpiffsDao implementation using uid
+    bool save(const SensorType& entity, const std::string& uid) override {
+        log("SpiffsSensorTypeDao: Saving sensor type with UID: %s", uid.c_str());
         if (filePath.empty()) initialize();
         
         std::vector<SensorType> entities;
         getAll(entities);
         
-        int entityId = std::stoi(id);
-        auto it = std::find_if(entities.begin(), entities.end(), [entityId](const SensorType& e) { return e.id == entityId; });
+        auto it = std::find_if(entities.begin(), entities.end(), [&uid](const SensorType& e) { return e.uid == uid; });
         if (it != entities.end()) {
             log("SpiffsSensorTypeDao: Updating existing sensor type");
             *it = entity;
@@ -129,8 +128,8 @@ public:
         return result;
     }
 
-    bool getById(const std::string& id, SensorType& entity) override {
-        log("SpiffsSensorTypeDao: Getting sensor type by ID: %s", id.c_str());
+    bool getById(const std::string& uid, SensorType& entity) override {
+        log("SpiffsSensorTypeDao: Getting sensor type by UID: %s", uid.c_str());
         if (filePath.empty()) initialize();
         
         std::vector<SensorType> entities;
@@ -139,8 +138,7 @@ public:
             return false;
         }
         
-        int entityId = std::stoi(id);
-        auto it = std::find_if(entities.begin(), entities.end(), [entityId](const SensorType& e) { return e.id == entityId; });
+        auto it = std::find_if(entities.begin(), entities.end(), [&uid](const SensorType& e) { return e.uid == uid; });
         if (it == entities.end()) {
             log("SpiffsSensorTypeDao: Sensor type not found");
             return false;
@@ -151,8 +149,8 @@ public:
         return true;
     }
 
-    bool remove(const std::string& id) override {
-        log("SpiffsSensorTypeDao: Removing sensor type with ID: %s", id.c_str());
+    bool remove(const std::string& uid) override {
+        log("SpiffsSensorTypeDao: Removing sensor type with UID: %s", uid.c_str());
         if (filePath.empty()) initialize();
         
         std::vector<SensorType> entities;
@@ -161,8 +159,7 @@ public:
             return false;
         }
         
-        int entityId = std::stoi(id);
-        auto it = std::find_if(entities.begin(), entities.end(), [entityId](const SensorType& e) { return e.id == entityId; });
+        auto it = std::find_if(entities.begin(), entities.end(), [&uid](const SensorType& e) { return e.uid == uid; });
         if (it == entities.end()) {
             log("SpiffsSensorTypeDao: Sensor type not found for removal");
             return false;
@@ -210,7 +207,9 @@ public:
     }
 
     bool getCalibrableSensorTypes(std::vector<SensorType>& sensorTypes) override {
-        return filterSensorTypes([](const SensorType& type) { return type.canCalibrate; }, sensorTypes);
+        return filterSensorTypes([](const SensorType& type) { 
+            return type.hasCalibratableSensorTypes(); 
+        }, sensorTypes);
     }
 
     bool getSensorTypeByName(const std::string& name, SensorType& sensorType) override {

@@ -1502,26 +1502,17 @@ public:
 
     bool sensorTypeFromJson(const std::string &jsonStr, SensorType &sensorType) override
     {
-        DynamicJsonDocument doc(2048);
+        DynamicJsonDocument doc(4096);
         DeserializationError error = deserializeJson(doc, jsonStr);
         if (error)
             return false;
 
-        sensorType.id = doc["id"] | 0;
+        // Parse main sensor type properties
+        sensorType.uid = doc["uid"] | "";
         sensorType.name = doc["name"] | "";
         sensorType.displayName = doc["displayName"] | "";
-        sensorType.isAnalog = doc["isAnalog"] | false;
-        sensorType.canCalibrate = doc["canCalibrate"] | false;
-        sensorType.validCalibrationPeriodDays = doc["validCalibrationPeriodDays"] | 0;
-        sensorType.calibrationTimeInSeconds = doc["calibrationTimeInSeconds"] | 0;
-        sensorType.minValue = doc["minValue"] | 0.0f;
-        sensorType.maxValue = doc["maxValue"] | 0.0f;
-        sensorType.limitMinValue = doc["limitMinValue"] | 0.0f;
-        sensorType.limitMaxValue = doc["limitMaxValue"] | 0.0f;
-        sensorType.unit = doc["unit"] | "";
-        sensorType.step = doc["step"] | 0.0f;
-        sensorType.precisionPercent = doc["precisionPercent"] | 0.0f;
-        sensorType.precisionValue = doc["precisionValue"] | 0.0f;
+        sensorType.canScan = doc["canScan"] | true;
+        sensorType.isSupported = doc["isSupported"] | true;
         
         std::string protocolStr = doc["protocol"] | "";
         sensorType.setProtocolFromString(protocolStr);
@@ -1531,11 +1522,39 @@ public:
         sensorType.modbusDeviceAddress = doc["modbusDeviceAddress"] | 1;
         sensorType.baudRate = doc["baudRate"] | 9600;
 
-        // Parse I2C register config
-        sensorType.i2cRegisterConfig.clear();
-        if (doc.containsKey("i2cRegisterConfig"))
+        // Parse legacy id for backward compatibility
+        sensorType.id = doc["id"] | 0;
+
+        // Parse sensorTypes array
+        sensorType.sensorTypes.clear();
+        if (doc.containsKey("sensorTypes"))
         {
-            for (JsonObject configObj : doc["i2cRegisterConfig"].as<JsonArray>())
+            for (JsonObject sensorTypeObj : doc["sensorTypes"].as<JsonArray>())
+            {
+                SubSensorType subSensorType;
+                subSensorType.name = sensorTypeObj["name"] | "";
+                subSensorType.displayName = sensorTypeObj["displayName"] | "";
+                subSensorType.isAnalog = sensorTypeObj["isAnalog"] | false;
+                subSensorType.canCalibrate = sensorTypeObj["canCalibrate"] | false;
+                subSensorType.validCalibrationPeriodDays = sensorTypeObj["validCalibrationPeriodDays"] | 0;
+                subSensorType.calibrationTimeInSeconds = sensorTypeObj["calibrationTimeInSeconds"] | 0;
+                subSensorType.minValue = sensorTypeObj["minValue"] | 0.0f;
+                subSensorType.maxValue = sensorTypeObj["maxValue"] | 0.0f;
+                subSensorType.limitMinValue = sensorTypeObj["limitMinValue"] | 0.0f;
+                subSensorType.limitMaxValue = sensorTypeObj["limitMaxValue"] | 0.0f;
+                subSensorType.unit = sensorTypeObj["unit"] | "";
+                subSensorType.step = sensorTypeObj["step"] | 0.0f;
+                subSensorType.precisionPercent = sensorTypeObj["precisionPercent"] | 0.0f;
+                subSensorType.precisionValue = sensorTypeObj["precisionValue"] | 0.0f;
+                sensorType.sensorTypes.push_back(subSensorType);
+            }
+        }
+
+        // Parse I2C register config (renamed in JSON)
+        sensorType.i2cRegisterConfig.clear();
+        if (doc.containsKey("i2CRegisterConfigs"))
+        {
+            for (JsonObject configObj : doc["i2CRegisterConfigs"].as<JsonArray>())
             {
                 I2CRegisterConfig config;
                 config.registerAddr = configObj["register"] | 0;
@@ -1546,11 +1565,11 @@ public:
             }
         }
 
-        // Parse Modbus register config
+        // Parse Modbus register config (renamed in JSON)
         sensorType.modbusRegisterConfig.clear();
-        if (doc.containsKey("modbusRegisterConfig"))
+        if (doc.containsKey("modbusRegisterConfigs"))
         {
-            for (JsonObject configObj : doc["modbusRegisterConfig"].as<JsonArray>())
+            for (JsonObject configObj : doc["modbusRegisterConfigs"].as<JsonArray>())
             {
                 ModbusRegisterConfig config;
                 config.functionCode = configObj["functionCode"] | 3;
@@ -1558,7 +1577,7 @@ public:
                 config.numRegisters = configObj["numRegisters"] | 1;
                 config.multiplier = configObj["multiplier"] | 1.0f;
                 config.offset = configObj["offset"] | 0.0f;
-                config.channelName = configObj["channel_name"] | "";
+                config.channelName = configObj["channelName"] | "";
                 config.channel = configObj["channel"] | 0;
                 config.sensorType = configObj["sensorType"] | "";
                 config.canConnectMinValue = configObj["canConnectMinValue"] | 0.0f;
@@ -1567,66 +1586,97 @@ public:
             }
         }
 
+        // Parse analog pin configs if present
+        sensorType.analogPinConfig.clear();
+        if (doc.containsKey("analogPinConfigs"))
+        {
+            for (JsonObject configObj : doc["analogPinConfigs"].as<JsonArray>())
+            {
+                AnalogPinConfig config;
+                // Add analog pin config parsing here when needed
+                sensorType.analogPinConfig.push_back(config);
+            }
+        }
+
         return true;
     }
 
     std::string sensorTypeToJson(const SensorType &sensorType) override
     {
-        DynamicJsonDocument doc(2048);
+        DynamicJsonDocument doc(4096);
         
-        doc["id"] = sensorType.id;
+        // Main sensor type properties
+        doc["uid"] = sensorType.uid;
         doc["name"] = sensorType.name;
         doc["displayName"] = sensorType.displayName;
-        doc["isAnalog"] = sensorType.isAnalog;
-        doc["canCalibrate"] = sensorType.canCalibrate;
-        doc["validCalibrationPeriodDays"] = sensorType.validCalibrationPeriodDays;
-        doc["calibrationTimeInSeconds"] = sensorType.calibrationTimeInSeconds;
-        doc["minValue"] = sensorType.minValue;
-        doc["maxValue"] = sensorType.maxValue;
-        doc["limitMinValue"] = sensorType.limitMinValue;
-        doc["limitMaxValue"] = sensorType.limitMaxValue;
-        doc["unit"] = sensorType.unit;
-        doc["step"] = sensorType.step;
-        doc["precisionPercent"] = sensorType.precisionPercent;
-        doc["precisionValue"] = sensorType.precisionValue;
+        doc["canScan"] = sensorType.canScan;
         doc["protocol"] = sensorType.getProtocolString();
-        doc["i2cAddress"] = sensorType.i2cAddress;
-        doc["chipType"] = sensorType.chipType;
+        doc["isSupported"] = sensorType.isSupported;
+        doc["i2cAddress"] = sensorType.i2cAddress.empty() ? nullptr : sensorType.i2cAddress;
+        doc["chipType"] = sensorType.chipType.empty() ? nullptr : sensorType.chipType;
         doc["modbusDeviceAddress"] = sensorType.modbusDeviceAddress;
         doc["baudRate"] = sensorType.baudRate;
 
-        // Add I2C register config
-        if (!sensorType.i2cRegisterConfig.empty())
-        {
-            JsonArray i2cConfigArr = doc.createNestedArray("i2cRegisterConfig");
-            for (const auto& config : sensorType.i2cRegisterConfig)
-            {
-                JsonObject configObj = i2cConfigArr.createNestedObject();
-                configObj["register"] = config.registerAddr;
-                configObj["length"] = config.length;
-                configObj["multiplier"] = config.multiplier;
-                configObj["offset"] = config.offset;
-            }
+        // Legacy id for backward compatibility (if needed)
+        if (sensorType.id != 0) {
+            doc["id"] = sensorType.id;
         }
 
-        // Add Modbus register config
-        if (!sensorType.modbusRegisterConfig.empty())
+        // Add sensorTypes array
+        JsonArray sensorTypesArr = doc.createNestedArray("sensorTypes");
+        for (const auto& subSensorType : sensorType.sensorTypes)
         {
-            JsonArray modbusConfigArr = doc.createNestedArray("modbusRegisterConfig");
-            for (const auto& config : sensorType.modbusRegisterConfig)
-            {
-                JsonObject configObj = modbusConfigArr.createNestedObject();
-                configObj["functionCode"] = config.functionCode;
-                configObj["startRegister"] = config.startRegister;
-                configObj["numRegisters"] = config.numRegisters;
-                configObj["multiplier"] = config.multiplier;
-                configObj["offset"] = config.offset;
-                configObj["channel_name"] = config.channelName;
-                configObj["channel"] = config.channel;
-                configObj["sensorType"] = config.sensorType;
-                configObj["canConnectMinValue"] = config.canConnectMinValue;
-                configObj["canConnectMaxValue"] = config.canConnectMaxValue;
-            }
+            JsonObject sensorTypeObj = sensorTypesArr.createNestedObject();
+            sensorTypeObj["name"] = subSensorType.name;
+            sensorTypeObj["displayName"] = subSensorType.displayName;
+            sensorTypeObj["isAnalog"] = subSensorType.isAnalog;
+            sensorTypeObj["canCalibrate"] = subSensorType.canCalibrate;
+            sensorTypeObj["validCalibrationPeriodDays"] = subSensorType.validCalibrationPeriodDays;
+            sensorTypeObj["calibrationTimeInSeconds"] = subSensorType.calibrationTimeInSeconds;
+            sensorTypeObj["minValue"] = subSensorType.minValue;
+            sensorTypeObj["maxValue"] = subSensorType.maxValue;
+            sensorTypeObj["limitMinValue"] = subSensorType.limitMinValue;
+            sensorTypeObj["limitMaxValue"] = subSensorType.limitMaxValue;
+            sensorTypeObj["unit"] = subSensorType.unit;
+            sensorTypeObj["step"] = subSensorType.step;
+            sensorTypeObj["precisionPercent"] = subSensorType.precisionPercent;
+            sensorTypeObj["precisionValue"] = subSensorType.precisionValue;
+        }
+
+        // Add I2C register config (renamed in JSON)
+        JsonArray i2cConfigArr = doc.createNestedArray("i2CRegisterConfigs");
+        for (const auto& config : sensorType.i2cRegisterConfig)
+        {
+            JsonObject configObj = i2cConfigArr.createNestedObject();
+            configObj["register"] = config.registerAddr;
+            configObj["length"] = config.length;
+            configObj["multiplier"] = config.multiplier;
+            configObj["offset"] = config.offset;
+        }
+
+        // Add Modbus register config (renamed in JSON)
+        JsonArray modbusConfigArr = doc.createNestedArray("modbusRegisterConfigs");
+        for (const auto& config : sensorType.modbusRegisterConfig)
+        {
+            JsonObject configObj = modbusConfigArr.createNestedObject();
+            configObj["functionCode"] = config.functionCode;
+            configObj["startRegister"] = config.startRegister;
+            configObj["numRegisters"] = config.numRegisters;
+            configObj["multiplier"] = config.multiplier;
+            configObj["offset"] = config.offset;
+            configObj["channelName"] = config.channelName;
+            configObj["channel"] = config.channel;
+            configObj["sensorType"] = config.sensorType;
+            configObj["canConnectMinValue"] = config.canConnectMinValue;
+            configObj["canConnectMaxValue"] = config.canConnectMaxValue;
+        }
+
+        // Add analog pin configs
+        JsonArray analogConfigArr = doc.createNestedArray("analogPinConfigs");
+        for (const auto& config : sensorType.analogPinConfig)
+        {
+            JsonObject configObj = analogConfigArr.createNestedObject();
+            // Add analog pin config serialization here when needed
         }
 
         std::string output;

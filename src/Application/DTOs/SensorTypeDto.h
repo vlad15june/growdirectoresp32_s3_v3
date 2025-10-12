@@ -1,10 +1,13 @@
 #pragma once
 
 #include <string>
+#include <vector>
 
-class SensorTypeDto {
+/**
+ * @brief DTO for individual sensor type within a sensor device
+ */
+class SubSensorTypeDto {
 public:
-    int id;
     std::string name;
     std::string displayName;
     bool isAnalog;
@@ -19,16 +22,8 @@ public:
     float step;
     float precisionPercent;
     float precisionValue;
-    std::string protocol;
-    std::string i2cAddress;
-    std::string chipType;
-    std::string i2cRegisterConfig;
-    int modbusDeviceAddress;
-    int baudRate;
-    std::string modbusRegisterConfig;
 
-    SensorTypeDto() : 
-        id(0),
+    SubSensorTypeDto() : 
         isAnalog(false),
         canCalibrate(false),
         validCalibrationPeriodDays(0),
@@ -39,7 +34,38 @@ public:
         limitMaxValue(0.0f),
         step(0.0f),
         precisionPercent(0.0f),
-        precisionValue(0.0f),
+        precisionValue(0.0f) {}
+};
+
+/**
+ * @brief DTO for sensor type device
+ */
+class SensorTypeDto {
+public:
+    std::string uid;
+    std::string name;
+    std::string displayName;
+    bool canScan;
+    std::string protocol;
+    bool isSupported;
+    
+    std::vector<SubSensorTypeDto> sensorTypes;
+    
+    std::string i2cAddress;
+    std::string chipType;
+    std::string i2cRegisterConfig;
+    int modbusDeviceAddress;
+    int baudRate;
+    std::string modbusRegisterConfig;
+    std::string analogPinConfig;
+
+    // Legacy fields for backward compatibility
+    int id;
+
+    SensorTypeDto() : 
+        canScan(true),
+        isSupported(true),
         modbusDeviceAddress(1),
-        baudRate(9600) {}
+        baudRate(9600),
+        id(0) {}
 };

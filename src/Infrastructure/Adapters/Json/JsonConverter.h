@@ -1582,24 +1582,14 @@ private:
         return "";
     }
 
-    // SensorType conversion methods
+    // SensorType conversion methods - simplified for new structure
     bool sensorTypeFromJson(const std::string &jsonStr, SensorType &sensorType) override
     {
-        sensorType.id = extractIntValue(jsonStr, "id");
+        sensorType.uid = extractValue(jsonStr, "uid");
         sensorType.name = extractValue(jsonStr, "name");
         sensorType.displayName = extractValue(jsonStr, "displayName");
-        sensorType.isAnalog = extractBoolValue(jsonStr, "isAnalog");
-        sensorType.canCalibrate = extractBoolValue(jsonStr, "canCalibrate");
-        sensorType.validCalibrationPeriodDays = extractIntValue(jsonStr, "validCalibrationPeriodDays");
-        sensorType.calibrationTimeInSeconds = extractIntValue(jsonStr, "calibrationTimeInSeconds");
-        sensorType.minValue = static_cast<float>(extractDoubleValue(jsonStr, "minValue"));
-        sensorType.maxValue = static_cast<float>(extractDoubleValue(jsonStr, "maxValue"));
-        sensorType.limitMinValue = static_cast<float>(extractDoubleValue(jsonStr, "limitMinValue"));
-        sensorType.limitMaxValue = static_cast<float>(extractDoubleValue(jsonStr, "limitMaxValue"));
-        sensorType.unit = extractValue(jsonStr, "unit");
-        sensorType.step = static_cast<float>(extractDoubleValue(jsonStr, "step"));
-        sensorType.precisionPercent = static_cast<float>(extractDoubleValue(jsonStr, "precisionPercent"));
-        sensorType.precisionValue = static_cast<float>(extractDoubleValue(jsonStr, "precisionValue"));
+        sensorType.canScan = extractBoolValue(jsonStr, "canScan");
+        sensorType.isSupported = extractBoolValue(jsonStr, "isSupported");
         
         std::string protocolStr = extractValue(jsonStr, "protocol");
         sensorType.setProtocolFromString(protocolStr);
@@ -1609,9 +1599,13 @@ private:
         sensorType.modbusDeviceAddress = extractIntValue(jsonStr, "modbusDeviceAddress");
         sensorType.baudRate = extractIntValue(jsonStr, "baudRate");
 
-        // Parse arrays (simplified implementation)
+        // Legacy id for backward compatibility
+        sensorType.id = extractIntValue(jsonStr, "id");
+
+        // Parse arrays (simplified implementation - complex parsing should use ArduinoJsonConverter)
         sensorType.i2cRegisterConfig.clear();
         sensorType.modbusRegisterConfig.clear();
+        sensorType.sensorTypes.clear();
 
         return !sensorType.name.empty();
     }
@@ -1620,26 +1614,29 @@ private:
     {
         std::ostringstream oss;
         oss << "{";
-        oss << "\"id\":" << sensorType.id;
+        oss << "\"uid\":\"" << sensorType.uid << "\"";
         oss << ",\"name\":\"" << sensorType.name << "\"";
         oss << ",\"displayName\":\"" << sensorType.displayName << "\"";
-        oss << ",\"isAnalog\":" << (sensorType.isAnalog ? "true" : "false");
-        oss << ",\"canCalibrate\":" << (sensorType.canCalibrate ? "true" : "false");
-        oss << ",\"validCalibrationPeriodDays\":" << sensorType.validCalibrationPeriodDays;
-        oss << ",\"calibrationTimeInSeconds\":" << sensorType.calibrationTimeInSeconds;
-        oss << ",\"minValue\":" << sensorType.minValue;
-        oss << ",\"maxValue\":" << sensorType.maxValue;
-        oss << ",\"limitMinValue\":" << sensorType.limitMinValue;
-        oss << ",\"limitMaxValue\":" << sensorType.limitMaxValue;
-        oss << ",\"unit\":\"" << sensorType.unit << "\"";
-        oss << ",\"step\":" << sensorType.step;
-        oss << ",\"precisionPercent\":" << sensorType.precisionPercent;
-        oss << ",\"precisionValue\":" << sensorType.precisionValue;
+        oss << ",\"canScan\":" << (sensorType.canScan ? "true" : "false");
         oss << ",\"protocol\":\"" << sensorType.getProtocolString() << "\"";
+        oss << ",\"isSupported\":" << (sensorType.isSupported ? "true" : "false");
         oss << ",\"i2cAddress\":\"" << sensorType.i2cAddress << "\"";
         oss << ",\"chipType\":\"" << sensorType.chipType << "\"";
         oss << ",\"modbusDeviceAddress\":" << sensorType.modbusDeviceAddress;
         oss << ",\"baudRate\":" << sensorType.baudRate;
+        
+        // Add sensorTypes array - simplified (for complex serialization use ArduinoJsonConverter)
+        oss << ",\"sensorTypes\":[";
+        for (size_t i = 0; i < sensorType.sensorTypes.size(); i++) {
+            if (i > 0) oss << ",";
+            const auto& subType = sensorType.sensorTypes[i];
+            oss << "{\"name\":\"" << subType.name << "\",\"displayName\":\"" << subType.displayName << "\"}";
+        }
+        oss << "]";
+        
+        if (sensorType.id != 0) {
+            oss << ",\"id\":" << sensorType.id;
+        }
         oss << "}";
         return oss.str();
     }

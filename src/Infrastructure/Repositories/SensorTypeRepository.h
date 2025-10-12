@@ -21,7 +21,7 @@ private:
             std::vector<SensorType> sensorTypes;
             if (sensorTypeDao->getAll(sensorTypes)) {
                 for (const auto& sensorType : sensorTypes) {
-                    cache[std::to_string(sensorType.id)] = sensorType;
+                    cache[sensorType.uid] = sensorType;
                 }
             }
             isCacheValid = true;
@@ -46,11 +46,11 @@ public:
         }
     }
 
-    Utils::Optional<SensorType> get(const char* id) override {
-        if (!id) return Utils::Optional<SensorType>();
+    Utils::Optional<SensorType> get(const char* uid) override {
+        if (!uid) return Utils::Optional<SensorType>();
         
         loadCache();
-        auto it = cache.find(id);
+        auto it = cache.find(uid);
         if (it != cache.end()) {
             return Utils::Optional<SensorType>(it->second);
         }
@@ -68,7 +68,7 @@ public:
     }
 
     bool save(const SensorType& entity) override {
-        bool result = sensorTypeDao->save(entity, std::to_string(entity.id));
+        bool result = sensorTypeDao->save(entity, entity.uid);
         if (result) {
             invalidateCache();
         }
@@ -84,9 +84,9 @@ public:
         return 0;
     }
 
-    bool remove(const char* id) override {
-        if (!id) return false;
-        bool result = sensorTypeDao->remove(id);
+    bool remove(const char* uid) override {
+        if (!uid) return false;
+        bool result = sensorTypeDao->remove(uid);
         if (result) {
             invalidateCache();
         }
@@ -107,10 +107,10 @@ public:
         return cache.size();
     }
 
-    bool exists(const char* id) override {
-        if (!id) return false;
+    bool exists(const char* uid) override {
+        if (!uid) return false;
         loadCache();
-        return cache.find(id) != cache.end();
+        return cache.find(uid) != cache.end();
     }
 
     std::vector<SensorType> getSensorTypesByProtocol(SensorProtocol protocol) override {
