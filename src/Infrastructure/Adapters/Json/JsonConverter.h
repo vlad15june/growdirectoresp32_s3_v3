@@ -1606,7 +1606,27 @@ private:
         sensorType.i2cRegisterConfig.clear();
         sensorType.modbusRegisterConfig.clear();
         sensorType.sensorTypes.clear();
-
+        
+        // Parse sensorTypes array - basic implementation for testing
+        auto sensorTypesPos = jsonStr.find("\"sensorTypes\":");
+        if (sensorTypesPos != std::string::npos) {
+            auto arrayStart = jsonStr.find("[", sensorTypesPos);
+            auto arrayEnd = jsonStr.find("]", arrayStart);
+            if (arrayStart != std::string::npos && arrayEnd != std::string::npos) {
+                std::string arrayContent = jsonStr.substr(arrayStart + 1, arrayEnd - arrayStart - 1);
+                if (!arrayContent.empty() && arrayContent != " ") {
+                    // Simple parsing - assuming single object for now
+                    if (arrayContent.find("{") != std::string::npos) {
+                        SubSensorType subType;
+                        subType.name = extractValue(arrayContent, "name");
+                        subType.displayName = extractValue(arrayContent, "displayName");
+                        subType.canCalibrate = extractBoolValue(arrayContent, "canCalibrate");
+                        sensorType.sensorTypes.push_back(subType);
+                    }
+                }
+            }
+        }
+        
         return !sensorType.name.empty();
     }
 
@@ -1630,7 +1650,8 @@ private:
         for (size_t i = 0; i < sensorType.sensorTypes.size(); i++) {
             if (i > 0) oss << ",";
             const auto& subType = sensorType.sensorTypes[i];
-            oss << "{\"name\":\"" << subType.name << "\",\"displayName\":\"" << subType.displayName << "\"}";
+            oss << "{\"name\":\"" << subType.name << "\",\"displayName\":\"" << subType.displayName << "\"";
+            oss << ",\"canCalibrate\":" << (subType.canCalibrate ? "true" : "false") << "}";
         }
         oss << "]";
         
