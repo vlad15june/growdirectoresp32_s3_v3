@@ -1623,8 +1623,15 @@ public:
             doc["protocol"] = protocolStr;
             
             doc["isSupported"] = sensorType.isSupported;
-            doc["i2cAddress"] = sensorType.i2cAddress.empty() ? nullptr : sensorType.i2cAddress;
-            doc["chipType"] = sensorType.chipType.empty() ? nullptr : sensorType.chipType;
+            
+            // Handle optional string fields properly
+            if (!sensorType.i2cAddress.empty()) {
+                doc["i2cAddress"] = sensorType.i2cAddress;
+            }
+            if (!sensorType.chipType.empty()) {
+                doc["chipType"] = sensorType.chipType;
+            }
+            
             doc["modbusDeviceAddress"] = sensorType.modbusDeviceAddress;
             doc["baudRate"] = sensorType.baudRate;
 
@@ -1710,7 +1717,7 @@ public:
             
             Serial.printf("ArduinoJsonConverter: Serialized successfully, length: %d\n", output.length());
             Serial.printf("ArduinoJsonConverter: Free heap after serialization: %d\n", ESP.getFreeHeap());
-            
+            Serial.printf("ArduinoJsonConverter: Output: %s\n", output.c_str());
             return output;
         }
         catch (const std::exception& e) {
