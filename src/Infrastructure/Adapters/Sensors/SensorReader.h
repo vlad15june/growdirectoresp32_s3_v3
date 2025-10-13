@@ -278,7 +278,7 @@ private:
         
         // Power control: Turn off all ports first to avoid interference
         log("SensorReader: Powering off all ports for clean scan");
-        for (int i = 0; i < 8; i++) // Assuming max 8 ports
+        for (int i = 0; i < 4; i++) // NOTE: TODO: need read/set from config
         {
             _modbusReader->powerOffPort(i);
         }
