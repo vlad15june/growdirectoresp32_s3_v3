@@ -1549,25 +1549,69 @@ inline void ModuleSetupService::collectModbusSensorsAndAddresses(const std::vect
                                                                 std::map<int, std::vector<SensorEntity*>>& addressMap,
                                                                 std::vector<SensorEntity*>& sensorsNeedingNewAddress)
 {
+    log("SETUP: collectModbusSensorsAndAddresses called with %zu sensor entities", allSensorEntities.size());
+    log("SETUP: Free heap at start: %d", ESP.getFreeHeap());
+    
+    int modbusCount = 0;
+    int addedCount = 0;
+    int validAddressCount = 0;
+    int invalidAddressCount = 0;
+    
     for (auto& sensorEntity : const_cast<std::vector<SensorEntity>&>(allSensorEntities))
     {
-        if (sensorEntity.protocol == "ModBus" && sensorEntity.status == SENSOR_STATUS_ADDED)
-        {
-            int address = sensorEntity.modbusDeviceAddress;
+        log("SETUP: Processing sensor - UID: %s, Protocol: %s, Status: %d", 
+            sensorEntity.uid.c_str(), sensorEntity.protocol.c_str(), sensorEntity.status);
             
-            // Check if address is outside valid range (0x70-0x78)
-            if (address < 0x70 || address > 0x78)
+        if (sensorEntity.protocol == "ModBus")
+        {
+            modbusCount++;
+            log("SETUP: Found ModBus sensor %s with address 0x%02X", 
+                sensorEntity.uid.c_str(), sensorEntity.modbusDeviceAddress);
+                
+            if (sensorEntity.status == SENSOR_STATUS_NEW)
             {
-                log("SETUP: Sensor %s has address 0x%02X outside valid range 0x70-0x78, needs new address", 
+                addedCount++;
+                int address = sensorEntity.modbusDeviceAddress;
+                
+                log("SETUP: ModBus sensor %s has NEW status, checking address 0x%02X", 
                     sensorEntity.uid.c_str(), address);
-                sensorsNeedingNewAddress.push_back(&sensorEntity);
+                
+                // Check if address is outside valid range (0x70-0x78)
+                if (address < 0x70 || address > 0x78)
+                {
+                    invalidAddressCount++;
+                    log("SETUP: Sensor %s has address 0x%02X outside valid range 0x70-0x78, needs new address", 
+                        sensorEntity.uid.c_str(), address);
+                    sensorsNeedingNewAddress.push_back(&sensorEntity);
+                    log("SETUP: Added sensor %s to sensorsNeedingNewAddress (total: %zu)", 
+                        sensorEntity.uid.c_str(), sensorsNeedingNewAddress.size());
+                }
+                else
+                {
+                    validAddressCount++;
+                    addressMap[address].push_back(&sensorEntity);
+                    log("SETUP: Added sensor %s to addressMap at address 0x%02X (sensors at this address: %zu)", 
+                        sensorEntity.uid.c_str(), address, addressMap[address].size());
+                }
             }
             else
             {
-                addressMap[address].push_back(&sensorEntity);
+                log("SETUP: ModBus sensor %s has status %d (not NEW), skipping", 
+                    sensorEntity.uid.c_str(), sensorEntity.status);
             }
         }
+        else
+        {
+            log("SETUP: Sensor %s has protocol %s (not ModBus), skipping", 
+                sensorEntity.uid.c_str(), sensorEntity.protocol.c_str());
+        }
     }
+    
+    log("SETUP: Collection summary - Total sensors: %zu, ModBus: %d, Added: %d, Valid addresses: %d, Invalid addresses: %d", 
+        allSensorEntities.size(), modbusCount, addedCount, validAddressCount, invalidAddressCount);
+    log("SETUP: Address map size: %zu, Sensors needing new address: %zu", 
+        addressMap.size(), sensorsNeedingNewAddress.size());
+    log("SETUP: Free heap at end: %d", ESP.getFreeHeap());
 }
 
 inline void ModuleSetupService::findDuplicateAddresses(const std::map<int, std::vector<SensorEntity*>>& addressMap,
