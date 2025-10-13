@@ -49,7 +49,18 @@ protected:
     }
 
     std::string entitiesToJson(const std::vector<SensorType>& sensorTypes) {
-        return jsonConverter->sensorTypesToJson(sensorTypes);
+        log("SpiffsSensorTypeDao: entitiesToJson called with %d sensor types", sensorTypes.size());
+        log("SpiffsSensorTypeDao: Free heap before JSON conversion: %d", ESP.getFreeHeap());
+        
+        try {
+            std::string result = jsonConverter->sensorTypesToJson(sensorTypes);
+            log("SpiffsSensorTypeDao: JSON conversion successful, result length: %d", result.length());
+            log("SpiffsSensorTypeDao: Free heap after JSON conversion: %d", ESP.getFreeHeap());
+            return result;
+        } catch (...) {
+            log("SpiffsSensorTypeDao: ERROR - Exception in jsonConverter->sensorTypesToJson!");
+            return "[]";
+        }
     }
 
     bool jsonToEntities(const std::string& jsonStr, std::vector<SensorType>& sensorTypes) {
@@ -109,10 +120,19 @@ public:
     // ISpiffsDao implementation using uid
     bool save(const SensorType& entity, const std::string& uid) override {
         log("SpiffsSensorTypeDao: Saving sensor type with UID: %s", uid.c_str());
-        if (filePath.empty()) initialize();
+        log("SpiffsSensorTypeDao: Entity name: %s, displayName: %s", entity.name.c_str(), entity.displayName.c_str());
+        log("SpiffsSensorTypeDao: Entity has %d sub-sensor types", entity.sensorTypes.size());
+        log("SpiffsSensorTypeDao: Free heap at start of save: %d", ESP.getFreeHeap());
         
+        if (filePath.empty()) {
+            log("SpiffsSensorTypeDao: FilePath empty, initializing...");
+            initialize();
+        }
+        
+        log("SpiffsSensorTypeDao: Getting all existing entities...");
         std::vector<SensorType> entities;
         getAll(entities);
+        log("SpiffsSensorTypeDao: Found %d existing entities", entities.size());
         
         auto it = std::find_if(entities.begin(), entities.end(), [&uid](const SensorType& e) { return e.uid == uid; });
         if (it != entities.end()) {
@@ -173,13 +193,42 @@ public:
 
     bool saveAll(const std::vector<SensorType>& entities) override {
         log("SpiffsSensorTypeDao: Saving %d sensor types", entities.size());
-        if (filePath.empty()) initialize();
+        log("SpiffsSensorTypeDao: Free heap before save: %d", ESP.getFreeHeap());
         
-        std::string jsonStr = entitiesToJson(entities);
-        log("SpiffsSensorTypeDao: JSON serialization complete, length: %d", jsonStr.length());
+        if (filePath.empty()) {
+            log("SpiffsSensorTypeDao: FilePath empty, initializing...");
+            initialize();
+        }
         
-        spiffsAdapter->RewriteToFile(filePath.c_str(), jsonStr.c_str());
-        log("SpiffsSensorTypeDao: File write complete");
+        log("SpiffsSensorTypeDao: Starting JSON serialization...");
+        for (size_t i = 0; i < entities.size(); i++) {
+            log("SpiffsSensorTypeDao: Processing entity %d - UID: %s, Name: %s", 
+                i, entities[i].uid.c_str(), entities[i].name.c_str());
+            log("SpiffsSensorTypeDao: Entity %d has %d sub-sensor types, %d modbus configs", 
+                i, entities[i].sensorTypes.size(), entities[i].modbusRegisterConfig.size());
+        }
+        
+        std::string jsonStr;
+        try {
+            log("SpiffsSensorTypeDao: Calling entitiesToJson...");
+            jsonStr = entitiesToJson(entities);
+            log("SpiffsSensorTypeDao: JSON serialization complete, length: %d", jsonStr.length());
+            log("SpiffsSensorTypeDao: Free heap after JSON: %d", ESP.getFreeHeap());
+        } catch (...) {
+            log("SpiffsSensorTypeDao: ERROR - Exception in JSON serialization!");
+            return false;
+        }
+        
+        log("SpiffsSensorTypeDao: Starting file write to: %s", filePath.c_str());
+        try {
+            spiffsAdapter->RewriteToFile(filePath.c_str(), jsonStr.c_str());
+            log("SpiffsSensorTypeDao: File write complete");
+            log("SpiffsSensorTypeDao: Free heap after file write: %d", ESP.getFreeHeap());
+        } catch (...) {
+            log("SpiffsSensorTypeDao: ERROR - Exception in file write!");
+            return false;
+        }
+        
         return true;
     }
 

@@ -1603,85 +1603,124 @@ public:
 
     std::string sensorTypeToJson(const SensorType &sensorType) override
     {
-        DynamicJsonDocument doc(4096);
+        Serial.printf("ArduinoJsonConverter: sensorTypeToJson for '%s' (UID: %s)\n", sensorType.name.c_str(), sensorType.uid.c_str());
+        Serial.printf("ArduinoJsonConverter: Free heap at start: %d\n", ESP.getFreeHeap());
         
-        // Main sensor type properties
-        doc["uid"] = sensorType.uid;
-        doc["name"] = sensorType.name;
-        doc["displayName"] = sensorType.displayName;
-        doc["canScan"] = sensorType.canScan;
-        doc["protocol"] = sensorType.getProtocolString();
-        doc["isSupported"] = sensorType.isSupported;
-        doc["i2cAddress"] = sensorType.i2cAddress.empty() ? nullptr : sensorType.i2cAddress;
-        doc["chipType"] = sensorType.chipType.empty() ? nullptr : sensorType.chipType;
-        doc["modbusDeviceAddress"] = sensorType.modbusDeviceAddress;
-        doc["baudRate"] = sensorType.baudRate;
+        try {
+            DynamicJsonDocument doc(4096);
+            Serial.printf("ArduinoJsonConverter: Document created, capacity: %d\n", doc.capacity());
+            
+            // Main sensor type properties
+            Serial.printf("ArduinoJsonConverter: Setting basic properties...\n");
+            doc["uid"] = sensorType.uid;
+            doc["name"] = sensorType.name;
+            doc["displayName"] = sensorType.displayName;
+            doc["canScan"] = sensorType.canScan;
+            
+            Serial.printf("ArduinoJsonConverter: Getting protocol string...\n");
+            std::string protocolStr = sensorType.getProtocolString();
+            Serial.printf("ArduinoJsonConverter: Protocol string: %s\n", protocolStr.c_str());
+            doc["protocol"] = protocolStr;
+            
+            doc["isSupported"] = sensorType.isSupported;
+            doc["i2cAddress"] = sensorType.i2cAddress.empty() ? nullptr : sensorType.i2cAddress;
+            doc["chipType"] = sensorType.chipType.empty() ? nullptr : sensorType.chipType;
+            doc["modbusDeviceAddress"] = sensorType.modbusDeviceAddress;
+            doc["baudRate"] = sensorType.baudRate;
 
-        // Legacy id for backward compatibility (if needed)
-        if (sensorType.id != 0) {
-            doc["id"] = sensorType.id;
+            // Legacy id for backward compatibility (if needed)
+            if (sensorType.id != 0) {
+                doc["id"] = sensorType.id;
+            }
+            
+            Serial.printf("ArduinoJsonConverter: Basic properties set, free heap: %d\n", ESP.getFreeHeap());
+
+            // Add sensorTypes array
+            Serial.printf("ArduinoJsonConverter: Creating sensorTypes array (%d items)...\n", sensorType.sensorTypes.size());
+            JsonArray sensorTypesArr = doc.createNestedArray("sensorTypes");
+            for (size_t i = 0; i < sensorType.sensorTypes.size(); i++)
+            {
+                Serial.printf("ArduinoJsonConverter: Processing sub-sensor %d: %s\n", i, sensorType.sensorTypes[i].name.c_str());
+                const auto& subSensorType = sensorType.sensorTypes[i];
+                JsonObject sensorTypeObj = sensorTypesArr.createNestedObject();
+                sensorTypeObj["name"] = subSensorType.name;
+                sensorTypeObj["displayName"] = subSensorType.displayName;
+                sensorTypeObj["isAnalog"] = subSensorType.isAnalog;
+                sensorTypeObj["canCalibrate"] = subSensorType.canCalibrate;
+                sensorTypeObj["validCalibrationPeriodDays"] = subSensorType.validCalibrationPeriodDays;
+                sensorTypeObj["calibrationTimeInSeconds"] = subSensorType.calibrationTimeInSeconds;
+                sensorTypeObj["minValue"] = subSensorType.minValue;
+                sensorTypeObj["maxValue"] = subSensorType.maxValue;
+                sensorTypeObj["limitMinValue"] = subSensorType.limitMinValue;
+                sensorTypeObj["limitMaxValue"] = subSensorType.limitMaxValue;
+                sensorTypeObj["unit"] = subSensorType.unit;
+                sensorTypeObj["step"] = subSensorType.step;
+                sensorTypeObj["precisionPercent"] = subSensorType.precisionPercent;
+                sensorTypeObj["precisionValue"] = subSensorType.precisionValue;
+                Serial.printf("ArduinoJsonConverter: Sub-sensor %d processed, free heap: %d\n", i, ESP.getFreeHeap());
+            }
+
+            // Add I2C register config (renamed in JSON)
+            Serial.printf("ArduinoJsonConverter: Creating i2CRegisterConfigs array (%d items)...\n", sensorType.i2cRegisterConfig.size());
+            JsonArray i2cConfigArr = doc.createNestedArray("i2CRegisterConfigs");
+            for (const auto& config : sensorType.i2cRegisterConfig)
+            {
+                JsonObject configObj = i2cConfigArr.createNestedObject();
+                configObj["register"] = config.registerAddr;
+                configObj["length"] = config.length;
+                configObj["multiplier"] = config.multiplier;
+                configObj["offset"] = config.offset;
+            }
+
+            // Add Modbus register config (renamed in JSON)
+            Serial.printf("ArduinoJsonConverter: Creating modbusRegisterConfigs array (%d items)...\n", sensorType.modbusRegisterConfig.size());
+            JsonArray modbusConfigArr = doc.createNestedArray("modbusRegisterConfigs");
+            for (size_t i = 0; i < sensorType.modbusRegisterConfig.size(); i++)
+            {
+                Serial.printf("ArduinoJsonConverter: Processing modbus config %d...\n", i);
+                const auto& config = sensorType.modbusRegisterConfig[i];
+                JsonObject configObj = modbusConfigArr.createNestedObject();
+                configObj["functionCode"] = config.functionCode;
+                configObj["startRegister"] = config.startRegister;
+                configObj["numRegisters"] = config.numRegisters;
+                configObj["multiplier"] = config.multiplier;
+                configObj["offset"] = config.offset;
+                configObj["channelName"] = config.channelName;
+                configObj["channel"] = config.channel;
+                configObj["sensorType"] = config.sensorType;
+                configObj["canConnectMinValue"] = config.canConnectMinValue;
+                configObj["canConnectMaxValue"] = config.canConnectMaxValue;
+                Serial.printf("ArduinoJsonConverter: Modbus config %d processed, free heap: %d\n", i, ESP.getFreeHeap());
+            }
+
+            // Add analog pin configs
+            Serial.printf("ArduinoJsonConverter: Creating analogPinConfigs array (%d items)...\n", sensorType.analogPinConfig.size());
+            JsonArray analogConfigArr = doc.createNestedArray("analogPinConfigs");
+            for (const auto& config : sensorType.analogPinConfig)
+            {
+                JsonObject configObj = analogConfigArr.createNestedObject();
+                // Add analog pin config serialization here when needed
+            }
+
+            Serial.printf("ArduinoJsonConverter: All arrays created, serializing...\n");
+            Serial.printf("ArduinoJsonConverter: Free heap before serialization: %d\n", ESP.getFreeHeap());
+            
+            std::string output;
+            serializeJson(doc, output);
+            
+            Serial.printf("ArduinoJsonConverter: Serialized successfully, length: %d\n", output.length());
+            Serial.printf("ArduinoJsonConverter: Free heap after serialization: %d\n", ESP.getFreeHeap());
+            
+            return output;
         }
-
-        // Add sensorTypes array
-        JsonArray sensorTypesArr = doc.createNestedArray("sensorTypes");
-        for (const auto& subSensorType : sensorType.sensorTypes)
-        {
-            JsonObject sensorTypeObj = sensorTypesArr.createNestedObject();
-            sensorTypeObj["name"] = subSensorType.name;
-            sensorTypeObj["displayName"] = subSensorType.displayName;
-            sensorTypeObj["isAnalog"] = subSensorType.isAnalog;
-            sensorTypeObj["canCalibrate"] = subSensorType.canCalibrate;
-            sensorTypeObj["validCalibrationPeriodDays"] = subSensorType.validCalibrationPeriodDays;
-            sensorTypeObj["calibrationTimeInSeconds"] = subSensorType.calibrationTimeInSeconds;
-            sensorTypeObj["minValue"] = subSensorType.minValue;
-            sensorTypeObj["maxValue"] = subSensorType.maxValue;
-            sensorTypeObj["limitMinValue"] = subSensorType.limitMinValue;
-            sensorTypeObj["limitMaxValue"] = subSensorType.limitMaxValue;
-            sensorTypeObj["unit"] = subSensorType.unit;
-            sensorTypeObj["step"] = subSensorType.step;
-            sensorTypeObj["precisionPercent"] = subSensorType.precisionPercent;
-            sensorTypeObj["precisionValue"] = subSensorType.precisionValue;
+        catch (const std::exception& e) {
+            Serial.printf("ArduinoJsonConverter: Exception in sensorTypeToJson: %s\n", e.what());
+            return "{}";
         }
-
-        // Add I2C register config (renamed in JSON)
-        JsonArray i2cConfigArr = doc.createNestedArray("i2CRegisterConfigs");
-        for (const auto& config : sensorType.i2cRegisterConfig)
-        {
-            JsonObject configObj = i2cConfigArr.createNestedObject();
-            configObj["register"] = config.registerAddr;
-            configObj["length"] = config.length;
-            configObj["multiplier"] = config.multiplier;
-            configObj["offset"] = config.offset;
+        catch (...) {
+            Serial.printf("ArduinoJsonConverter: Unknown exception in sensorTypeToJson\n");
+            return "{}";
         }
-
-        // Add Modbus register config (renamed in JSON)
-        JsonArray modbusConfigArr = doc.createNestedArray("modbusRegisterConfigs");
-        for (const auto& config : sensorType.modbusRegisterConfig)
-        {
-            JsonObject configObj = modbusConfigArr.createNestedObject();
-            configObj["functionCode"] = config.functionCode;
-            configObj["startRegister"] = config.startRegister;
-            configObj["numRegisters"] = config.numRegisters;
-            configObj["multiplier"] = config.multiplier;
-            configObj["offset"] = config.offset;
-            configObj["channelName"] = config.channelName;
-            configObj["channel"] = config.channel;
-            configObj["sensorType"] = config.sensorType;
-            configObj["canConnectMinValue"] = config.canConnectMinValue;
-            configObj["canConnectMaxValue"] = config.canConnectMaxValue;
-        }
-
-        // Add analog pin configs
-        JsonArray analogConfigArr = doc.createNestedArray("analogPinConfigs");
-        for (const auto& config : sensorType.analogPinConfig)
-        {
-            JsonObject configObj = analogConfigArr.createNestedObject();
-            // Add analog pin config serialization here when needed
-        }
-
-        std::string output;
-        serializeJson(doc, output);
-        return output;
     }
 
     bool sensorTypesFromJson(const std::string &jsonStr, std::vector<SensorType> &sensorTypes) override
@@ -1721,17 +1760,50 @@ public:
 
     std::string sensorTypesToJson(const std::vector<SensorType> &sensorTypes) override
     {
-        DynamicJsonDocument doc(8192);
-        JsonArray typesArr = doc.to<JsonArray>();
+        Serial.printf("ArduinoJsonConverter: sensorTypesToJson called with %d sensor types\n", sensorTypes.size());
+        Serial.printf("ArduinoJsonConverter: Free heap at start: %d\n", ESP.getFreeHeap());
+        
+        try {
+            DynamicJsonDocument doc(8192);
+            Serial.printf("ArduinoJsonConverter: DynamicJsonDocument created, capacity: %d\n", doc.capacity());
+            Serial.printf("ArduinoJsonConverter: Free heap after doc creation: %d\n", ESP.getFreeHeap());
+            
+            JsonArray typesArr = doc.to<JsonArray>();
+            Serial.printf("ArduinoJsonConverter: JsonArray created\n");
+            Serial.printf("ArduinoJsonConverter: Free heap after array creation: %d\n", ESP.getFreeHeap());
 
-        for (const SensorType &sensorType : sensorTypes)
-        {
-            typesArr.add(serialized(sensorTypeToJson(sensorType)));
+            for (size_t i = 0; i < sensorTypes.size(); i++)
+            {
+                Serial.printf("ArduinoJsonConverter: Processing sensor type %d: %s\n", i, sensorTypes[i].name.c_str());
+                Serial.printf("ArduinoJsonConverter: Free heap before sensorTypeToJson: %d\n", ESP.getFreeHeap());
+                
+                std::string singleJson = sensorTypeToJson(sensorTypes[i]);
+                Serial.printf("ArduinoJsonConverter: sensorTypeToJson returned, length: %d\n", singleJson.length());
+                Serial.printf("ArduinoJsonConverter: Free heap after sensorTypeToJson: %d\n", ESP.getFreeHeap());
+                
+                typesArr.add(serialized(singleJson));
+                Serial.printf("ArduinoJsonConverter: Added to array, free heap: %d\n", ESP.getFreeHeap());
+            }
+
+            Serial.printf("ArduinoJsonConverter: All sensor types processed, serializing...\n");
+            Serial.printf("ArduinoJsonConverter: Free heap before serialization: %d\n", ESP.getFreeHeap());
+            
+            std::string output;
+            serializeJson(doc, output);
+            
+            Serial.printf("ArduinoJsonConverter: Serialization complete, output length: %d\n", output.length());
+            Serial.printf("ArduinoJsonConverter: Free heap after serialization: %d\n", ESP.getFreeHeap());
+            
+            return output;
         }
-
-        std::string output;
-        serializeJson(doc, output);
-        return output;
+        catch (const std::exception& e) {
+            Serial.printf("ArduinoJsonConverter: Exception in sensorTypesToJson: %s\n", e.what());
+            return "[]";
+        }
+        catch (...) {
+            Serial.printf("ArduinoJsonConverter: Unknown exception in sensorTypesToJson\n");
+            return "[]";
+        }
     }
 
     std::string moduleCommandUpdateToJson(const ModuleCommandUpdateDto& commandUpdateDto) override
