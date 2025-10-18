@@ -1175,6 +1175,8 @@ public:
                 config.channelName = configObj["channel_name"] | "";
                 config.channel = configObj["channel"] | 0;
                 config.sensorType = configObj["sensorType"] | "";
+                config.canConnectMinValue = configObj["canConnectMinValue"] | 0.0f;
+                config.canConnectMaxValue = configObj["canConnectMaxValue"] | 100.0f;
                 sensor.modbusRegisterConfigs.push_back(config);
             }
         }

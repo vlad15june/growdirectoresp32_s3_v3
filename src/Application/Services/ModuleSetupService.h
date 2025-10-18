@@ -1201,7 +1201,7 @@ inline bool ModuleSetupService::isPinOccupied(int pin, const std::vector<SensorE
 {
     for (const auto &sensor : sensors)
     {
-        if (sensor.protocol != protocol || sensor.status != SENSOR_STATUS_ADDED)
+        if (sensor.protocol != protocol || (sensor.status != SENSOR_STATUS_ADDED && sensor.status != SENSOR_STATUS_NEW))
             continue;
 
         if (sensor.pin == pin)
@@ -1477,7 +1477,7 @@ inline void ModuleSetupService::processSensorsFromRepository(Node &node)
     auto sensorEntities = sensorRepository->getAll();
     log("SETUP: Found %zu sensors in repository", sensorEntities.size());
 
-    for (const auto &sensorEntity : sensorEntities)
+    for (auto &sensorEntity : sensorEntities)
     {
         if (jsonConverter)
         {
@@ -1514,6 +1514,7 @@ inline void ModuleSetupService::processSensorsFromRepository(Node &node)
                 log("SETUP: Sensor %s status is %s, adding placeholder with type 'none'",
                     sensorEntity.uid.c_str(), getSensorStatusName(sensorEntity.status));
                 removeDisconnectedNewSensorPlaceholders(node, sensorEntity);
+                sensorEntity.status = SENSOR_STATUS_DELETED;                
             }
         }
     }

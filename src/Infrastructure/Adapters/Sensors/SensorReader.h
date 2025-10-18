@@ -65,7 +65,8 @@ public:
     {
         if (sensor.protocol == "Analog")
         {
-            return scanAnalogSensor(sensor);
+            // return scanAnalogSensor(sensor);
+            return false; // NOTE: temporary disable analog scan
         }
         else if (sensor.protocol == "ModBus")
         {
@@ -73,7 +74,8 @@ public:
         }
         else if (sensor.protocol == "I2C")
         {
-            return scanI2CSensor(sensor);
+            // return scanI2CSensor(sensor);
+            return false; // NOTE: temporary disable I2C scan
         }
 
         return false;
@@ -166,7 +168,7 @@ public:
         return !channelValues.empty();
     }
 
-    bool writeSensorAddress(const SensorEntity& sensor, int newAddress) override
+    bool writeSensorAddress(const SensorEntity &sensor, int newAddress) override
     {
         if (sensor.protocol == "ModBus")
         {
@@ -275,18 +277,18 @@ private:
 
         int portIndex = sensor.pin;
         _modbusReader->init(sensor.baudRate);
-        
+
         // Power control: Turn off all ports first to avoid interference
         log("SensorReader: Powering off all ports for clean scan");
         for (int i = 0; i < 4; i++) // NOTE: TODO: need read/set from config
         {
-            _modbusReader->powerOffPort(i);
+            _modbusReader->powerOffPort(i);            
         }
         if (_arduino)
         {
             _arduino->delay(500); // Wait for ports to power down completely
         }
-        
+
         // Power on only the target port
         log("SensorReader: Powering on port %d for scanning", portIndex);
         _modbusReader->powerOnPort(portIndex);
@@ -294,14 +296,14 @@ private:
         {
             _arduino->delay(1000); // Wait for sensor to stabilize
         }
-        
+
         // Try to query device address using 6EH function code first
         uint8_t actualDeviceAddress = queryDeviceAddress(portIndex);
         uint8_t deviceAddressToUse = (actualDeviceAddress != 0) ? actualDeviceAddress : sensor.modbusDeviceAddress;
-        
-        log("SensorReader: Using device address %d for scanning (queried: %d, configured: %d)", 
+
+        log("SensorReader: Using device address %d for scanning (queried: %d, configured: %d)",
             deviceAddressToUse, actualDeviceAddress, sensor.modbusDeviceAddress);
-        
+
         // First, ping the device to check if it responds at this address
         if (_modbusReader->pingAddress(deviceAddressToUse, portIndex))
         {
@@ -310,7 +312,7 @@ private:
         else
         {
             log("SensorReader: Device does not respond at address %d, trying address range 0x70-0x78", deviceAddressToUse);
-            
+
             // Try addresses from 0x70 to 0x78
             bool foundAddress = false;
             for (uint8_t testAddress = 0x70; testAddress <= 0x78; testAddress++)
@@ -323,21 +325,21 @@ private:
                     break;
                 }
             }
-            
+
             if (!foundAddress)
             {
                 log("SensorReader: No responding device found in address range 0x70-0x78");
                 return false;
             }
         }
-        
+
         // Now scan all register configurations with the found address
         bool scanSuccess = true;
         for (const auto &config : sensor.modbusRegisterConfigs)
         {
             bool success = false;
             float dummyValue;
-            
+
             // Try up to 3 times
             for (int attempt = 1; attempt <= 3; attempt++)
             {
@@ -347,20 +349,20 @@ private:
                     if (dummyValue >= config.canConnectMinValue && dummyValue <= config.canConnectMaxValue)
                     {
                         success = true;
-                        log("SensorReader: Scan successful - read value %.2f is within range [%.2f, %.2f] for channel %s", 
+                        log("SensorReader: Scan successful - read value %.2f is within range [%.2f, %.2f] for channel %s",
                             dummyValue, config.canConnectMinValue, config.canConnectMaxValue, config.channelName.c_str());
                         break;
                     }
                     else
                     {
-                        log("SensorReader: Read value %.2f is outside expected range [%.2f, %.2f] for channel %s", 
+                        log("SensorReader: Read value %.2f is outside expected range [%.2f, %.2f] for channel %s",
                             dummyValue, config.canConnectMinValue, config.canConnectMaxValue, config.channelName.c_str());
                     }
                 }
-                
+
                 if (attempt < 3)
                 {
-                    log("SensorReader: Failed to scan modbus register on port %d (attempt %d/3), retrying...", 
+                    log("SensorReader: Failed to scan modbus register on port %d (attempt %d/3), retrying...",
                         portIndex, attempt);
                     if (_arduino)
                     {
@@ -368,16 +370,16 @@ private:
                     }
                 }
             }
-            
+
             if (!success)
             {
-                log("SensorReader: Failed to scan modbus register %s on port %d after 3 attempts or value out of range", 
+                log("SensorReader: Failed to scan modbus register %s on port %d after 3 attempts or value out of range",
                     config.channelName.c_str(), portIndex);
                 scanSuccess = false;
                 break;
             }
         }
-        
+
         return scanSuccess;
     }
 
@@ -388,18 +390,18 @@ private:
         {
             return 0;
         }
-        
+
         ModbusRegisterConfig queryConfig;
         queryConfig.functionCode = 0x6E;
         queryConfig.startRegister = 0x0012;
         queryConfig.numRegisters = 1;
         queryConfig.multiplier = 1.0f;
         queryConfig.offset = 0.0f;
-        
+
         float deviceAddressFloat;
         if (_modbusReader->readRegister(0xFF, queryConfig, deviceAddressFloat, portIndex))
         {
-            uint8_t deviceAddress = (uint8_t)(deviceAddressFloat) & 0xFF;  // Lower 8 bits are device address
+            uint8_t deviceAddress = (uint8_t)(deviceAddressFloat) & 0xFF; // Lower 8 bits are device address
             log("SensorReader: Successfully queried device address: %d", deviceAddress);
             return deviceAddress;
         }

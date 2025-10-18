@@ -108,18 +108,18 @@ void createTestSensorTypes()
     humidityConfig.canConnectMaxValue = 70.0f;
     ryWs301SensorType.modbusRegisterConfig.push_back(humidityConfig);
 
-    ModbusRegisterConfig pressureConfig;
-    pressureConfig.functionCode = 3;
-    pressureConfig.startRegister = 2;
-    pressureConfig.numRegisters = 1;
-    pressureConfig.multiplier = 0.1f;
-    pressureConfig.offset = 0.0f;
-    pressureConfig.channelName = "pressure";
-    pressureConfig.channel = 3;
-    pressureConfig.sensorType = "pressure";
-    pressureConfig.canConnectMinValue = 300.0f;
-    pressureConfig.canConnectMaxValue = 1100.0f;
-    ryWs301SensorType.modbusRegisterConfig.push_back(pressureConfig);
+    // ModbusRegisterConfig pressureConfig;
+    // pressureConfig.functionCode = 3;
+    // pressureConfig.startRegister = 2;
+    // pressureConfig.numRegisters = 1;
+    // pressureConfig.multiplier = 0.1f;
+    // pressureConfig.offset = 0.0f;
+    // pressureConfig.channelName = "pressure";
+    // pressureConfig.channel = 3;
+    // pressureConfig.sensorType = "pressure";
+    // pressureConfig.canConnectMinValue = 300.0f;
+    // pressureConfig.canConnectMaxValue = 1100.0f;
+    // ryWs301SensorType.modbusRegisterConfig.push_back(pressureConfig);
 
     // Save to repository
     bool saved = sensorTypeRepository.save(ryWs301SensorType);

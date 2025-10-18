@@ -148,7 +148,8 @@ public:
 
     bool writeSensorAddress(int currentAddress, int newAddress, int portIndex) override
     {
-        return false;
+        //NOTE: temporary
+        // return false;
         if (portIndex < 0 || portIndex >= _modbusPorts.size())
         {
             log("ModbusSensorReader: Invalid port index %d for address write", portIndex);
@@ -165,8 +166,8 @@ public:
         modbus->powerOnPort();
         _arduino.delay(1000); // Wait for sensor to stabilize
 
-        // Write new address to register 0x0012 using function code 0x10
-        bool success = modbus->writeRegister(currentAddress, 0x0012, (uint16_t)newAddress);
+        // Write new address to register 0x0001 using function code 0x10
+        bool success = modbus->writeRegister(currentAddress, 0x0001, (uint16_t)newAddress);
 
         if (success)
         {
