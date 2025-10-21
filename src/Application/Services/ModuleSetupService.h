@@ -1245,6 +1245,10 @@ inline void ModuleSetupService::scanPinForSensorTypes(int pin, Node &node)
         tempSensor.uid = moduleUid + "." + pinStr;
         tempSensor.status = SensorStatusEnum::SENSOR_STATUS_NEW;
 
+        log("SETUP: Creating temp sensor for scanning - UID: %s, Type: %s, Model: %s, Protocol: %s, Pin: %d", 
+            tempSensor.uid.c_str(), tempSensor.sensorType.c_str(), tempSensor.model.c_str(), 
+            tempSensor.protocol.c_str(), tempSensor.pin);
+
         if (sensorType.isI2CSensor())
         {
             tempSensor.i2cAddress = sensorType.i2cAddress;

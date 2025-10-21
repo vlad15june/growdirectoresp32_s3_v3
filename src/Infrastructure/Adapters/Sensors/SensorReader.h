@@ -65,15 +65,24 @@ public:
     {
         if (sensor.protocol == "Analog")
         {
+            log("SensorReader: Scanning analog sensor - UID: %s, Type: %s, Model: %s, Protocol: %s, Pin: %d", 
+                sensor.uid.c_str(), sensor.sensorType.c_str(), sensor.model.c_str(), 
+                sensor.protocol.c_str(), sensor.pin);
             // return scanAnalogSensor(sensor);
             return false; // NOTE: temporary disable analog scan
         }
         else if (sensor.protocol == "ModBus")
         {
+            log("SensorReader: Scanning ModBus sensor - UID: %s, Type: %s, Model: %s, Protocol: %s, Pin: %d", 
+                sensor.uid.c_str(), sensor.sensorType.c_str(), sensor.model.c_str(), 
+                sensor.protocol.c_str(), sensor.pin);
             return scanModbusSensor(sensor);
         }
         else if (sensor.protocol == "I2C")
         {
+            log("SensorReader: Scanning I2C sensor - UID: %s, Type: %s, Model: %s, Protocol: %s, Pin: %d", 
+                sensor.uid.c_str(), sensor.sensorType.c_str(), sensor.model.c_str(), 
+                sensor.protocol.c_str(), sensor.pin);
             // return scanI2CSensor(sensor);
             return false; // NOTE: temporary disable I2C scan
         }

@@ -39,11 +39,10 @@ void createTestSensorTypes()
     ryWs301SensorType.canScan = true;
     ryWs301SensorType.protocol = SensorProtocol::MODBUS_PROTOCOL;
     ryWs301SensorType.isSupported = true;
-    ryWs301SensorType.modbusDeviceAddress = 255; // 0xFF
+    ryWs301SensorType.modbusDeviceAddress = 255;
     ryWs301SensorType.baudRate = 9600;
-    ryWs301SensorType.id = 1; // Legacy compatibility
+    ryWs301SensorType.id = 1;
 
-    // Create air temperature sub-sensor type
     SubSensorType airTempType;
     airTempType.name = "air_temp";
     airTempType.displayName = "Air temperature";
@@ -60,7 +59,6 @@ void createTestSensorTypes()
     airTempType.precisionPercent = 5.0f;
     airTempType.precisionValue = 5.8f;
 
-    // Create humidity sub-sensor type
     SubSensorType humidityType;
     humidityType.name = "humidity";
     humidityType.displayName = "Air humidity";
@@ -77,11 +75,9 @@ void createTestSensorTypes()
     humidityType.precisionPercent = 5.0f;
     humidityType.precisionValue = 5.0f;
 
-    // Add sub-sensor types to main sensor type
     ryWs301SensorType.sensorTypes.push_back(airTempType);
     ryWs301SensorType.sensorTypes.push_back(humidityType);
 
-    // Create Modbus register configurations
     ModbusRegisterConfig tempConfig;
     tempConfig.functionCode = 3;
     tempConfig.startRegister = 0;
@@ -121,12 +117,10 @@ void createTestSensorTypes()
     // pressureConfig.canConnectMaxValue = 1100.0f;
     // ryWs301SensorType.modbusRegisterConfig.push_back(pressureConfig);
 
-    // Save to repository
     bool saved = sensorTypeRepository.save(ryWs301SensorType);
     Serial.printf("RY-WS301 sensor type created: %s\n", saved ? "SUCCESS" : "FAILED");
   }
 
-  // Check if MP-508C already exists
   bool mp508cExists = false;
   for (const auto &type : existingTypes)
   {
@@ -140,7 +134,6 @@ void createTestSensorTypes()
 
   if (!mp508cExists)
   {
-    // Create MP-508C sensor type according to new structure
     SensorType mp508cSensorType;
     mp508cSensorType.uid = "144f6c6d-d210-44bf-a9c3-23c5f26472fe";
     mp508cSensorType.name = "mp-508c";
@@ -150,9 +143,8 @@ void createTestSensorTypes()
     mp508cSensorType.isSupported = true;
     mp508cSensorType.modbusDeviceAddress = 1;
     mp508cSensorType.baudRate = 9600;
-    mp508cSensorType.id = 2; // Legacy compatibility
+    mp508cSensorType.id = 2;
 
-    // Create soil moisture sub-sensor type
     SubSensorType soilMoistureType;
     soilMoistureType.name = "soil_moisture";
     soilMoistureType.displayName = "Soil Moisture";
@@ -169,10 +161,8 @@ void createTestSensorTypes()
     soilMoistureType.precisionPercent = 10.0f;
     soilMoistureType.precisionValue = 10.0f;
 
-    // Add sub-sensor types to main sensor type
     mp508cSensorType.sensorTypes.push_back(soilMoistureType);
 
-    // Create Modbus register configurations
     ModbusRegisterConfig soilMoistureConfig;
     soilMoistureConfig.functionCode = 3;
     soilMoistureConfig.startRegister = 0;
@@ -199,12 +189,10 @@ void createTestSensorTypes()
     soilTempConfig.canConnectMaxValue = 30.0f;
     mp508cSensorType.modbusRegisterConfig.push_back(soilTempConfig);
 
-    // Save to repository
     bool saved = sensorTypeRepository.save(mp508cSensorType);
     Serial.printf("MP-508C sensor type created: %s\n", saved ? "SUCCESS" : "FAILED");
   }
 
-  // Print final summary
   std::vector<SensorType> finalTypes = sensorTypeRepository.getAll();
   Serial.printf("Total sensor types in repository: %d\n", finalTypes.size());
 
@@ -270,8 +258,9 @@ void setup()
   // spiffsAdapter.RemoveFile("/data/sensorTypes.json");
   // spiffsAdapter.RemoveFile("/data/sensors.json");
   // spiffsAdapter.RemoveFile("/sensors/sensors.json");
+
   // Create and store test sensor types
-  createTestSensorTypes();
+  // createTestSensorTypes();
 
   moduleSetupService.setupModule();
   // Create loop service according to module mode and module type

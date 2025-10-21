@@ -129,7 +129,7 @@ public:
         log("SYNC_SENSOR_TYPES: Force sync requested");
         _forceSyncRequested = true;
 
-        //NOTE: debug - immediate sync on force request
+        //NOTE:  debug - immediate sync on force request
         syncSensorTypesFromServer();
 
         return true;

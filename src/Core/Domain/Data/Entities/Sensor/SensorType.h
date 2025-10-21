@@ -2,6 +2,8 @@
 
 #include <string>
 #include <vector>
+#include <algorithm>
+#include <cctype>
 #include "ModbusRegisterConfig.h"
 #include "I2CRegisterConfig.h"
 #include "AnalogPinConfig.h"
@@ -137,18 +139,23 @@ public:
     }
     
     void setProtocolFromString(const std::string& protocolStr) {
-        if (protocolStr == "Analog") {
+        std::string lowerProtocol = protocolStr;
+        std::transform(lowerProtocol.begin(), lowerProtocol.end(), lowerProtocol.begin(), ::tolower);
+        
+        if (lowerProtocol == "analog") {
             protocol = SensorProtocol::ANALOG_PROTOCOL;
-        } else if (protocolStr == "AnalogBnc") {
+        } else if (lowerProtocol == "analogbnc") {
             protocol = SensorProtocol::ANALOG_BNC_PROTOCOL;
-        } else if (protocolStr == "AnalogEc2ch") {
+        } else if (lowerProtocol == "analogec2ch") {
             protocol = SensorProtocol::ANALOG_EC2CH_PROTOCOL;
-        } else if (protocolStr == "AnalogPh") {
+        } else if (lowerProtocol == "analogph") {
             protocol = SensorProtocol::ANALOG_PH_PROTOCOL;
-        } else if (protocolStr == "I2C") {
+        } else if (lowerProtocol == "i2c") {
             protocol = SensorProtocol::I2C_PROTOCOL;
-        } else if (protocolStr == "ModBus") {
+        } else if (lowerProtocol == "modbus") {
             protocol = SensorProtocol::MODBUS_PROTOCOL;
+        } else {
+            protocol = SensorProtocol::ANALOG_PROTOCOL;
         }
     }
 };
