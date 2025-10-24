@@ -167,7 +167,7 @@ public:
         _arduino.delay(1000); // Wait for sensor to stabilize
 
         // Write new address to register 0x0001 using function code 0x10
-        bool success = modbus->writeRegister(currentAddress, 0x0001, (uint16_t)newAddress);
+        bool success = modbus->writeRegister(0x0, 0x0001, (uint16_t)newAddress);
 
         if (success)
         {
@@ -183,29 +183,39 @@ public:
         return success;
     }
 
-    void powerOnPort(int portIndex) override
+    bool powerOnPort(int portIndex) override
     {
         if (portIndex >= 0 && portIndex < _modbusPorts.size())
         {
-            _modbusPorts[portIndex]->powerOnPort();
-            log("ModbusSensorReader: Powered ON port %d", portIndex);
+            bool changed = _modbusPorts[portIndex]->powerOnPort();
+            if (changed)
+            {
+                log("ModbusSensorReader: Powered ON port %d", portIndex);
+            }
+            return changed;
         }
         else
         {
             log("ModbusSensorReader: Invalid port index %d for power ON", portIndex);
+            return false;
         }
     }
 
-    void powerOffPort(int portIndex) override
+    bool powerOffPort(int portIndex) override
     {
         if (portIndex >= 0 && portIndex < _modbusPorts.size())
         {
-            _modbusPorts[portIndex]->powerOffPort();
-            log("ModbusSensorReader: Powered OFF port %d", portIndex);
+            bool changed = _modbusPorts[portIndex]->powerOffPort();
+            if (changed)
+            {
+                log("ModbusSensorReader: Powered OFF port %d", portIndex);
+            }
+            return changed;
         }
         else
         {
             log("ModbusSensorReader: Invalid port index %d for power OFF", portIndex);
+            return false;
         }
     }
 

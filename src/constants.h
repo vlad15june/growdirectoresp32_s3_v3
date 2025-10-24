@@ -137,4 +137,8 @@
 // #define MODULE_UID_SIZE 50
 // #define MQTT_LOGGER_TOPIC_SIZE 25
 
+// ModBus address range for sensor devices
+#define MODBUS_ADDRESS_MIN 0x70
+#define MODBUS_ADDRESS_MAX 0x78
+
 #endif // CONSTANTS_H

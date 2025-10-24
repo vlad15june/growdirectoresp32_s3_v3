@@ -14,10 +14,11 @@ private:
     int _rxPin;           // RX pin
     int _txPin;           // TX pin
     int _sensorPowerPin;  // Sensor power pin
+    bool _isPoweredOn;    // Track power state
 
 public:
     ModbusRS485(HardwareSerial &port, int controlPin, const char *portName, IArduinoAdapter &arduino, uint32_t config, int rxPin, int txPin, int sensorPowerPin)
-        : _port(port), _controlPin(controlPin), _portName(portName), _arduino(arduino), _config(config), _rxPin(rxPin), _txPin(txPin), _sensorPowerPin(sensorPowerPin)
+        : _port(port), _controlPin(controlPin), _portName(portName), _arduino(arduino), _config(config), _rxPin(rxPin), _txPin(txPin), _sensorPowerPin(sensorPowerPin), _isPoweredOn(false)
     {
         _arduino.pinMode(_controlPin, _arduino.getPinModeOutput());
         _arduino.digitalWrite(_controlPin, _arduino.getDigitalLow());
@@ -122,7 +123,6 @@ public:
         
         Serial.printf("[%s] Write register response: %d bytes received\n", _portName, bytesRead);
         
-        // Check if we got a valid response (at least 6 bytes for normal response)
         if (bytesRead >= 6 && response[0] == slaveAddress && response[1] == 0x10)
         {
             Serial.printf("[%s] Successfully wrote register 0x%04X = 0x%04X to device %d\n", 
@@ -131,7 +131,6 @@ public:
         }
         else if (bytesRead > 0 && response[1] >= 0x80)
         {
-            // Exception response
             Serial.printf("[%s] Exception response (0x%02X) when writing register to device %d\n", 
                          _portName, response[1], slaveAddress);
             return false;
@@ -141,18 +140,30 @@ public:
         return false;
     }
 
-    void powerOnPort() override
+    bool powerOnPort() override
     {
+        if (_isPoweredOn)
+        {
+            return false;
+        }
         _arduino.digitalWrite(_sensorPowerPin, _arduino.getDigitalHigh());
-        _arduino.delay(100); // Small delay to stabilize power
+        _arduino.delay(100);
+        _isPoweredOn = true;
         Serial.printf("[%s] Port powered ON\n", _portName);
+        return true;
     }
 
-    void powerOffPort() override
+    bool powerOffPort() override
     {
+        if (!_isPoweredOn)
+        {
+            return false;
+        }
         _arduino.digitalWrite(_sensorPowerPin, _arduino.getDigitalLow());
-        _arduino.delay(100); // Small delay to ensure power is off
+        _arduino.delay(100);
+        _isPoweredOn = false;
         Serial.printf("[%s] Port powered OFF\n", _portName);
+        return true;
     }
 };
 #endif

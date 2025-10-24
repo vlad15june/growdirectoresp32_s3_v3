@@ -1,6 +1,7 @@
 #ifndef MODULE_SETUP_SERVICE_H
 #define MODULE_SETUP_SERVICE_H
 
+#include "constants.h"
 #include "Core/Domain/Interfaces/ILogger.h"
 #include "Core/Domain/Interfaces/IDebugSystem.h"
 #include "Core/Domain/Interfaces/IModuleConfig.h"
@@ -1258,14 +1259,18 @@ inline void ModuleSetupService::scanPinForSensorTypes(int pin, Node &node)
             {
                 tempSensor.i2cRegisterConfigs.push_back(regConfig);
             }
+            //TODO: use extracted method
         }
         else if (sensorType.isModbusSensor())
         {
             tempSensor.modbusDeviceAddress = sensorType.modbusDeviceAddress;
             tempSensor.baudRate = sensorType.baudRate;
             tempSensor.modbusRegisterConfigs = sensorType.modbusRegisterConfig;
+
+            //TODO: scan all ModBus possible addresses use extracted method
         }
 
+        //TODO: extract to method
         if (sensorReader->scanSensor(tempSensor))
         {
             //TODO: set new address ModBus sensors
@@ -1429,8 +1434,8 @@ inline void ModuleSetupService::removeDisconnectedNewSensorPlaceholders(Node &no
 
 inline int ModuleSetupService::findNextAvailableAddress(const std::map<int, std::vector<SensorEntity*>>& addressMap)
 {
-    // Search for next available address in range 0x70-0x78
-    for (int address = 0x70; address <= 0x78; address++)
+    // Search for next available address in range MODBUS_ADDRESS_MIN-MODBUS_ADDRESS_MAX
+    for (int address = MODBUS_ADDRESS_MIN; address <= MODBUS_ADDRESS_MAX; address++)
     {
         if (addressMap.find(address) == addressMap.end() || addressMap.at(address).empty())
         {
@@ -1439,7 +1444,7 @@ inline int ModuleSetupService::findNextAvailableAddress(const std::map<int, std:
         }
     }
     
-    log("SETUP: No available addresses found in range 0x70-0x78");
+    log("SETUP: No available addresses found in range 0x%02X-0x%02X", MODBUS_ADDRESS_MIN, MODBUS_ADDRESS_MAX);
     return -1; // No available address found
 }
 
@@ -1501,6 +1506,7 @@ inline void ModuleSetupService::processSensorsFromRepository(Node &node)
         if (sensorReader && sensorReader->scanSensor(sensorEntity))
         {
             log("SETUP: Sensor %s is online, adding to structure", sensorEntity.uid.c_str());
+            log("SETUP: Sensor modbusDeviceAddress %d", sensorEntity.modbusDeviceAddress);
             addSensorToStructure(node, sensorEntity);
         }
         else
@@ -1581,12 +1587,12 @@ inline void ModuleSetupService::collectModbusSensorsAndAddresses(const std::vect
                 log("SETUP: ModBus sensor %s has NEW status, checking address 0x%02X", 
                     sensorEntity.uid.c_str(), address);
                 
-                // Check if address is outside valid range (0x70-0x78)
-                if (address < 0x70 || address > 0x78)
+                // Check if address is outside valid range (MODBUS_ADDRESS_MIN-MODBUS_ADDRESS_MAX)
+                if (address < MODBUS_ADDRESS_MIN || address > MODBUS_ADDRESS_MAX)
                 {
                     invalidAddressCount++;
-                    log("SETUP: Sensor %s has address 0x%02X outside valid range 0x70-0x78, needs new address", 
-                        sensorEntity.uid.c_str(), address);
+                    log("SETUP: Sensor %s has address 0x%02X outside valid range 0x%02X-0x%02X, needs new address", 
+                        sensorEntity.uid.c_str(), address, MODBUS_ADDRESS_MIN, MODBUS_ADDRESS_MAX);
                     sensorsNeedingNewAddress.push_back(&sensorEntity);
                     log("SETUP: Added sensor %s to sensorsNeedingNewAddress (total: %zu)", 
                         sensorEntity.uid.c_str(), sensorsNeedingNewAddress.size());
@@ -1657,7 +1663,7 @@ inline void ModuleSetupService::assignNewAddresses(std::vector<SensorEntity*>& s
     
     for (SensorEntity* sensorEntity : sensorsNeedingNewAddress)
     {
-        // Find next available address in range 0x70-0x78
+        // Find next available address in range MODBUS_ADDRESS_MIN-MODBUS_ADDRESS_MAX
         int newAddress = findNextAvailableAddress(addressMap);
         
         if (newAddress != -1)
@@ -1670,6 +1676,7 @@ inline void ModuleSetupService::assignNewAddresses(std::vector<SensorEntity*>& s
             {
                 int oldAddress = sensorEntity->modbusDeviceAddress;
                 sensorEntity->modbusDeviceAddress = newAddress;
+                log("SETUP: Address successfully changed - Old: 0x%02X, New: 0x%02X", oldAddress, newAddress);
                 
                 // Update sensor in repository
                 if (sensorRepository->createOrUpdateSensor(*sensorEntity))
@@ -1694,8 +1701,8 @@ inline void ModuleSetupService::assignNewAddresses(std::vector<SensorEntity*>& s
         }
         else
         {
-            log("SETUP: No available addresses in range 0x70-0x78 for sensor %s", 
-                sensorEntity->uid.c_str());
+            log("SETUP: No available addresses in range 0x%02X-0x%02X for sensor %s", 
+                MODBUS_ADDRESS_MIN, MODBUS_ADDRESS_MAX, sensorEntity->uid.c_str());
         }
     }
 }

@@ -28,14 +28,16 @@ public:
     /**
      * @brief Power on specific port
      * @param portIndex Port index to power on
+     * @return true if state changed, false if already on
      */
-    virtual void powerOnPort(int portIndex) = 0;
+    virtual bool powerOnPort(int portIndex) = 0;
 
     /**
      * @brief Power off specific port
      * @param portIndex Port index to power off
+     * @return true if state changed, false if already off
      */
-    virtual void powerOffPort(int portIndex) = 0;
+    virtual bool powerOffPort(int portIndex) = 0;
 };
 
 #endif

@@ -287,74 +287,49 @@ private:
         int portIndex = sensor.pin;
         _modbusReader->init(sensor.baudRate);
 
-        // Power control: Turn off all ports first to avoid interference
-        log("SensorReader: Powering off all ports for clean scan");
+        log("SensorReader: Configuring port states for scanning (target port: %d)", portIndex);
+        bool stateChanged = false;
         for (int i = 0; i < 4; i++) // NOTE: TODO: need read/set from config
         {
-            _modbusReader->powerOffPort(i);            
-        }
-        if (_arduino)
-        {
-            _arduino->delay(500); // Wait for ports to power down completely
-        }
-
-        // Power on only the target port
-        log("SensorReader: Powering on port %d for scanning", portIndex);
-        _modbusReader->powerOnPort(portIndex);
-        if (_arduino)
-        {
-            _arduino->delay(1000); // Wait for sensor to stabilize
-        }
-
-        // Try to query device address using 6EH function code first
-        uint8_t actualDeviceAddress = queryDeviceAddress(portIndex);
-        uint8_t deviceAddressToUse = (actualDeviceAddress != 0) ? actualDeviceAddress : sensor.modbusDeviceAddress;
-
-        log("SensorReader: Using device address %d for scanning (queried: %d, configured: %d)",
-            deviceAddressToUse, actualDeviceAddress, sensor.modbusDeviceAddress);
-
-        // First, ping the device to check if it responds at this address
-        if (_modbusReader->pingAddress(deviceAddressToUse, portIndex))
-        {
-            log("SensorReader: Device responds at address %d, proceeding with scan", deviceAddressToUse);
-        }
-        else
-        {
-            log("SensorReader: Device does not respond at address %d, trying address range 0x70-0x78", deviceAddressToUse);
-
-            // Try addresses from 0x70 to 0x78
-            bool foundAddress = false;
-            for (uint8_t testAddress = 0x70; testAddress <= 0x78; testAddress++)
+            if (i == portIndex)
             {
-                if (_modbusReader->pingAddress(testAddress, portIndex))
+                if (_modbusReader->powerOnPort(i))
                 {
-                    deviceAddressToUse = testAddress;
-                    foundAddress = true;
-                    log("SensorReader: Found responding device at address 0x%02X", testAddress);
-                    break;
+                    stateChanged = true;
+                    log("SensorReader: Powered on port %d", i);
                 }
             }
-
-            if (!foundAddress)
+            else
             {
-                log("SensorReader: No responding device found in address range 0x70-0x78");
-                return false;
+                if (_modbusReader->powerOffPort(i))
+                {
+                    stateChanged = true;
+                    log("SensorReader: Powered off port %d", i);
+                }
             }
         }
+        
+        if (stateChanged && _arduino)
+        {
+            _arduino->delay(500);
+        }
 
-        // Now scan all register configurations with the found address
+        if (_modbusReader->pingAddress(sensor.modbusDeviceAddress, portIndex))
+        {
+            log("SensorReader: Device responds at address %d, proceeding with scan", sensor.modbusDeviceAddress);
+            return false;
+        }        
+
         bool scanSuccess = true;
         for (const auto &config : sensor.modbusRegisterConfigs)
         {
             bool success = false;
             float dummyValue;
 
-            // Try up to 3 times
             for (int attempt = 1; attempt <= 3; attempt++)
             {
-                if (_modbusReader->readRegister(deviceAddressToUse, config, dummyValue, portIndex))
+                if (_modbusReader->readRegister(sensor.modbusDeviceAddress, config, dummyValue, portIndex))
                 {
-                    // Check if the read value is within the expected range for this sensor type
                     if (dummyValue >= config.canConnectMinValue && dummyValue <= config.canConnectMaxValue)
                     {
                         success = true;
@@ -375,7 +350,7 @@ private:
                         portIndex, attempt);
                     if (_arduino)
                     {
-                        _arduino->delay(100); // Small delay between retries
+                        _arduino->delay(100);
                     }
                 }
             }
@@ -392,7 +367,6 @@ private:
         return scanSuccess;
     }
 
-    // Helper method to query device address using 6EH function code
     uint8_t queryDeviceAddress(int portIndex)
     {
         if (!_modbusReader || portIndex < 0)
@@ -410,7 +384,7 @@ private:
         float deviceAddressFloat;
         if (_modbusReader->readRegister(0xFF, queryConfig, deviceAddressFloat, portIndex))
         {
-            uint8_t deviceAddress = (uint8_t)(deviceAddressFloat) & 0xFF; // Lower 8 bits are device address
+            uint8_t deviceAddress = (uint8_t)(deviceAddressFloat) & 0xFF;
             log("SensorReader: Successfully queried device address: %d", deviceAddress);
             return deviceAddress;
         }

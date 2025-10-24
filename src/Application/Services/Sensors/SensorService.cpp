@@ -214,6 +214,9 @@ bool SensorService::readModbusSensors() {
     for (const auto& sensor : modbusSensors) {
         if (!sensor.isActive) continue;
         
+        log("SensorService: Reading Modbus sensor model %s address: %d", 
+            sensor.model.c_str(), sensor.modbusDeviceAddress);
+
         if (!readSensor(sensor)) {
             allSuccess = false;
         }
