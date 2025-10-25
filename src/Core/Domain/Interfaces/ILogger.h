@@ -34,6 +34,11 @@ public:
     virtual void println(const char* topic, const char* message) = 0;
     virtual void printf(const char* topic, const char* format, ...) = 0;
     
+    // Log to specific topic with custom mode
+    virtual void print(const char* topic, MqttLoggerMode mode, const char* message) = 0;
+    virtual void println(const char* topic, MqttLoggerMode mode, const char* message) = 0;
+    virtual void printf(const char* topic, MqttLoggerMode mode, const char* format, ...) = 0;
+    
     // Log with specified level
     virtual void log(LogLevel level, const char* message) = 0;
     virtual void log(LogLevel level, const char* topic, const char* message) = 0;

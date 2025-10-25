@@ -175,6 +175,60 @@ public:
         }
     }
     
+    // Methods for specific topic with custom mode
+    void print(const char* topic, MqttLoggerMode mode, const char* message) override {
+        String baseTopic = _defaultTopic + "/" + topic;
+        String fullTopic = getTopicWithModuleUid(baseTopic);
+        
+        bool logToMqtt = (mode == MqttLoggerMode::MqttOnly || mode == MqttLoggerMode::MqttAndSerial) && _mqttClient.connected();
+        bool logToSerial = (mode == MqttLoggerMode::SerialOnly || mode == MqttLoggerMode::MqttAndSerial);
+        
+        if (logToMqtt) {
+            _mqttClient.publish(fullTopic.c_str(), message);
+        }
+        
+        if (logToSerial) {
+            Serial.print(message);
+        }
+    }
+    
+    void println(const char* topic, MqttLoggerMode mode, const char* message) override {
+        String baseTopic = _defaultTopic + "/" + topic;
+        String fullTopic = getTopicWithModuleUid(baseTopic);
+        
+        bool logToMqtt = (mode == MqttLoggerMode::MqttOnly || mode == MqttLoggerMode::MqttAndSerial) && _mqttClient.connected();
+        bool logToSerial = (mode == MqttLoggerMode::SerialOnly || mode == MqttLoggerMode::MqttAndSerial);
+        
+        if (logToMqtt) {
+            _mqttClient.publish(fullTopic.c_str(), message);
+        }
+        
+        if (logToSerial) {
+            Serial.println(message);
+        }
+    }
+    
+    void printf(const char* topic, MqttLoggerMode mode, const char* format, ...) override {
+        va_list args;
+        va_start(args, format);
+        vsnprintf(_buffer, sizeof(_buffer), format, args);
+        va_end(args);
+        
+        String baseTopic = _defaultTopic + "/" + topic;
+        String fullTopic = getTopicWithModuleUid(baseTopic);
+        
+        bool logToMqtt = (mode == MqttLoggerMode::MqttOnly || mode == MqttLoggerMode::MqttAndSerial) && _mqttClient.connected();
+        bool logToSerial = (mode == MqttLoggerMode::SerialOnly || mode == MqttLoggerMode::MqttAndSerial);
+        
+        if (logToMqtt) {
+            _mqttClient.publish(fullTopic.c_str(), _buffer);
+        }
+        
+        if (logToSerial) {
+            Serial.print(_buffer);
+        }
+    }
+    
     // Logging with levels
     void log(LogLevel level, const char* message) override {
         snprintf(_buffer, sizeof(_buffer), "[%s] %s", logLevelToString(level), message);
