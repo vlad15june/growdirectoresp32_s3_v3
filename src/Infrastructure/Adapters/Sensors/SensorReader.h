@@ -65,23 +65,23 @@ public:
     {
         if (sensor.protocol == "Analog")
         {
-            log("SensorReader: Scanning analog sensor - UID: %s, Type: %s, Model: %s, Protocol: %s, Pin: %d", 
-                sensor.uid.c_str(), sensor.sensorType.c_str(), sensor.model.c_str(), 
+            log("SensorReader: Scanning analog sensor - UID: %s, Type: %s, Model: %s, Protocol: %s, Pin: %d",
+                sensor.uid.c_str(), sensor.sensorType.c_str(), sensor.model.c_str(),
                 sensor.protocol.c_str(), sensor.pin);
             // return scanAnalogSensor(sensor);
             return false; // NOTE: temporary disable analog scan
         }
         else if (sensor.protocol == "ModBus")
         {
-            log("SensorReader: Scanning ModBus sensor - UID: %s, Type: %s, Model: %s, Protocol: %s, Pin: %d", 
-                sensor.uid.c_str(), sensor.sensorType.c_str(), sensor.model.c_str(), 
+            log("SensorReader: Scanning ModBus sensor - UID: %s, Type: %s, Model: %s, Protocol: %s, Pin: %d",
+                sensor.uid.c_str(), sensor.sensorType.c_str(), sensor.model.c_str(),
                 sensor.protocol.c_str(), sensor.pin);
             return scanModbusSensor(sensor);
         }
         else if (sensor.protocol == "I2C")
         {
-            log("SensorReader: Scanning I2C sensor - UID: %s, Type: %s, Model: %s, Protocol: %s, Pin: %d", 
-                sensor.uid.c_str(), sensor.sensorType.c_str(), sensor.model.c_str(), 
+            log("SensorReader: Scanning I2C sensor - UID: %s, Type: %s, Model: %s, Protocol: %s, Pin: %d",
+                sensor.uid.c_str(), sensor.sensorType.c_str(), sensor.model.c_str(),
                 sensor.protocol.c_str(), sensor.pin);
             // return scanI2CSensor(sensor);
             return false; // NOTE: temporary disable I2C scan
@@ -298,6 +298,10 @@ private:
                     stateChanged = true;
                     log("SensorReader: Powered on port %d", i);
                 }
+                else
+                {
+                    log("SensorReader: Port %d already powered on", i);
+                }
             }
             else
             {
@@ -306,19 +310,24 @@ private:
                     stateChanged = true;
                     log("SensorReader: Powered off port %d", i);
                 }
+                else
+                {
+                    log("SensorReader: Port %d already powered off", i);
+                }
             }
         }
-        
+
         if (stateChanged && _arduino)
         {
             _arduino->delay(500);
         }
 
-        if (_modbusReader->pingAddress(sensor.modbusDeviceAddress, portIndex))
+        if (_modbusReader->pingAddress(sensor.modbusDeviceAddress, portIndex) == false)
         {
-            log("SensorReader: Device responds at address %d, proceeding with scan", sensor.modbusDeviceAddress);
+            log("SensorReader: Device does not respond at address %d, skipping scan", sensor.modbusDeviceAddress);
             return false;
-        }        
+        }
+        log("SensorReader: Device responds at address %d, proceeding with scan", sensor.modbusDeviceAddress);
 
         bool scanSuccess = true;
         for (const auto &config : sensor.modbusRegisterConfigs)

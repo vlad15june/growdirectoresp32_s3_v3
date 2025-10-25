@@ -107,49 +107,54 @@ public:
 
         IModbusRS485* modbus = _modbusPorts[portIndex];
 
-        // Create a simple read holding registers request for register 0x0000
-        uint8_t request[8] = {
-            deviceAddress,
-            0x03,  // Function code: Read Holding Registers
-            0x00, 0x00,  // Starting register address (0x0000)
-            0x00, 0x01   // Number of registers to read (1)
-        };
-
-        uint16_t crc = modbus->calculateCRC(request, 6);
-        request[6] = crc & 0xFF;
-        request[7] = (crc >> 8);
-
-        modbus->sendData(request, sizeof(request));
-
-        _arduino.delay(300);
-
-        uint8_t response[64];
-        int bytesRead = modbus->readAvailable(response, sizeof(response));
-        
-        log("ModbusSensorReader: Ping device %d on port %d - received %d bytes", deviceAddress, portIndex, bytesRead);
-        
-        // Check if we got a valid response (at least 5 bytes and correct function code)
-        if (bytesRead >= 5 && response[0] == deviceAddress && response[1] == 0x03)
+        for (int attempt = 1; attempt <= 3; attempt++)
         {
-            log("ModbusSensorReader: Device %d responded to ping on port %d", deviceAddress, portIndex);
-            return true;
-        }
-        else if (bytesRead > 0 && response[1] >= 0x80)
-        {
-            // Exception response (function code + 0x80), but device is responding
-            log("ModbusSensorReader: Device %d sent exception response (0x%02X) but is alive on port %d", 
-                deviceAddress, response[1], portIndex);
-            return true;
+            log("ModbusSensorReader: Ping attempt %d/3 for device %d on port %d", attempt, deviceAddress, portIndex);
+
+            uint8_t request[8] = {
+                deviceAddress,
+                0x03,  // Function code: Read Holding Registers
+                0x00, 0x00,  // Starting register address (0x0000)
+                0x00, 0x01   // Number of registers to read (1)
+            };
+
+            uint16_t crc = modbus->calculateCRC(request, 6);
+            request[6] = crc & 0xFF;
+            request[7] = (crc >> 8);
+
+            modbus->sendData(request, sizeof(request));
+
+            _arduino.delay(300);
+
+            uint8_t response[64];
+            int bytesRead = modbus->readAvailable(response, sizeof(response));
+            
+            log("ModbusSensorReader: Ping device %d on port %d - received %d bytes", deviceAddress, portIndex, bytesRead);
+            
+            if (bytesRead >= 5 && response[0] == deviceAddress && response[1] == 0x03)
+            {
+                log("ModbusSensorReader: Device %d responded to ping on port %d (attempt %d)", deviceAddress, portIndex, attempt);
+                return true;
+            }
+            else if (bytesRead > 0 && response[1] >= 0x80)
+            {
+                log("ModbusSensorReader: Device %d sent exception response (0x%02X) but is alive on port %d (attempt %d)", 
+                    deviceAddress, response[1], portIndex, attempt);
+                return true;
+            }
+
+            if (attempt < 3)
+            {
+                _arduino.delay(100);
+            }
         }
 
-        log("ModbusSensorReader: Device %d did not respond to ping on port %d", deviceAddress, portIndex);
+        log("ModbusSensorReader: Device %d did not respond to ping on port %d after 3 attempts", deviceAddress, portIndex);
         return false;
     }
 
     bool writeSensorAddress(int currentAddress, int newAddress, int portIndex) override
     {
-        //NOTE: temporary
-        // return false;
         if (portIndex < 0 || portIndex >= _modbusPorts.size())
         {
             log("ModbusSensorReader: Invalid port index %d for address write", portIndex);
@@ -158,15 +163,12 @@ public:
 
         IModbusRS485* modbus = _modbusPorts[portIndex];
 
-        // Power off all ports first to avoid interference
         powerOffAllPorts();
         _arduino.delay(500);
 
-        // Power on only the target port
         modbus->powerOnPort();
-        _arduino.delay(1000); // Wait for sensor to stabilize
+        _arduino.delay(1000);
 
-        // Write new address to register 0x0001 using function code 0x10
         bool success = modbus->writeRegister(0x0, 0x0001, (uint16_t)newAddress);
 
         if (success)
@@ -239,7 +241,7 @@ private:
             vsnprintf(buffer, sizeof(buffer), format, args);
             va_end(args);
 
-            _logger->println(DebugFeatures::SETUP_SENSOR_DEBUG, buffer);
+            _logger->println(DebugFeatures::SETUP_SENSOR_DEBUG, MqttLoggerMode::SerialOnly, buffer);
         }
     }
 };
