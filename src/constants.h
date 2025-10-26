@@ -139,6 +139,6 @@
 
 // ModBus address range for sensor devices
 #define MODBUS_ADDRESS_MIN 0x70
-#define MODBUS_ADDRESS_MAX 0x78
+#define MODBUS_ADDRESS_MAX 0x73
 
 #endif // CONSTANTS_H

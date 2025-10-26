@@ -124,7 +124,7 @@ public:
 
             modbus->sendData(request, sizeof(request));
 
-            _arduino.delay(300);
+            _arduino.delay(200);
 
             uint8_t response[64];
             int bytesRead = modbus->readAvailable(response, sizeof(response));
@@ -145,7 +145,7 @@ public:
 
             if (attempt < 3)
             {
-                _arduino.delay(100);
+                _arduino.delay(10);
             }
         }
 
