@@ -227,6 +227,10 @@ public:
         return moduleCommandsReturnValue;
     }
     
+    std::vector<SensorType> getSensorTypesList() override {
+        return std::vector<SensorType>();
+    }
+    
     int getRestApiSendFails() const override {
         return restApiSendFailsValue;
     }

@@ -36,6 +36,7 @@ public:
     std::string lastPublishTopic;
     std::string lastPublishPayload;
     IMessageProcessor* lastMessageProcessor = nullptr;
+    std::string clientId;
     
     // Mock return values
     bool connectReturnValue = true;
@@ -128,6 +129,19 @@ public:
         resetMqttFailsCalled = true;
         resetMqttFailsCallCount++;
         mqttFailsReturnValue = 0;
+    }
+    
+    // Implementation of client ID methods
+    const char* getClientId() const override {
+        return clientId.c_str();
+    }
+    
+    void setClientId(const char* clientId) override {
+        if (clientId) {
+            this->clientId = clientId;
+        } else {
+            this->clientId = "";
+        }
     }
     
     // Reset for test setup

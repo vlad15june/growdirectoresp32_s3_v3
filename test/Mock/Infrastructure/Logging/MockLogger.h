@@ -101,6 +101,35 @@ public:
         }
     }
     
+    // Log to specific topic with custom mode
+    void print(const char* topic, MqttLoggerMode mode, const char* message) override {
+        printCalled = true;
+        lastMessage = message ? message : "";
+        if (logFile.is_open()) {
+            logFile << "[" << (topic ? topic : "NULL") << "][Mode:" << static_cast<int>(mode) << "] " 
+                   << (message ? message : "") << std::endl;
+            logFile.flush();
+        }
+    }
+    
+    void println(const char* topic, MqttLoggerMode mode, const char* message) override {
+        printCalled = true;
+        lastMessage = message ? message : "";
+        if (logFile.is_open()) {
+            logFile << "[" << (topic ? topic : "NULL") << "][Mode:" << static_cast<int>(mode) << "] " 
+                   << (message ? message : "") << std::endl;
+            logFile.flush();
+        }
+    }
+    
+    void printf(const char* topic, MqttLoggerMode mode, const char* format, ...) override {
+        printCalled = true;
+        if (logFile.is_open() && topic && format) {
+            logFile << "[" << topic << "][Mode:" << static_cast<int>(mode) << "] printf: " << format << std::endl;
+            logFile.flush();
+        }
+    }
+    
     void log(LogLevel level, const char* message) override {
         printCalled = true;
         lastMessage = message ? message : "";

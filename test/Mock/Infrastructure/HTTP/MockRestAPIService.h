@@ -170,6 +170,10 @@ public:
         return moduleCommandsReturnValue;
     }
     
+    std::vector<SensorType> getSensorTypesList() override {
+        return std::vector<SensorType>();
+    }
+    
     int getApiSendFails() const override { return apiSendFails; }
     void resetApiSendFails() override { apiSendFails = 0; }
     

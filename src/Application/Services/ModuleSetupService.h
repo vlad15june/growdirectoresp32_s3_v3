@@ -1601,7 +1601,9 @@ inline void ModuleSetupService::collectModbusSensorsAndAddresses(const std::vect
                                                                  std::vector<SensorEntity *> &sensorsNeedingNewAddress)
 {
     log("SETUP: collectModbusSensorsAndAddresses called with %zu sensor entities", allSensorEntities.size());
+#ifdef ESP_PLATFORM
     log("SETUP: Free heap at start: %d", ESP.getFreeHeap());
+#endif
 
     int modbusCount = 0;
     int addedCount = 0;
@@ -1662,7 +1664,9 @@ inline void ModuleSetupService::collectModbusSensorsAndAddresses(const std::vect
         allSensorEntities.size(), modbusCount, addedCount, validAddressCount, invalidAddressCount);
     log("SETUP: Address map size: %zu, Sensors needing new address: %zu",
         addressMap.size(), sensorsNeedingNewAddress.size());
+#ifdef ESP_PLATFORM
     log("SETUP: Free heap at end: %d", ESP.getFreeHeap());
+#endif
 }
 
 inline void ModuleSetupService::findDuplicateAddresses(const std::map<int, std::vector<SensorEntity *>> &addressMap,

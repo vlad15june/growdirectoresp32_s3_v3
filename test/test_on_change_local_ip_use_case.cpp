@@ -8,6 +8,7 @@
 #include "Core/Domain/Data/Models/ModuleStructure.h"
 #include "Mock/Infrastructure/Configuration/MockModuleConfig.h"
 #include "Mock/UseCases/Rules/MockSyncRulesUseCase.h"
+#include "Mock/UseCases/SensorTypes/MockSyncSensorTypesUseCase.h"
 #include "Application/DTOs/DeviceCommandUpdateDto.h"
 
 // Global test variables
@@ -18,6 +19,7 @@ static MockWiFiManager g_mockWifiManager;
 static MockHybridAPIService g_mockApiService;
 static MockModuleConfig g_mockModuleConfig;
 static MockSyncRulesUseCase g_mockSyncRulesUseCase;
+static MockSyncSensorTypesUseCase g_mockSyncSensorTypesUseCase;
 static ModuleStructure g_moduleStructure;
 static OnChangeLocalIpUseCase* g_onChangeLocalIpUseCase;
 
@@ -56,6 +58,7 @@ void on_change_local_ip_use_case_setup(void) {
         g_mockApiService, 
         g_mockModuleConfig,
         g_mockSyncRulesUseCase,
+        g_mockSyncSensorTypesUseCase,
         g_mockLogger, 
         g_mockDebugSystem);
 }
