@@ -83,7 +83,7 @@ public:
     {
         if (handler != nullptr)
         {
-            log("Adding topic handler for: %s", handler->getTopicPattern());
+            log("Adding topic handler for: '%s'", handler->getTopicPattern());
             _topicHandlers.push_back(handler); // TODO: check for duplicates
         }
     }
