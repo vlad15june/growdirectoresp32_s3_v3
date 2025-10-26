@@ -88,9 +88,6 @@
 #include "Infrastructure/Controllers/HTTP/FirmwareRemoteUpdate.h"
 #include "Infrastructure/Controllers/WebServices/TestModeWebServer.h"
 
-const char *mqttUser = "GrowDirectorMqtt";
-const char *mqttPassword = "lasdfh329483457sfdjhs92_w";
-
 // MQTT settings
 IPAddress mqttBroker(116, 203, 235, 144);
 const int mqttPort = 1883;

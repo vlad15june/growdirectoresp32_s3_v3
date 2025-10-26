@@ -40,6 +40,12 @@ public:
     
     // Reset MQTT failures counter
     virtual void resetMqttFails() = 0;
+
+    // Get MQTT client ID
+    virtual const char* getClientId() const = 0;
+
+    // Set MQTT client ID
+    virtual void setClientId(const char* clientId) = 0;
 };
 
 #endif // I_MQTT_MANAGER_H

@@ -132,6 +132,7 @@ public:
     // Static callback that will be passed to PubSubClient
     static void mqttCallback(char *topic, byte *payload, unsigned int length)
     {
+        Serial.printf("MQTT Callback triggered for topic: %s", topic);
         // Now we can access the instance through the static pointer
         if (_instance && _instance->_messageProcessor)
         {
@@ -145,6 +146,7 @@ public:
     {
         if (_mqttClient.connected())
         {
+            log("MQTT already connected, skipping connect");
             return true;
         }
 
@@ -300,6 +302,18 @@ public:
     {
         _mqttFails = 0;
         log("MQTT failures counter reset");
+    }
+
+    // Client ID getter and setter methods
+    const char* getClientId() const
+    {
+        return _clientId;
+    }
+
+    void setClientId(const char* clientId)
+    {
+        _clientId = clientId;
+        log("MQTT client ID set to: %s", clientId);
     }
 };
 

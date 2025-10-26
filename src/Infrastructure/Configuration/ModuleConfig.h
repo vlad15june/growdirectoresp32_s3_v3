@@ -358,7 +358,7 @@ public:
     }
     
     const char* getFirmwareVersion() const override {
-        return FIRMWARE_VERSION;
+        return FIRMWARE_VERSION; //TODO: define in globals if not defined then use this
     }
     
     int getSensorPinCount() const override {
