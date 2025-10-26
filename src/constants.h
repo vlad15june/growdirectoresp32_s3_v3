@@ -141,9 +141,4 @@
 #define MODBUS_ADDRESS_MIN 0x70
 #define MODBUS_ADDRESS_MAX 0x73
 
-// MQTT configuration constants
-const char *mqttUser = "GrowDirectorMqtt";
-const char *mqttPassword = "lasdfh329483457sfdjhs92_w";
-const char *mqttClientIdPrefix = "GrowDirectorWifiClient";
-
 #endif // CONSTANTS_H

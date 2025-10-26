@@ -595,7 +595,7 @@ inline void ModuleSetupService::setupMqttConnection()
 
     // Set dynamic client ID: prefix + module UID
     std::string moduleUid = moduleConfig->getModuleUid();
-    std::string clientId = std::string(mqttClientIdPrefix) + moduleUid;
+    std::string clientId = mqttManager->getClientId() + moduleUid;
     mqttManager->setClientId(clientId.c_str());
     log("SETUP: MQTT client ID set to: %s", clientId.c_str());
 
