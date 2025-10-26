@@ -120,7 +120,18 @@ DebugSystem debugSystem;
 
 ArduinoJsonConverter jsonConverter;
 
-// MQTT components
+EepromAdapter eeprom(1024, 0);
+Settings settings(eeprom, &mqttLogger, &debugSystem);
+
+LedAdapter ledAdapter(&mqttLogger, &debugSystem);
+
+ArduinoAdapter arduinoAdapter;
+
+ButtonAdapter buttonAdapter(&arduinoAdapter);
+
+WifiAdapter wifiAdapter(wifiMulti, &mqttLogger, &debugSystem);
+
+// MQTT components (created after wifiAdapter)
 TopicHandlerFactory topicHandlerFactory(&mqttLogger, &debugSystem);
 MessageProcessor messageProcessor(&mqttLogger, &debugSystem);
 MqttManager mqttManager(
@@ -132,18 +143,8 @@ MqttManager mqttManager(
     mqttPassword,
     true,
     &messageProcessor,
-    &topicHandlerFactory);
-
-EepromAdapter eeprom(1024, 0);
-Settings settings(eeprom, &mqttLogger, &debugSystem);
-
-LedAdapter ledAdapter(&mqttLogger, &debugSystem);
-
-ArduinoAdapter arduinoAdapter;
-
-ButtonAdapter buttonAdapter(&arduinoAdapter);
-
-WifiAdapter wifiAdapter(wifiMulti, &mqttLogger, &debugSystem);
+    &topicHandlerFactory,
+    &wifiAdapter);  // Pass WiFi adapter
 
 WiFiManager wifiManager(&wifiAdapter, &settings, &mqttLogger, &debugSystem);
 
