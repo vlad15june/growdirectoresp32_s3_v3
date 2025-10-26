@@ -3,6 +3,7 @@
 #include "Repository.h"
 #include "Core/Domain/Interfaces/Repositories/IRuleRepository.h"
 #include "Infrastructure/Adapters/SPIFFS/ISpiffsRuleDao.h"
+#include "Infrastructure/Adapters/Time/INTPTimeAdapter.h"
 #include <string>
 #include <vector>
 #include <unordered_map>
@@ -14,6 +15,7 @@ class RuleRepository : public Repository<Rule>, public IRuleRepository {
 
 private:
     ISpiffsRuleDao* ruleDao;
+    INTPTimeAdapter* _ntpTimeAdapter;
 
 public:
     ~RuleRepository() noexcept override = default;
@@ -24,8 +26,8 @@ public:
      * @param debugSystem Debug system for logging (optional)
      * @param logger Logger for output (optional)
      */
-    RuleRepository(ISpiffsRuleDao* dao, IDebugSystem *debugSystem = nullptr, ILogger *logger = nullptr) 
-        : Repository<Rule>(dao, debugSystem, logger), ruleDao(dao) {
+    RuleRepository(ISpiffsRuleDao* dao, INTPTimeAdapter* ntpTimeAdapter = nullptr, IDebugSystem *debugSystem = nullptr, ILogger *logger = nullptr) 
+        : Repository<Rule>(dao, debugSystem, logger), ruleDao(dao), _ntpTimeAdapter(ntpTimeAdapter) {
         if (!dao) {
             throw std::invalid_argument("DAO cannot be null");
         }
@@ -228,7 +230,7 @@ public:
                     
                     // Preserve local mode if needed
                     Rule updatedRule = incomingRule;
-                    if (existingRule->mode != RuleMode::AUTO && existingRule->state != RuleState::UNSYNCHRONIZED) {
+                    if (existingRule->state != RuleState::UNSYNCHRONIZED) {
                         updatedRule.mode = existingRule->mode;
                         updatedRule.modeReason = existingRule->modeReason;
                     }
@@ -273,11 +275,18 @@ public:
         std::vector<Rule> allRules = Repository<Rule>::getAll();
         std::vector<Rule> activeRules;
         
-        // Current time information - will be needed for time-based filters
-        time_t now;
-        time(&now);
-        struct tm timeinfo;
-        localtime_r(&now, &timeinfo);
+        // Current time information
+        struct tm timeinfo = {0};
+        if (_ntpTimeAdapter) {
+            // Use NTP time adapter to get current time
+            time_t now = _ntpTimeAdapter->getEpochTime();
+            localtime_r(&now, &timeinfo);
+        } else {
+            // Fallback to system time if NTP adapter not available
+            time_t now;
+            time(&now);
+            localtime_r(&now, &timeinfo);
+        }
         
         // Filter rules that are active
         for (const auto& rule : allRules) {
@@ -288,12 +297,7 @@ public:
                 continue;
             }
             
-            // Check rule mode - must be ON or AUTO for rules to be active
-            if (rule.mode == RuleMode::ON) {
-                isRuleOn = true;
-            } else if (rule.mode == RuleMode::AUTO) {
-                // In AUTO mode, need to check if today is a valid day to execute
-                
+            if (rule.mode == RuleMode::ON) {                
                 // Check day of week
                 if (!rule.daysOfWeek.empty()) {
                     int today = timeinfo.tm_wday; // 0 is Sunday

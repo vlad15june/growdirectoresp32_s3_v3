@@ -165,7 +165,7 @@ ModuleCommandExecutionUseCase moduleCommandExecutionUseCase(&mqttLogger, &debugS
 SpiffsAdapter spiffsAdapter(&mqttLogger, &debugSystem);
 
 SpiffsRuleDao ruleDao(&spiffsAdapter, &jsonConverter, &debugSystem, &mqttLogger);
-RuleRepository ruleRepository(&ruleDao, &debugSystem, &mqttLogger);
+RuleRepository ruleRepository(&ruleDao, &ntpTimeAdapter, &debugSystem, &mqttLogger);
 
 SpiffsSensorDao sensorDao(&spiffsAdapter, &jsonConverter, &debugSystem, &mqttLogger);
 SensorRepository sensorRepository(&sensorDao, &debugSystem, &mqttLogger);

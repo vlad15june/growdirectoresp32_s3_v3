@@ -145,7 +145,7 @@ public:
             return;
         }
 
-        log("EVALUATE_RULES: Starting rule evaluation cycle at %lu ms", now);
+        log("EVALUATE_RULES: Starting rule evaluation cycle at %lu ms, last= %lu, elapsed= %lu", now, _lastEvaluationTime, elapsed);
         
         _lastEvaluationTime = now;
         
@@ -195,7 +195,7 @@ public:
             result.sensorUid = rule.sensorUid;
             result.sensorValue = getSensorValue(rule.sensorUid);
             if (_arduinoAdapter) {
-                result.sensorValueTime = _arduinoAdapter->millis();
+                result.sensorValueTime = _arduinoAdapter->millis(); //TODO: check, may be need real tile
             }
         }
         
@@ -315,6 +315,59 @@ private:
     RuleEvaluationResult evaluateScheduleRule(const Rule& rule, RuleEvaluationResult& result) {
         log("EVALUATE_RULES: Evaluating schedule rule %s", rule.uid.c_str());
         
+        #ifdef DEBUG
+        log("EVALUATE_RULES: Rule data - uid: %s, version: %d, deviceUid: %s", 
+            rule.uid.c_str(), rule.version, rule.deviceUid.c_str());
+        log("EVALUATE_RULES: Rule type: %d, mode: %d, state: %d, protectiveShutdown: %s", 
+            static_cast<int>(rule.ruleType), static_cast<int>(rule.mode), 
+            static_cast<int>(rule.state), rule.protectiveShutdown ? "true" : "false");
+        log("EVALUATE_RULES: Mode reason: %s", rule.modeReason.c_str());
+        log("EVALUATE_RULES: SensorUid: %s, direction: %d", 
+            rule.sensorUid.c_str(), static_cast<int>(rule.direction));
+        log("EVALUATE_RULES: ValueTarget: %.2f, cyclesToSetPoint: %d, workingTime: %d, waitingTime: %d", 
+            rule.valueTarget, rule.cyclesToSetPoint, rule.workingTime, rule.waitingTime);
+        log("EVALUATE_RULES: ValueLow: %.2f, valueHigh: %.2f, timeToSetPoint: %d", 
+            rule.valueLow, rule.valueHigh, rule.timeToSetPoint);
+        log("EVALUATE_RULES: IsAdvanced: %s, conditionOr: %s, delayOn: %d, delayOff: %d", 
+            rule.isAdvanced ? "true" : "false", rule.conditionOr ? "true" : "false", 
+            rule.delayOn, rule.delayOff);
+        log("EVALUATE_RULES: StartDayTime: %ld, endDayTime: %ld", 
+            static_cast<long>(rule.startDayTime), static_cast<long>(rule.endDayTime));
+        log("EVALUATE_RULES: DaysOfWeek count: %d, daysOfMonth count: %d", 
+            static_cast<int>(rule.daysOfWeek.size()), static_cast<int>(rule.daysOfMonth.size()));
+        log("EVALUATE_RULES: Conditions count: %d, advancedRuleValues count: %d", 
+            static_cast<int>(rule.conditions.size()), static_cast<int>(rule.advancedRuleValues.size()));
+        log("EVALUATE_RULES: Schedule items count: %d", static_cast<int>(rule.schedule.size()));
+        
+        // Log schedule items details
+        for (size_t i = 0; i < rule.schedule.size(); ++i) {
+            log("EVALUATE_RULES: Schedule[%d] - startAt: %ld, duration: %d", 
+                static_cast<int>(i), static_cast<long>(rule.schedule[i].startAt), rule.schedule[i].duration);
+        }
+        
+        // Log days of week if any
+        if (!rule.daysOfWeek.empty()) {
+            char daysBuffer[64] = {0};
+            int offset = 0;
+            for (size_t i = 0; i < rule.daysOfWeek.size() && offset < 60; ++i) {
+                offset += snprintf(daysBuffer + offset, 64 - offset, "%d%s", 
+                    rule.daysOfWeek[i], (i < rule.daysOfWeek.size() - 1) ? "," : "");
+            }
+            log("EVALUATE_RULES: DaysOfWeek: [%s]", daysBuffer);
+        }
+        
+        // Log days of month if any
+        if (!rule.daysOfMonth.empty()) {
+            char daysBuffer[128] = {0};
+            int offset = 0;
+            for (size_t i = 0; i < rule.daysOfMonth.size() && offset < 120; ++i) {
+                offset += snprintf(daysBuffer + offset, 128 - offset, "%d%s", 
+                    rule.daysOfMonth[i], (i < rule.daysOfMonth.size() - 1) ? "," : "");
+            }
+            log("EVALUATE_RULES: DaysOfMonth: [%s]", daysBuffer);
+        }
+        #endif
+
         if (!_ntpTimeAdapter) {
             log("EVALUATE_RULES: NTP time adapter not available for schedule rule");
             result.state = DEVICE_STATE_OFF;

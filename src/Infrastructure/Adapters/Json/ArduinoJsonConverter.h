@@ -14,6 +14,46 @@
 
 class ArduinoJsonConverter : public IJsonConverter
 {
+private:
+    // Helper function to parse ISO 8601 time string to time_t
+    time_t parseISOTimeToTimeT(const std::string& isoTimeStr) {
+        if (isoTimeStr.length() < 19) return 0; // Invalid format
+        
+        // Extract time part: "HH:MM:SS" from "YYYY-MM-DDTHH:MM:SS+00:00"
+        size_t timeStart = isoTimeStr.find('T');
+        if (timeStart == std::string::npos) return 0;
+        
+        timeStart++; // Skip 'T'
+        if (timeStart + 8 > isoTimeStr.length()) return 0;
+        
+        try {
+            int hours = std::stoi(isoTimeStr.substr(timeStart, 2));
+            int minutes = std::stoi(isoTimeStr.substr(timeStart + 3, 2));
+            int seconds = std::stoi(isoTimeStr.substr(timeStart + 6, 2));
+            
+            // Convert to seconds since midnight
+            return static_cast<time_t>(hours * 3600 + minutes * 60 + seconds);
+        } catch (const std::exception&) {
+            return 0;
+        }
+    }
+
+    // Helper function to convert time_t (seconds since midnight) to ISO time string
+    std::string timeToISOString(time_t secondsSinceMidnight) {
+        if (secondsSinceMidnight <= 0) return "00:00:00";
+        
+        int hours = secondsSinceMidnight / 3600;
+        int minutes = (secondsSinceMidnight % 3600) / 60;
+        int seconds = secondsSinceMidnight % 60;
+        
+        // Format as HH:MM:SS - simplified without full date/timezone
+        char timeStr[16];
+        snprintf(timeStr, sizeof(timeStr), "%02d:%02d:%02d", hours, minutes, seconds);
+        
+        // For schedule rules, we typically use today's date with the time
+        return "2025-01-01T" + std::string(timeStr) + "+00:00";
+    }
+
 public:
     bool moduleStructureFromJson(const std::string &jsonStr, ModuleStructure &moduleStructure) override
     {
@@ -185,6 +225,9 @@ public:
 
     bool ruleFromJson(const std::string &jsonStr, Rule &rule) override
     {
+        // Debug: Log the JSON string being parsed
+        printf("Parsing rule JSON: %s\n", jsonStr.c_str());
+
         DynamicJsonDocument doc(4096);
         DeserializationError error = deserializeJson(doc, jsonStr);
         if (error)
@@ -206,12 +249,11 @@ public:
 
         // Parse mode
         std::string modeStr = doc["mode"] | "";
+        rule.mode = RuleMode::OFF;
         if (modeStr == "On")
             rule.mode = RuleMode::ON;
-        else if (modeStr == "Off")
-            rule.mode = RuleMode::OFF;
-        else if (modeStr == "Auto")
-            rule.mode = RuleMode::AUTO;
+        else if (modeStr == "WaitingForUserConfirm")
+            rule.mode = RuleMode::RULE_MODE_WAITING_FOR_USER_CONFIRM;
 
         if (doc.containsKey("modeReason") && !doc["modeReason"].isNull())
         {
@@ -381,8 +423,8 @@ public:
                 for (JsonObject schedObj : doc["schedule"].as<JsonArray>())
                 {
                     ScheduleItem item;
-                    // TODO: Parse time properly
-                    item.startAt = 0;
+                    std::string startAtStr = schedObj["startAt"] | "";
+                    item.startAt = parseISOTimeToTimeT(startAtStr);
                     item.duration = schedObj["duration"] | 0;
                     rule.schedule.push_back(item);
                 }
@@ -559,8 +601,7 @@ public:
             for (const ScheduleItem &item : rule.schedule)
             {
                 JsonObject itemObj = scheduleArr.createNestedObject();
-                // TODO: Format time properly
-                itemObj["startAt"] = "";
+                itemObj["startAt"] = timeToISOString(item.startAt);
                 itemObj["duration"] = item.duration;
             }
         }
