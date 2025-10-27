@@ -59,7 +59,7 @@ public:
     {
         _arduino.digitalWrite(_controlPin, _arduino.getDigitalHigh());
         _arduino.digitalWrite(_sensorPowerPin, _arduino.getDigitalHigh());
-        _arduino.delay(500);
+        _arduino.delay(100);
 
         Serial.printf("[%s] Sending request: ", _portName);
         for (int i = 0; i < length; i++)
@@ -71,7 +71,6 @@ public:
         Serial.println(" | Request sent.");
 
         _arduino.digitalWrite(_controlPin, _arduino.getDigitalLow());
-        // _arduino.digitalWrite(_sensorPowerPin, _arduino.getDigitalLow());
     }
 
     int readAvailable(uint8_t *buffer, size_t maxLength) override

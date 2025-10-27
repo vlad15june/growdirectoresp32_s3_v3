@@ -376,11 +376,63 @@ public:
     void loop() override
     {
         static uint32_t lastPrintTime = 0;
+        static uint32_t lastHealthCheck = 0;
+        static bool wasConnected = false;
         const uint32_t printInterval = 30000; // Print every 30 seconds
+        const uint32_t healthCheckInterval = 5000; // Check health every 5 seconds
         
-        if (_mqttClient.connected())
+        bool isConnected = _mqttClient.connected();
+        
+        // Detect connection state changes
+        if (isConnected && !wasConnected)
+        {
+            log("MQTT: ✓ Connection established");
+            
+            // Resubscribe to all topics after reconnection
+            if (_subscribedTopics.size() > 0)
+            {
+                log("MQTT: Resubscribing to %d topics...", _subscribedTopics.size());
+                for (const auto& topic : _subscribedTopics)
+                {
+                    bool success = _mqttClient.subscribe(topic.c_str());
+                    if (success)
+                    {
+                        log("MQTT: ✓ Resubscribed to: %s", topic.c_str());
+                    }
+                    else
+                    {
+                        log("MQTT: ✗ Failed to resubscribe to: %s", topic.c_str());
+                    }
+                }
+            }
+        }
+        else if (!isConnected && wasConnected)
+        {
+            log("MQTT: ✗ Connection lost - will attempt reconnect");
+        }
+        
+        wasConnected = isConnected;
+        
+        if (isConnected)
         {
             _mqttClient.loop();
+            
+            // Active health check - verify connection is really alive
+            if (millis() - lastHealthCheck >= healthCheckInterval)
+            {
+                lastHealthCheck = millis();
+                
+                // Check MQTT state - if not CONNECTED (0), force disconnect
+                int state = _mqttClient.state();
+                if (state != 0)
+                {
+                    log("MQTT: Health check failed - state: %d (expected 0)", state);
+                    log("MQTT: Forcing disconnect to trigger clean reconnect");
+                    _mqttClient.disconnect();
+                    wasConnected = false;
+                    return; // Will reconnect on next loop()
+                }
+            }
             
             // Periodically print subscribed topics
             if (millis() - lastPrintTime >= printInterval)
