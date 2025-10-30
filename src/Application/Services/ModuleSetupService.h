@@ -1245,6 +1245,8 @@ inline void ModuleSetupService::scanPinForSensorTypes(int pin, Node &node)
     std::string moduleUid = moduleConfig->getModuleUid();
     for (const auto &sensorType : allSensorTypes)
     {
+        mqttManager->loop(); // NOTE: not good solution - Keep MQTT responsive during potentially long operations
+
         SensorEntity tempSensor;
         tempSensor.sensorType = sensorType.name;
         tempSensor.model = sensorType.name;
@@ -1281,27 +1283,29 @@ inline void ModuleSetupService::scanPinForSensorTypes(int pin, Node &node)
             tempSensor.modbusRegisterConfigs = sensorType.modbusRegisterConfig;
             tempSensor.modbusDeviceAddress = sensorType.modbusDeviceAddress;
             log("SETUP: Trying default ModBus address 0x%02X for sensor type %s", sensorType.modbusDeviceAddress, sensorType.name.c_str());
-            
+
             if (detectSensor(node, tempSensor, sensorType, pin))
             {
                 isAdded = true;
                 break;
             }
-            
+
             // If not detected at default address, scan all addresses in the defined range
             log("SETUP: Sensor not found at default address, scanning range 0x%02X-0x%02X", MODBUS_ADDRESS_MIN, MODBUS_ADDRESS_MAX);
             for (int address = MODBUS_ADDRESS_MIN; address <= MODBUS_ADDRESS_MAX; address++)
-            {                
+            {
+                mqttManager->loop(); // NOTE: not good solution - Keep MQTT responsive during potentially long operations
+
                 tempSensor.modbusDeviceAddress = address;
                 log("SETUP: Scanning ModBus address 0x%02X for sensor type %s", address, sensorType.name.c_str());
-                
+
                 if (detectSensor(node, tempSensor, sensorType, pin))
                 {
                     isAdded = true;
                     break;
                 }
             }
-            
+
             if (isAdded)
             {
                 break;
@@ -1567,6 +1571,7 @@ inline void ModuleSetupService::processSensorsFromRepository(Node &node)
                 sensorEntity.status = SENSOR_STATUS_DELETED;
             }
         }
+        mqttManager->loop(); // NOTE: not good solution - Keep MQTT responsive during potentially long operations
     }
 
     // Scan empty pins for additional sensors

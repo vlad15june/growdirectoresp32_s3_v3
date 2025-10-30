@@ -1,19 +1,20 @@
 #include "SensorService.h"
 #include <cstring>
 
-SensorService::SensorService(IModuleConfig* moduleConfig, 
-                            ModuleStructure* moduleStructure,
-                            ISensorRepository* sensorRepository,
-                            ISensorReader* sensorReader,
-                            ISensorValueModel* sensorValueModel,
-                            INTPTimeAdapter* timeAdapter,
-                            IArduinoAdapter* arduinoAdapter,
-                            IHybridAPIService* hybridApiService,
-                            ILogger* logger,
-                            IDebugSystem* debugSystem,
-                            IUdpManager* udpManager,
-                            IJsonConverter* jsonConverter) 
-    : moduleConfig(moduleConfig), 
+SensorService::SensorService(IModuleConfig *moduleConfig,
+                             ModuleStructure *moduleStructure,
+                             ISensorRepository *sensorRepository,
+                             ISensorReader *sensorReader,
+                             ISensorValueModel *sensorValueModel,
+                             INTPTimeAdapter *timeAdapter,
+                             IArduinoAdapter *arduinoAdapter,
+                             IHybridAPIService *hybridApiService,
+                             ILogger *logger,
+                             IDebugSystem *debugSystem,
+                             IUdpManager *udpManager,
+                             IJsonConverter *jsonConverter,
+                             IMqttManager *mqttManager)
+    : moduleConfig(moduleConfig),
       moduleStructure(moduleStructure),
       sensorRepository(sensorRepository),
       sensorReader(sensorReader),
@@ -25,138 +26,169 @@ SensorService::SensorService(IModuleConfig* moduleConfig,
       debugSystem(debugSystem),
       udpManager(udpManager),
       jsonConverter(jsonConverter),
+      mqttManager(mqttManager),
       lastSensorReadTime(0),
       lastSensorUpdateTime(0),
-      lastUdpSendTime(0) {
+      lastUdpSendTime(0)
+{
 }
 
-SensorService::~SensorService() {
+SensorService::~SensorService()
+{
 }
 
-bool SensorService::init() {
+bool SensorService::init()
+{
     log("SensorService: Initializing");
-    
-    if (!sensorRepository) {
+
+    if (!sensorRepository)
+    {
         log("SensorService: Sensor repository is null");
         return false;
     }
-    
-    if (!sensorReader) {
+
+    if (!sensorReader)
+    {
         log("SensorService: Sensor reader is null");
         return false;
     }
-    
-    if (!sensorValueModel) {
+
+    if (!sensorValueModel)
+    {
         log("SensorService: Sensor value model is null");
         return false;
     }
-    
-    if (!sensorValueModel->init()) {
+
+    if (!sensorValueModel->init())
+    {
         log("SensorService: Failed to initialize sensor value model");
         return false;
     }
-    
+
     lastSensorReadTime = arduinoAdapter->millis();
     lastSensorUpdateTime = arduinoAdapter->millis();
-    
+
     log("SensorService: Initialization successful");
     return true;
 }
 
-void SensorService::loop() {
+void SensorService::loop()
+{
     auto activeSensors = sensorRepository->getActiveSensors();
-    if (activeSensors.empty()) {
+    if (activeSensors.empty())
+    {
         return;
     }
-    
+
     unsigned long currentTime = arduinoAdapter->millis();
-    
-    if (currentTime - lastSensorReadTime >= SENSOR_READ_INTERVAL) {
+
+    if (currentTime - lastSensorReadTime >= SENSOR_READ_INTERVAL)
+    {
         log("SensorService: Reading all sensors");
         readAllSensors();
         lastSensorReadTime = currentTime;
     }
-    
-    if (hybridApiService && (currentTime - lastSensorUpdateTime >= SENSOR_UPDATE_INTERVAL)) {
+
+    if (hybridApiService && (currentTime - lastSensorUpdateTime >= SENSOR_UPDATE_INTERVAL))
+    {
         log("SensorService: Sending sensor update to server");
         UpdateDto updateDto = createSensorUpdateDto();
-        
+
         hybridApiService->sendModuleUpdateData(updateDto);
         lastSensorUpdateTime = currentTime;
     }
-    
-    if (udpManager && (currentTime - lastUdpSendTime >= UDP_SEND_INTERVAL)) {
+
+    if (udpManager && (currentTime - lastUdpSendTime >= UDP_SEND_INTERVAL))
+    {
         log("SensorService: Sending sensor update via UDP");
         UpdateDto updateDto = createSensorUpdateDto();
-        
+
         sendUpdateViaUdp(updateDto);
         lastUdpSendTime = currentTime;
     }
 }
 
-bool SensorService::readAllSensors() {
-    if (!sensorRepository) {
+bool SensorService::readAllSensors()
+{
+    if (!sensorRepository)
+    {
         return false;
     }
-    
+
     bool success = true;
-    
-    if (!readAnalogSensors()) {
+
+    if (!readAnalogSensors())
+    {
         success = false;
     }
-    
-    if (!readI2CSensors()) {
+
+    if (!readI2CSensors())
+    {
         success = false;
     }
-    
-    if (!readModbusSensors()) {
+
+    if (!readModbusSensors())
+    {
         success = false;
     }
-    
+
     return success;
 }
 
-bool SensorService::readSensor(SensorEntity sensor) {
-    if (!sensorRepository || !sensorReader) {
+bool SensorService::readSensor(SensorEntity sensor)
+{
+    if (!sensorRepository || !sensorReader)
+    {
         return false;
     }
-    
-    if (!sensor.isActive) {
+
+    if (!sensor.isActive)
+    {
         log("SensorService: Sensor %s is not active", sensor.uid.c_str());
         return false;
     }
-    
+
     uint32_t currentTime = arduinoAdapter->millis();
-    
-    if (sensor.isMultiChannel()) {
+
+    if (sensor.isMultiChannel())
+    {
         // Mark sensor as multi-channel in the value model
         sensorValueModel->setSensorMultiChannel(sensor.uid, true);
-        
+
         std::map<std::string, float> channelValues;
-        if (sensorReader->readMultiChannelSensor(sensor, channelValues)) {
-            for (const auto& pair : channelValues) {
+        if (sensorReader->readMultiChannelSensor(sensor, channelValues))
+        {
+            for (const auto &pair : channelValues)
+            {
                 sensorValueModel->setChannelValue(sensor.uid, pair.first, pair.second);
             }
             sensorRepository->updateSensorStatus(sensor.uid.c_str(), true, false);
             log("SensorService: Read multi-channel sensor %s", sensor.uid.c_str());
             return true;
-        } else {
+        }
+        else
+        {
             sensorRepository->updateSensorStatus(sensor.uid.c_str(), sensor.isActive, true);
             log("SensorService: Failed to read multi-channel sensor %s", sensor.uid.c_str());
             return false;
         }
-    } else {
+    }
+    else
+    {
         // Mark sensor as single-channel in the value model
         sensorValueModel->setSensorMultiChannel(sensor.uid, false);
-        
+
         float value;
-        if (sensorReader->readSensor(sensor, value)) {
+        if (sensorReader->readSensor(sensor, value))
+        {
             // For single-channel sensors, use setSensorValue
             sensorValueModel->setSensorValue(sensor.uid, value);
             sensorRepository->updateSensorStatus(sensor.uid.c_str(), true, false);
             log("SensorService: Read sensor %s, value: %.2f", sensor.uid.c_str(), value);
             return true;
-        } else {
+        }
+        else
+        {
             sensorRepository->updateSensorStatus(sensor.uid.c_str(), sensor.isActive, true);
             log("SensorService: Failed to read sensor %s", sensor.uid.c_str());
             return false;
@@ -164,149 +196,186 @@ bool SensorService::readSensor(SensorEntity sensor) {
     }
 }
 
-bool SensorService::readAnalogSensors() {
+bool SensorService::readAnalogSensors()
+{
     auto analogSensors = sensorRepository->getSensorsByProtocol("ANALOG");
-    if (analogSensors.empty()) {
+    if (analogSensors.empty())
+    {
         return true; // No sensors to read, consider it successful
     }
-    
+
     bool allSuccess = true;
-    
-    for (const auto& sensor : analogSensors) {
-        if (!sensor.isActive) continue;
-        
-        if (!readSensor(sensor)) {
+
+    for (const auto &sensor : analogSensors)
+    {
+        if (!sensor.isActive)
+            continue;
+
+        if (!readSensor(sensor))
+        {
             allSuccess = false;
         }
     }
-    
+
     return allSuccess;
 }
 
-bool SensorService::readI2CSensors() {
+bool SensorService::readI2CSensors()
+{
     auto i2cSensors = sensorRepository->getI2CSensors();
-    if (i2cSensors.empty()) {
+    if (i2cSensors.empty())
+    {
         return true; // No sensors to read, consider it successful
     }
-    
+
     bool allSuccess = true;
-    
-    for (const auto& sensor : i2cSensors) {
-        if (!sensor.isActive) continue;
-        
-        if (!readSensor(sensor)) {
+
+    for (const auto &sensor : i2cSensors)
+    {
+        if (!sensor.isActive)
+            continue;
+
+        if (!readSensor(sensor))
+        {
             allSuccess = false;
         }
     }
-    
+
     return allSuccess;
 }
 
-bool SensorService::readModbusSensors() {
+bool SensorService::readModbusSensors()
+{
     auto modbusSensors = sensorRepository->getModbusSensors();
     log("SensorService: Found %zu Modbus sensors", modbusSensors.size());
-    if (modbusSensors.empty()) {
+    if (modbusSensors.empty())
+    {
         return true; // No sensors to read, consider it successful
     }
-    
+
     bool allSuccess = true;
-    
-    for (const auto& sensor : modbusSensors) {
-        if (!sensor.isActive) continue;
-        
-        log("SensorService: Reading Modbus sensor model %s address: %d", 
+
+    for (const auto &sensor : modbusSensors)
+    {
+        mqttManager->loop(); // NOTE: not good solution - Keep MQTT responsive during potentially long operations
+
+        if (!sensor.isActive)
+            continue;
+
+        log("SensorService: Reading Modbus sensor model %s address: %d",
             sensor.model.c_str(), sensor.modbusDeviceAddress);
 
-        if (!readSensor(sensor)) {
+        if (!readSensor(sensor))
+        {
             allSuccess = false;
         }
     }
-    
+
     return allSuccess;
 }
 
-UpdateDto SensorService::createSensorUpdateDto() {
+UpdateDto SensorService::createSensorUpdateDto()
+{
     UpdateDto dto;
-    
+
     dto.growdirectorUid = moduleConfig->getModuleUid();
     dto.time = timeAdapter->getFormattedTime();
     dto.millis = arduinoAdapter->millis();
-    
-    ISettings* settings = moduleConfig->getSettings();
-    if (settings) {
+
+    ISettings *settings = moduleConfig->getSettings();
+    if (settings)
+    {
         char accountUidBuffer[256];
         settings->getAccountUid(accountUidBuffer);
         dto.accountUid = accountUidBuffer;
-        
+
         char userEmailBuffer[256];
         settings->getUser(userEmailBuffer);
         dto.email = userEmailBuffer;
     }
-    
+
     auto sensors = sensorRepository->getActiveSensors();
-    for (const auto& sensor : sensors) {
-        if (sensor.isMultiChannel() && sensorValueModel->hasChannelValues(sensor.uid)) {
+    for (const auto &sensor : sensors)
+    {
+        if (sensor.isMultiChannel() && sensorValueModel->hasChannelValues(sensor.uid))
+        {
             auto channelValues = sensorValueModel->getChannelValues(sensor.uid);
-            for (const auto& channelValue : channelValues) {
+            for (const auto &channelValue : channelValues)
+            {
                 SensorDto sensorDto;
                 sensorDto.uid = channelValue.first;
                 sensorDto.value = channelValue.second;
                 sensorDto.state = sensor.isError ? "error" : (sensor.isActive ? "online" : "offline");
-                
+
                 dto.sensors.push_back(sensorDto);
             }
-        } else {
+        }
+        else
+        {
             SensorDto sensorDto;
             sensorDto.uid = sensor.uid;
             // Get value from SensorValueModel for single-channel sensors
             sensorDto.value = sensorValueModel->getSensorValue(sensor.uid);
             sensorDto.state = sensor.isError ? "error" : (sensor.isActive ? "online" : "offline");
-            
+
             dto.sensors.push_back(sensorDto);
         }
     }
-    
+
     return dto;
 }
 
-void SensorService::sendUpdateViaUdp(const UpdateDto& updateDto) {
-    if (!udpManager || !jsonConverter) {
+void SensorService::sendUpdateViaUdp(const UpdateDto &updateDto)
+{
+    if (!udpManager || !jsonConverter)
+    {
         log("SensorService: UDP manager or JSON converter not available");
         return;
     }
-    
-    if (!udpManager->isInitialized()) {
+
+    if (!udpManager->isInitialized())
+    {
         log("SensorService: UDP manager not initialized");
         return;
     }
-    
+
     // Convert UpdateDto to JSON string
     std::string jsonString = jsonConverter->updateToJson(updateDto);
-    if (jsonString.empty()) {
+    if (jsonString.empty())
+    {
         log("SensorService: Failed to convert UpdateDto to JSON");
         return;
     }
-    
+
     // Send via UDP broadcast
-    IUdpSender* sender = udpManager->getSender();
-    if (sender) {
+    IUdpSender *sender = udpManager->getSender();
+    if (sender)
+    {
         // Use multicast for sensor data broadcast (port 1234 as default)
-        const char* multicastIP = udpManager->getMulticastIP();
+        const char *multicastIP = udpManager->getMulticastIP();
         uint16_t port = udpManager->getLocalPort();
-        
-        if (sender->sendMulticast(jsonString.c_str(), multicastIP, port)) {
+
+        if (sender->sendMulticast(jsonString.c_str(), multicastIP, port))
+        {
             log("SensorService: Successfully sent sensor data via UDP multicast to %s:%d", multicastIP, port);
-        } else {
+        }
+        else
+        {
             log("SensorService: Failed to send sensor data via UDP multicast");
-            
+
             // Fallback to broadcast
-            if (sender->sendBroadcast(jsonString.c_str(), port)) {
+            if (sender->sendBroadcast(jsonString.c_str(), port))
+            {
                 log("SensorService: Successfully sent sensor data via UDP broadcast on port %d", port);
-            } else {
+            }
+            else
+            {
                 log("SensorService: Failed to send sensor data via UDP broadcast");
             }
         }
-    } else {
+    }
+    else
+    {
         log("SensorService: UDP sender not available");
     }
 }

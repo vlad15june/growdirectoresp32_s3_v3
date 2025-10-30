@@ -355,7 +355,8 @@ SensorService sensorService(
     &mqttLogger,
     &debugSystem,
     &udpManager,
-    &jsonConverter);
+    &jsonConverter,
+    &mqttManager);
 
 LoopServiceFactory loopServiceFactory(
     &ledUseCases,

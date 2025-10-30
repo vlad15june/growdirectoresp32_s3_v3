@@ -16,6 +16,7 @@
 #include "Core/Domain/Interfaces/IDebugSystem.h"
 #include "Core/Domain/Interfaces/Udp/IUdpManager.h"
 #include "Core/Domain/Interfaces/Adapters/Json/IJsonConverter.h"
+#include "Core/Domain/Interfaces/Mqtt/IMqttManager.h"
 
 class SensorService : public ISensorService {
 private:
@@ -31,6 +32,7 @@ private:
     IDebugSystem* debugSystem;
     IUdpManager* udpManager;
     IJsonConverter* jsonConverter;
+    IMqttManager* mqttManager;
     
     const unsigned long SENSOR_READ_INTERVAL = 15000;
     const unsigned long SENSOR_UPDATE_INTERVAL = 15000;
@@ -72,7 +74,8 @@ public:
                   ILogger* logger = nullptr,
                   IDebugSystem* debugSystem = nullptr,
                   IUdpManager* udpManager = nullptr,
-                  IJsonConverter* jsonConverter = nullptr);
+                  IJsonConverter* jsonConverter = nullptr,
+                  IMqttManager* mqttManager = nullptr);
 
     ~SensorService();
     
