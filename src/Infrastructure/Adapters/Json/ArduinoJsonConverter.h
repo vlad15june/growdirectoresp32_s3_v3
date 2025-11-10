@@ -54,6 +54,32 @@ private:
         return "2025-01-01T" + std::string(timeStr) + "+00:00";
     }
 
+    // Helper function to convert internal pin numbering to external JSON format
+    int convertPinToJson(int internalPin) {
+        // Mapping: internal -> JSON
+        // 0 -> 4, 1 -> 5, 2 -> 6, 3 -> 1
+        switch (internalPin) {
+            case 0: return 4;
+            case 1: return 5;
+            case 2: return 6;
+            case 3: return 1;
+            default: return internalPin; // Return unchanged if not in mapping
+        }
+    }
+
+    // Helper function to convert external JSON pin numbering to internal format
+    int convertPinFromJson(int jsonPin) {
+        // Mapping: JSON -> internal
+        // 4 -> 0, 5 -> 1, 6 -> 2, 1 -> 3
+        switch (jsonPin) {
+            case 4: return 0;
+            case 5: return 1;
+            case 6: return 2;
+            case 1: return 3;
+            default: return jsonPin; // Return unchanged if not in mapping
+        }
+    }
+
 public:
     bool moduleStructureFromJson(const std::string &jsonStr, ModuleStructure &moduleStructure) override
     {
@@ -92,7 +118,7 @@ public:
                         Sensor sensor;
                         sensor.uid = sensorObj["uid"] | "";
                         sensor.type = sensorObj["type"] | "";
-                        sensor.pin = sensorObj["pin"] | 0;
+                        sensor.pin = convertPinFromJson(sensorObj["pin"] | 0);
                         node.sensors.push_back(sensor);
                     }
                 }
@@ -158,7 +184,7 @@ public:
                     JsonObject sensorObj = sensorsArr.createNestedObject();
                     sensorObj["uid"] = sensor.uid;
                     sensorObj["type"] = sensor.type;
-                    sensorObj["pin"] = sensor.pin;
+                    sensorObj["pin"] = convertPinToJson(sensor.pin);
                 }
             }
 
