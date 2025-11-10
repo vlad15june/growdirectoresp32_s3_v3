@@ -405,8 +405,8 @@ uint8_t ModuleConfig::LED_G_HYDRO[3] = {13, 14, 12};
 uint8_t ModuleConfig::LED_R_DIMMER[2] = {42, 41};
 uint8_t ModuleConfig::LED_G_DIMMER[2] = {40, 39};
 
-uint8_t ModuleConfig::LED_R_Sensor = 12;
-uint8_t ModuleConfig::LED_G_Sensor = 13;
+uint8_t ModuleConfig::LED_R_Sensor = 13;
+uint8_t ModuleConfig::LED_G_Sensor = 12;
 
 uint8_t ModuleConfig::RELAY_PINS[4] = {39, 40, 41, 42};
 
