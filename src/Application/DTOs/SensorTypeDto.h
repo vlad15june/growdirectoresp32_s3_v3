@@ -22,6 +22,8 @@ public:
     float step;
     float precisionPercent;
     float precisionValue;
+    std::string createdAt;
+    std::string updatedAt;
 
     SubSensorTypeDto() : 
         isAnalog(false),

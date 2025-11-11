@@ -36,6 +36,8 @@ public:
     float step;
     float precisionPercent;
     float precisionValue;
+    std::string createdAt;
+    std::string updatedAt;
 
     SubSensorType() : 
         isAnalog(false),

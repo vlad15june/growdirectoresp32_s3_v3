@@ -1615,6 +1615,8 @@ public:
                 subSensorType.step = sensorTypeObj["step"] | 0.0f;
                 subSensorType.precisionPercent = sensorTypeObj["precisionPercent"] | 0.0f;
                 subSensorType.precisionValue = sensorTypeObj["precisionValue"] | 0.0f;
+                subSensorType.createdAt = sensorTypeObj["createdAt"] | "";
+                subSensorType.updatedAt = sensorTypeObj["updatedAt"] | "";
                 sensorType.sensorTypes.push_back(subSensorType);
             }
         }
@@ -1733,6 +1735,12 @@ public:
                 sensorTypeObj["step"] = subSensorType.step;
                 sensorTypeObj["precisionPercent"] = subSensorType.precisionPercent;
                 sensorTypeObj["precisionValue"] = subSensorType.precisionValue;
+                if (!subSensorType.createdAt.empty()) {
+                    sensorTypeObj["createdAt"] = subSensorType.createdAt;
+                }
+                if (!subSensorType.updatedAt.empty()) {
+                    sensorTypeObj["updatedAt"] = subSensorType.updatedAt;
+                }
                 Serial.printf("ArduinoJsonConverter: Sub-sensor %d processed, free heap: %d\n", i, ESP.getFreeHeap());
             }
 

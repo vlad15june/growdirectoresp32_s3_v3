@@ -240,13 +240,22 @@ private:
     }
     
     bool shouldUpdateSensorType(const SensorType& existingSensorType, const SensorType& newSensorType) {
-        return true;
-        // Simple comparison - in a real implementation, you might want to compare timestamps or versions
-        // return (existingSensorType.name != newSensorType.name ||
-        //         existingSensorType.displayName != newSensorType.displayName ||
-        //         existingSensorType.protocol != newSensorType.protocol ||
-        //         existingSensorType.isSupported != newSensorType.isSupported ||
-        //         existingSensorType.sensorTypes.size() != newSensorType.sensorTypes.size());
+        // Compare sub sensor types - check if any timestamp has changed
+        if (existingSensorType.sensorTypes.size() != newSensorType.sensorTypes.size()) {
+            return true;
+        }
+        
+        for (size_t i = 0; i < existingSensorType.sensorTypes.size(); ++i) {
+            const auto& existingSubSensor = existingSensorType.sensorTypes[i];
+            const auto& newSubSensor = newSensorType.sensorTypes[i];
+            
+            if (existingSubSensor.createdAt != newSubSensor.createdAt ||
+                existingSubSensor.updatedAt != newSubSensor.updatedAt) {
+                return true;
+            }
+        }
+        
+        return false;
     }
     
     bool handleEmptyServerResponse() {

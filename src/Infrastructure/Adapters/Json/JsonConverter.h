@@ -1656,6 +1656,8 @@ private:
                         subType.name = extractValue(arrayContent, "name");
                         subType.displayName = extractValue(arrayContent, "displayName");
                         subType.canCalibrate = extractBoolValue(arrayContent, "canCalibrate");
+                        subType.createdAt = extractValue(arrayContent, "createdAt");
+                        subType.updatedAt = extractValue(arrayContent, "updatedAt");
                         sensorType.sensorTypes.push_back(subType);
                     }
                 }
@@ -1686,7 +1688,14 @@ private:
             if (i > 0) oss << ",";
             const auto& subType = sensorType.sensorTypes[i];
             oss << "{\"name\":\"" << subType.name << "\",\"displayName\":\"" << subType.displayName << "\"";
-            oss << ",\"canCalibrate\":" << (subType.canCalibrate ? "true" : "false") << "}";
+            oss << ",\"canCalibrate\":" << (subType.canCalibrate ? "true" : "false");
+            if (!subType.createdAt.empty()) {
+                oss << ",\"createdAt\":\"" << subType.createdAt << "\"";
+            }
+            if (!subType.updatedAt.empty()) {
+                oss << ",\"updatedAt\":\"" << subType.updatedAt << "\"";
+            }
+            oss << "}";
         }
         oss << "]";
         
