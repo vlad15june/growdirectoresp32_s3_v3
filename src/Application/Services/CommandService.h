@@ -329,10 +329,10 @@ private:
     bool processModuleCommand(const CommandDto &command)
     {
         log(DebugFeatures::MODULE_COMMAND_DEBUG,
-            "CommandService: Processing module command - command: %s, version: %s",
-            command.command.c_str(), command.version.c_str());
+            "CommandService: Processing module command - command: %s",
+            command.command.c_str());
 
-        if (command.command == "UpdateFirmware")
+        if (isComplexModuleCommand(command.command))
         {
             return processComplexModuleCommand(command);
         }
@@ -346,6 +346,11 @@ private:
             logError("CommandService: ModuleCommandExecutionUseCase not available");
             return false;
         }
+    }
+
+    bool isComplexModuleCommand(const std::string& commandName) const
+    {
+        return commandName == "UpdateFirmware";
     }
 
     bool processComplexModuleCommand(const CommandDto &command)
@@ -405,6 +410,7 @@ private:
         return allCommandsSuccessful;
     }
 
+    //TODO: there is no such command type, deside use or not or delete
     bool processSensorTypeCommand(const CommandDto &command)
     {
         log(DebugFeatures::SETUP_SENSOR_DEBUG,

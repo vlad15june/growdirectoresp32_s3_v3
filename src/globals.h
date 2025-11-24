@@ -166,7 +166,7 @@ DeviceCommandExecutionUseCase deviceCommandExecutionUseCase(
 
 FirmwareRemoteUpdate firmwareRemoteUpdate(&mqttLogger, &debugSystem, &settings);
 
-ModuleCommandExecutionUseCase moduleCommandExecutionUseCase(&mqttLogger, &debugSystem, &ntpTimeAdapter, &firmwareRemoteUpdate);
+ModuleCommandExecutionUseCase moduleCommandExecutionUseCase(&mqttLogger, &debugSystem, &ntpTimeAdapter, &firmwareRemoteUpdate, &arduinoAdapter);
 
 SpiffsAdapter spiffsAdapter(&mqttLogger, &debugSystem);
 

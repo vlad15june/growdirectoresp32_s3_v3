@@ -39,10 +39,5 @@ public:
     bool isDeviceCommand() const { return type == "DeviceCommandNotification"; }
     bool isRuleCommand() const { return type == "RuleCommandNotification"; }
     bool isModuleCommand() const { return type == "ModuleCommandNotification"; }
-    bool isSensorTypeCommand() const { return type == "SensorTypeCommandNotification"; }
-    
-    // Helper methods for sensor commands
-    bool isAddSensorCommand() const { return isSensorTypeCommand() && command == "AddSensor"; }
-    bool isScanSensorCommand() const { return isSensorTypeCommand() && command == "ScanSensor"; }
-    bool isRemoveSensorCommand() const { return isSensorTypeCommand() && command == "RemoveSensor"; }
+    bool isSensorTypeCommand() const { return type == "SensorTypeCommandNotification"; } //TODO: Rename to SensorCommandNotification or delete        
 };

@@ -176,10 +176,8 @@ public:
 
         _lastReconnectAttempt = millis();
 
-        // Log detailed pre-connection information
         log("=== MQTT Connection Attempt ===");
         
-        // Check WiFi status first
         if (_wifiAdapter != nullptr)
         {
             bool wifiConnected = _wifiAdapter->isConnected();
@@ -199,7 +197,6 @@ public:
                 return false;
             }
             
-            // Warn on weak signal
             if (rssi < -80)
             {
                 log("MQTT: ⚠ WARNING - Weak WiFi signal (%d dBm), connection may be unstable", rssi);
@@ -241,7 +238,6 @@ public:
             _mqttFails++; // Increment failures counter on connection failure
             int state = _mqttClient.state();
             
-            // Detailed error logging
             log("MQTT: ✗ Connection failed!");
             log("MQTT: Error code (rc): %d", state);
             log("MQTT: Total failures: %d", _mqttFails);

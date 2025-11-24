@@ -4,6 +4,7 @@
 #include "Core/Domain/Interfaces/ILogger.h"
 #include "Core/Domain/Interfaces/IDebugSystem.h"
 #include "Core/Domain/Interfaces/IFirmwareRemoteUpdate.h"
+#include "Core/Domain/Interfaces/Adapters/IArduinoAdapter.h"
 #include "Infrastructure/Adapters/Time/INTPTimeAdapter.h"
 #include <string>
 
@@ -17,11 +18,12 @@ private:
     IDebugSystem *debugSystem;
     INTPTimeAdapter *timeAdapter;
     IFirmwareRemoteUpdate *firmwareUpdater;
+    IArduinoAdapter *arduinoAdapter;
     static const unsigned long commandMaxAgeSeconds = 300;
 
 public:
-    ModuleCommandExecutionUseCase(ILogger *logger = nullptr, IDebugSystem *debugSystem = nullptr, INTPTimeAdapter *timeAdapter = nullptr, IFirmwareRemoteUpdate *firmwareUpdater = nullptr)
-        : logger(logger), debugSystem(debugSystem), timeAdapter(timeAdapter), firmwareUpdater(firmwareUpdater) {}
+    ModuleCommandExecutionUseCase(ILogger *logger = nullptr, IDebugSystem *debugSystem = nullptr, INTPTimeAdapter *timeAdapter = nullptr, IFirmwareRemoteUpdate *firmwareUpdater = nullptr, IArduinoAdapter *arduinoAdapter = nullptr)
+        : logger(logger), debugSystem(debugSystem), timeAdapter(timeAdapter), firmwareUpdater(firmwareUpdater), arduinoAdapter(arduinoAdapter) {}
     
     virtual ~ModuleCommandExecutionUseCase() = default;
 
@@ -40,6 +42,8 @@ public:
             return handleBlinkingStart("", options);
         } else if (command == "BlinkingStop") {
             return handleBlinkingStop("", options);
+        } else if (command == "Reboot") {
+            return handleReboot();
         }
         return false;
     }
@@ -106,6 +110,12 @@ public:
                     bool success = handleBlinkingStop("", moduleCommand.options);
                     status = success ? "Done" : "Error";
                     errorMessage = success ? "" : "BlinkingStop command failed";
+                }
+                else if (moduleCommand.command == "Reboot")
+                {
+                    bool success = handleReboot();
+                    status = success ? "Done" : "Error";
+                    errorMessage = success ? "" : "Reboot command failed";
                 }
             }
 
@@ -218,6 +228,25 @@ private:
             return false;
         }
         // Stop blinking logic here
+        return true;
+    }
+
+    /**
+     * @brief Handle Reboot command
+     * @return true if command was executed successfully, false otherwise
+     */
+    bool handleReboot()
+    {
+        if (!arduinoAdapter)
+        {
+            logError("ModuleCommandUseCase: Arduino adapter not available for reboot");
+            return false;
+        }
+        
+        log(DebugFeatures::MODULE_COMMAND_DEBUG,
+            "ModuleCommandUseCase: Executing reboot command");
+        
+        arduinoAdapter->restart();
         return true;
     }
 
