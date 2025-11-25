@@ -224,6 +224,9 @@ public:
             node.firmware = extractValue(nodeStr, "firmware");
             node.ssid = extractValue(nodeStr, "ssid");
             node.ip = extractValue(nodeStr, "ip");
+            node.chip = extractValue(nodeStr, "chip");
+            if (node.chip.empty()) node.chip = "S3";
+            node.board = extractIntValue(nodeStr, "board");
 
             // Sensors
             std::string sensorsArr = extractArray(nodeStr, "sensors");
@@ -300,6 +303,8 @@ public:
                 oss << ",\"ssid\":\"" << node.ssid << "\"";
             if (!node.ip.empty())
                 oss << ",\"ip\":\"" << node.ip << "\"";
+            oss << ",\"chip\":\"" << node.chip << "\"";
+            oss << ",\"board\":" << node.board;
 
             // Sensors
             if (!node.sensors.empty())

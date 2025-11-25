@@ -109,6 +109,8 @@ public:
                 node.firmware = nodeObj["firmware"] | "";
                 node.ssid = nodeObj["ssid"] | "";
                 node.ip = nodeObj["ip"] | "";
+                node.chip = nodeObj["chip"] | "S3";
+                node.board = nodeObj["board"] | 0;
 
                 node.sensors.clear();
                 if (nodeObj.containsKey("sensors"))
@@ -177,6 +179,8 @@ public:
             nodeObj["firmware"] = node.firmware;
             nodeObj["ssid"] = node.ssid;
             nodeObj["ip"] = node.ip;
+            nodeObj["chip"] = node.chip;
+            nodeObj["board"] = node.board;
 
             if (!node.sensors.empty())
             {

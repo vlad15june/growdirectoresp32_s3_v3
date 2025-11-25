@@ -39,7 +39,7 @@ public:
 
 class Node {
 public:
-    Node() = default;
+    Node() : chip("S3"), board(0) {}
 
     std::string type;
     std::string subtype;
@@ -49,6 +49,8 @@ public:
     std::string firmware;
     std::string ssid;
     std::string ip;
+    std::string chip;
+    int board;
     std::vector<Sensor> sensors;
     std::vector<Relay> relays;
     std::vector<Pump> pumps;
