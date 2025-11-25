@@ -38,6 +38,7 @@ public:
     float offset = 0.0f;
 
     int sensorTypeId = 0;
+    std::string sensorTypeUid;
 
     SensorEntity() : isActive(true), isError(false), modbusDeviceAddress(1), baudRate(9600), 
                currentValue(0.0f), lastReadTime(0), multiplier(1.0f), offset(0.0f), sensorTypeId(0), 

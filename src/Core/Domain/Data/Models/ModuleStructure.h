@@ -8,11 +8,13 @@ class Sensor {
 public:
     Sensor() = default;
     Sensor(const std::string& uid, const std::string& type, int pin)
-        : uid(uid), type(type), pin(pin) {}
+        : uid(uid), type(type), pin(pin), group(0), modelUid("") {}
 
     std::string uid;
     std::string type;
     int pin;
+    int group;
+    std::string modelUid;
 };
 
 class Relay {

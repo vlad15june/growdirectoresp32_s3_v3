@@ -60,8 +60,8 @@ private:
         // 0 -> 4, 1 -> 5, 2 -> 6, 3 -> 1
         switch (internalPin) {
             case 0: return 4;
-            case 1: return 5;
-            case 2: return 6;
+            case 1: return 3;
+            case 2: return 2;
             case 3: return 1;
             default: return internalPin; // Return unchanged if not in mapping
         }
@@ -73,8 +73,8 @@ private:
         // 4 -> 0, 5 -> 1, 6 -> 2, 1 -> 3
         switch (jsonPin) {
             case 4: return 0;
-            case 5: return 1;
-            case 6: return 2;
+            case 3: return 1;
+            case 2: return 2;
             case 1: return 3;
             default: return jsonPin; // Return unchanged if not in mapping
         }
@@ -119,6 +119,8 @@ public:
                         sensor.uid = sensorObj["uid"] | "";
                         sensor.type = sensorObj["type"] | "";
                         sensor.pin = convertPinFromJson(sensorObj["pin"] | 0);
+                        sensor.group = sensorObj["group"] | 0;
+                        sensor.modelUid = sensorObj["modelUid"] | "";
                         node.sensors.push_back(sensor);
                     }
                 }
@@ -185,6 +187,8 @@ public:
                     sensorObj["uid"] = sensor.uid;
                     sensorObj["type"] = sensor.type;
                     sensorObj["pin"] = convertPinToJson(sensor.pin);
+                    sensorObj["group"] = sensor.group;
+                    sensorObj["modelUid"] = sensor.modelUid;
                 }
             }
 
@@ -1224,6 +1228,9 @@ public:
         
         sensor.currentValue = doc["currentValue"] | 0.0f;
         sensor.lastReadTime = doc["lastReadTime"] | 0;
+        
+        sensor.sensorTypeId = doc["sensorTypeId"] | 0;
+        sensor.sensorTypeUid = doc["sensorTypeUid"] | "";
 
         // Note: channelValues are now handled by SensorValueModel, not stored in SensorEntity
 
@@ -1290,6 +1297,9 @@ public:
         
         doc["currentValue"] = sensor.currentValue;
         doc["lastReadTime"] = sensor.lastReadTime;
+        
+        doc["sensorTypeId"] = sensor.sensorTypeId;
+        doc["sensorTypeUid"] = sensor.sensorTypeUid;
 
         // Note: channelValues are now handled by SensorValueModel and not serialized here
 

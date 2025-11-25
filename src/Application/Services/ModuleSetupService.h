@@ -716,6 +716,9 @@ inline void ModuleSetupService::addMultiChannelModbusSensor(Node &node, const Se
         sensor.uid = sensorEntity.uid + "." + (config.channel < 10 ? "0" : "") + std::to_string(config.channel);
         sensor.type = config.sensorType.empty() ? sensorEntity.sensorType : config.channelName;
         sensor.pin = sensorEntity.pin;
+        sensor.group = sensorEntity.modbusDeviceAddress;
+        sensor.modelUid = sensorEntity.sensorTypeUid;
+        log("SETUP: Adding multi-channel ModBus sensor - sensorTypeUid: %s", sensorEntity.sensorTypeUid.c_str());
 
         // Search for existing sensor with same UID
         bool found = false;
@@ -748,6 +751,8 @@ inline void ModuleSetupService::addMultiChannelI2CSensor(Node &node, const Senso
         sensor.uid = sensorEntity.uid + "." + (config.channel < 10 ? "0" : "") + std::to_string(config.channel);
         sensor.type = config.sensorType.empty() ? sensorEntity.sensorType : config.channelName;
         sensor.pin = sensorEntity.pin;
+        sensor.group = 1; // I2C typically uses a single address/group
+        sensor.modelUid = sensorEntity.sensorTypeUid;
 
         // Search for existing sensor with same UID
         bool found = false;
@@ -778,6 +783,8 @@ inline void ModuleSetupService::addSingleChannelSensor(Node &node, const SensorE
     sensor.uid = sensorEntity.uid + ".01";
     sensor.type = sensorEntity.sensorType;
     sensor.pin = sensorEntity.pin;
+    sensor.group = 1;
+    sensor.modelUid = sensorEntity.sensorTypeUid;
 
     // Search for existing sensor with same UID
     bool found = false;
@@ -894,6 +901,7 @@ inline void ModuleSetupService::addHydroSensors(Node &node)
                         tempSensor.sensorType = analogConfig.sensorType.empty() ? sensorType.name : analogConfig.sensorType;
                         tempSensor.model = sensorType.name;
                         tempSensor.protocol = sensorType.getProtocolString();
+                        tempSensor.sensorTypeUid = sensorType.uid;
                         tempSensor.isActive = true;
                         tempSensor.pin = pin;
                         char pinStr[3];
@@ -1251,16 +1259,17 @@ inline void ModuleSetupService::scanPinForSensorTypes(int pin, Node &node)
         tempSensor.sensorType = sensorType.name;
         tempSensor.model = sensorType.name;
         tempSensor.protocol = sensorType.getProtocolString();
+        tempSensor.sensorTypeUid = sensorType.uid;
         tempSensor.isActive = true;
-        tempSensor.pin = pin; // NOTE: pin + 1 ?????? and after add to structure pin should be -1 ???? // OR add new property visualPin
+        tempSensor.pin = pin;
         char pinStr[3];
         sprintf(pinStr, "%02d", pin);
         tempSensor.uid = moduleUid + "." + pinStr;
         tempSensor.status = SensorStatusEnum::SENSOR_STATUS_NEW;
 
-        log("SETUP: Creating temp sensor for scanning - UID: %s, Type: %s, Model: %s, Protocol: %s, Pin: %d",
+        log("SETUP: Creating temp sensor for scanning - UID: %s, Type: %s, Model: %s, Protocol: %s, Pin: %d, SensorTypeUID: %s",
             tempSensor.uid.c_str(), tempSensor.sensorType.c_str(), tempSensor.model.c_str(),
-            tempSensor.protocol.c_str(), tempSensor.pin);
+            tempSensor.protocol.c_str(), tempSensor.pin, tempSensor.sensorTypeUid.c_str());
 
         if (sensorType.isI2CSensor())
         {

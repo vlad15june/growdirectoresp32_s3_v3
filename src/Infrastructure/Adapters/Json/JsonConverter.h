@@ -234,6 +234,8 @@ public:
                 sensor.uid = extractValue(sensorStr, "uid");
                 sensor.type = extractValue(sensorStr, "type");
                 sensor.pin = extractIntValue(sensorStr, "pin");
+                sensor.group = extractIntValue(sensorStr, "group");
+                sensor.modelUid = extractValue(sensorStr, "modelUid");
                 node.sensors.push_back(sensor);
             }
 
@@ -309,7 +311,9 @@ public:
                     oss << "{\"uid\":\"" << s.uid << "\"";
                     if (!s.type.empty())
                         oss << ",\"type\":\"" << s.type << "\"";
-                    oss << ",\"pin\":" << s.pin << "}";
+                    oss << ",\"pin\":" << s.pin;
+                    oss << ",\"group\":" << s.group;
+                    oss << ",\"modelUid\":\"" << s.modelUid << "\"}";
                     if (j + 1 < node.sensors.size())
                         oss << ",";
                 }
@@ -1237,6 +1241,9 @@ public:
         
         sensor.currentValue = static_cast<float>(extractDoubleValue(jsonStr, "currentValue"));
         sensor.lastReadTime = static_cast<uint32_t>(extractIntValue(jsonStr, "lastReadTime"));
+        
+        sensor.sensorTypeId = extractIntValue(jsonStr, "sensorTypeId");
+        sensor.sensorTypeUid = extractValue(jsonStr, "sensorTypeUid");
 
         // Note: channelValues are now handled by SensorValueModel, not stored in SensorEntity
 
@@ -1299,6 +1306,8 @@ public:
         oss << ",\"chipType\":\"" << sensor.chipType << "\"";
         oss << ",\"currentValue\":" << sensor.currentValue;
         oss << ",\"lastReadTime\":" << sensor.lastReadTime;
+        oss << ",\"sensorTypeId\":" << sensor.sensorTypeId;
+        oss << ",\"sensorTypeUid\":\"" << sensor.sensorTypeUid << "\"";
 
         // Note: channelValues are now handled by SensorValueModel and not serialized here
 
