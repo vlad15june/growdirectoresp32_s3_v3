@@ -5,9 +5,15 @@
 #include "Core/Domain/Interfaces/IDebugSystem.h"
 #include "Core/Domain/Interfaces/IFirmwareRemoteUpdate.h"
 #include "Core/Domain/Interfaces/Adapters/IArduinoAdapter.h"
+#include "Core/Domain/Interfaces/Repositories/ISensorRepository.h"
+#include "Core/Domain/Interfaces/Repositories/ISensorTypeRepository.h"
+#include "Core/Domain/Interfaces/Adapters/Sensors/ISensorReader.h"
+#include "Core/Domain/Data/Entities/Sensor/Sensor.h"
 #include "Core/Domain/Enums/ModuleCommandEnum.h"
 #include "Core/Domain/Enums/ModuleCommandStatus.h"
+#include "Core/Domain/Enums/SensorStatusEnum.h"
 #include "Infrastructure/Adapters/Time/INTPTimeAdapter.h"
+#include "constants.h"
 #include <string>
 
 /**
@@ -21,11 +27,14 @@ private:
     INTPTimeAdapter *timeAdapter;
     IFirmwareRemoteUpdate *firmwareUpdater;
     IArduinoAdapter *arduinoAdapter;
+    ISensorRepository *sensorRepository;
+    ISensorTypeRepository *sensorTypeRepository;
+    ISensorReader *sensorReader;
     static const unsigned long commandMaxAgeSeconds = 300;
 
 public:
-    ModuleCommandExecutionUseCase(ILogger *logger = nullptr, IDebugSystem *debugSystem = nullptr, INTPTimeAdapter *timeAdapter = nullptr, IFirmwareRemoteUpdate *firmwareUpdater = nullptr, IArduinoAdapter *arduinoAdapter = nullptr)
-        : logger(logger), debugSystem(debugSystem), timeAdapter(timeAdapter), firmwareUpdater(firmwareUpdater), arduinoAdapter(arduinoAdapter) {}
+    ModuleCommandExecutionUseCase(ILogger *logger = nullptr, IDebugSystem *debugSystem = nullptr, INTPTimeAdapter *timeAdapter = nullptr, IFirmwareRemoteUpdate *firmwareUpdater = nullptr, IArduinoAdapter *arduinoAdapter = nullptr, ISensorRepository *sensorRepository = nullptr, ISensorTypeRepository *sensorTypeRepository = nullptr, ISensorReader *sensorReader = nullptr)
+        : logger(logger), debugSystem(debugSystem), timeAdapter(timeAdapter), firmwareUpdater(firmwareUpdater), arduinoAdapter(arduinoAdapter), sensorRepository(sensorRepository), sensorTypeRepository(sensorTypeRepository), sensorReader(sensorReader) {}
     
     virtual ~ModuleCommandExecutionUseCase() = default;
 
@@ -276,7 +285,7 @@ private:
     }
 
     /**
-     * @brief Handle PingPin command
+     * @brief Handle PingPin command - scan pin for any connected sensor
      * @param moduleCommand Module command DTO with options
      * @return Pair of status and error message
      */
@@ -293,24 +302,78 @@ private:
             return {ModuleCommandStatus::ERROR, "Missing or invalid pin in options"};
         }
 
-        if (!arduinoAdapter)
+        if (!sensorTypeRepository || !sensorReader)
         {
             log(DebugFeatures::MODULE_COMMAND_DEBUG,
-                "ModuleCommandUseCase: Arduino adapter not available for PingPin");
-            return {ModuleCommandStatus::ERROR, "Arduino adapter not available"};
+                "ModuleCommandUseCase: Sensor repository or reader not available for PingPin");
+            return {ModuleCommandStatus::ERROR, "Sensor service not available"};
         }
 
         log(DebugFeatures::MODULE_COMMAND_DEBUG,
-            "ModuleCommandUseCase: PingPin command - Pin: %d", pin);
+            "ModuleCommandUseCase: PingPin command - scanning pin %d", pin);
 
-        // TODO: Implement actual ping logic
-        // For now, just validate the pin exists
-        
-        return {ModuleCommandStatus::DONE, ""};
+        // Get all sensor types for scanning
+        auto allSensorTypes = sensorTypeRepository->getAll();
+        if (allSensorTypes.empty())
+        {
+            log(DebugFeatures::MODULE_COMMAND_DEBUG,
+                "ModuleCommandUseCase: No sensor types available for scanning");
+            return {ModuleCommandStatus::ERROR, "No sensor types available"};
+        }
+
+        // Try to detect any sensor on the pin
+        for (const auto &sensorType : allSensorTypes)
+        {
+            // Create temporary sensor entity for testing
+            SensorEntity tempSensor;
+            tempSensor.pin = pin;
+            tempSensor.sensorType = sensorType.name;
+            tempSensor.model = sensorType.name;
+            tempSensor.protocol = sensorType.getProtocolString();
+            tempSensor.modbusDeviceAddress = sensorType.modbusDeviceAddress;
+            tempSensor.baudRate = sensorType.baudRate;
+            tempSensor.i2cAddress = sensorType.i2cAddress;
+            tempSensor.chipType = sensorType.chipType;
+            tempSensor.modbusRegisterConfigs = sensorType.modbusRegisterConfig;
+            tempSensor.i2cRegisterConfigs = sensorType.i2cRegisterConfig;
+
+            // Try to scan this sensor at default address
+            if (sensorReader->scanSensor(tempSensor))
+            {
+                log(DebugFeatures::MODULE_COMMAND_DEBUG,
+                    "ModuleCommandUseCase: Found %s sensor on pin %d", sensorType.name.c_str(), pin);
+                return {ModuleCommandStatus::DONE, ""};
+            }
+
+            // If not detected at default address, scan all ModBus addresses in the defined range
+            log(DebugFeatures::MODULE_COMMAND_DEBUG,
+                "ModuleCommandUseCase: Sensor not found at default address, scanning range 0x%02X-0x%02X", 
+                MODBUS_ADDRESS_MIN, MODBUS_ADDRESS_MAX);
+            
+            for (int address = MODBUS_ADDRESS_MIN; address <= MODBUS_ADDRESS_MAX; address++)
+            {
+                tempSensor.modbusDeviceAddress = address;
+                log(DebugFeatures::MODULE_COMMAND_DEBUG,
+                    "ModuleCommandUseCase: Scanning ModBus address 0x%02X for sensor type %s", 
+                    address, sensorType.name.c_str());
+
+                if (sensorReader->scanSensor(tempSensor))
+                {
+                    log(DebugFeatures::MODULE_COMMAND_DEBUG,
+                        "ModuleCommandUseCase: Found %s sensor on pin %d at address 0x%02X", 
+                        sensorType.name.c_str(), pin, address);
+                    return {ModuleCommandStatus::DONE, ""};
+                }
+            }
+        }
+
+        log(DebugFeatures::MODULE_COMMAND_DEBUG,
+            "ModuleCommandUseCase: No sensor detected on pin %d", pin);
+        return {ModuleCommandStatus::ERROR, "No sensor detected on pin"};
     }
 
     /**
-     * @brief Handle SetSensorModel command
+     * @brief Handle SetSensorModel command - verify specific sensor and save to repository
      * @param moduleCommand Module command DTO with options
      * @return Pair of status and error message
      */
@@ -329,11 +392,101 @@ private:
             return {ModuleCommandStatus::ERROR, "Missing pin or uid in options"};
         }
 
+        if (!sensorTypeRepository || !sensorReader || !sensorRepository)
+        {
+            log(DebugFeatures::MODULE_COMMAND_DEBUG,
+                "ModuleCommandUseCase: Sensor services not available for SetSensorModel");
+            return {ModuleCommandStatus::ERROR, "Sensor service not available"};
+        }
+
         log(DebugFeatures::MODULE_COMMAND_DEBUG,
             "ModuleCommandUseCase: SetSensorModel command - Pin: %d, SensorUID: %s",
             pin, sensorUid.c_str());
 
-        // TODO: Implement actual sensor model update logic
+        // Find sensor type by UID
+        auto allSensorTypes = sensorTypeRepository->getAll();
+        SensorType* targetSensorType = nullptr;
+        
+        for (auto &sensorType : allSensorTypes)
+        {
+            if (sensorType.uid == sensorUid)
+            {
+                targetSensorType = &sensorType;
+                break;
+            }
+        }
+
+        if (!targetSensorType)
+        {
+            log(DebugFeatures::MODULE_COMMAND_DEBUG,
+                "ModuleCommandUseCase: Sensor type with UID %s not found", sensorUid.c_str());
+            return {ModuleCommandStatus::ERROR, "Sensor type not found"};
+        }
+
+        // Create sensor entity from sensor type
+        SensorEntity sensorEntity;
+        sensorEntity.uid = targetSensorType->uid;
+        sensorEntity.pin = pin;
+        sensorEntity.sensorType = targetSensorType->name;
+        sensorEntity.model = targetSensorType->name;
+        sensorEntity.protocol = targetSensorType->getProtocolString();
+        sensorEntity.modbusDeviceAddress = targetSensorType->modbusDeviceAddress;
+        sensorEntity.baudRate = targetSensorType->baudRate;
+        sensorEntity.i2cAddress = targetSensorType->i2cAddress;
+        sensorEntity.chipType = targetSensorType->chipType;
+        sensorEntity.modbusRegisterConfigs = targetSensorType->modbusRegisterConfig;
+        sensorEntity.i2cRegisterConfigs = targetSensorType->i2cRegisterConfig;
+        sensorEntity.isActive = true;
+        sensorEntity.isError = false;
+        sensorEntity.status = SensorStatusEnum::SENSOR_STATUS_ADDED;
+
+        // Verify sensor is actually connected on this pin at default address
+        bool sensorDetected = sensorReader->scanSensor(sensorEntity);
+        
+        if (!sensorDetected)
+        {
+            // If not detected at default address, scan all ModBus addresses in the defined range
+            log(DebugFeatures::MODULE_COMMAND_DEBUG,
+                "ModuleCommandUseCase: Sensor not found at default address, scanning range 0x%02X-0x%02X", 
+                MODBUS_ADDRESS_MIN, MODBUS_ADDRESS_MAX);
+            
+            for (int address = MODBUS_ADDRESS_MIN; address <= MODBUS_ADDRESS_MAX; address++)
+            {
+                sensorEntity.modbusDeviceAddress = address;
+                log(DebugFeatures::MODULE_COMMAND_DEBUG,
+                    "ModuleCommandUseCase: Scanning ModBus address 0x%02X for sensor %s", 
+                    address, targetSensorType->name.c_str());
+
+                if (sensorReader->scanSensor(sensorEntity))
+                {
+                    log(DebugFeatures::MODULE_COMMAND_DEBUG,
+                        "ModuleCommandUseCase: Found %s sensor on pin %d at address 0x%02X", 
+                        targetSensorType->name.c_str(), pin, address);
+                    sensorDetected = true;
+                    break;
+                }
+            }
+        }
+        
+        if (!sensorDetected)
+        {
+            log(DebugFeatures::MODULE_COMMAND_DEBUG,
+                "ModuleCommandUseCase: Sensor %s not detected on pin %d",
+                targetSensorType->name.c_str(), pin);
+            return {ModuleCommandStatus::ERROR, "Sensor not detected on specified pin"};
+        }
+
+        // Save sensor to repository
+        if (!sensorRepository->save(sensorEntity))
+        {
+            log(DebugFeatures::MODULE_COMMAND_DEBUG,
+                "ModuleCommandUseCase: Failed to save sensor to repository");
+            return {ModuleCommandStatus::ERROR, "Failed to save sensor"};
+        }
+
+        log(DebugFeatures::MODULE_COMMAND_DEBUG,
+            "ModuleCommandUseCase: Successfully saved %s sensor on pin %d",
+            targetSensorType->name.c_str(), pin);
         
         return {ModuleCommandStatus::DONE, ""};
     }
