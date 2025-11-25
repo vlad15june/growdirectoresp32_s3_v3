@@ -12,6 +12,7 @@
 #include "Core/Domain/Interfaces/ILogger.h"
 #include "Core/Domain/Interfaces/IDebugSystem.h"
 #include "Core/Domain/Enums/ModuleCommandEnum.h"
+#include "Core/Domain/Enums/ModuleCommandStatus.h"
 #include "Infrastructure/Adapters/Time/INTPTimeAdapter.h"
 
 class CommandService : public ICommandService
@@ -384,16 +385,28 @@ private:
 
         if (moduleCommandUseCase)
         {
-            // Delegate to use case for command execution
+            for (const auto& moduleCommand : moduleCommands)
+            {
+                ModuleCommandUpdateDto inProgressDto;
+                inProgressDto.uid = moduleCommand.uid;
+                inProgressDto.status = getModuleCommandStatusName(ModuleCommandStatus::IN_PROGRESS);
+                hybridApiService->sendModuleCommandExecutionResult(inProgressDto);
+
+                log(DebugFeatures::MODULE_COMMAND_DEBUG,
+                    "CommandService: Set command to InProgress - uid: %s, command: %s",
+                    moduleCommand.uid.c_str(), moduleCommand.command.c_str());
+            }
+
             std::vector<ModuleCommandExecutionResult> results = moduleCommandUseCase->executeCommands(moduleCommands);
             
-            // Send results back to API
             for (const auto& result : results)
             {
                 ModuleCommandUpdateDto updateDto;
                 updateDto.uid = result.uid;
                 updateDto.status = result.status;
-                if (result.status == "Error")
+                
+                ModuleCommandStatus status = getModuleCommandStatus(result.status);
+                if (status == ModuleCommandStatus::ERROR)
                 {
                     updateDto.errorMessage = result.errorMessage;
                     allCommandsSuccessful = false;
