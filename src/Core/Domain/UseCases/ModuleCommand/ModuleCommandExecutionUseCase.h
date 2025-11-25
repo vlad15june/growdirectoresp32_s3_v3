@@ -6,6 +6,7 @@
 #include "Core/Domain/Interfaces/IFirmwareRemoteUpdate.h"
 #include "Core/Domain/Interfaces/Adapters/IArduinoAdapter.h"
 #include "Core/Domain/Enums/ModuleCommandEnum.h"
+#include "Core/Domain/Enums/ModuleCommandStatus.h"
 #include "Infrastructure/Adapters/Time/INTPTimeAdapter.h"
 #include <string>
 
@@ -71,7 +72,7 @@ public:
                 "ModuleCommandUseCase: Processing command - command: %s, commandUid: %s",
                 moduleCommand.command.c_str(), moduleCommand.uid.c_str());
 
-            std::string status = "Error";
+            ModuleCommandStatus status = ModuleCommandStatus::ERROR;
             std::string errorMessage = "Unknown command";
             bool isExpired = false;
 
@@ -85,7 +86,7 @@ public:
 
             if (isExpired)
             {
-                status = "Error";
+                status = ModuleCommandStatus::ERROR;
                 errorMessage = "Command is expired";
             }
             else
@@ -96,14 +97,14 @@ public:
                 switch (commandEnum) {
                     case ModuleCommandEnum::ADD_WIFI:
                     {
-                        auto result = processAddWifiCommand(moduleCommand);
+                        auto result = handleAddWifi(moduleCommand);
                         status = result.first;
                         errorMessage = result.second;
                         break;
                     }
                     case ModuleCommandEnum::UPDATE_FIRMWARE:
                     {
-                        auto result = processUpdateFirmwareCommand(moduleCommand);
+                        auto result = handleUpdateFirmware(moduleCommand);
                         status = result.first;
                         errorMessage = result.second;
                         break;
@@ -111,22 +112,36 @@ public:
                     case ModuleCommandEnum::BLINKING_START:
                     {
                         bool success = handleBlinkingStart("", moduleCommand.options);
-                        status = success ? "Done" : "Error";
+                        status = success ? ModuleCommandStatus::DONE : ModuleCommandStatus::ERROR;
                         errorMessage = success ? "" : "BlinkingStart command failed";
                         break;
                     }
                     case ModuleCommandEnum::BLINKING_STOP:
                     {
                         bool success = handleBlinkingStop("", moduleCommand.options);
-                        status = success ? "Done" : "Error";
+                        status = success ? ModuleCommandStatus::DONE : ModuleCommandStatus::ERROR;
                         errorMessage = success ? "" : "BlinkingStop command failed";
                         break;
                     }
                     case ModuleCommandEnum::REBOOT:
                     {
                         bool success = handleReboot();
-                        status = success ? "Done" : "Error";
+                        status = success ? ModuleCommandStatus::DONE : ModuleCommandStatus::ERROR;
                         errorMessage = success ? "" : "Reboot command failed";
+                        break;
+                    }
+                    case ModuleCommandEnum::PING_PIN:
+                    {
+                        auto result = handlePingPin(moduleCommand);
+                        status = result.first;
+                        errorMessage = result.second;
+                        break;
+                    }
+                    case ModuleCommandEnum::SET_SENSOR_MODEL:
+                    {
+                        auto result = handleSetSensorModel(moduleCommand);
+                        status = result.first;
+                        errorMessage = result.second;
                         break;
                     }
                     case ModuleCommandEnum::UNKNOWN:
@@ -136,22 +151,29 @@ public:
                 }
             }
 
+            std::string statusStr = getModuleCommandStatusName(status);
+            
             log(DebugFeatures::MODULE_COMMAND_DEBUG,
                 "ModuleCommandUseCase: Command execution result - command: %s, status: %s, error: %s",
-                moduleCommand.command.c_str(), status.c_str(), errorMessage.c_str());
+                moduleCommand.command.c_str(), statusStr.c_str(), errorMessage.c_str());
 
-            results.emplace_back(moduleCommand.uid, status, errorMessage);
+            results.emplace_back(moduleCommand.uid, statusStr, errorMessage);
         }
 
         return results;
     }
 
 private:
-    std::pair<std::string, std::string> processAddWifiCommand(const ModuleCommandDto& moduleCommand)
+    /**
+     * @brief Handle AddWifi command
+     * @param moduleCommand Module command DTO with options
+     * @return Pair of status and error message
+     */
+    std::pair<ModuleCommandStatus, std::string> handleAddWifi(const ModuleCommandDto& moduleCommand)
     {
         if (moduleCommand.options.empty())
         {
-            return {"Error", "Missing options"};
+            return {ModuleCommandStatus::ERROR, "Missing options"};
         }
 
         std::string ssid = extractJsonValue(moduleCommand.options, "ssid");
@@ -159,7 +181,7 @@ private:
 
         if (ssid.empty() || password.empty())
         {
-            return {"Error", "Missing ssid or password in options"};
+            return {ModuleCommandStatus::ERROR, "Missing ssid or password in options"};
         }
 
         log(DebugFeatures::MODULE_COMMAND_DEBUG,
@@ -168,14 +190,19 @@ private:
         // TODO: Implement addWifiToFile functionality
         // addWifiToFile(ssid, password);
         
-        return {"Done", ""};
+        return {ModuleCommandStatus::DONE, ""};
     }
 
-    std::pair<std::string, std::string> processUpdateFirmwareCommand(const ModuleCommandDto& moduleCommand)
+    /**
+     * @brief Handle UpdateFirmware command
+     * @param moduleCommand Module command DTO with options
+     * @return Pair of status and error message
+     */
+    std::pair<ModuleCommandStatus, std::string> handleUpdateFirmware(const ModuleCommandDto& moduleCommand)
     {
         if (moduleCommand.options.empty())
         {
-            return {"Error", "Missing options"};
+            return {ModuleCommandStatus::ERROR, "Missing options"};
         }
 
         std::string url = extractJsonValue(moduleCommand.options, "url");
@@ -183,7 +210,7 @@ private:
 
         if (url.empty() || version.empty())
         {
-            return {"Error", "Missing url or version in options"};
+            return {ModuleCommandStatus::ERROR, "Missing url or version in options"};
         }
 
         log(DebugFeatures::MODULE_COMMAND_DEBUG,
@@ -194,7 +221,7 @@ private:
         {
             log(DebugFeatures::MODULE_COMMAND_DEBUG,
                 "ModuleCommandUseCase: Firmware updater not available");
-            return {"Error", "Firmware updater not available"};
+            return {ModuleCommandStatus::ERROR, "Firmware updater not available"};
         }
 
         // Execute firmware update
@@ -204,13 +231,13 @@ private:
         {
             log(DebugFeatures::MODULE_COMMAND_DEBUG,
                 "ModuleCommandUseCase: Firmware update completed successfully");
-            return {"Done", ""};
+            return {ModuleCommandStatus::DONE, ""};
         }
         else
         {
             log(DebugFeatures::MODULE_COMMAND_DEBUG,
                 "ModuleCommandUseCase: Firmware update failed to start");
-            return {"Error", "Failed to start firmware update"};
+            return {ModuleCommandStatus::ERROR, "Failed to start firmware update"};
         }
     }
 
@@ -246,6 +273,69 @@ private:
         }
         // Stop blinking logic here
         return true;
+    }
+
+    /**
+     * @brief Handle PingPin command
+     * @param moduleCommand Module command DTO with options
+     * @return Pair of status and error message
+     */
+    std::pair<ModuleCommandStatus, std::string> handlePingPin(const ModuleCommandDto& moduleCommand)
+    {
+        if (moduleCommand.options.empty())
+        {
+            return {ModuleCommandStatus::ERROR, "Missing options"};
+        }
+
+        int pin = extractJsonIntValue(moduleCommand.options, "pin");
+        if (pin == 0)
+        {
+            return {ModuleCommandStatus::ERROR, "Missing or invalid pin in options"};
+        }
+
+        if (!arduinoAdapter)
+        {
+            log(DebugFeatures::MODULE_COMMAND_DEBUG,
+                "ModuleCommandUseCase: Arduino adapter not available for PingPin");
+            return {ModuleCommandStatus::ERROR, "Arduino adapter not available"};
+        }
+
+        log(DebugFeatures::MODULE_COMMAND_DEBUG,
+            "ModuleCommandUseCase: PingPin command - Pin: %d", pin);
+
+        // TODO: Implement actual ping logic
+        // For now, just validate the pin exists
+        
+        return {ModuleCommandStatus::DONE, ""};
+    }
+
+    /**
+     * @brief Handle SetSensorModel command
+     * @param moduleCommand Module command DTO with options
+     * @return Pair of status and error message
+     */
+    std::pair<ModuleCommandStatus, std::string> handleSetSensorModel(const ModuleCommandDto& moduleCommand)
+    {
+        if (moduleCommand.options.empty())
+        {
+            return {ModuleCommandStatus::ERROR, "Missing options"};
+        }
+
+        int pin = extractJsonIntValue(moduleCommand.options, "pin");
+        std::string sensorUid = extractJsonValue(moduleCommand.options, "uid");
+
+        if (pin == 0 || sensorUid.empty())
+        {
+            return {ModuleCommandStatus::ERROR, "Missing pin or uid in options"};
+        }
+
+        log(DebugFeatures::MODULE_COMMAND_DEBUG,
+            "ModuleCommandUseCase: SetSensorModel command - Pin: %d, SensorUID: %s",
+            pin, sensorUid.c_str());
+
+        // TODO: Implement actual sensor model update logic
+        
+        return {ModuleCommandStatus::DONE, ""};
     }
 
     /**
@@ -318,6 +408,31 @@ private:
         size_t valueEnd = json.find("\"", valueStart + 1);
         if (valueEnd == std::string::npos) return "";
         return json.substr(valueStart + 1, valueEnd - valueStart - 1);
+    }
+
+    int extractJsonIntValue(const std::string& json, const std::string& key)
+    {
+        std::string searchKey = "\"" + key + "\"";
+        size_t keyPos = json.find(searchKey);
+        if (keyPos == std::string::npos) return 0;
+        size_t colonPos = json.find(":", keyPos);
+        if (colonPos == std::string::npos) return 0;
+        size_t valueStart = colonPos + 1;
+        while (valueStart < json.size() && std::isspace(json[valueStart])) valueStart++;
+        size_t valueEnd = valueStart;
+        while (valueEnd < json.size() && (std::isdigit(json[valueEnd]) || json[valueEnd] == '-')) valueEnd++;
+        if (valueEnd > valueStart)
+        {
+            try
+            {
+                return std::stoi(json.substr(valueStart, valueEnd - valueStart));
+            }
+            catch (const std::exception& e)
+            {
+                logError("ModuleCommandUseCase: Failed to parse integer value for key '%s'", key.c_str());
+            }
+        }
+        return 0;
     }
 
     void log(const char *feature, const char *format, ...)
