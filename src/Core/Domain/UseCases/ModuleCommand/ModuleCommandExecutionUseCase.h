@@ -5,6 +5,7 @@
 #include "Core/Domain/Interfaces/IDebugSystem.h"
 #include "Core/Domain/Interfaces/IFirmwareRemoteUpdate.h"
 #include "Core/Domain/Interfaces/Adapters/IArduinoAdapter.h"
+#include "Core/Domain/Enums/ModuleCommandEnum.h"
 #include "Infrastructure/Adapters/Time/INTPTimeAdapter.h"
 #include <string>
 
@@ -37,15 +38,18 @@ public:
      */
     bool execute(const std::string &command, const std::string &options, const std::string &commandUid, const std::string &createdAt) override
     {
-        // TODO: Parse JSON options and execute commands
-        if (command == "BlinkingStart") {
-            return handleBlinkingStart("", options);
-        } else if (command == "BlinkingStop") {
-            return handleBlinkingStop("", options);
-        } else if (command == "Reboot") {
-            return handleReboot();
+        ModuleCommandEnum commandEnum = getModuleCommandEnum(command);
+        
+        switch (commandEnum) {
+            case ModuleCommandEnum::BLINKING_START:
+                return handleBlinkingStart("", options);
+            case ModuleCommandEnum::BLINKING_STOP:
+                return handleBlinkingStop("", options);
+            case ModuleCommandEnum::REBOOT:
+                return handleReboot();
+            default:
+                return false;
         }
-        return false;
     }
 
     /**
@@ -87,35 +91,48 @@ public:
             else
             {
                 // Process specific commands
-                if (moduleCommand.command == "AddWifi")
-                {
-                    auto result = processAddWifiCommand(moduleCommand);
-                    status = result.first;
-                    errorMessage = result.second;
-                }
-                else if (moduleCommand.command == "UpdateFirmware")
-                {
-                    auto result = processUpdateFirmwareCommand(moduleCommand);
-                    status = result.first;
-                    errorMessage = result.second;
-                }
-                else if (moduleCommand.command == "BlinkingStart")
-                {
-                    bool success = handleBlinkingStart("", moduleCommand.options);
-                    status = success ? "Done" : "Error";
-                    errorMessage = success ? "" : "BlinkingStart command failed";
-                }
-                else if (moduleCommand.command == "BlinkingStop")
-                {
-                    bool success = handleBlinkingStop("", moduleCommand.options);
-                    status = success ? "Done" : "Error";
-                    errorMessage = success ? "" : "BlinkingStop command failed";
-                }
-                else if (moduleCommand.command == "Reboot")
-                {
-                    bool success = handleReboot();
-                    status = success ? "Done" : "Error";
-                    errorMessage = success ? "" : "Reboot command failed";
+                ModuleCommandEnum commandEnum = getModuleCommandEnum(moduleCommand.command);
+                
+                switch (commandEnum) {
+                    case ModuleCommandEnum::ADD_WIFI:
+                    {
+                        auto result = processAddWifiCommand(moduleCommand);
+                        status = result.first;
+                        errorMessage = result.second;
+                        break;
+                    }
+                    case ModuleCommandEnum::UPDATE_FIRMWARE:
+                    {
+                        auto result = processUpdateFirmwareCommand(moduleCommand);
+                        status = result.first;
+                        errorMessage = result.second;
+                        break;
+                    }
+                    case ModuleCommandEnum::BLINKING_START:
+                    {
+                        bool success = handleBlinkingStart("", moduleCommand.options);
+                        status = success ? "Done" : "Error";
+                        errorMessage = success ? "" : "BlinkingStart command failed";
+                        break;
+                    }
+                    case ModuleCommandEnum::BLINKING_STOP:
+                    {
+                        bool success = handleBlinkingStop("", moduleCommand.options);
+                        status = success ? "Done" : "Error";
+                        errorMessage = success ? "" : "BlinkingStop command failed";
+                        break;
+                    }
+                    case ModuleCommandEnum::REBOOT:
+                    {
+                        bool success = handleReboot();
+                        status = success ? "Done" : "Error";
+                        errorMessage = success ? "" : "Reboot command failed";
+                        break;
+                    }
+                    case ModuleCommandEnum::UNKNOWN:
+                    default:
+                        // Keep default error message
+                        break;
                 }
             }
 

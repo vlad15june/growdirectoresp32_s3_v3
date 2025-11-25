@@ -11,6 +11,7 @@
 #include "Core/Domain/Interfaces/API/IHybridAPIService.h"
 #include "Core/Domain/Interfaces/ILogger.h"
 #include "Core/Domain/Interfaces/IDebugSystem.h"
+#include "Core/Domain/Enums/ModuleCommandEnum.h"
 #include "Infrastructure/Adapters/Time/INTPTimeAdapter.h"
 
 class CommandService : public ICommandService
@@ -350,7 +351,10 @@ private:
 
     bool isComplexModuleCommand(const std::string& commandName) const
     {
-        return commandName == "UpdateFirmware";
+        ModuleCommandEnum command = getModuleCommandEnum(commandName);
+        return command == ModuleCommandEnum::UPDATE_FIRMWARE ||
+               command == ModuleCommandEnum::PING_PIN ||
+               command == ModuleCommandEnum::SET_SENSOR_MODEL;
     }
 
     bool processComplexModuleCommand(const CommandDto &command)
