@@ -11,6 +11,26 @@
 // Global loop service instance
 std::unique_ptr<ILoopService> loopService;
 
+// MQTT background task handle
+TaskHandle_t mqttTaskHandle = nullptr;
+
+void mqttTask(void *param)
+{
+  PubSubClient *mqttClient = (PubSubClient *)param;
+  
+  while (1)
+  {
+    if (WiFi.isConnected())
+    {
+      if (mqttClient->connected())
+      {
+        mqttClient->loop();
+      }
+    }
+    delay(50);
+  }
+}
+
 void createTestSensorTypes()
 {
   // Check if sensor types already exist
@@ -263,6 +283,20 @@ void setup()
   // createTestSensorTypes();
 
   moduleSetupService.setupModule();
+  
+  // Start MQTT background task on Core 1
+  xTaskCreatePinnedToCore(
+    mqttTask,
+    "MQTT",
+    4096,
+    &mqttClient,
+    2,
+    &mqttTaskHandle,
+    1
+  );
+
+  //TODO: setup background task for led on core 0
+
   // Create loop service according to module mode and module type
   loopService = moduleSetupService.getLoopService();
 }
