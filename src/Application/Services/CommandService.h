@@ -383,7 +383,8 @@ private:
                 {
                     updateDto.timestamp = timeAdapter->getFormattedTime();
                 }
-                hybridApiService->sendModuleCommandExecutionResult(updateDto);
+                std::vector<ModuleCommandUpdateDto> updates = {updateDto};
+                hybridApiService->sendModuleCommandExecutionResult(updates);
 
                 allCommandsSuccessful = false;
                 continue;
@@ -407,7 +408,8 @@ private:
                 {
                     updateDto.timestamp = timeAdapter->getFormattedTime();
                 }
-                hybridApiService->sendModuleCommandExecutionResult(updateDto);
+                std::vector<ModuleCommandUpdateDto> updates = {updateDto};
+                hybridApiService->sendModuleCommandExecutionResult(updates);
 
                 allCommandsSuccessful = false;
                 continue;
@@ -421,7 +423,8 @@ private:
             {
                 inProgressDto.timestamp = timeAdapter->getFormattedTime();
             }
-            hybridApiService->sendModuleCommandExecutionResult(inProgressDto);
+            std::vector<ModuleCommandUpdateDto> updates = {inProgressDto};
+            hybridApiService->sendModuleCommandExecutionResult(updates);
 
             log(DebugFeatures::MODULE_COMMAND_DEBUG,
                 "CommandService: Set command to InProgress - uid: %s, command: %s",
@@ -466,6 +469,7 @@ private:
             if (!validCommands.empty())
             {
                 std::vector<ModuleCommandExecutionResult> results = moduleCommandUseCase->executeCommands(validCommands);
+                std::vector<ModuleCommandUpdateDto> updates;
                 
                 for (const auto& result : results)
                 {
@@ -483,11 +487,16 @@ private:
                         updateDto.errorMessage = result.errorMessage;
                         allCommandsSuccessful = false;
                     }
-                    hybridApiService->sendModuleCommandExecutionResult(updateDto);
+                    updates.push_back(updateDto);
 
                     log(DebugFeatures::MODULE_COMMAND_DEBUG,
                         "CommandService: Sent result - uid: %s, status: %s, error: %s",
                         result.uid.c_str(), result.status.c_str(), result.errorMessage.c_str());
+                }
+                
+                if (!updates.empty())
+                {
+                    hybridApiService->sendModuleCommandExecutionResult(updates);
                 }
             }
             else

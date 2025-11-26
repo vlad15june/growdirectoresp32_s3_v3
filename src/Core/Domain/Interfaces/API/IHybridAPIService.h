@@ -104,7 +104,7 @@ public:
      * @param commandUpdate The module command update containing the execution result
      * @return true if the operation was successful, false otherwise
      */
-    virtual bool sendModuleCommandExecutionResult(const ModuleCommandUpdateDto& commandUpdate) = 0;
+    virtual bool sendModuleCommandExecutionResult(const std::vector<ModuleCommandUpdateDto>& commandUpdates) = 0;
     
     /**
      * Send diagnostic data to the server

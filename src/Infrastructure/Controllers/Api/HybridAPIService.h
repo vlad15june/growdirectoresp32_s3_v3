@@ -490,14 +490,14 @@ public:
         return success;
     }
 
-    bool sendModuleCommandExecutionResult(const ModuleCommandUpdateDto& commandUpdate) override
+    bool sendModuleCommandExecutionResult(const std::vector<ModuleCommandUpdateDto>& commandUpdates) override
     {
-        if (_restApiService == nullptr)
+        if (!_restApiService)
         {
             log("HYBRID API: sendModuleCommandExecutionResult - REST API not available");
             return false;
         }
-        bool success = _restApiService->sendModuleCommandExecutionResult(commandUpdate);
+        bool success = _restApiService->sendModuleCommandExecutionResult(commandUpdates);
         if (!success)
             trackApiSendFailure(true);
         return success;

@@ -1931,6 +1931,38 @@ public:
         return output;
     }
 
+    std::string moduleCommandUpdatesToJson(const std::vector<ModuleCommandUpdateDto>& commandUpdates) override
+    {
+        DynamicJsonDocument doc(4096);
+        JsonArray array = doc.to<JsonArray>();
+
+        for (const auto& commandUpdateDto : commandUpdates)
+        {
+            JsonObject obj = array.createNestedObject();
+            obj["uid"] = commandUpdateDto.uid;
+            obj["status"] = commandUpdateDto.status;
+            
+            if (!commandUpdateDto.errorMessage.empty())
+            {
+                obj["errorMessage"] = commandUpdateDto.errorMessage;
+            }
+            
+            if (!commandUpdateDto.timestamp.empty())
+            {
+                obj["timestamp"] = commandUpdateDto.timestamp;
+            }
+            
+            if (!commandUpdateDto.accountUid.empty())
+            {
+                obj["accountUid"] = commandUpdateDto.accountUid;
+            }
+        }
+
+        std::string output;
+        serializeJson(doc, output);
+        return output;
+    }
+
     bool moduleCommandFromJson(const std::string &jsonStr, ModuleCommandDto &commandDto) override
     {
         DynamicJsonDocument doc(2048);

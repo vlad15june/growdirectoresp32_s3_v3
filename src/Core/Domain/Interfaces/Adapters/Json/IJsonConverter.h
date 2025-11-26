@@ -35,6 +35,7 @@ public:
     virtual std::string deviceCommandToJson(const DeviceCommandDto &commandDto) = 0;
     virtual bool deviceCommandsFromJson(const std::string &jsonStr, std::vector<DeviceCommandDto> &commands) = 0;
     virtual std::string moduleCommandUpdateToJson(const ModuleCommandUpdateDto& commandUpdateDto) = 0;
+    virtual std::string moduleCommandUpdatesToJson(const std::vector<ModuleCommandUpdateDto>& commandUpdates) = 0;
     virtual bool moduleCommandFromJson(const std::string &jsonStr, ModuleCommandDto &commandDto) = 0;
     virtual std::string moduleCommandToJson(const ModuleCommandDto &commandDto) = 0;
     virtual bool moduleCommandsFromJson(const std::string &jsonStr, std::vector<ModuleCommandDto> &commands) = 0;

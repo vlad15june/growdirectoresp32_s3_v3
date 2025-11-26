@@ -26,7 +26,7 @@ public:
     virtual bool sendFirmwareVersion() = 0;
     virtual bool sendDeviceCommandExecutionResult(const DeviceCommandUpdateDto& commandUpdate) = 0;
     virtual bool sendAnalogInputDeviceCommandExecutionResult(const char* msg) = 0;
-    virtual bool sendModuleCommandExecutionResult(const ModuleCommandUpdateDto& commandUpdate) = 0;
+    virtual bool sendModuleCommandExecutionResult(const std::vector<ModuleCommandUpdateDto>& commandUpdates) = 0;
     
     /**
      * @brief Get pending device commands from server

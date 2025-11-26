@@ -447,7 +447,7 @@ public:
         }
     }
 
-    bool sendModuleCommandExecutionResult(const ModuleCommandUpdateDto& commandUpdate) override
+    bool sendModuleCommandExecutionResult(const std::vector<ModuleCommandUpdateDto>& commandUpdates) override
     {
         if (_jsonConverter == nullptr) {
             log("NET: sendModuleCommandExecutionResult - JSON converter not available");
@@ -460,8 +460,8 @@ public:
             return false;
         }
 
-        // Convert ModuleCommandUpdateDto to JSON
-        std::string jsonMsg = _jsonConverter->moduleCommandUpdateToJson(commandUpdate);
+        // Convert array of ModuleCommandUpdateDto to JSON array
+        std::string jsonMsg = _jsonConverter->moduleCommandUpdatesToJson(commandUpdates);
         log("NET: Module command result %s", jsonMsg.c_str());
 
         if (jsonMsg.length() < 10)

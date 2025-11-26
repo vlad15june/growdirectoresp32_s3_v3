@@ -1552,6 +1552,42 @@ public:
         return oss.str();
     }
 
+    std::string moduleCommandUpdatesToJson(const std::vector<ModuleCommandUpdateDto>& commandUpdates) override
+    {
+        std::ostringstream oss;
+        oss << "[";
+        
+        for (size_t i = 0; i < commandUpdates.size(); ++i)
+        {
+            if (i > 0) oss << ",";
+            
+            const auto& commandUpdateDto = commandUpdates[i];
+            oss << "{";
+            oss << "\"uid\":\"" << commandUpdateDto.uid << "\"";
+            oss << ",\"status\":\"" << commandUpdateDto.status << "\"";
+            
+            if (!commandUpdateDto.errorMessage.empty())
+            {
+                oss << ",\"errorMessage\":\"" << commandUpdateDto.errorMessage << "\"";
+            }
+            
+            if (!commandUpdateDto.timestamp.empty())
+            {
+                oss << ",\"timestamp\":\"" << commandUpdateDto.timestamp << "\"";
+            }
+            
+            if (!commandUpdateDto.accountUid.empty())
+            {
+                oss << ",\"accountUid\":\"" << commandUpdateDto.accountUid << "\"";
+            }
+            
+            oss << "}";
+        }
+        
+        oss << "]";
+        return oss.str();
+    }
+
     bool moduleCommandFromJson(const std::string &jsonStr, ModuleCommandDto &commandDto) override
     {
         commandDto.uid = extractValue(jsonStr, "uid");
