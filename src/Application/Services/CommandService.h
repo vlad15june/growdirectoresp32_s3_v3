@@ -390,6 +390,10 @@ private:
                 ModuleCommandUpdateDto inProgressDto;
                 inProgressDto.uid = moduleCommand.uid;
                 inProgressDto.status = getModuleCommandStatusName(ModuleCommandStatus::IN_PROGRESS);
+                if (timeAdapter)
+                {
+                    inProgressDto.timestamp = timeAdapter->getFormattedTime();
+                }
                 hybridApiService->sendModuleCommandExecutionResult(inProgressDto);
 
                 log(DebugFeatures::MODULE_COMMAND_DEBUG,
@@ -404,6 +408,10 @@ private:
                 ModuleCommandUpdateDto updateDto;
                 updateDto.uid = result.uid;
                 updateDto.status = result.status;
+                if (timeAdapter)
+                {
+                    updateDto.timestamp = timeAdapter->getFormattedTime();
+                }
                 
                 ModuleCommandStatus status = getModuleCommandStatus(result.status);
                 if (status == ModuleCommandStatus::ERROR)

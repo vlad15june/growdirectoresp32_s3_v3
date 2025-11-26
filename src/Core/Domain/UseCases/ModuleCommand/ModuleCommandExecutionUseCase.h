@@ -295,6 +295,8 @@ private:
         {
             return {ModuleCommandStatus::ERROR, "Missing options"};
         }
+        log(DebugFeatures::MODULE_COMMAND_DEBUG,
+            "ModuleCommandUseCase: PingPin options: %s", moduleCommand.options.c_str());
 
         int pin = extractJsonIntValue(moduleCommand.options, "pin");
         if (pin == 0)
@@ -383,6 +385,9 @@ private:
         {
             return {ModuleCommandStatus::ERROR, "Missing options"};
         }
+
+        log(DebugFeatures::MODULE_COMMAND_DEBUG,
+            "ModuleCommandUseCase: SetSensorModel options: %s", moduleCommand.options.c_str());
 
         int pin = extractJsonIntValue(moduleCommand.options, "pin");
         std::string sensorUid = extractJsonValue(moduleCommand.options, "uid");
@@ -565,6 +570,9 @@ private:
 
     int extractJsonIntValue(const std::string& json, const std::string& key)
     {
+        log(DebugFeatures::MODULE_COMMAND_DEBUG,
+            "ModuleCommandUseCase: Extracting int value - JSON: %s, Key: %s", json.c_str(), key.c_str());
+
         std::string searchKey = "\"" + key + "\"";
         size_t keyPos = json.find(searchKey);
         if (keyPos == std::string::npos) return 0;
@@ -572,17 +580,48 @@ private:
         if (colonPos == std::string::npos) return 0;
         size_t valueStart = colonPos + 1;
         while (valueStart < json.size() && std::isspace(json[valueStart])) valueStart++;
-        size_t valueEnd = valueStart;
-        while (valueEnd < json.size() && (std::isdigit(json[valueEnd]) || json[valueEnd] == '-')) valueEnd++;
-        if (valueEnd > valueStart)
+        
+        // Check if value is a string (starts with quote)
+        if (valueStart < json.size() && json[valueStart] == '"')
         {
-            try
+            // Extract string value
+            size_t stringStart = valueStart + 1;
+            size_t stringEnd = json.find("\"", stringStart);
+            if (stringEnd != std::string::npos)
             {
-                return std::stoi(json.substr(valueStart, valueEnd - valueStart));
+                std::string stringValue = json.substr(stringStart, stringEnd - stringStart);
+                try
+                {
+                    int result = std::stoi(stringValue);
+                    log(DebugFeatures::MODULE_COMMAND_DEBUG,
+                        "ModuleCommandUseCase: Extracted int from string - value: %d", result);
+                    return result;
+                }
+                catch (const std::exception& e)
+                {
+                    logError("ModuleCommandUseCase: Failed to parse integer from string value '%s' for key '%s'", 
+                             stringValue.c_str(), key.c_str());
+                }
             }
-            catch (const std::exception& e)
+        }
+        else
+        {
+            // Extract numeric value
+            size_t valueEnd = valueStart;
+            while (valueEnd < json.size() && (std::isdigit(json[valueEnd]) || json[valueEnd] == '-')) valueEnd++;
+            if (valueEnd > valueStart)
             {
-                logError("ModuleCommandUseCase: Failed to parse integer value for key '%s'", key.c_str());
+                try
+                {
+                    int result = std::stoi(json.substr(valueStart, valueEnd - valueStart));
+                    log(DebugFeatures::MODULE_COMMAND_DEBUG,
+                        "ModuleCommandUseCase: Extracted int from number - value: %d", result);
+                    return result;
+                }
+                catch (const std::exception& e)
+                {
+                    logError("ModuleCommandUseCase: Failed to parse integer value for key '%s'", key.c_str());
+                }
             }
         }
         return 0;

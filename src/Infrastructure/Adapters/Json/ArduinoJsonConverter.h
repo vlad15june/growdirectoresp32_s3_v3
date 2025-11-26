@@ -1910,7 +1910,21 @@ public:
 
         doc["uid"] = commandUpdateDto.uid;
         doc["status"] = commandUpdateDto.status;
-        doc["errorMessage"] = commandUpdateDto.errorMessage;
+        
+        if (!commandUpdateDto.errorMessage.empty())
+        {
+            doc["errorMessage"] = commandUpdateDto.errorMessage;
+        }
+        
+        if (!commandUpdateDto.timestamp.empty())
+        {
+            doc["timestamp"] = commandUpdateDto.timestamp;
+        }
+        
+        if (!commandUpdateDto.accountUid.empty())
+        {
+            doc["accountUid"] = commandUpdateDto.accountUid;
+        }
 
         std::string output;
         serializeJson(doc, output);
@@ -1926,7 +1940,26 @@ public:
 
         commandDto.uid = doc["uid"] | "";
         commandDto.command = doc["command"] | "";
-        commandDto.options = doc["options"] | "";
+        
+        // Serialize options object to JSON string
+        if (doc.containsKey("options") && !doc["options"].isNull())
+        {
+            if (doc["options"].is<JsonObject>() || doc["options"].is<JsonArray>())
+            {
+                std::string optionsJson;
+                serializeJson(doc["options"], optionsJson);
+                commandDto.options = optionsJson;
+            }
+            else
+            {
+                commandDto.options = doc["options"] | "";
+            }
+        }
+        else
+        {
+            commandDto.options = "";
+        }
+        
         commandDto.createdAt = doc["createdAt"] | "";
 
         return true;
@@ -1967,7 +2000,26 @@ public:
                 ModuleCommandDto command;
                 command.uid = commandObj["uid"] | "";
                 command.command = commandObj["command"] | "";
-                command.options = commandObj["options"] | "";
+                
+                // Serialize options object to JSON string
+                if (commandObj.containsKey("options") && !commandObj["options"].isNull())
+                {
+                    if (commandObj["options"].is<JsonObject>() || commandObj["options"].is<JsonArray>())
+                    {
+                        std::string optionsJson;
+                        serializeJson(commandObj["options"], optionsJson);
+                        command.options = optionsJson;
+                    }
+                    else
+                    {
+                        command.options = commandObj["options"] | "";
+                    }
+                }
+                else
+                {
+                    command.options = "";
+                }
+                
                 command.createdAt = commandObj["createdAt"] | "";
                 
                 commands.push_back(command);

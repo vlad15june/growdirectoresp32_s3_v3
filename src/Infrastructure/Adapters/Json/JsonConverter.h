@@ -1532,7 +1532,22 @@ public:
         oss << "{";
         oss << "\"uid\":\"" << commandUpdateDto.uid << "\"";
         oss << ",\"status\":\"" << commandUpdateDto.status << "\"";
-        oss << ",\"errorMessage\":\"" << commandUpdateDto.errorMessage << "\"";
+        
+        if (!commandUpdateDto.errorMessage.empty())
+        {
+            oss << ",\"errorMessage\":\"" << commandUpdateDto.errorMessage << "\"";
+        }
+        
+        if (!commandUpdateDto.timestamp.empty())
+        {
+            oss << ",\"timestamp\":\"" << commandUpdateDto.timestamp << "\"";
+        }
+        
+        if (!commandUpdateDto.accountUid.empty())
+        {
+            oss << ",\"accountUid\":\"" << commandUpdateDto.accountUid << "\"";
+        }
+        
         oss << "}";
         return oss.str();
     }
@@ -1541,7 +1556,18 @@ public:
     {
         commandDto.uid = extractValue(jsonStr, "uid");
         commandDto.command = extractValue(jsonStr, "command");
-        commandDto.options = extractValue(jsonStr, "options");
+        
+        // Try to extract options as JSON object first, if not found try as string
+        std::string optionsObj = extractJsonObject(jsonStr, "options");
+        if (!optionsObj.empty())
+        {
+            commandDto.options = optionsObj;
+        }
+        else
+        {
+            commandDto.options = extractValue(jsonStr, "options");
+        }
+        
         commandDto.createdAt = extractValue(jsonStr, "createdAt");
 
         return !commandDto.uid.empty();
