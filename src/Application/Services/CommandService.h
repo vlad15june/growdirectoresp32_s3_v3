@@ -358,6 +358,81 @@ private:
                command == ModuleCommandEnum::SET_SENSOR_MODEL;
     }
 
+    std::vector<ModuleCommandDto> validateAndFilterModuleCommands(
+        const std::vector<ModuleCommandDto>& moduleCommands,
+        bool& allCommandsSuccessful)
+    {
+        std::vector<ModuleCommandDto> validCommands;
+        
+        for (const auto& moduleCommand : moduleCommands)
+        {
+            log(DebugFeatures::MODULE_COMMAND_DEBUG,
+                "CommandService: Processing module command - uid: %s, command: %s, createdAt: %s",
+                moduleCommand.uid.c_str(), moduleCommand.command.c_str(), moduleCommand.createdAt.c_str());
+
+            if (moduleCommand.createdAt.empty())
+            {
+                logError("CommandService: Module command has empty createdAt - uid: %s",
+                        moduleCommand.uid.c_str());
+
+                ModuleCommandUpdateDto updateDto;
+                updateDto.uid = moduleCommand.uid;
+                updateDto.status = getModuleCommandStatusName(ModuleCommandStatus::ERROR);
+                updateDto.errorMessage = "Command has no timestamp";
+                if (timeAdapter)
+                {
+                    updateDto.timestamp = timeAdapter->getFormattedTime();
+                }
+                hybridApiService->sendModuleCommandExecutionResult(updateDto);
+
+                allCommandsSuccessful = false;
+                continue;
+            }
+
+            bool isTimeValid = checkCommandTime(moduleCommand.createdAt);
+            log(DebugFeatures::MODULE_COMMAND_DEBUG,
+                "CommandService: Module command time validation - createdAt: %s, isValid: %s",
+                moduleCommand.createdAt.c_str(), isTimeValid ? "true" : "false");
+
+            if (!isTimeValid)
+            {
+                logError("CommandService: Module command is too old - createdAt: %s, maxAge: %lu seconds",
+                        moduleCommand.createdAt.c_str(), commandMaxAgeSeconds);
+
+                ModuleCommandUpdateDto updateDto;
+                updateDto.uid = moduleCommand.uid;
+                updateDto.status = getModuleCommandStatusName(ModuleCommandStatus::ERROR);
+                updateDto.errorMessage = "Command expired: too old to execute";
+                if (timeAdapter)
+                {
+                    updateDto.timestamp = timeAdapter->getFormattedTime();
+                }
+                hybridApiService->sendModuleCommandExecutionResult(updateDto);
+
+                allCommandsSuccessful = false;
+                continue;
+            }
+
+            // Command is valid, set to InProgress and add to valid list
+            ModuleCommandUpdateDto inProgressDto;
+            inProgressDto.uid = moduleCommand.uid;
+            inProgressDto.status = getModuleCommandStatusName(ModuleCommandStatus::IN_PROGRESS);
+            if (timeAdapter)
+            {
+                inProgressDto.timestamp = timeAdapter->getFormattedTime();
+            }
+            hybridApiService->sendModuleCommandExecutionResult(inProgressDto);
+
+            log(DebugFeatures::MODULE_COMMAND_DEBUG,
+                "CommandService: Set command to InProgress - uid: %s, command: %s",
+                moduleCommand.uid.c_str(), moduleCommand.command.c_str());
+
+            validCommands.push_back(moduleCommand);
+        }
+        
+        return validCommands;
+    }
+
     bool processComplexModuleCommand(const CommandDto &command)
     {
         logInfo("CommandService: Complex module command requested - command: %s, version: %s, url: %s",
@@ -385,45 +460,40 @@ private:
 
         if (moduleCommandUseCase)
         {
-            for (const auto& moduleCommand : moduleCommands)
-            {
-                ModuleCommandUpdateDto inProgressDto;
-                inProgressDto.uid = moduleCommand.uid;
-                inProgressDto.status = getModuleCommandStatusName(ModuleCommandStatus::IN_PROGRESS);
-                if (timeAdapter)
-                {
-                    inProgressDto.timestamp = timeAdapter->getFormattedTime();
-                }
-                hybridApiService->sendModuleCommandExecutionResult(inProgressDto);
+            std::vector<ModuleCommandDto> validCommands = validateAndFilterModuleCommands(moduleCommands, allCommandsSuccessful);
 
-                log(DebugFeatures::MODULE_COMMAND_DEBUG,
-                    "CommandService: Set command to InProgress - uid: %s, command: %s",
-                    moduleCommand.uid.c_str(), moduleCommand.command.c_str());
-            }
-
-            std::vector<ModuleCommandExecutionResult> results = moduleCommandUseCase->executeCommands(moduleCommands);
-            
-            for (const auto& result : results)
+            // Execute only valid commands
+            if (!validCommands.empty())
             {
-                ModuleCommandUpdateDto updateDto;
-                updateDto.uid = result.uid;
-                updateDto.status = result.status;
-                if (timeAdapter)
-                {
-                    updateDto.timestamp = timeAdapter->getFormattedTime();
-                }
+                std::vector<ModuleCommandExecutionResult> results = moduleCommandUseCase->executeCommands(validCommands);
                 
-                ModuleCommandStatus status = getModuleCommandStatus(result.status);
-                if (status == ModuleCommandStatus::ERROR)
+                for (const auto& result : results)
                 {
-                    updateDto.errorMessage = result.errorMessage;
-                    allCommandsSuccessful = false;
-                }
-                hybridApiService->sendModuleCommandExecutionResult(updateDto);
+                    ModuleCommandUpdateDto updateDto;
+                    updateDto.uid = result.uid;
+                    updateDto.status = result.status;
+                    if (timeAdapter)
+                    {
+                        updateDto.timestamp = timeAdapter->getFormattedTime();
+                    }
+                    
+                    ModuleCommandStatus status = getModuleCommandStatus(result.status);
+                    if (status == ModuleCommandStatus::ERROR)
+                    {
+                        updateDto.errorMessage = result.errorMessage;
+                        allCommandsSuccessful = false;
+                    }
+                    hybridApiService->sendModuleCommandExecutionResult(updateDto);
 
+                    log(DebugFeatures::MODULE_COMMAND_DEBUG,
+                        "CommandService: Sent result - uid: %s, status: %s, error: %s",
+                        result.uid.c_str(), result.status.c_str(), result.errorMessage.c_str());
+                }
+            }
+            else
+            {
                 log(DebugFeatures::MODULE_COMMAND_DEBUG,
-                    "CommandService: Sent result - uid: %s, status: %s, error: %s",
-                    result.uid.c_str(), result.status.c_str(), result.errorMessage.c_str());
+                    "CommandService: No valid module commands to execute (all expired or invalid)");
             }
         }
         else
