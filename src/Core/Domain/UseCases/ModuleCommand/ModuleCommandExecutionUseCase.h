@@ -396,14 +396,14 @@ private:
             "ModuleCommandUseCase: SetSensorModel options: %s", moduleCommand.options.c_str());
 
         int pin = extractJsonIntValue(moduleCommand.options, "pin");
-        std::string sensorUid = extractJsonValue(moduleCommand.options, "uid");
+        std::string modelUid = extractJsonValue(moduleCommand.options, "uid");
 
-        if (pin == 0 || sensorUid.empty())
+        if (pin == 0 || modelUid.empty())
         {
             return {ModuleCommandStatus::ERROR, "Missing pin or uid in options"};
         }
 
-        if (!sensorTypeRepository || !sensorReader || !sensorRepository)
+        if (!sensorTypeRepository || !sensorReader || !sensorRepository || !moduleConfig)
         {
             log(DebugFeatures::MODULE_COMMAND_DEBUG,
                 "ModuleCommandUseCase: Sensor services not available for SetSensorModel");
@@ -411,16 +411,16 @@ private:
         }
 
         log(DebugFeatures::MODULE_COMMAND_DEBUG,
-            "ModuleCommandUseCase: SetSensorModel command - Pin: %d, SensorUID: %s",
-            pin, sensorUid.c_str());
+            "ModuleCommandUseCase: SetSensorModel command - Pin: %d, ModelUID: %s",
+            pin, modelUid.c_str());
 
-        // Find sensor type by UID
+        // Find sensor type by UID (modelUid)
         auto allSensorTypes = sensorTypeRepository->getAll();
         SensorType* targetSensorType = nullptr;
         
         for (auto &sensorType : allSensorTypes)
         {
-            if (sensorType.uid == sensorUid)
+            if (sensorType.uid == modelUid)
             {
                 targetSensorType = &sensorType;
                 break;
@@ -430,29 +430,39 @@ private:
         if (!targetSensorType)
         {
             log(DebugFeatures::MODULE_COMMAND_DEBUG,
-                "ModuleCommandUseCase: Sensor type with UID %s not found", sensorUid.c_str());
+                "ModuleCommandUseCase: Sensor type with UID %s not found", modelUid.c_str());
             return {ModuleCommandStatus::ERROR, "Sensor type not found"};
         }
 
+        // Generate sensor UID based on module UID and pin (e.g., "48:27:E2:E2:01:78.02")
+        std::string moduleUid = moduleConfig->getModuleUid();
+        char pinStr[3];
+        sprintf(pinStr, "%02d", pin);
+        std::string generatedSensorUid = moduleUid + "." + pinStr;
+
+        log(DebugFeatures::MODULE_COMMAND_DEBUG,
+            "ModuleCommandUseCase: Generated sensor UID: %s", generatedSensorUid.c_str());
+
         // Create sensor entity from sensor type
-        SensorEntity sensorEntity;
-        sensorEntity.uid = targetSensorType->uid;
-        sensorEntity.pin = pin;
-        sensorEntity.sensorType = targetSensorType->name;
-        sensorEntity.model = targetSensorType->name;
-        sensorEntity.protocol = targetSensorType->getProtocolString();
-        sensorEntity.modbusDeviceAddress = targetSensorType->modbusDeviceAddress;
-        sensorEntity.baudRate = targetSensorType->baudRate;
-        sensorEntity.i2cAddress = targetSensorType->i2cAddress;
-        sensorEntity.chipType = targetSensorType->chipType;
-        sensorEntity.modbusRegisterConfigs = targetSensorType->modbusRegisterConfig;
-        sensorEntity.i2cRegisterConfigs = targetSensorType->i2cRegisterConfig;
-        sensorEntity.isActive = true;
-        sensorEntity.isError = false;
-        sensorEntity.status = SensorStatusEnum::SENSOR_STATUS_ADDED;
+        SensorEntity newSensorEntity;
+        newSensorEntity.uid = generatedSensorUid;
+        newSensorEntity.pin = pin;
+        newSensorEntity.sensorType = targetSensorType->name;
+        newSensorEntity.model = targetSensorType->name;
+        newSensorEntity.protocol = targetSensorType->getProtocolString();
+        newSensorEntity.sensorTypeUid = targetSensorType->uid;
+        newSensorEntity.modbusDeviceAddress = targetSensorType->modbusDeviceAddress;
+        newSensorEntity.baudRate = targetSensorType->baudRate;
+        newSensorEntity.i2cAddress = targetSensorType->i2cAddress;
+        newSensorEntity.chipType = targetSensorType->chipType;
+        newSensorEntity.modbusRegisterConfigs = targetSensorType->modbusRegisterConfig;
+        newSensorEntity.i2cRegisterConfigs = targetSensorType->i2cRegisterConfig;
+        newSensorEntity.isActive = true;
+        newSensorEntity.isError = false;
+        newSensorEntity.status = SensorStatusEnum::SENSOR_STATUS_ADDED;
 
         // Verify sensor is actually connected on this pin at default address
-        bool sensorDetected = sensorReader->scanSensor(sensorEntity);
+        bool sensorDetected = sensorReader->scanSensor(newSensorEntity);
         
         if (!sensorDetected)
         {
@@ -463,12 +473,12 @@ private:
             
             for (int address = MODBUS_ADDRESS_MIN; address <= MODBUS_ADDRESS_MAX; address++)
             {
-                sensorEntity.modbusDeviceAddress = address;
+                newSensorEntity.modbusDeviceAddress = address;
                 log(DebugFeatures::MODULE_COMMAND_DEBUG,
                     "ModuleCommandUseCase: Scanning ModBus address 0x%02X for sensor %s", 
                     address, targetSensorType->name.c_str());
 
-                if (sensorReader->scanSensor(sensorEntity))
+                if (sensorReader->scanSensor(newSensorEntity))
                 {
                     log(DebugFeatures::MODULE_COMMAND_DEBUG,
                         "ModuleCommandUseCase: Found %s sensor on pin %d at address 0x%02X", 
@@ -487,8 +497,41 @@ private:
             return {ModuleCommandStatus::ERROR, "Sensor not detected on specified pin"};
         }
 
-        // Save sensor to repository
-        if (!sensorRepository->save(sensorEntity))
+        log(DebugFeatures::MODULE_COMMAND_DEBUG,
+            "ModuleCommandUseCase: Sensor detected successfully, now checking for existing sensors on pin %d", pin);
+
+        // Get all existing sensors to check if there's already one on this pin
+        auto allSensors = sensorRepository->getAll();
+        std::vector<SensorEntity> sensorsToDelete;
+        
+        for (const auto &existingSensor : allSensors)
+        {
+            if (existingSensor.pin == pin)
+            {
+                log(DebugFeatures::MODULE_COMMAND_DEBUG,
+                    "ModuleCommandUseCase: Found existing sensor on pin %d with UID: %s, marking for deletion",
+                    pin, existingSensor.uid.c_str());
+                sensorsToDelete.push_back(existingSensor);
+            }
+        }
+
+        // Now delete old sensors on the same pin (after new one is saved)
+        for (const auto &sensorToDelete : sensorsToDelete)
+        {
+            log(DebugFeatures::MODULE_COMMAND_DEBUG,
+                "ModuleCommandUseCase: Deleting old sensor with UID: %s from pin %d",
+                sensorToDelete.uid.c_str(), pin);
+            
+            if (!sensorRepository->remove(sensorToDelete.uid.c_str()))
+            {
+                log(DebugFeatures::MODULE_COMMAND_DEBUG,
+                    "ModuleCommandUseCase: Warning - Failed to delete old sensor UID: %s",
+                    sensorToDelete.uid.c_str());
+            }
+        }
+
+        // Save the new sensor first
+        if (!sensorRepository->save(newSensorEntity))
         {
             log(DebugFeatures::MODULE_COMMAND_DEBUG,
                 "ModuleCommandUseCase: Failed to save sensor to repository");
@@ -496,8 +539,8 @@ private:
         }
 
         log(DebugFeatures::MODULE_COMMAND_DEBUG,
-            "ModuleCommandUseCase: Successfully saved %s sensor on pin %d",
-            targetSensorType->name.c_str(), pin);
+            "ModuleCommandUseCase: Successfully saved %s sensor on pin %d with UID: %s",
+            targetSensorType->name.c_str(), pin, generatedSensorUid.c_str());
         
         return {ModuleCommandStatus::DONE, ""};
     }
