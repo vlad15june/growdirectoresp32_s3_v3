@@ -192,7 +192,7 @@ ModbusSensorReader modbusSensorReader(modbusPorts, arduinoAdapter, &mqttLogger, 
 
 SensorReader sensorReader(&analogSensorReader, &modbusSensorReader, &arduinoAdapter, &mqttLogger, &debugSystem);
 
-ModuleCommandExecutionUseCase moduleCommandExecutionUseCase(&mqttLogger, &debugSystem, &ntpTimeAdapter, &firmwareRemoteUpdate, &arduinoAdapter, &sensorRepository, &sensorTypeRepository, &sensorReader);
+ModuleCommandExecutionUseCase moduleCommandExecutionUseCase(&mqttLogger, &debugSystem, &ntpTimeAdapter, &firmwareRemoteUpdate, &arduinoAdapter, &sensorRepository, &sensorTypeRepository, &sensorReader, &moduleConfig, &settings);
 
 SensorCommandUseCase sensorCommandUseCase(
     &moduleConfig,

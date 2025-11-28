@@ -30,11 +30,13 @@ private:
     ISensorRepository *sensorRepository;
     ISensorTypeRepository *sensorTypeRepository;
     ISensorReader *sensorReader;
+    IModuleConfig *moduleConfig;
+    ISettings *settings;
     static const unsigned long commandMaxAgeSeconds = 300;
 
 public:
-    ModuleCommandExecutionUseCase(ILogger *logger = nullptr, IDebugSystem *debugSystem = nullptr, INTPTimeAdapter *timeAdapter = nullptr, IFirmwareRemoteUpdate *firmwareUpdater = nullptr, IArduinoAdapter *arduinoAdapter = nullptr, ISensorRepository *sensorRepository = nullptr, ISensorTypeRepository *sensorTypeRepository = nullptr, ISensorReader *sensorReader = nullptr)
-        : logger(logger), debugSystem(debugSystem), timeAdapter(timeAdapter), firmwareUpdater(firmwareUpdater), arduinoAdapter(arduinoAdapter), sensorRepository(sensorRepository), sensorTypeRepository(sensorTypeRepository), sensorReader(sensorReader) {}
+    ModuleCommandExecutionUseCase(ILogger *logger = nullptr, IDebugSystem *debugSystem = nullptr, INTPTimeAdapter *timeAdapter = nullptr, IFirmwareRemoteUpdate *firmwareUpdater = nullptr, IArduinoAdapter *arduinoAdapter = nullptr, ISensorRepository *sensorRepository = nullptr, ISensorTypeRepository *sensorTypeRepository = nullptr, ISensorReader *sensorReader = nullptr, IModuleConfig *moduleConfig = nullptr, ISettings *settings = nullptr)
+        : logger(logger), debugSystem(debugSystem), timeAdapter(timeAdapter), firmwareUpdater(firmwareUpdater), arduinoAdapter(arduinoAdapter), sensorRepository(sensorRepository), sensorTypeRepository(sensorTypeRepository), sensorReader(sensorReader), moduleConfig(moduleConfig), settings(settings) {}
     
     virtual ~ModuleCommandExecutionUseCase() = default;
 
@@ -240,6 +242,10 @@ private:
         {
             log(DebugFeatures::MODULE_COMMAND_DEBUG,
                 "ModuleCommandUseCase: Firmware update completed successfully");
+
+            settings->setBootType(BOOT_TYPE_FIRMWARE_UPDATE);
+            moduleConfig->setRequestedModuleMode(CONFIGURED_NEED_RESTART);
+
             return {ModuleCommandStatus::DONE, ""};
         }
         else
