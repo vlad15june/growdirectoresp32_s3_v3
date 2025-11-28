@@ -4,6 +4,8 @@
 #include <Arduino.h>
 #include <PubSubClient.h>
 #include <set>
+#include <vector>
+#include <queue>
 #include "Core/Domain/Interfaces/ILogger.h"
 #include "Core/Domain/Interfaces/IDebugSystem.h"
 #include "Core/Domain/Interfaces/Mqtt/IMessageProcessor.h"
@@ -31,6 +33,12 @@ private:
     uint16_t _reconnectInterval;
     int _mqttFails; // Track MQTT connection failures
     std::set<String> _subscribedTopics; // Track subscribed topics (auto-deduplication)
+
+    struct MqttMessage {
+        String topic;
+        std::vector<uint8_t> payload;
+    };
+    std::queue<MqttMessage> _messageQueue;
 
     // Static instance pointer for callback access
     static MqttManager *_instance;
@@ -158,11 +166,13 @@ public:
     {
         Serial.printf("MQTT Callback triggered for topic: %s", topic);
         // Now we can access the instance through the static pointer
-        if (_instance && _instance->_messageProcessor)
+        if (_instance)
         {
-            // NOTE: Not use mqtt logger here to avoid corrupting the MQTT data
-            // _instance->log("Received message on topic: %s", topic);
-            _instance->_messageProcessor->processMessage(topic, payload, length);
+            // Store message for later processing to avoid stack overflow in callback
+            MqttMessage msg;
+            msg.topic = String(topic);
+            msg.payload.assign(payload, payload + length);
+            _instance->_messageQueue.push(msg);
         }
     }
 
@@ -413,6 +423,16 @@ public:
         {
             _mqttClient.loop();
             
+            // Process pending messages
+            while (!_messageQueue.empty()) {
+                MqttMessage& msg = _messageQueue.front();
+                
+                if (_messageProcessor) {
+                    _messageProcessor->processMessage(msg.topic.c_str(), msg.payload.data(), msg.payload.size());
+                }
+                _messageQueue.pop();
+            }
+
             // Active health check - verify connection is really alive
             if (millis() - lastHealthCheck >= healthCheckInterval)
             {
