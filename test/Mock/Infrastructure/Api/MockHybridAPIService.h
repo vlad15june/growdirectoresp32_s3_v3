@@ -185,9 +185,11 @@ public:
         return sendAnalogInputDeviceCommandExecutionResultReturnValue;
     }
     
-    bool sendModuleCommandExecutionResult(const ModuleCommandUpdateDto& commandUpdate) override {
+    bool sendModuleCommandExecutionResult(const std::vector<ModuleCommandUpdateDto>& commandUpdates) override {
         sendModuleCommandExecutionResultCalled = true;
-        lastModuleCommandUpdate = commandUpdate;
+        if (!commandUpdates.empty()) {
+            lastModuleCommandUpdate = commandUpdates[0];
+        }
         return sendModuleCommandExecutionResultReturnValue;
     }
     

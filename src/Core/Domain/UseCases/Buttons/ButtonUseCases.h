@@ -5,17 +5,22 @@
 #include "Core/Domain/Interfaces/Adapters/IButtonAdapter.h"
 #include "Core/Domain/Interfaces/ILogger.h"
 #include "Core/Domain/Interfaces/IDebugSystem.h"
+#include "Core/Domain/Interfaces/ISettings.h"
 
 class ButtonUseCases : public IButtonUseCases {
 private:
     IButtonAdapter* buttonAdapter;
     ILogger *logger;
     IDebugSystem *debugSystem;
+    ISettings *settings;
     const uint8_t buttonIndex;
     bool isSystemOn;
     bool buttonPressedState;
+    bool buttonWasPressedBeforeReboot;
     unsigned long lastPressTime;
-    const unsigned long durationMs = 15000;
+    const unsigned long durationMs = 10000;  // 10 seconds for test mode (changed from 15)
+    const unsigned long factoryResetDurationMs = 10000;  // 10 seconds minimum for factory reset
+    const unsigned long addModeDurationMs = 10000;  // 10 seconds minimum for add mode
 
     void log(const char *format, ...)
     {
@@ -33,48 +38,107 @@ private:
 
 public:
     ButtonUseCases(IButtonAdapter* adapter, ILogger* loggerInstance = nullptr, 
-                  IDebugSystem* debugSystemInstance = nullptr, uint8_t index = 0)
+                  IDebugSystem* debugSystemInstance = nullptr, uint8_t index = 0,
+                  ISettings* settingsInstance = nullptr)
         : buttonAdapter(adapter), logger(loggerInstance), debugSystem(debugSystemInstance), 
-          buttonIndex(index), isSystemOn(false), buttonPressedState(false), lastPressTime(0) {}
+          settings(settingsInstance), buttonIndex(index), isSystemOn(false), 
+          buttonPressedState(false), buttonWasPressedBeforeReboot(false), lastPressTime(0) {
+        if (settings != nullptr) {
+            buttonWasPressedBeforeReboot = settings->getButtonPressedBeforeReboot() != 0;
+            log("Button %d state before reboot: %s", buttonIndex, buttonWasPressedBeforeReboot ? "pressed" : "not pressed");
+        }
+    }
     
     ~ButtonUseCases() override = default;
     
-    // Check if button is pressed and store the state
-    // This method will be called only on system start
     bool checkButtonPressedWhenOn() override {
         bool pressed = buttonAdapter->isButtonPressed(buttonIndex);
         if (pressed) {
             buttonPressedState = true;
+            if (settings != nullptr) {
+                settings->setButtonPressedBeforeReboot(1);
+                log("Button %d state saved to settings for potential reboot", buttonIndex);
+            }
             log("Button %d is pressed when system is on", buttonIndex);
+        } else {
+            if (settings != nullptr && !buttonWasPressedBeforeReboot) {
+                settings->setButtonPressedBeforeReboot(0);
+                log("Button %d normal boot - clearing any stale saved state", buttonIndex);
+            }
         }
         log("Button %d pressed state: %s", buttonIndex, buttonPressedState ? "true" : "false");
         return buttonPressedState;
     }
     
-    // Check if button is currently pressed (returns current state)
     bool isButtonPressedWhenOn() override {
         return buttonPressedState;
     }
     
-    // Check if button is held for the specified duration
     bool isButtonHeldForDuration() override {
         bool held = buttonAdapter->wasButtonHeld(buttonIndex, durationMs);
         log("Button %d held for %lu ms: %s", buttonIndex, durationMs, held ? "true" : "false");
         return held;
     }
     
-    // Check if button was pressed when system was on and then held for the specified duration
-    bool isButtonPressedWhenOnThenHeldForDuration() override {
-        // First check if the button was pressed when system was on
-        if (!buttonPressedState) {
-            log("Button %d wasn't pressed when system was on", buttonIndex);
+    bool isTestModeRequested() override {
+        if (!buttonWasPressedBeforeReboot) {
+            log("Button %d wasn't pressed before reboot - test mode not possible", buttonIndex);
             return false;
         }
         
-        // Then check if it's being held for the duration
+        if (!buttonPressedState) {
+            log("Button %d not pressed at startup - test mode not possible", buttonIndex);
+            if (settings != nullptr) {
+                settings->setButtonPressedBeforeReboot(0);
+            }
+            return false;
+        }
+        
         bool held = buttonAdapter->wasButtonHeld(buttonIndex, durationMs);
-        log("Button %d pressed when on and held for %lu ms: %s", buttonIndex, durationMs, held ? "true" : "false");
+        
+        if (held) {
+            log("Button %d TEST MODE activated (pressed before reboot, held at startup for %lu ms)", 
+                buttonIndex, durationMs);
+            if (settings != nullptr) {
+                settings->setButtonPressedBeforeReboot(0);
+            }
+        } else {
+            log("Button %d held time insufficient for test mode", buttonIndex);
+        }
+        
         return held;
+    }
+    
+    bool isFactoryResetRequested() override {
+        if (buttonWasPressedBeforeReboot) {
+            log("Button %d was pressed before reboot - this is test mode, not factory reset", buttonIndex);
+            return false;
+        }
+        
+        if (!buttonPressedState) {
+            log("Button %d wasn't pressed during power on - factory reset not possible", buttonIndex);
+            return false;
+        }
+        
+        bool held = buttonAdapter->wasButtonHeld(buttonIndex, factoryResetDurationMs);
+        log("Button %d factory reset requested (pressed at power on, held for %lu ms): %s", 
+            buttonIndex, factoryResetDurationMs, held ? "true" : "false");
+        return held;
+    }
+    
+    bool isAddModeRequested() override {
+        bool held = buttonAdapter->wasButtonHeld(buttonIndex, addModeDurationMs);
+        log("Button %d add mode requested (held for %lu ms): %s", 
+            buttonIndex, addModeDurationMs, held ? "true" : "false");
+        return held;
+    }
+    
+    void clearSavedButtonState() override {
+        if (settings != nullptr) {
+            settings->setButtonPressedBeforeReboot(0);
+            log("Button %d saved state cleared", buttonIndex);
+        }
+        buttonWasPressedBeforeReboot = false;
     }
 };
 

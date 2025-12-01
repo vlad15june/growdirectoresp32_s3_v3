@@ -61,35 +61,35 @@ protected:
 public:
     virtual ~LoopServiceBase() = default;
     
-    // Common loop implementation that will be called by derived classes
     void loop() override {
-        // Check if button was pressed when on and then held for duration
         if (buttonUseCases && onChangeModuleModeUseCase && moduleConfig) {
-            if (buttonUseCases->isButtonPressedWhenOnThenHeldForDuration()) {
-                log("Button was pressed when on and held for duration - switching to TEST mode");
-                // Request test mode by setting the module config
+            if (buttonUseCases->isTestModeRequested()) {
+                log("Test mode requested - switching to AP_TEST_MODE");
                 moduleConfig->setRequestedModuleMode(ModuleModeEnum::AP_TEST_MODE);
+            }
+            else if (buttonUseCases->isFactoryResetRequested()) {
+                log("Factory reset requested - switching to USER_CAN_CONFIGURE mode");
+                moduleConfig->setRequestedModuleMode(ModuleModeEnum::USER_CAN_CONFIGURE);
+            }
+            else if (buttonUseCases->isAddModeRequested()) {
+                log("Add mode requested - switching to USER_CAN_RE_CONFIGURE mode");
+                moduleConfig->setRequestedModuleMode(ModuleModeEnum::USER_CAN_RE_CONFIGURE);
             }
         }
                 
-        // Check module mode changes
         if (onChangeModuleModeUseCase) {
             onChangeModuleModeUseCase->loop();
         }
         
-        // Call specific implementation for this mode
         executeLoopImplementation();
         
-        // Handle LED updates
         if (ledUseCases) {
             ledUseCases->loop();
         }
     }
     
-    // This is what derived classes will implement
     virtual void executeLoopImplementation() = 0;
     
-    // Separate setters for each use case
     virtual void setLedUseCases(ILedUseCases* ledUC) {
         this->ledUseCases = ledUC;
     }

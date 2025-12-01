@@ -27,6 +27,7 @@ private:
         _byteValues["sensorDoOrpType"] = 0;
         _byteValues["keyTestMode"] = 0;
         _byteValues["tempCoefVersion"] = 0;
+        _byteValues["buttonPressedBeforeReboot"] = 0;
 
         // Set default sensor types
         for (int i = 0; i < 4; i++)
@@ -286,7 +287,18 @@ public:
         _byteValues["tempCoefVersion"] = versionNumber;
     }
 
-    // Reset all values to defaults
+    // Button state persistence for test mode
+    uint8_t getButtonPressedBeforeReboot() override
+    {
+        return _byteValues["buttonPressedBeforeReboot"];
+    }
+
+    void setButtonPressedBeforeReboot(uint8_t wasPressed) override
+    {
+        _byteValues["buttonPressedBeforeReboot"] = wasPressed;
+    }
+
+    // Reset method to reset all values to defaults
     void reset()
     {
         initDefaults();

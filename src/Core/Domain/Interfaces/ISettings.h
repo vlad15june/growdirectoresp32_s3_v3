@@ -69,7 +69,10 @@ public:
     virtual uint8_t getKeyTestMode() = 0;
     virtual void setKeyTestMode(uint8_t isApTestKey) = 0;
     virtual uint8_t getTempCoefVersion() = 0;
-    virtual void setTempCoefVersion(uint8_t versionNumber) = 0;    
+    virtual void setTempCoefVersion(uint8_t versionNumber) = 0;
+    
+    virtual uint8_t getButtonPressedBeforeReboot() = 0;
+    virtual void setButtonPressedBeforeReboot(uint8_t wasPressed) = 0;
 };
 
 // Default implementation of destructor

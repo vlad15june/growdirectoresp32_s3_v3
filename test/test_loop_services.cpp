@@ -116,7 +116,11 @@ static void test_loop_service_base_functionality(void) {
     
     TEST_ASSERT_TRUE(g_mockModuleModeUseCase->loopCalled);
     TEST_ASSERT_TRUE(g_mockLedUseCases->loopCalled);
-    TEST_ASSERT_TRUE(g_mockButtonUseCases->isButtonPressedWhenOnThenHeldForDurationCalled);
+    // Check that button methods were called (at least one of the new methods)
+    bool buttonMethodCalled = g_mockButtonUseCases->isTestModeRequestedCalled || 
+                              g_mockButtonUseCases->isFactoryResetRequestedCalled ||
+                              g_mockButtonUseCases->isAddModeRequestedCalled;
+    TEST_ASSERT_TRUE(buttonMethodCalled);
     TEST_ASSERT_TRUE(g_mockOnChangeLocalIpUseCase->performCalled);
     TEST_ASSERT_TRUE(g_mockMqttManager->loopCalled);
     
@@ -137,7 +141,7 @@ static void test_button_long_press_changes_mode(void) {
     service.setOnChangeLocalIpUseCase(g_mockOnChangeLocalIpUseCase);
     service.setMqttManager(g_mockMqttManager);
     
-    g_mockButtonUseCases->buttonPressedThenHeldResult = true;
+    g_mockButtonUseCases->testModeRequestedResult = true;
     
     service.loop();
     

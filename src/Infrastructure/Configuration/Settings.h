@@ -40,6 +40,7 @@ private:
     static const int EEPROM_ADDRES_UPDATE_STATUS = 380;
     static const int EEPROM_ADDRES_UPDATE_LINK = 382;
     static const int EEPROM_ADDRES_MODULE_COMMAND_UID = 500;
+    static const int EEPROM_BUTTON_PRESSED_BEFORE_REBOOT = 550;
 
     void log(const char *format, ...)
     {
@@ -323,6 +324,17 @@ public:
     void setTempCoefVersion(uint8_t versionNumber)
     {
         _eeprom.writeByte(EEPROM_TEMP_COEF_VERSION, versionNumber);
+        _eeprom.commit();
+    }
+
+    uint8_t getButtonPressedBeforeReboot() override
+    {
+        return _eeprom.readByte(EEPROM_BUTTON_PRESSED_BEFORE_REBOOT);
+    }
+
+    void setButtonPressedBeforeReboot(uint8_t wasPressed) override
+    {
+        _eeprom.writeByte(EEPROM_BUTTON_PRESSED_BEFORE_REBOOT, wasPressed);
         _eeprom.commit();
     }
 };

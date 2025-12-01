@@ -414,7 +414,8 @@ void test_rest_only_methods() {
     commandUpdate.uid = "test-module-uid";
     commandUpdate.status = "completed";
     commandUpdate.errorMessage = "";
-    result = g_hybridApiService->sendModuleCommandExecutionResult(commandUpdate);
+    std::vector<ModuleCommandUpdateDto> commandUpdates = {commandUpdate};
+    result = g_hybridApiService->sendModuleCommandExecutionResult(commandUpdates);
     TEST_ASSERT_TRUE(result);
     TEST_ASSERT_TRUE(g_mockRestApi.sendModuleCommandExecutionResultCalled);
 
@@ -424,7 +425,8 @@ void test_rest_only_methods() {
     commandUpdate2.uid = "test-module-uid";
     commandUpdate2.status = "failed";
     commandUpdate2.errorMessage = "Test execution failed";
-    result = g_hybridApiService->sendModuleCommandExecutionResult(commandUpdate2);
+    std::vector<ModuleCommandUpdateDto> commandUpdates2 = {commandUpdate2};
+    result = g_hybridApiService->sendModuleCommandExecutionResult(commandUpdates2);
     TEST_ASSERT_FALSE(result);
     TEST_ASSERT_TRUE(g_mockRestApi.sendModuleCommandExecutionResultCalled);
 
