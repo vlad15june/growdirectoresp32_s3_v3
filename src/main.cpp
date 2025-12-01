@@ -7,6 +7,7 @@
 #include <PubSubClient.h>
 #include <T67XX.h>
 #include "globals.h"
+#include "Infrastructure/Adapters/ExternalWDT/ExternalWDT.h"
 
 // Global loop service instance
 std::unique_ptr<ILoopService> loopService;
@@ -264,6 +265,17 @@ void setup()
   Serial.println("System initialized.");
   Serial.print("Free heap: ");
   Serial.println(ESP.getFreeHeap());
+
+  // Initialize and start External WDT (BD87A28FVM-TR)
+  ExternalWDT& wdt = ExternalWDT::getInstance();
+  if (wdt.init() == ESP_OK && wdt.enable() == ESP_OK && wdt.startTask() == ESP_OK)
+  {
+    Serial.println("External WDT started");
+  }
+  else
+  {
+    Serial.println("External WDT failed to start");
+  }
 
   // settings.begin();
   // settings.setConfigured(ModuleModeEnum::USER_CAN_CONFIGURE);
