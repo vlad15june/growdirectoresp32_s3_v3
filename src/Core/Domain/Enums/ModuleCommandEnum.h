@@ -12,7 +12,8 @@ enum class ModuleCommandEnum {
     REBOOT,
     PING_PIN,
     SET_SENSOR_MODEL,
-    DELETE_SENSORS
+    DELETE_SENSORS,
+    SCAN_SENSORS
 };
 
 // Utility function to get ModuleCommandEnum from string
@@ -33,6 +34,8 @@ inline ModuleCommandEnum getModuleCommandEnum(const std::string& commandStr) {
         return ModuleCommandEnum::SET_SENSOR_MODEL;
     } else if (commandStr == "deleteSensors") {
         return ModuleCommandEnum::DELETE_SENSORS;
+    } else if (commandStr == "scanSensors") {
+        return ModuleCommandEnum::SCAN_SENSORS;
     }
     return ModuleCommandEnum::UNKNOWN;
 }
@@ -56,6 +59,8 @@ inline const char* getModuleCommandName(ModuleCommandEnum command) {
             return "SetSensorModel";
         case ModuleCommandEnum::DELETE_SENSORS:
             return "deleteSensors";
+        case ModuleCommandEnum::SCAN_SENSORS:
+            return "scanSensors";
         case ModuleCommandEnum::UNKNOWN:
         default:
             return "Unknown";

@@ -174,6 +174,14 @@ public:
                         cmdResult = result.result;
                         break;
                     }
+                    case ModuleCommandEnum::SCAN_SENSORS:
+                    {
+                        auto result = handleScanSensors(moduleCommand);
+                        status = result.status;
+                        errorMessage = result.errorMessage;
+                        cmdResult = result.result;
+                        break;
+                    }
                     case ModuleCommandEnum::UNKNOWN:
                     default:
                         // Keep default error message
@@ -689,6 +697,185 @@ private:
             "ModuleCommandUseCase: Successfully deleted %d sensor(s) from pin %d", 
             sensorsToDelete.size(), pin);
 
+        return {ModuleCommandStatus::DONE, "", result};
+    }
+
+    /**
+     * @brief Handle ScanSensors command - scan pin for connected sensors and return detected sensor info
+     * @param moduleCommand Module command DTO with options
+     * @return CommandExecutionResult with detected sensors info
+     */
+    CommandExecutionResult handleScanSensors(const ModuleCommandDto& moduleCommand)
+    {
+        if (moduleCommand.options.empty())
+        {
+            return {ModuleCommandStatus::ERROR, "Missing options"};
+        }
+
+        log(DebugFeatures::MODULE_COMMAND_DEBUG,
+            "ModuleCommandUseCase: ScanSensors options: %s", moduleCommand.options.c_str());
+
+        int pin = extractJsonIntValue(moduleCommand.options, "pin");
+        if (pin == 0)
+        {
+            return {ModuleCommandStatus::ERROR, "Missing or invalid pin in options"};
+        }
+
+        if (!sensorTypeRepository || !sensorReader || !moduleConfig)
+        {
+            log(DebugFeatures::MODULE_COMMAND_DEBUG,
+                "ModuleCommandUseCase: Sensor services not available for ScanSensors");
+            return {ModuleCommandStatus::ERROR, "Sensor service not available"};
+        }
+
+        log(DebugFeatures::MODULE_COMMAND_DEBUG,
+            "ModuleCommandUseCase: ScanSensors command - scanning pin %d", pin);
+
+        // Get all sensor types for scanning
+        auto allSensorTypes = sensorTypeRepository->getAll();
+        if (allSensorTypes.empty())
+        {
+            log(DebugFeatures::MODULE_COMMAND_DEBUG,
+                "ModuleCommandUseCase: No sensor types available for scanning");
+            return {ModuleCommandStatus::ERROR, "No sensor types available"};
+        }
+
+        ModuleCommandResult result;
+        std::string moduleUid = moduleConfig->getModuleUid();
+
+        // Try to detect sensors on the pin
+        for (const auto &sensorType : allSensorTypes)
+        {
+            // Create temporary sensor entity for testing
+            SensorEntity tempSensor;
+            tempSensor.pin = pin;
+            tempSensor.sensorType = sensorType.name;
+            tempSensor.model = sensorType.name;
+            tempSensor.protocol = sensorType.getProtocolString();
+            tempSensor.sensorTypeUid = sensorType.uid;
+            tempSensor.modbusDeviceAddress = sensorType.modbusDeviceAddress;
+            tempSensor.baudRate = sensorType.baudRate;
+            tempSensor.i2cAddress = sensorType.i2cAddress;
+            tempSensor.chipType = sensorType.chipType;
+            tempSensor.modbusRegisterConfigs = sensorType.modbusRegisterConfig;
+            tempSensor.i2cRegisterConfigs = sensorType.i2cRegisterConfig;
+
+            char pinStr[3];
+            sprintf(pinStr, "%02d", pin);
+            tempSensor.uid = moduleUid + "." + pinStr;
+
+            log(DebugFeatures::MODULE_COMMAND_DEBUG,
+                "ModuleCommandUseCase: Trying sensor type %s on pin %d", sensorType.name.c_str(), pin);
+
+            // Try to scan this sensor at default address
+            if (sensorReader->scanSensor(tempSensor))
+            {
+                log(DebugFeatures::MODULE_COMMAND_DEBUG,
+                    "ModuleCommandUseCase: Found %s sensor on pin %d", sensorType.name.c_str(), pin);
+                
+                // Set sensor status to NEW for auto-detected sensor
+                tempSensor.status = SensorStatusEnum::SENSOR_STATUS_NEW;
+                tempSensor.isActive = true;
+                tempSensor.isError = false;
+                
+                // Save sensor to repository
+                if (sensorRepository)
+                {
+                    if (sensorRepository->createOrUpdateSensor(tempSensor))
+                    {
+                        log(DebugFeatures::MODULE_COMMAND_DEBUG,
+                            "ModuleCommandUseCase: Successfully saved detected sensor %s to repository with NEW status", 
+                            tempSensor.uid.c_str());
+                    }
+                    else
+                    {
+                        log(DebugFeatures::MODULE_COMMAND_DEBUG,
+                            "ModuleCommandUseCase: Failed to save detected sensor %s to repository", 
+                            tempSensor.uid.c_str());
+                    }
+                }
+                
+                // Add detected sensor to result
+                SensorResultDto sensorResult(
+                    tempSensor.uid,
+                    tempSensor.sensorType,
+                    tempSensor.pin,
+                    1, // group
+                    tempSensor.sensorTypeUid
+                );
+                result.sensors.push_back(sensorResult);
+                
+                // Return immediately after finding first sensor
+                log(DebugFeatures::MODULE_COMMAND_DEBUG,
+                    "ModuleCommandUseCase: ScanSensors completed - found sensor %s", 
+                    tempSensor.sensorType.c_str());
+                return {ModuleCommandStatus::DONE, "", result};
+            }
+
+            // For ModBus sensors, scan all addresses in the defined range if not found at default
+            if (sensorType.isModbusSensor())
+            {
+                log(DebugFeatures::MODULE_COMMAND_DEBUG,
+                    "ModuleCommandUseCase: Sensor not found at default address, scanning range 0x%02X-0x%02X", 
+                    MODBUS_ADDRESS_MIN, MODBUS_ADDRESS_MAX);
+                
+                for (int address = MODBUS_ADDRESS_MIN; address <= MODBUS_ADDRESS_MAX; address++)
+                {
+                    tempSensor.modbusDeviceAddress = address;
+                    log(DebugFeatures::MODULE_COMMAND_DEBUG,
+                        "ModuleCommandUseCase: Scanning ModBus address 0x%02X for sensor type %s", 
+                        address, sensorType.name.c_str());
+
+                    if (sensorReader->scanSensor(tempSensor))
+                    {
+                        log(DebugFeatures::MODULE_COMMAND_DEBUG,
+                            "ModuleCommandUseCase: Found %s sensor on pin %d at address 0x%02X", 
+                            sensorType.name.c_str(), pin, address);
+                        
+                        // Set sensor status to NEW for auto-detected sensor
+                        tempSensor.status = SensorStatusEnum::SENSOR_STATUS_NEW;
+                        tempSensor.isActive = true;
+                        tempSensor.isError = false;
+                        
+                        // Save sensor to repository
+                        if (sensorRepository)
+                        {
+                            if (sensorRepository->createOrUpdateSensor(tempSensor))
+                            {
+                                log(DebugFeatures::MODULE_COMMAND_DEBUG,
+                                    "ModuleCommandUseCase: Successfully saved detected sensor %s to repository with NEW status", 
+                                    tempSensor.uid.c_str());
+                            }
+                            else
+                            {
+                                log(DebugFeatures::MODULE_COMMAND_DEBUG,
+                                    "ModuleCommandUseCase: Failed to save detected sensor %s to repository", 
+                                    tempSensor.uid.c_str());
+                            }
+                        }
+                        
+                        // Add detected sensor to result
+                        SensorResultDto sensorResult(
+                            tempSensor.uid,
+                            tempSensor.sensorType,
+                            tempSensor.pin,
+                            1, // group
+                            tempSensor.sensorTypeUid
+                        );
+                        result.sensors.push_back(sensorResult);
+                        
+                        log(DebugFeatures::MODULE_COMMAND_DEBUG,
+                            "ModuleCommandUseCase: ScanSensors completed - found sensor %s at address 0x%02X", 
+                            tempSensor.sensorType.c_str(), address);
+                        return {ModuleCommandStatus::DONE, "", result};
+                    }
+                }
+            }
+        }
+
+        // No sensor detected on this pin
+        log(DebugFeatures::MODULE_COMMAND_DEBUG,
+            "ModuleCommandUseCase: No sensor detected on pin %d", pin);
         return {ModuleCommandStatus::DONE, "", result};
     }
 

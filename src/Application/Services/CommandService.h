@@ -355,7 +355,8 @@ private:
         ModuleCommandEnum command = getModuleCommandEnum(commandName);
         return command == ModuleCommandEnum::UPDATE_FIRMWARE ||
                command == ModuleCommandEnum::PING_PIN ||
-               command == ModuleCommandEnum::SET_SENSOR_MODEL;
+               command == ModuleCommandEnum::SET_SENSOR_MODEL ||
+               command == ModuleCommandEnum::SCAN_SENSORS;
     }
 
     std::vector<ModuleCommandDto> validateAndFilterModuleCommands(
