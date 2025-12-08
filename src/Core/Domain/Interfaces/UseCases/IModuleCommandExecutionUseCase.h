@@ -3,6 +3,7 @@
 #include <string>
 #include <vector>
 #include "Application/DTOs/ModuleCommandDto.h"
+#include "Application/DTOs/ModuleCommandUpdateDto.h"
 
 /**
  * @brief Result of module command execution
@@ -11,9 +12,13 @@ struct ModuleCommandExecutionResult {
     std::string uid;
     std::string status;
     std::string errorMessage;
+    ModuleCommandResult result;
     
     ModuleCommandExecutionResult(const std::string& uid, const std::string& status, const std::string& errorMessage = "")
         : uid(uid), status(status), errorMessage(errorMessage) {}
+        
+    ModuleCommandExecutionResult(const std::string& uid, const std::string& status, const std::string& errorMessage, const ModuleCommandResult& result)
+        : uid(uid), status(status), errorMessage(errorMessage), result(result) {}
 };
 
 /**

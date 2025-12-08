@@ -476,6 +476,7 @@ private:
                     ModuleCommandUpdateDto updateDto;
                     updateDto.uid = result.uid;
                     updateDto.status = result.status;
+                    updateDto.result = result.result;
                     if (timeAdapter)
                     {
                         updateDto.timestamp = timeAdapter->getFormattedTime();
@@ -490,8 +491,8 @@ private:
                     updates.push_back(updateDto);
 
                     log(DebugFeatures::MODULE_COMMAND_DEBUG,
-                        "CommandService: Sent result - uid: %s, status: %s, error: %s",
-                        result.uid.c_str(), result.status.c_str(), result.errorMessage.c_str());
+                        "CommandService: Sent result - uid: %s, status: %s, error: %s, sensors count: %d",
+                        result.uid.c_str(), result.status.c_str(), result.errorMessage.c_str(), result.result.sensors.size());
                 }
                 
                 if (!updates.empty())

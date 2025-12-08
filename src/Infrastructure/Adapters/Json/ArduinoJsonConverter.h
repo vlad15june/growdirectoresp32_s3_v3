@@ -1906,7 +1906,7 @@ public:
 
     std::string moduleCommandUpdateToJson(const ModuleCommandUpdateDto& commandUpdateDto) override
     {
-        DynamicJsonDocument doc(1024);
+        DynamicJsonDocument doc(2048);
 
         doc["uid"] = commandUpdateDto.uid;
         doc["status"] = commandUpdateDto.status;
@@ -1925,6 +1925,23 @@ public:
         {
             doc["accountUid"] = commandUpdateDto.accountUid;
         }
+        
+        // Add result field with sensors array if present
+        if (!commandUpdateDto.result.sensors.empty())
+        {
+            JsonObject resultObj = doc.createNestedObject("result");
+            JsonArray sensorsArray = resultObj.createNestedArray("sensors");
+            
+            for (const auto& sensor : commandUpdateDto.result.sensors)
+            {
+                JsonObject sensorObj = sensorsArray.createNestedObject();
+                sensorObj["uid"] = sensor.uid;
+                sensorObj["type"] = sensor.type;
+                sensorObj["pin"] = sensor.pin;
+                sensorObj["group"] = sensor.group;
+                sensorObj["modelUid"] = sensor.modelUid;
+            }
+        }
 
         std::string output;
         serializeJson(doc, output);
@@ -1933,7 +1950,7 @@ public:
 
     std::string moduleCommandUpdatesToJson(const std::vector<ModuleCommandUpdateDto>& commandUpdates) override
     {
-        DynamicJsonDocument doc(4096);
+        DynamicJsonDocument doc(8192);
         JsonArray array = doc.to<JsonArray>();
 
         for (const auto& commandUpdateDto : commandUpdates)
@@ -1955,6 +1972,23 @@ public:
             if (!commandUpdateDto.accountUid.empty())
             {
                 obj["accountUid"] = commandUpdateDto.accountUid;
+            }
+            
+            // Add result field with sensors array if present
+            if (!commandUpdateDto.result.sensors.empty())
+            {
+                JsonObject resultObj = obj.createNestedObject("result");
+                JsonArray sensorsArray = resultObj.createNestedArray("sensors");
+                
+                for (const auto& sensor : commandUpdateDto.result.sensors)
+                {
+                    JsonObject sensorObj = sensorsArray.createNestedObject();
+                    sensorObj["uid"] = sensor.uid;
+                    sensorObj["type"] = sensor.type;
+                    sensorObj["pin"] = sensor.pin;
+                    sensorObj["group"] = sensor.group;
+                    sensorObj["modelUid"] = sensor.modelUid;
+                }
             }
         }
 

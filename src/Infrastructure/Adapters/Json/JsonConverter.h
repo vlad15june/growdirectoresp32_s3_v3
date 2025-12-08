@@ -1548,6 +1548,25 @@ public:
             oss << ",\"accountUid\":\"" << commandUpdateDto.accountUid << "\"";
         }
         
+        // Add result field with sensors array if present
+        if (!commandUpdateDto.result.sensors.empty())
+        {
+            oss << ",\"result\":{\"sensors\":[";
+            for (size_t i = 0; i < commandUpdateDto.result.sensors.size(); ++i)
+            {
+                if (i > 0) oss << ",";
+                const auto& sensor = commandUpdateDto.result.sensors[i];
+                oss << "{";
+                oss << "\"uid\":\"" << sensor.uid << "\"";
+                oss << ",\"type\":\"" << sensor.type << "\"";
+                oss << ",\"pin\":" << sensor.pin;
+                oss << ",\"group\":" << sensor.group;
+                oss << ",\"modelUid\":\"" << sensor.modelUid << "\"";
+                oss << "}";
+            }
+            oss << "]}";
+        }
+        
         oss << "}";
         return oss.str();
     }
@@ -1579,6 +1598,25 @@ public:
             if (!commandUpdateDto.accountUid.empty())
             {
                 oss << ",\"accountUid\":\"" << commandUpdateDto.accountUid << "\"";
+            }
+            
+            // Add result field with sensors array if present
+            if (!commandUpdateDto.result.sensors.empty())
+            {
+                oss << ",\"result\":{\"sensors\":[";
+                for (size_t j = 0; j < commandUpdateDto.result.sensors.size(); ++j)
+                {
+                    if (j > 0) oss << ",";
+                    const auto& sensor = commandUpdateDto.result.sensors[j];
+                    oss << "{";
+                    oss << "\"uid\":\"" << sensor.uid << "\"";
+                    oss << ",\"type\":\"" << sensor.type << "\"";
+                    oss << ",\"pin\":" << sensor.pin;
+                    oss << ",\"group\":" << sensor.group;
+                    oss << ",\"modelUid\":\"" << sensor.modelUid << "\"";
+                    oss << "}";
+                }
+                oss << "]}";
             }
             
             oss << "}";

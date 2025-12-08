@@ -12,7 +12,7 @@
 #include "Core/Domain/Enums/ModuleCommandEnum.h"
 #include "Core/Domain/Enums/ModuleCommandStatus.h"
 #include "Core/Domain/Enums/SensorStatusEnum.h"
-#include "Infrastructure/Adapters/Time/INTPTimeAdapter.h"
+#include "Infrastructure/Adapters/Time/INTPTimeAdapter.h" //TODO: move to Core/Domain/Interfaces/Adapters/Time/INTPTimeAdapter.h
 #include "constants.h"
 #include <string>
 
@@ -71,6 +71,8 @@ public:
      */
     std::vector<ModuleCommandExecutionResult> executeCommands(const std::vector<ModuleCommandDto>& moduleCommands) override
     {
+        //TODO: bad arch!!! do not use ModuleCommandDto! Create separate Entity for Domain layer
+
         std::vector<ModuleCommandExecutionResult> results;
         
         log(DebugFeatures::MODULE_COMMAND_DEBUG,
@@ -85,6 +87,7 @@ public:
 
             ModuleCommandStatus status = ModuleCommandStatus::ERROR;
             std::string errorMessage = "Unknown command";
+            ModuleCommandResult cmdResult;
             bool isExpired = false;
 
             // Check if command is expired
@@ -155,6 +158,14 @@ public:
                         errorMessage = result.second;
                         break;
                     }
+                    case ModuleCommandEnum::DELETE_SENSORS:
+                    {
+                        auto result = handleDeleteSensors(moduleCommand);
+                        status = result.status;
+                        errorMessage = result.errorMessage;
+                        cmdResult = result.result;
+                        break;
+                    }
                     case ModuleCommandEnum::UNKNOWN:
                     default:
                         // Keep default error message
@@ -168,13 +179,28 @@ public:
                 "ModuleCommandUseCase: Command execution result - command: %s, status: %s, error: %s",
                 moduleCommand.command.c_str(), statusStr.c_str(), errorMessage.c_str());
 
-            results.emplace_back(moduleCommand.uid, statusStr, errorMessage);
+            results.emplace_back(moduleCommand.uid, statusStr, errorMessage, cmdResult);
         }
 
         return results;
     }
 
 private:
+    /**
+     * @brief Helper structure for commands that return results with sensor data
+     */
+    struct CommandExecutionResult {
+        ModuleCommandStatus status;
+        std::string errorMessage;
+        ModuleCommandResult result;
+        
+        CommandExecutionResult(ModuleCommandStatus status, const std::string& errorMessage)
+            : status(status), errorMessage(errorMessage) {}
+            
+        CommandExecutionResult(ModuleCommandStatus status, const std::string& errorMessage, const ModuleCommandResult& result)
+            : status(status), errorMessage(errorMessage), result(result) {}
+    };
+
     /**
      * @brief Handle AddWifi command
      * @param moduleCommand Module command DTO with options
@@ -543,6 +569,119 @@ private:
             targetSensorType->name.c_str(), pin, generatedSensorUid.c_str());
         
         return {ModuleCommandStatus::DONE, ""};
+    }
+
+    /**
+     * @brief Handle DeleteSensors command - delete sensors from a specific pin
+     * @param moduleCommand Module command DTO with options
+     * @return CommandExecutionResult with deleted sensors info
+     */
+    CommandExecutionResult handleDeleteSensors(const ModuleCommandDto& moduleCommand)
+    {
+        if (moduleCommand.options.empty())
+        {
+            return {ModuleCommandStatus::ERROR, "Missing options"};
+        }
+
+        log(DebugFeatures::MODULE_COMMAND_DEBUG,
+            "ModuleCommandUseCase: DeleteSensors options: %s", moduleCommand.options.c_str());
+
+        int pin = extractJsonIntValue(moduleCommand.options, "pin");
+        if (pin == 0)
+        {
+            return {ModuleCommandStatus::ERROR, "Missing or invalid pin in options"};
+        }
+
+        if (!sensorRepository || !moduleConfig)
+        {
+            log(DebugFeatures::MODULE_COMMAND_DEBUG,
+                "ModuleCommandUseCase: Sensor repository or module config not available for DeleteSensors");
+            return {ModuleCommandStatus::ERROR, "Sensor service not available"};
+        }
+
+        log(DebugFeatures::MODULE_COMMAND_DEBUG,
+            "ModuleCommandUseCase: DeleteSensors command - deleting sensors from pin %d", pin);
+
+        // Get all sensors and find those on the specified pin
+        std::vector<SensorEntity> allSensors = sensorRepository->getAll();
+        std::vector<SensorEntity> sensorsToDelete;
+        
+        for (const auto& sensor : allSensors)
+        {
+            if (sensor.pin == pin)
+            {
+                sensorsToDelete.push_back(sensor);
+            }
+        }
+
+        // Prepare result with sensor information before deletion
+        ModuleCommandResult result;
+        for (const auto& sensor : sensorsToDelete)
+        {
+            // Extract group from sensor UID (format: MAC.group.pin)
+            int group = 0;
+            size_t firstDot = sensor.uid.find('.');
+            if (firstDot != std::string::npos)
+            {
+                size_t secondDot = sensor.uid.find('.', firstDot + 1);
+                if (secondDot != std::string::npos)
+                {
+                    std::string groupStr = sensor.uid.substr(firstDot + 1, secondDot - firstDot - 1);
+                    try {
+                        group = std::stoi(groupStr);
+                    } catch (...) {
+                        group = 0;
+                    }
+                }
+            }
+            
+            SensorResultDto sensorResult(
+                sensor.uid,
+                sensor.sensorType,
+                sensor.pin,
+                group,
+                sensor.sensorTypeUid
+            );
+            result.sensors.push_back(sensorResult);
+        }
+
+        // If no sensors found on this pin, return success with empty result
+        if (sensorsToDelete.empty())
+        {
+            log(DebugFeatures::MODULE_COMMAND_DEBUG,
+                "ModuleCommandUseCase: No sensors found on pin %d", pin);
+            return {ModuleCommandStatus::DONE, "", result};
+        }
+
+        log(DebugFeatures::MODULE_COMMAND_DEBUG,
+            "ModuleCommandUseCase: Found %d sensor(s) on pin %d to delete", 
+            sensorsToDelete.size(), pin);
+
+        // Delete each sensor
+        bool allDeleted = true;
+        for (const auto& sensor : sensorsToDelete)
+        {
+            log(DebugFeatures::MODULE_COMMAND_DEBUG,
+                "ModuleCommandUseCase: Deleting sensor %s from pin %d", 
+                sensor.uid.c_str(), pin);
+                
+            if (!sensorRepository->remove(sensor.uid.c_str()))
+            {
+                logError("ModuleCommandUseCase: Failed to delete sensor %s", sensor.uid.c_str());
+                allDeleted = false;
+            }
+        }
+
+        if (!allDeleted)
+        {
+            return {ModuleCommandStatus::ERROR, "Failed to delete some sensors"};
+        }
+
+        log(DebugFeatures::MODULE_COMMAND_DEBUG,
+            "ModuleCommandUseCase: Successfully deleted %d sensor(s) from pin %d", 
+            sensorsToDelete.size(), pin);
+
+        return {ModuleCommandStatus::DONE, "", result};
     }
 
     /**
