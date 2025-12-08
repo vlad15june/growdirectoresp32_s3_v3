@@ -28,6 +28,7 @@ private:
         _byteValues["keyTestMode"] = 0;
         _byteValues["tempCoefVersion"] = 0;
         _byteValues["buttonPressedBeforeReboot"] = 0;
+        _byteValues["noScanSensors"] = 0;
 
         // Set default sensor types
         for (int i = 0; i < 4; i++)
@@ -296,6 +297,16 @@ public:
     void setButtonPressedBeforeReboot(uint8_t wasPressed) override
     {
         _byteValues["buttonPressedBeforeReboot"] = wasPressed;
+    }
+
+    uint8_t getNoScanSensors() override
+    {
+        return _byteValues["noScanSensors"];
+    }
+
+    void setNoScanSensors(uint8_t noScan) override
+    {
+        _byteValues["noScanSensors"] = noScan;
     }
 
     // Reset method to reset all values to defaults

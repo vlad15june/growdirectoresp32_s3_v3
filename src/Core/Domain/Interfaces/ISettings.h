@@ -73,6 +73,10 @@ public:
     
     virtual uint8_t getButtonPressedBeforeReboot() = 0;
     virtual void setButtonPressedBeforeReboot(uint8_t wasPressed) = 0;
+    
+    // No scan sensors flag methods
+    virtual uint8_t getNoScanSensors() = 0;
+    virtual void setNoScanSensors(uint8_t noScan) = 0;
 };
 
 // Default implementation of destructor

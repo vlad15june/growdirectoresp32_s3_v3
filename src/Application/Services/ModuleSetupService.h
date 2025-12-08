@@ -1583,8 +1583,20 @@ inline void ModuleSetupService::processSensorsFromRepository(Node &node)
         mqttManager->loop(); // NOTE: not good solution - Keep MQTT responsive during potentially long operations
     }
 
-    // Scan empty pins for additional sensors
-    scanEmptyPinsForSensors(node, sensorEntities);
+    // Check if sensor scanning should be skipped
+    ISettings *settings = moduleConfig->getSettings();
+    bool skipSensorScan = settings && settings->getNoScanSensors();
+    
+    if (skipSensorScan)
+    {
+        log("SETUP: Skipping sensor scanning on empty pins (noScanSensors flag is set)");
+        settings->setNoScanSensors(false); // Reset flag after use
+    }
+    else
+    {
+        // Scan empty pins for additional sensors
+        scanEmptyPinsForSensors(node, sensorEntities);
+    }
 }
 
 inline void ModuleSetupService::handleModbusAddressManagement(Node &node)

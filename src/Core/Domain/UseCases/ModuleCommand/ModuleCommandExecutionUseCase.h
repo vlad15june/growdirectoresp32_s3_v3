@@ -58,7 +58,15 @@ public:
             case ModuleCommandEnum::BLINKING_STOP:
                 return handleBlinkingStop("", options);
             case ModuleCommandEnum::REBOOT:
-                return handleReboot();
+            {
+                // Create a ModuleCommandDto for reboot with options
+                ModuleCommandDto moduleCommand;
+                moduleCommand.command = command;
+                moduleCommand.options = options;
+                moduleCommand.uid = commandUid;
+                moduleCommand.createdAt = createdAt;
+                return handleReboot(moduleCommand);
+            }
             default:
                 return false;
         }
@@ -139,7 +147,7 @@ public:
                     }
                     case ModuleCommandEnum::REBOOT:
                     {
-                        bool success = handleReboot();
+                        bool success = handleReboot(moduleCommand);
                         status = success ? ModuleCommandStatus::DONE : ModuleCommandStatus::ERROR;
                         errorMessage = success ? "" : "Reboot command failed";
                         break;
@@ -686,14 +694,30 @@ private:
 
     /**
      * @brief Handle Reboot command
+     * @param moduleCommand Module command DTO with options (may contain noScanSensors flag)
      * @return true if command was executed successfully, false otherwise
      */
-    bool handleReboot()
+    bool handleReboot(const ModuleCommandDto& moduleCommand)
     {
         if (!arduinoAdapter)
         {
             logError("ModuleCommandUseCase: Arduino adapter not available for reboot");
             return false;
+        }
+        
+        // Check for noScanSensors flag in options
+        if (!moduleCommand.options.empty() && settings)
+        {
+            std::string noScanValue = extractJsonValue(moduleCommand.options, "noScanSensors");
+            if (!noScanValue.empty())
+            {
+                // Parse boolean value (accepts "true", "1", or true)
+                bool noScan = (noScanValue == "true" || noScanValue == "1");
+                settings->setNoScanSensors(noScan ? 1 : 0);
+                
+                log(DebugFeatures::MODULE_COMMAND_DEBUG,
+                    "ModuleCommandUseCase: Set noScanSensors flag to %d", noScan ? 1 : 0);
+            }
         }
         
         log(DebugFeatures::MODULE_COMMAND_DEBUG,
