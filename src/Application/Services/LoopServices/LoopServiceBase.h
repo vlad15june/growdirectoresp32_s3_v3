@@ -5,6 +5,7 @@
 #include "Core/Domain/Interfaces/UseCases/ILedUseCases.h"
 #include "Core/Domain/Interfaces/UseCases/IButtonUseCases.h"
 #include "Core/Domain/Interfaces/UseCases/IOnChangeModuleModeUseCase.h"
+#include "Application/Interfaces/IClearModuleDataService.h"
 #include "Core/Domain/Interfaces/ILogger.h"
 #include "Core/Domain/Interfaces/IDebugSystem.h"
 #include "Core/Domain/Interfaces/IModuleConfig.h"
@@ -24,6 +25,7 @@ protected:
     IModuleConfig* moduleConfig;
     IArduinoAdapter* arduinoAdapter;
     IBoardTest* boardTest;
+    IClearModuleDataService* clearModuleDataService;
     
     LoopServiceBase(
         ILedUseCases* ledUseCases = nullptr,
@@ -34,7 +36,8 @@ protected:
         IWebServerLooper* webServer = nullptr,
         IModuleConfig* moduleConfig = nullptr,
         IArduinoAdapter* arduinoAdapter = nullptr,
-        IBoardTest* boardTest = nullptr
+        IBoardTest* boardTest = nullptr,
+        IClearModuleDataService* clearModuleDataService = nullptr
     ) : ledUseCases(ledUseCases),
         buttonUseCases(buttonUseCases),
         onChangeModuleModeUseCase(moduleModeUseCase),
@@ -43,7 +46,8 @@ protected:
         webServer(webServer),
         moduleConfig(moduleConfig),
         arduinoAdapter(arduinoAdapter),
-        boardTest(boardTest) {}
+        boardTest(boardTest),
+        clearModuleDataService(clearModuleDataService) {}
     
     void log(const char* format, ...) {
         if (logger != nullptr && debugSystem != nullptr && 
@@ -69,6 +73,10 @@ public:
             }
             else if (buttonUseCases->isFactoryResetRequested()) {
                 log("Factory reset requested - switching to USER_CAN_CONFIGURE mode");
+                if (clearModuleDataService) {
+                    clearModuleDataService->clearAllData();
+                    log("Module data cleared");
+                }
                 moduleConfig->setRequestedModuleMode(ModuleModeEnum::USER_CAN_CONFIGURE);
             }
             else if (buttonUseCases->isAddModeRequested()) {
@@ -126,6 +134,11 @@ public:
     // Method to set board test
     virtual void setBoardTest(IBoardTest* test) {
         this->boardTest = test;
+    }
+    
+    // Method to set clear module data service
+    virtual void setClearModuleDataService(IClearModuleDataService* service) {
+        this->clearModuleDataService = service;
     }
 };
 

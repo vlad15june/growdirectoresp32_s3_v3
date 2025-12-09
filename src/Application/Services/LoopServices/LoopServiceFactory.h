@@ -6,6 +6,7 @@
 #include "LoopServiceReConfigure.h"
 #include "LoopServiceTestMode.h"
 #include "LoopServiceConfigureDone.h"
+#include "Application/Interfaces/IClearModuleDataService.h"
 #include "Core/Domain/Interfaces/UseCases/ILedUseCases.h"
 #include "Core/Domain/Interfaces/UseCases/IButtonUseCases.h"
 #include "Core/Domain/Interfaces/UseCases/IOnChangeModuleModeUseCase.h"
@@ -37,6 +38,7 @@ private:
     IDeviceService* deviceService;
     ISensorService* sensorService;
     IRuleService* ruleService;
+    IClearModuleDataService* clearModuleDataService;
 
 public:
     LoopServiceFactory(
@@ -54,7 +56,8 @@ public:
         IDeviceService* deviceService = nullptr,
         ISensorService* sensorService = nullptr,
         IRuleService* ruleService = nullptr,
-        IWebServerLooper* webTestModeServer = nullptr
+        IWebServerLooper* webTestModeServer = nullptr,
+        IClearModuleDataService* clearModuleDataService = nullptr
     ) : ledUseCases(ledUseCases),
         buttonUseCases(buttonUseCases),
         moduleModeUseCase(moduleModeUseCase),
@@ -69,7 +72,8 @@ public:
         deviceService(deviceService),
         sensorService(sensorService),
         ruleService(ruleService),
-        webTestModeServer(webTestModeServer) {}
+        webTestModeServer(webTestModeServer),
+        clearModuleDataService(clearModuleDataService) {}
     
     ~LoopServiceFactory() override = default;
 
@@ -114,6 +118,7 @@ public:
         service->setLogging(logger, debugSystem);
         service->setModuleConfig(moduleConfig);
         service->setArduinoAdapter(arduinoAdapter);
+        service->setClearModuleDataService(clearModuleDataService);
         
         return service;
     }
@@ -151,6 +156,11 @@ public:
     // Setter for WebTestModeServer
     void setWebTestModeServer(IWebServerLooper* server) {
         this->webTestModeServer = server;
+    }
+    
+    // Setter for ClearModuleDataService
+    void setClearModuleDataService(IClearModuleDataService* service) {
+        this->clearModuleDataService = service;
     }
 };
 

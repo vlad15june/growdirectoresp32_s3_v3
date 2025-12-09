@@ -79,6 +79,7 @@
 #include "Application/Services/Sensors/ISensorService.h"
 #include "Application/Services/Sensors/SensorService.h"
 #include "Application/Services/Rules/RuleService.h"
+#include "Application/Services/ClearModuleDataService.h"
 
 #include "Infrastructure/Adapters/Sensors/SensorReader.h"
 #include "Infrastructure/Adapters/Sensors/HardwareSensors/AnalogSensors/AnalogSensorReader.h"
@@ -176,6 +177,8 @@ SensorRepository sensorRepository(&sensorDao, &debugSystem, &mqttLogger);
 
 SpiffsSensorTypeDao sensorTypeDao(&spiffsAdapter, &jsonConverter, &debugSystem, &mqttLogger);
 SensorTypeRepository sensorTypeRepository(&sensorTypeDao);
+
+ClearModuleDataService clearModuleDataService(&ruleDao, &sensorDao, &sensorTypeDao, &mqttLogger, &debugSystem);
 
 HardwareSerial RS485_1(1);
 HardwareSerial RS485_2(2);
@@ -373,7 +376,8 @@ LoopServiceFactory loopServiceFactory(
     &deviceService,
     &sensorService,
     &ruleService,
-    &testModeWebServer);
+    &testModeWebServer,
+    &clearModuleDataService);
 
 ModuleSetupService moduleSetupService(
     &mqttLogger,
