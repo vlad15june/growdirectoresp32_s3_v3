@@ -11,6 +11,8 @@
 #include "Core/Domain/Interfaces/Adapters/IArduinoAdapter.h"
 #include "Core/Domain/Interfaces/Mqtt/IMqttManager.h"
 #include "Infrastructure/Adapters/Time/INTPTimeAdapter.h"
+#include "Core/Domain/Enums/BootTypeEnum.h"
+#include "Core/Domain/Enums/ModuleModeEnum.h"
 
 // Replace defines with enum
 enum DiagnosticsNetworkState {
@@ -40,6 +42,11 @@ private:
     static const int MAX_FAILS_HISTORY = 60; // Store last 60 minutes
     unsigned long _failsHistory[MAX_FAILS_HISTORY];
     int _failsHistoryIndex;
+
+    // MQTT disconnection tracking
+    unsigned long _mqttLastDisconnectedTime;
+    bool _mqttWasConnected;
+    static const unsigned long MQTT_DISCONNECT_THRESHOLD_MS = 10 * 60 * 1000; // 10 minutes in milliseconds
 
     unsigned long calculateFailsInHour()
     {
@@ -86,6 +93,77 @@ private:
         log("DIAG: Board state recorded");
     }
 
+    // Check MQTT connection and trigger restart if disconnected for too long
+    void checkMqttConnectionAndTriggerRestart()
+    {
+        if (_mqttManager == nullptr || _arduinoAdapter == nullptr)
+        {
+            return;
+        }
+
+        bool currentlyConnected = _mqttManager->isConnected();
+        unsigned long currentTime = _arduinoAdapter->millis();
+
+        if (!currentlyConnected)
+        {
+            // MQTT is disconnected
+            if (_mqttWasConnected)
+            {
+                // Just disconnected, start tracking
+                _mqttLastDisconnectedTime = currentTime;
+                _mqttWasConnected = false;
+                log("DIAG: MQTT disconnected, starting timer");
+            }
+            else if (_mqttLastDisconnectedTime > 0)
+            {
+                // Already disconnected, check if threshold exceeded
+                unsigned long disconnectDuration = currentTime - _mqttLastDisconnectedTime;
+                
+                if (disconnectDuration >= MQTT_DISCONNECT_THRESHOLD_MS)
+                {
+                    log("DIAG: MQTT disconnected for %lu ms (>10 min), triggering module restart", disconnectDuration);
+                    
+                    // Get settings and moduleConfig to trigger restart
+                    ISettings *settings = _moduleConfig ? _moduleConfig->getSettings() : nullptr;
+                    
+                    if (settings != nullptr && _moduleConfig != nullptr)
+                    {
+                        // Set no scan sensors flag
+                        settings->setNoScanSensors(1);
+                        
+                        // Set boot type to technical
+                        settings->setBootType(BOOT_TYPE_TECHNICAL);
+                        
+                        // Request module restart
+                        _moduleConfig->setRequestedModuleMode(CONFIGURED_NEED_RESTART);
+                        
+                        log("DIAG: Module restart triggered due to MQTT disconnection");
+                    }
+                    else
+                    {
+                        log("DIAG: ERROR - Cannot trigger restart, settings or moduleConfig not available");
+                    }
+                    
+                    // Reset timer to avoid repeated restart attempts
+                    _mqttLastDisconnectedTime = currentTime;
+                }
+            }
+        }
+        else
+        {
+            // MQTT is connected
+            if (!_mqttWasConnected && _mqttLastDisconnectedTime > 0)
+            {
+                // Just reconnected
+                unsigned long disconnectDuration = currentTime - _mqttLastDisconnectedTime;
+                log("DIAG: MQTT reconnected after %lu ms", disconnectDuration);
+            }
+            
+            _mqttWasConnected = true;
+            _mqttLastDisconnectedTime = 0; // Reset timer when connected
+        }
+    }
+
 public:
     DiagnosticService(
         IRestAPIService *restApiService,
@@ -109,7 +187,9 @@ public:
           _arduinoAdapter(arduinoAdapter),
           _mqttManager(mqttManager),
           _mqttConnected(false),
-          _failsHistoryIndex(0)
+          _failsHistoryIndex(0),
+          _mqttLastDisconnectedTime(0),
+          _mqttWasConnected(false)
     {
         for (int i = 0; i < MAX_FAILS_HISTORY; i++)
         {
@@ -150,6 +230,9 @@ public:
         {
             _mqttConnected = _mqttManager->isConnected();
         }
+
+        // Track MQTT disconnection time and trigger restart if needed
+        checkMqttConnectionAndTriggerRestart();
 
         // Check and update network state
         if (!_mqttConnected || !wifiConnected)
