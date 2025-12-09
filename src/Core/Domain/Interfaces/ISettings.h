@@ -77,6 +77,10 @@ public:
     // No scan sensors flag methods
     virtual uint8_t getNoScanSensors() = 0;
     virtual void setNoScanSensors(uint8_t noScan) = 0;
+    
+    // Sensor scan performed flag methods
+    virtual uint8_t getWasSensorScanPerformed() = 0;
+    virtual void setWasSensorScanPerformed(uint8_t wasPerformed) = 0;
 };
 
 // Default implementation of destructor

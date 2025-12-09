@@ -1596,6 +1596,13 @@ inline void ModuleSetupService::processSensorsFromRepository(Node &node)
     {
         // Scan empty pins for additional sensors
         scanEmptyPinsForSensors(node, sensorEntities);
+        
+        // Set flag indicating that sensor scan was performed
+        if (settings)
+        {
+            settings->setWasSensorScanPerformed(1);
+            log("SETUP: Sensor scan completed, wasSensorScanPerformed flag set");
+        }
     }
 }
 

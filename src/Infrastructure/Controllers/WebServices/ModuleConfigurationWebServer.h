@@ -291,6 +291,10 @@ public:
             if (settings != nullptr && settings->getIfConfigured() == ModuleModeEnum::USER_CAN_CONFIGURE) {
                 settings->setConfigured(ModuleModeEnum::CONFIGURED_DONE);
                 
+                // Set flag to skip sensor scanning on next reboot for faster startup
+                settings->setNoScanSensors(1);
+                log("Set noScanSensors flag to skip scanning on next reboot");
+                
                 if (moduleConfig != nullptr) {
                     moduleConfig->setRequestedModuleMode(ModuleModeEnum::CONFIGURED_NEED_RESTART);
                 }

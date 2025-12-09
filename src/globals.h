@@ -178,7 +178,7 @@ SensorRepository sensorRepository(&sensorDao, &debugSystem, &mqttLogger);
 SpiffsSensorTypeDao sensorTypeDao(&spiffsAdapter, &jsonConverter, &debugSystem, &mqttLogger);
 SensorTypeRepository sensorTypeRepository(&sensorTypeDao);
 
-ClearModuleDataService clearModuleDataService(&ruleDao, &sensorDao, &sensorTypeDao, &mqttLogger, &debugSystem);
+ClearModuleDataService clearModuleDataService(&ruleDao, &sensorDao, &sensorTypeDao, &mqttLogger, &debugSystem, &settings);
 
 HardwareSerial RS485_1(1);
 HardwareSerial RS485_2(2);

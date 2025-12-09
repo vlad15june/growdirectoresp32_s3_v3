@@ -37,9 +37,12 @@ private:
     const unsigned long SENSOR_READ_INTERVAL = 15000;
     const unsigned long SENSOR_UPDATE_INTERVAL = 15000;
     const unsigned long UDP_SEND_INTERVAL = 15000;
+    const unsigned long REBOOT_DELAY_FOR_SCAN = 5000;
     unsigned long lastSensorReadTime = 0;
     unsigned long lastSensorUpdateTime = 0;
     unsigned long lastUdpSendTime = 0;
+    unsigned long rebootScheduledTime = 0;
+    bool rebootScheduled = false;
     
     std::string generateSensorUid(const SensorEntity& sensor, const std::string& channelName = "") const;
     UpdateDto createSensorUpdateDto();

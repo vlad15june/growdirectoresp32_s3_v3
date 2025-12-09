@@ -7,6 +7,7 @@
 #include "Infrastructure/Adapters/SPIFFS/ISpiffsSensorTypeDao.h"
 #include "Core/Domain/Interfaces/ILogger.h"
 #include "Core/Domain/Interfaces/IDebugSystem.h"
+#include "Core/Domain/Interfaces/ISettings.h"
 #include <stdarg.h>
 #include <vector>
 
@@ -20,6 +21,7 @@ private:
     ISpiffsSensorTypeDao* sensorTypeDao;
     ILogger* logger;
     IDebugSystem* debugSystem;
+    ISettings* settings;
 
     void log(const char *format, ...) {
         if (logger != nullptr && debugSystem != nullptr && 
@@ -40,12 +42,14 @@ public:
         ISpiffsSensorDao* sensorDao,
         ISpiffsSensorTypeDao* sensorTypeDao,
         ILogger* logger = nullptr,
-        IDebugSystem* debugSystem = nullptr
+        IDebugSystem* debugSystem = nullptr,
+        ISettings* settings = nullptr
     ) : ruleDao(ruleDao),
         sensorDao(sensorDao),
         sensorTypeDao(sensorTypeDao),
         logger(logger), 
-        debugSystem(debugSystem) {}
+        debugSystem(debugSystem),
+        settings(settings) {}
     
     ~ClearModuleDataService() override = default;
     
@@ -94,6 +98,14 @@ public:
         } else {
             log("WARNING: ruleDao is null");
             success = false;
+        }
+        
+        // Clear sensor scan performed flag
+        if (settings != nullptr) {
+            settings->setWasSensorScanPerformed(0);
+            log("Cleared wasSensorScanPerformed flag");
+        } else {
+            log("WARNING: settings is null, cannot clear wasSensorScanPerformed flag");
         }
         
         log("Module data clearing completed. Success: %s", success ? "true" : "false");
