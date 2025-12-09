@@ -285,6 +285,7 @@ private:
             log(DebugFeatures::MODULE_COMMAND_DEBUG,
                 "ModuleCommandUseCase: Firmware update completed successfully");
 
+            settings->setNoScanSensors(1);
             settings->setBootType(BOOT_TYPE_FIRMWARE_UPDATE);
             moduleConfig->setRequestedModuleMode(CONFIGURED_NEED_RESTART);
 
