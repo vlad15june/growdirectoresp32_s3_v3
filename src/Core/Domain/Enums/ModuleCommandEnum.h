@@ -32,9 +32,9 @@ inline ModuleCommandEnum getModuleCommandEnum(const std::string& commandStr) {
         return ModuleCommandEnum::PING_PIN;
     } else if (commandStr == "SetSensorModel") {
         return ModuleCommandEnum::SET_SENSOR_MODEL;
-    } else if (commandStr == "deleteSensors") {
+    } else if (commandStr == "DeleteSensors") {
         return ModuleCommandEnum::DELETE_SENSORS;
-    } else if (commandStr == "scanSensors") {
+    } else if (commandStr == "ScanSensors") {
         return ModuleCommandEnum::SCAN_SENSORS;
     }
     return ModuleCommandEnum::UNKNOWN;
@@ -58,9 +58,9 @@ inline const char* getModuleCommandName(ModuleCommandEnum command) {
         case ModuleCommandEnum::SET_SENSOR_MODEL:
             return "SetSensorModel";
         case ModuleCommandEnum::DELETE_SENSORS:
-            return "deleteSensors";
+            return "DeleteSensors";
         case ModuleCommandEnum::SCAN_SENSORS:
-            return "scanSensors";
+            return "ScanSensors";
         case ModuleCommandEnum::UNKNOWN:
         default:
             return "Unknown";
