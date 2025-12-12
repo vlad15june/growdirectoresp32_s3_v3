@@ -384,6 +384,7 @@ ModuleSetupService moduleSetupService(
     &debugSystem,
     &moduleConfig,
     &ledAdapter,
+    &buttonAdapter,
     &ledUseCases,
     &buttonUseCases,
     &wifiAdapter,

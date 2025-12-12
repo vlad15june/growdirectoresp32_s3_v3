@@ -6,6 +6,7 @@
 #include "Core/Domain/Interfaces/IDebugSystem.h"
 #include "Core/Domain/Interfaces/IModuleConfig.h"
 #include "Core/Domain/Interfaces/Adapters/ILedAdapter.h"
+#include "Core/Domain/Interfaces/Adapters/IButtonAdapter.h"
 #include "Core/Domain/Interfaces/Adapters/IWifiAdapter.h"
 #include "Core/Domain/Interfaces/IWifiManager.h"
 #include "Core/Domain/Interfaces/UseCases/ILedUseCases.h"
@@ -46,6 +47,7 @@ private:
     IDebugSystem *debugSystem;
     IModuleConfig *moduleConfig;
     ILedAdapter *ledAdapter;
+    IButtonAdapter *buttonAdapter;
     ILedUseCases *ledUseCases;
     IButtonUseCases *buttonUseCases;
     IWifiAdapter *wifiAdapter;
@@ -68,6 +70,7 @@ private:
 
     bool initializeModuleConfiguration();
     bool setupLeds();
+    bool setupButtons();
     void handleModuleMode();
     void ApTestModeModeConfigure();
     void UserCanConfigModeConfigure();
@@ -131,6 +134,7 @@ public:
         IDebugSystem *debugSystem,
         IModuleConfig *moduleConfig,
         ILedAdapter *ledAdapter = nullptr,
+        IButtonAdapter *buttonAdapter = nullptr,
         ILedUseCases *ledUseCases = nullptr,
         IButtonUseCases *buttonUseCases = nullptr,
         IWifiAdapter *wifiAdapter = nullptr,
@@ -160,6 +164,7 @@ inline ModuleSetupService::ModuleSetupService(
     IDebugSystem *debugSystem,
     IModuleConfig *moduleConfig,
     ILedAdapter *ledAdapter,
+    IButtonAdapter *buttonAdapter,
     ILedUseCases *ledUseCases,
     IButtonUseCases *buttonUseCases,
     IWifiAdapter *wifiAdapter,
@@ -180,6 +185,7 @@ inline ModuleSetupService::ModuleSetupService(
                                debugSystem(debugSystem),
                                moduleConfig(moduleConfig),
                                ledAdapter(ledAdapter),
+                               buttonAdapter(buttonAdapter),
                                ledUseCases(ledUseCases),
                                buttonUseCases(buttonUseCases),
                                wifiAdapter(wifiAdapter),
@@ -249,6 +255,21 @@ inline bool ModuleSetupService::setupLeds()
     {
         log("SETUP: LED[%d] - Green: %d, Red: %d", i, greenLeds[i], redLeds[i]);
     }
+
+    return true;
+}
+
+inline bool ModuleSetupService::setupButtons()
+{
+    if (!buttonAdapter)
+        return false;
+
+    uint8_t buttonPin = moduleConfig->getButtonPin();
+    uint8_t buttonPins[1] = {buttonPin};
+    
+    buttonAdapter->setupModuleButtons(buttonPins, 1);
+
+    log("SETUP: Button initialized on pin: %d", buttonPin);
 
     return true;
 }
@@ -1168,6 +1189,11 @@ inline void ModuleSetupService::setupModule()
     if (!setupLeds())
     {
         log("SETUP: LED setup failed");
+    }
+
+    if (!setupButtons())
+    {
+        log("SETUP: Button setup failed");
     }
 
     if (ledUseCases)
