@@ -6,6 +6,9 @@
 #include "Core/Domain/Interfaces/ILogger.h"
 #include "Core/Domain/Interfaces/IDebugSystem.h"
 #include "Core/Domain/Interfaces/ISettings.h"
+#include "Core/Domain/Interfaces/IModuleConfig.h"
+#include "Core/Domain/Enums/ModuleModeEnum.h"
+#include "Application/Interfaces/IClearModuleDataService.h"
 
 class ButtonUseCases : public IButtonUseCases {
 private:
@@ -13,6 +16,8 @@ private:
     ILogger *logger;
     IDebugSystem *debugSystem;
     ISettings *settings;
+    IModuleConfig* moduleConfig;
+    IClearModuleDataService* clearModuleDataService;
     const uint8_t buttonIndex;
     bool isSystemOn;
     bool buttonPressedState;
@@ -39,9 +44,11 @@ private:
 public:
     ButtonUseCases(IButtonAdapter* adapter, ILogger* loggerInstance = nullptr, 
                   IDebugSystem* debugSystemInstance = nullptr, uint8_t index = 0,
-                  ISettings* settingsInstance = nullptr)
+                  ISettings* settingsInstance = nullptr, IModuleConfig* moduleConfigInstance = nullptr,
+                  IClearModuleDataService* clearModuleDataServiceInstance = nullptr)
         : buttonAdapter(adapter), logger(loggerInstance), debugSystem(debugSystemInstance), 
-          settings(settingsInstance), buttonIndex(index), isSystemOn(false), 
+          settings(settingsInstance), moduleConfig(moduleConfigInstance), 
+          clearModuleDataService(clearModuleDataServiceInstance), buttonIndex(index), isSystemOn(false), 
           buttonPressedState(false), buttonWasPressedBeforeReboot(false), lastPressTime(0) {
         if (settings != nullptr) {
             buttonWasPressedBeforeReboot = settings->getButtonPressedBeforeReboot() != 0;
@@ -139,6 +146,29 @@ public:
             log("Button %d saved state cleared", buttonIndex);
         }
         buttonWasPressedBeforeReboot = false;
+    }
+    
+    void loop() override {
+        if (!moduleConfig) {
+            return;
+        }
+        
+        if (isTestModeRequested()) {
+            log("Test mode requested - switching to AP_TEST_MODE");
+            moduleConfig->setRequestedModuleMode(ModuleModeEnum::AP_TEST_MODE);
+        }
+        else if (isFactoryResetRequested()) {
+            log("Factory reset requested - switching to USER_CAN_CONFIGURE mode");
+            if (clearModuleDataService) {
+                clearModuleDataService->clearAllData();
+                log("Module data cleared");
+            }
+            moduleConfig->setRequestedModuleMode(ModuleModeEnum::USER_CAN_CONFIGURE);
+        }
+        else if (isAddModeRequested()) {
+            log("Add mode requested - switching to USER_CAN_RE_CONFIGURE mode");
+            moduleConfig->setRequestedModuleMode(ModuleModeEnum::USER_CAN_RE_CONFIGURE);
+        }
     }
 };
 

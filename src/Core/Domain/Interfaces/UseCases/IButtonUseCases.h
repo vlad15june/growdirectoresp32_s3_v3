@@ -15,6 +15,7 @@ public:
     virtual bool isFactoryResetRequested() = 0;
     virtual bool isAddModeRequested() = 0;
     virtual void clearSavedButtonState() = 0;
+    virtual void loop() = 0;
 };
 
 #endif // I_BUTTON_USE_CASES_H

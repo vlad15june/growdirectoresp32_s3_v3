@@ -66,23 +66,8 @@ public:
     virtual ~LoopServiceBase() = default;
     
     void loop() override {
-        if (buttonUseCases && onChangeModuleModeUseCase && moduleConfig) {
-            if (buttonUseCases->isTestModeRequested()) {
-                log("Test mode requested - switching to AP_TEST_MODE");
-                moduleConfig->setRequestedModuleMode(ModuleModeEnum::AP_TEST_MODE);
-            }
-            else if (buttonUseCases->isFactoryResetRequested()) {
-                log("Factory reset requested - switching to USER_CAN_CONFIGURE mode");
-                if (clearModuleDataService) {
-                    clearModuleDataService->clearAllData();
-                    log("Module data cleared");
-                }
-                moduleConfig->setRequestedModuleMode(ModuleModeEnum::USER_CAN_CONFIGURE);
-            }
-            else if (buttonUseCases->isAddModeRequested()) {
-                log("Add mode requested - switching to USER_CAN_RE_CONFIGURE mode");
-                moduleConfig->setRequestedModuleMode(ModuleModeEnum::USER_CAN_RE_CONFIGURE);
-            }
+        if (buttonUseCases) {
+            buttonUseCases->loop();
         }
                 
         if (onChangeModuleModeUseCase) {

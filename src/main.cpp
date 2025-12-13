@@ -14,6 +14,8 @@ std::unique_ptr<ILoopService> loopService;
 
 // MQTT background task handle
 TaskHandle_t mqttTaskHandle = nullptr;
+// Button update task handle
+TaskHandle_t buttonTaskHandle = nullptr;
 
 void mqttTask(void *param)
 {
@@ -29,6 +31,17 @@ void mqttTask(void *param)
       }
     }
     delay(50);
+  }
+}
+
+void buttonUpdateTask(void *param)
+{
+  ButtonAdapter *buttonAdapter = (ButtonAdapter *)param;
+  
+  while (1)
+  {
+    buttonAdapter->updateButtonStates();
+    delay(50); // Update button states every 50ms
   }
 }
 
@@ -308,6 +321,17 @@ void setup()
   );
 
   //TODO: setup background task for led on core 0
+
+  // Start button update task on Core 0
+  xTaskCreatePinnedToCore(
+    buttonUpdateTask,
+    "ButtonUpdate",
+    2048,
+    &buttonAdapter,
+    1,
+    &buttonTaskHandle,
+    0
+  );
 
   // Create loop service according to module mode and module type
   loopService = moduleSetupService.getLoopService();
