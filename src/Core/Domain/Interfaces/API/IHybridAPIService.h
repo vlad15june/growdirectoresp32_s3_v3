@@ -165,4 +165,10 @@ public:
      * @return vector of ModuleCommandDto containing the command details, empty if no commands or error
      */
     virtual std::vector<ModuleCommandDto> getModuleCommand() = 0;
+    
+    /**
+     * Check if module is marked as deleted on the server (REST only)
+     * @return true if module is deleted, false otherwise or on error
+     */
+    virtual bool checkIsModuleDeleted() = 0;
 };

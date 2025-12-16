@@ -195,7 +195,26 @@ ModbusSensorReader modbusSensorReader(modbusPorts, arduinoAdapter, &mqttLogger, 
 
 SensorReader sensorReader(&analogSensorReader, &modbusSensorReader, &arduinoAdapter, &mqttLogger, &debugSystem);
 
-ModuleCommandExecutionUseCase moduleCommandExecutionUseCase(&mqttLogger, &debugSystem, &ntpTimeAdapter, &firmwareRemoteUpdate, &arduinoAdapter, &sensorRepository, &sensorTypeRepository, &sensorReader, &moduleConfig, &settings);
+// API Services - created early so they can be used by use cases
+RestAPIService restApiService(&moduleConfig, &settings, &mqttLogger, &debugSystem, &jsonConverter);
+
+MqttApiService mqttApiService(
+    &mqttManager,
+    &moduleConfig,
+    &jsonConverter,
+    &mqttLogger,
+    &debugSystem);
+
+HybridAPIService hybridApiService(
+    &restApiService,
+    &mqttApiService,
+    &moduleConfig,
+    &mqttLogger,
+    &debugSystem,
+    ApiPriority::BOTH);
+
+// Now we can create ModuleCommandExecutionUseCase with hybridApiService
+ModuleCommandExecutionUseCase moduleCommandExecutionUseCase(&mqttLogger, &debugSystem, &ntpTimeAdapter, &firmwareRemoteUpdate, &arduinoAdapter, &sensorRepository, &sensorTypeRepository, &sensorReader, &moduleConfig, &settings, &hybridApiService, &clearModuleDataService);
 
 SensorCommandUseCase sensorCommandUseCase(
     &moduleConfig,
@@ -237,22 +256,7 @@ WebServerLauncher webServerLauncher(
     moduleConfigurationWebServer,
     testModeWebServer);
 
-RestAPIService restApiService(&moduleConfig, &settings, &mqttLogger, &debugSystem, &jsonConverter);
-
-MqttApiService mqttApiService(
-    &mqttManager,
-    &moduleConfig,
-    &jsonConverter,
-    &mqttLogger,
-    &debugSystem);
-
-HybridAPIService hybridApiService(
-    &restApiService,
-    &mqttApiService,
-    &moduleConfig,
-    &mqttLogger,
-    &debugSystem,
-    ApiPriority::BOTH);
+// API Services already defined earlier before ModuleCommandExecutionUseCase
 
 CommandService commandService(
     &deviceCommandExecutionUseCase,

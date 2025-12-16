@@ -39,5 +39,6 @@ public:
     bool isDeviceCommand() const { return type == "DeviceCommandNotification"; }
     bool isRuleCommand() const { return type == "RuleCommandNotification"; }
     bool isModuleCommand() const { return type == "ModuleCommandNotification"; }
-    bool isSensorTypeCommand() const { return type == "SensorTypeCommandNotification"; } //TODO: Rename to SensorCommandNotification or delete        
+    bool isSensorTypeCommand() const { return type == "SensorTypeCommandNotification"; } //TODO: Rename to SensorCommandNotification or delete
+    bool isDeleteModuleCommand() const { return type == "DeleteGdCommandNotification"; }
 };

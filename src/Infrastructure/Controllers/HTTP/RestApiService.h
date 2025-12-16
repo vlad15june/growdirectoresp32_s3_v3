@@ -888,6 +888,91 @@ public:
         return sensorTypes;
     }
 
+    bool checkIsModuleDeleted() override
+    {
+        if (init() == false)
+        {
+            log("NET: checkIsModuleDeleted - Initialization failed");
+            return false;
+        }
+
+        const char *url = buildUrl("/api/v1/HardWare/is_deleted");
+        log("NET: Checking if module is deleted at: %s", url);
+
+        if (_httpClient == nullptr)
+        {
+            _httpClient = createNewHttpClient();
+        }
+        else
+        {
+            _httpClient->end();
+        }
+
+        byte tries = 0;
+        int httpResponseCode = 0;
+        std::string responseBody;
+        
+        while (tries < 3 && httpResponseCode != 200)
+        {
+            _httpClient->setTimeout(10000);
+            _httpClient->begin(url);
+            
+            httpResponseCode = _httpClient->GET();
+            
+            if (httpResponseCode > 0)
+            {
+                log("NET: HTTP Response code: %d", httpResponseCode);
+                
+                // Get response body
+                responseBody = _httpClient->getString();
+                log("NET: HTTP Response: %s", responseBody.c_str());
+            }
+            else
+            {
+                log("NET: HTTP Response Error code: %d", httpResponseCode);
+            }
+            
+            _httpClient->end();
+            delay(200);
+            tries++;
+        }
+        
+        if (httpResponseCode == 200 && !responseBody.empty())
+        {
+            // Parse JSON response to extract isDeleted boolean field
+            // Expected format: {"isDeleted": true/false}
+            size_t isDeletedPos = responseBody.find("\"isDeleted\"");
+            if (isDeletedPos != std::string::npos)
+            {
+                size_t truePos = responseBody.find("true", isDeletedPos);
+                size_t falsePos = responseBody.find("false", isDeletedPos);
+                
+                if (truePos != std::string::npos && (falsePos == std::string::npos || truePos < falsePos))
+                {
+                    log("NET: Module is marked as deleted on server");
+                    trackApiSendSuccess();
+                    return true;
+                }
+                else if (falsePos != std::string::npos)
+                {
+                    log("NET: Module is NOT marked as deleted on server");
+                    trackApiSendSuccess();
+                    return false;
+                }
+            }
+            
+            log("NET: Failed to parse isDeleted field from response");
+            trackApiSendFailure();
+            return false;
+        }
+        else
+        {
+            log("NET: Failed to check module deletion status - HTTP code: %d", httpResponseCode);
+            trackApiSendFailure();
+            return false;
+        }
+    }
+
     // Implementations of network diagnostic counter methods
     int getApiSendFails() const override { return _apiSendFails; }
     void resetApiSendFails() override { _apiSendFails = 0; }

@@ -8,6 +8,8 @@
 #include "Core/Domain/Interfaces/Repositories/ISensorRepository.h"
 #include "Core/Domain/Interfaces/Repositories/ISensorTypeRepository.h"
 #include "Core/Domain/Interfaces/Adapters/Sensors/ISensorReader.h"
+#include "Core/Domain/Interfaces/API/IHybridAPIService.h"
+#include "Application/Interfaces/IClearModuleDataService.h"
 #include "Core/Domain/Data/Entities/Sensor/Sensor.h"
 #include "Core/Domain/Enums/ModuleCommandEnum.h"
 #include "Core/Domain/Enums/ModuleCommandStatus.h"
@@ -32,11 +34,13 @@ private:
     ISensorReader *sensorReader;
     IModuleConfig *moduleConfig;
     ISettings *settings;
+    IHybridAPIService *hybridApiService;
+    IClearModuleDataService *clearModuleDataService;
     static const unsigned long commandMaxAgeSeconds = 300;
 
 public:
-    ModuleCommandExecutionUseCase(ILogger *logger = nullptr, IDebugSystem *debugSystem = nullptr, INTPTimeAdapter *timeAdapter = nullptr, IFirmwareRemoteUpdate *firmwareUpdater = nullptr, IArduinoAdapter *arduinoAdapter = nullptr, ISensorRepository *sensorRepository = nullptr, ISensorTypeRepository *sensorTypeRepository = nullptr, ISensorReader *sensorReader = nullptr, IModuleConfig *moduleConfig = nullptr, ISettings *settings = nullptr)
-        : logger(logger), debugSystem(debugSystem), timeAdapter(timeAdapter), firmwareUpdater(firmwareUpdater), arduinoAdapter(arduinoAdapter), sensorRepository(sensorRepository), sensorTypeRepository(sensorTypeRepository), sensorReader(sensorReader), moduleConfig(moduleConfig), settings(settings) {}
+    ModuleCommandExecutionUseCase(ILogger *logger = nullptr, IDebugSystem *debugSystem = nullptr, INTPTimeAdapter *timeAdapter = nullptr, IFirmwareRemoteUpdate *firmwareUpdater = nullptr, IArduinoAdapter *arduinoAdapter = nullptr, ISensorRepository *sensorRepository = nullptr, ISensorTypeRepository *sensorTypeRepository = nullptr, ISensorReader *sensorReader = nullptr, IModuleConfig *moduleConfig = nullptr, ISettings *settings = nullptr, IHybridAPIService *hybridApiService = nullptr, IClearModuleDataService *clearModuleDataService = nullptr)
+        : logger(logger), debugSystem(debugSystem), timeAdapter(timeAdapter), firmwareUpdater(firmwareUpdater), arduinoAdapter(arduinoAdapter), sensorRepository(sensorRepository), sensorTypeRepository(sensorTypeRepository), sensorReader(sensorReader), moduleConfig(moduleConfig), settings(settings), hybridApiService(hybridApiService), clearModuleDataService(clearModuleDataService) {}
     
     virtual ~ModuleCommandExecutionUseCase() = default;
 
@@ -180,6 +184,13 @@ public:
                         status = result.status;
                         errorMessage = result.errorMessage;
                         cmdResult = result.result;
+                        break;
+                    }
+                    case ModuleCommandEnum::DELETE_MODULE:
+                    {
+                        auto result = handleDeleteModule(moduleCommand);
+                        status = result.first;
+                        errorMessage = result.second;
                         break;
                     }
                     case ModuleCommandEnum::UNKNOWN:
@@ -952,6 +963,61 @@ private:
         // TODO: Implement proper timestamp parsing (similar to CommandService)
         // For now, just return true
         return true;
+    }
+
+    /**
+     * @brief Handle DeleteModule command - wipes and resets the module to unconfigured state
+     * @param moduleCommand Module command DTO with options
+     * @return Pair of status and error message
+     */
+    std::pair<ModuleCommandStatus, std::string> handleDeleteModule(const ModuleCommandDto& moduleCommand)
+    {
+        log(DebugFeatures::MODULE_COMMAND_DEBUG,
+            "ModuleCommandUseCase: Processing DeleteModule command - uid: %s", moduleCommand.uid.c_str());
+
+        // Check if hybridApiService is available for verification
+        if (!hybridApiService)
+        {
+            logError("ModuleCommandUseCase: HybridAPIService not available for module deletion verification");
+            return {ModuleCommandStatus::ERROR, "API service not available"};
+        }
+
+        // Verify with server that module is actually marked as deleted
+        log(DebugFeatures::MODULE_COMMAND_DEBUG,
+            "ModuleCommandUseCase: Verifying module deletion status with server");
+        
+        bool isDeleted = hybridApiService->checkIsModuleDeleted();
+        
+        if (!isDeleted)
+        {
+            logError("ModuleCommandUseCase: Server verification failed - module is not marked as deleted");
+            return {ModuleCommandStatus::ERROR, "Module deletion not confirmed by server"};
+        }
+
+        log(DebugFeatures::MODULE_COMMAND_DEBUG,
+            "ModuleCommandUseCase: Server confirmed module deletion - proceeding with factory reset");
+
+        // Check if clearModuleDataService is available
+        if (!clearModuleDataService)
+        {
+            logError("ModuleCommandUseCase: ClearModuleDataService not available");
+            return {ModuleCommandStatus::ERROR, "Clear data service not available"};
+        }
+
+        // Execute factory reset
+        bool clearResult = clearModuleDataService->clearAllData();
+        
+        if (clearResult)
+        {
+            log(DebugFeatures::MODULE_COMMAND_DEBUG,
+                "ModuleCommandUseCase: Factory reset completed successfully - all module data cleared");
+            return {ModuleCommandStatus::DONE, ""};
+        }
+        else
+        {
+            logError("ModuleCommandUseCase: Factory reset failed - could not clear all data");
+            return {ModuleCommandStatus::ERROR, "Failed to clear module data"};
+        }
     }
 
     std::string extractJsonValue(const std::string& json, const std::string& key)

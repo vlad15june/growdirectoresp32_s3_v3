@@ -68,6 +68,10 @@ public:
         {
             return processSensorTypeCommand(command);
         }
+        else if (command.isDeleteModuleCommand())
+        {
+            return processDeleteModuleCommand(command);
+        }
         else
         {
             logError("CommandService: Unknown command type: %s", command.type.c_str());
@@ -596,6 +600,87 @@ private:
             
             return false;
         }
+    }
+
+    bool processDeleteModuleCommand(const CommandDto &command)
+    {
+        log(DebugFeatures::MODULE_COMMAND_DEBUG,
+            "CommandService: Processing delete module command - commandUid: %s, moduleUid: %s",
+            command.commandUid.c_str(), command.growDirectorUid.c_str());
+
+        // Send immediate acknowledgment
+        CommandResultDto acceptedResult("accepted", "DeleteModule");
+        if (hybridApiService)
+        {
+            bool sent = hybridApiService->sendCommandResult(acceptedResult, ApiPriority::MQTT_PREFERRED);
+            log(DebugFeatures::MODULE_COMMAND_DEBUG,
+                "CommandService: Delete command acknowledgment sent - success: %s", sent ? "true" : "false");
+        }
+
+        // Create module command DTO for execution
+        ModuleCommandDto moduleCommand;
+        moduleCommand.command = "DeleteModule";
+        moduleCommand.uid = command.commandUid;
+        moduleCommand.createdAt = command.createdAt;
+        moduleCommand.options = "{}"; // No options needed for delete
+
+        if (!moduleCommandUseCase)
+        {
+            logError("CommandService: ModuleCommandUseCase not available for delete command");
+            
+            CommandResultDto errorResult("error", "DeleteModule", "Module command service not available");
+            if (hybridApiService)
+            {
+                hybridApiService->sendCommandResult(errorResult, ApiPriority::MQTT_PREFERRED);
+            }
+            
+            return false;
+        }
+
+        // Execute the delete command (which includes server verification)
+        std::vector<ModuleCommandDto> commands = {moduleCommand};
+        std::vector<ModuleCommandExecutionResult> results = moduleCommandUseCase->executeCommands(commands);
+        
+        if (results.empty())
+        {
+            logError("CommandService: No result received from delete command execution");
+            
+            CommandResultDto errorResult("error", "DeleteModule", "Command execution failed");
+            if (hybridApiService)
+            {
+                hybridApiService->sendCommandResult(errorResult, ApiPriority::MQTT_PREFERRED);
+            }
+            
+            return false;
+        }
+
+        // Process the result
+        const auto& result = results[0];
+        ModuleCommandStatus status = getModuleCommandStatus(result.status);
+        
+        log(DebugFeatures::MODULE_COMMAND_DEBUG,
+            "CommandService: Delete command execution completed - status: %s, error: %s",
+            result.status.c_str(), result.errorMessage.c_str());
+
+        CommandResultDto finalResult;
+        if (status == ModuleCommandStatus::DONE)
+        {
+            finalResult = CommandResultDto("done", "DeleteModule", "Module successfully deleted and reset");
+            log(DebugFeatures::MODULE_COMMAND_DEBUG,
+                "CommandService: Module deletion and factory reset completed successfully");
+        }
+        else
+        {
+            finalResult = CommandResultDto("error", "DeleteModule", result.errorMessage);
+            logError("CommandService: Module deletion failed - %s", result.errorMessage.c_str());
+        }
+
+        if (hybridApiService)
+        {
+            hybridApiService->sendCommandResult(finalResult, ApiPriority::MQTT_PREFERRED);
+        }
+
+        return (status == ModuleCommandStatus::DONE);
     }
 
 private:

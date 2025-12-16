@@ -66,6 +66,12 @@ public:
      */
     virtual std::vector<ModuleCommandDto> getModuleCommand() = 0;
     
+    /**
+     * @brief Check if module is marked as deleted on the server
+     * @return true if module is deleted, false otherwise or on error
+     */
+    virtual bool checkIsModuleDeleted() = 0;
+    
     // Network diagnostic counter methods - getters and reset methods only
     virtual int getApiSendFails() const = 0;
     virtual void resetApiSendFails() = 0;
