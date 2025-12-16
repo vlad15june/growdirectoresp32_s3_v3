@@ -5,7 +5,7 @@
 #include "Core/Domain/Interfaces/UseCases/ILedUseCases.h"
 #include "Core/Domain/Interfaces/UseCases/IButtonUseCases.h"
 #include "Core/Domain/Interfaces/UseCases/IOnChangeModuleModeUseCase.h"
-#include "Application/Interfaces/IClearModuleDataService.h"
+#include "Core/Domain/Interfaces/IClearModuleDataService.h"
 #include "Core/Domain/Interfaces/ILogger.h"
 #include "Core/Domain/Interfaces/IDebugSystem.h"
 #include "Core/Domain/Interfaces/IModuleConfig.h"

@@ -8,7 +8,7 @@
 #include "Core/Domain/Interfaces/ISettings.h"
 #include "Core/Domain/Interfaces/IModuleConfig.h"
 #include "Core/Domain/Enums/ModuleModeEnum.h"
-#include "Application/Interfaces/IClearModuleDataService.h"
+#include "Core/Domain/Interfaces/IClearModuleDataService.h"
 
 class ButtonUseCases : public IButtonUseCases {
 private:

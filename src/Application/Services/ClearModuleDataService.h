@@ -1,7 +1,7 @@
 #ifndef CLEAR_MODULE_DATA_SERVICE_H
 #define CLEAR_MODULE_DATA_SERVICE_H
 
-#include "Application/Interfaces/IClearModuleDataService.h"
+#include "Core/Domain/Interfaces/IClearModuleDataService.h"
 #include "Infrastructure/Adapters/SPIFFS/ISpiffsRuleDao.h"
 #include "Infrastructure/Adapters/SPIFFS/ISpiffsSensorDao.h"
 #include "Infrastructure/Adapters/SPIFFS/ISpiffsSensorTypeDao.h"

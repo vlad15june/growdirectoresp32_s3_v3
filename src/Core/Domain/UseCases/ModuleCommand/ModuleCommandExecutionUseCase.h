@@ -9,7 +9,7 @@
 #include "Core/Domain/Interfaces/Repositories/ISensorTypeRepository.h"
 #include "Core/Domain/Interfaces/Adapters/Sensors/ISensorReader.h"
 #include "Core/Domain/Interfaces/API/IHybridAPIService.h"
-#include "Application/Interfaces/IClearModuleDataService.h"
+#include "Core/Domain/Interfaces/IClearModuleDataService.h"
 #include "Core/Domain/Data/Entities/Sensor/Sensor.h"
 #include "Core/Domain/Enums/ModuleCommandEnum.h"
 #include "Core/Domain/Enums/ModuleCommandStatus.h"
