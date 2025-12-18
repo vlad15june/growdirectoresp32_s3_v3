@@ -20,7 +20,7 @@
 #define LED_SENSOR_SIZE 1
 
 #define SENSOR_PIN_COUNT 4
-#define BUTTON_PIN 0
+#define BUTTON_PIN 9
 
 #define SENSOR_POWER_1 42
 #define SENSOR_POWER_2 41
