@@ -51,7 +51,7 @@ private:
     IWifiAdapter *wifiAdapter;
     ModuleModeEnum requestedModuleMode;
     ModuleModeEnum currentModuleMode;
-    static constexpr const char* FIRMWARE_VERSION = "2.1.11";
+    static constexpr const char* FIRMWARE_VERSION = "2.1.12";
         
     // LED arrays
     uint8_t* redLeds;
