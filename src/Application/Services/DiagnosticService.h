@@ -48,6 +48,12 @@ private:
     bool _mqttWasConnected;
     static const unsigned long MQTT_DISCONNECT_THRESHOLD_MS = 10 * 60 * 1000; // 10 minutes in milliseconds
 
+    // Full offline state tracking (WiFi down OR (MQTT down AND API down))
+    unsigned long _allOfflineStartTime;
+    bool _wasFullyOffline;
+    static const unsigned long OFFLINE_RESET_THRESHOLD_SENSOR_MS = 15 * 60 * 1000; // 15 minutes for sensor directors
+    static const unsigned long OFFLINE_RESET_THRESHOLD_DEVICE_MS = 4 * 60 * 60 * 1000; // 4 hours for other modules
+
     unsigned long calculateFailsInHour()
     {
         unsigned long totalFails = 0;
@@ -164,6 +170,110 @@ private:
         }
     }
 
+    // Check if module is fully offline and trigger reboot after threshold
+    void checkOfflineStateAndTriggerReboot()
+    {
+        if (_arduinoAdapter == nullptr || _moduleConfig == nullptr)
+        {
+            return;
+        }
+
+        // Check connectivity status
+        bool wifiConnected = (_wifiAdapter != nullptr) ? _wifiAdapter->isConnected() : false;
+        bool mqttConnected = (_mqttManager != nullptr) ? _mqttManager->isConnected() : false;
+        
+        // Check API status
+        const int countOffline = _restApiService ? _restApiService->getCountOffline() : 0;
+        bool apiDisconnected = (countOffline > _maxCountOffline);
+
+        // Module is fully offline if:
+        // - WiFi is down OR
+        // - (MQTT is down AND API is down)
+        bool isFullyOffline = !wifiConnected || (!mqttConnected && apiDisconnected);
+
+        unsigned long currentTime = _arduinoAdapter->millis();
+
+        if (isFullyOffline)
+        {
+            // Module is fully offline
+            if (!_wasFullyOffline)
+            {
+                // Just went offline, start tracking
+                _allOfflineStartTime = currentTime;
+                _wasFullyOffline = true;
+                log("DIAG: Module went fully offline, starting timer (WiFi: %s, MQTT: %s, API: %s)",
+                    wifiConnected ? "connected" : "disconnected",
+                    mqttConnected ? "connected" : "disconnected",
+                    apiDisconnected ? "disconnected" : "connected");
+            }
+            else if (_allOfflineStartTime > 0)
+            {
+                // Already offline, check if threshold exceeded
+                unsigned long offlineDuration = currentTime - _allOfflineStartTime;
+                
+                // Determine module type and select appropriate threshold
+                int moduleType = _moduleConfig->getModuleType();
+                unsigned long threshold;
+                const char* moduleTypeName;
+                
+                if (moduleType == MODULE_TYPE_SENSOR) // sensor_director
+                {
+                    threshold = OFFLINE_RESET_THRESHOLD_SENSOR_MS; // 15 minutes
+                    moduleTypeName = "sensor_director";
+                }
+                else // grow_director, hydro, analog_input, etc.
+                {
+                    threshold = OFFLINE_RESET_THRESHOLD_DEVICE_MS; // 4 hours
+                    moduleTypeName = "device";
+                }
+                
+                if (offlineDuration >= threshold)
+                {
+                    log("DIAG: Module offline for %lu ms (threshold: %lu ms for %s), triggering automatic reboot",
+                        offlineDuration, threshold, moduleTypeName);
+                    
+                    // Get settings to configure reboot
+                    ISettings *settings = _moduleConfig->getSettings();
+                    
+                    if (settings != nullptr)
+                    {
+                        // Set noScanSensors flag to skip sensor scan after reboot
+                        settings->setNoScanSensors(1);
+                        log("DIAG: Set noScanSensors flag for faster recovery");
+                        
+                        // Set boot type to technical
+                        settings->setBootType(BOOT_TYPE_TECHNICAL);
+                        log("DIAG: Set boot type to BOOT_TYPE_TECHNICAL");
+                        
+                        // Request module restart
+                        _moduleConfig->setRequestedModuleMode(CONFIGURED_NEED_RESTART);
+                        log("DIAG: Automatic module restart triggered due to prolonged offline state");
+                    }
+                    else
+                    {
+                        log("DIAG: ERROR - Cannot trigger restart, settings not available");
+                    }
+                    
+                    // Reset timer to avoid repeated restart attempts
+                    _allOfflineStartTime = currentTime;
+                }
+            }
+        }
+        else
+        {
+            // Module is online
+            if (_wasFullyOffline && _allOfflineStartTime > 0)
+            {
+                // Just reconnected
+                unsigned long offlineDuration = currentTime - _allOfflineStartTime;
+                log("DIAG: Module reconnected after %lu ms offline", offlineDuration);
+            }
+            
+            _wasFullyOffline = false;
+            _allOfflineStartTime = 0; // Reset timer when online
+        }
+    }
+
 public:
     DiagnosticService(
         IRestAPIService *restApiService,
@@ -189,7 +299,9 @@ public:
           _mqttConnected(false),
           _failsHistoryIndex(0),
           _mqttLastDisconnectedTime(0),
-          _mqttWasConnected(false)
+          _mqttWasConnected(false),
+          _allOfflineStartTime(0),
+          _wasFullyOffline(false)
     {
         for (int i = 0; i < MAX_FAILS_HISTORY; i++)
         {
@@ -233,6 +345,9 @@ public:
 
         // Track MQTT disconnection time and trigger restart if needed
         checkMqttConnectionAndTriggerRestart();
+
+        // Check for prolonged offline state and trigger automatic reboot if needed
+        checkOfflineStateAndTriggerReboot();
 
         // Check and update network state
         if (!_mqttConnected || !wifiConnected)
