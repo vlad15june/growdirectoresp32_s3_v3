@@ -43,6 +43,7 @@ private:
     static const int EEPROM_BUTTON_PRESSED_BEFORE_REBOOT = 550;
     static const int EEPROM_NO_SCAN_SENSORS = 552;
     static const int EEPROM_WAS_SENSOR_SCAN_PERFORMED = 554;
+    static const int EEPROM_WAS_INITIAL_SYNC_COMPLETED = 556;
 
     void log(const char *format, ...)
     {
@@ -361,6 +362,18 @@ public:
     {
         log("SETTINGS: wasSensorScanPerformed = %d", wasPerformed);
         _eeprom.writeByte(EEPROM_WAS_SENSOR_SCAN_PERFORMED, wasPerformed);
+        _eeprom.commit();
+    }
+    
+    uint8_t getWasInitialSyncCompleted() override
+    {
+        return _eeprom.readByte(EEPROM_WAS_INITIAL_SYNC_COMPLETED);
+    }
+
+    void setWasInitialSyncCompleted(uint8_t wasCompleted) override
+    {
+        log("SETTINGS: wasInitialSyncCompleted = %d", wasCompleted);
+        _eeprom.writeByte(EEPROM_WAS_INITIAL_SYNC_COMPLETED, wasCompleted);
         _eeprom.commit();
     }
 };

@@ -113,6 +113,12 @@ public:
                 if (!sendSuccess) {
                     log("NET: Failed to send structure after 3 attempts, restarting...");
                     _moduleConfig.setRequestedModuleMode(ModuleModeEnum::CONFIGURED_NEED_RESTART);
+                } else {
+                    // Mark initial sync as completed after first successful structure send
+                    if (_moduleConfig.getSettings()->getWasInitialSyncCompleted() == 0) {
+                        _moduleConfig.getSettings()->setWasInitialSyncCompleted(1);
+                        log("OnChangeLocalIpUseCase: Initial sync completed - module registered on server");
+                    }
                 }
 
                 // Sync rules after IP change

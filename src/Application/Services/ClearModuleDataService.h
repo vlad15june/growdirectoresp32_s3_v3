@@ -105,6 +105,9 @@ public:
         if (settings != nullptr) {
             settings->setWasSensorScanPerformed(0);
             log("Cleared wasSensorScanPerformed flag");
+            
+            settings->setWasInitialSyncCompleted(0);
+            log("Cleared wasInitialSyncCompleted flag");
         } else {
             log("WARNING: settings is null, cannot clear wasSensorScanPerformed flag");
         }

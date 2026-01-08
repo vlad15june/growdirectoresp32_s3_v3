@@ -443,6 +443,15 @@ inline void ModuleSetupService::checkModuleDeletionOnStartup()
         return;
     }
 
+    // Skip deletion check on first boot after configuration
+    // Module needs to complete initial sync (send structure to server) first
+    uint8_t wasInitialSyncCompleted = moduleConfig->getSettings()->getWasInitialSyncCompleted();
+    if (wasInitialSyncCompleted == 0)
+    {
+        log("SETUP: Skipping deletion check - first boot after configuration (initial sync not yet completed)");
+        return;
+    }
+
     // Verify all required dependencies are available
     if (!hybridApiService || !clearModuleDataService || !arduinoAdapter)
     {
