@@ -28,6 +28,9 @@
 #include "Core/Domain/Interfaces/Adapters/Json/IJsonConverter.h"
 #include "Core/Domain/Interfaces/BoardTesting/IBoardTest.h"
 #include "Core/Domain/Interfaces/Udp/IUdpManager.h"
+#include "Core/Domain/Interfaces/API/IHybridAPIService.h"
+#include "Core/Domain/Interfaces/IClearModuleDataService.h"
+#include "Core/Domain/Interfaces/Adapters/IArduinoAdapter.h"
 
 class IModuleSetupService
 {
@@ -65,6 +68,9 @@ private:
     IJsonConverter *jsonConverter;
     IBoardTest *boardTest;
     IUdpManager *udpManager;
+    IHybridAPIService *hybridApiService;
+    IClearModuleDataService *clearModuleDataService;
+    IArduinoAdapter *arduinoAdapter;
 
     void log(const char *format, ...);
 
@@ -76,6 +82,7 @@ private:
     void UserCanConfigModeConfigure();
     void UserReConfigModeConfigure();
     void ConfigureDoneModeConfigure();
+    void checkModuleDeletionOnStartup();
     void clearAllFileLog();
     void clearStoreRules();
     void setupAP(bool isTestMode = false);
@@ -151,7 +158,10 @@ public:
         ISpiffsAdapter *spiffsAdapter = nullptr,
         IJsonConverter *jsonConverter = nullptr,
         IBoardTest *boardTest = nullptr,
-        IUdpManager *udpManager = nullptr);
+        IUdpManager *udpManager = nullptr,
+        IHybridAPIService *hybridApiService = nullptr,
+        IClearModuleDataService *clearModuleDataService = nullptr,
+        IArduinoAdapter *arduinoAdapter = nullptr);
 
     void setupModule() override;
     std::unique_ptr<ILoopService> getLoopService() override;
@@ -181,7 +191,10 @@ inline ModuleSetupService::ModuleSetupService(
     ISpiffsAdapter *spiffsAdapter,
     IJsonConverter *jsonConverter,
     IBoardTest *boardTest,
-    IUdpManager *udpManager) : logger(logger),
+    IUdpManager *udpManager,
+    IHybridAPIService *hybridApiService,
+    IClearModuleDataService *clearModuleDataService,
+    IArduinoAdapter *arduinoAdapter) : logger(logger),
                                debugSystem(debugSystem),
                                moduleConfig(moduleConfig),
                                ledAdapter(ledAdapter),
@@ -202,7 +215,10 @@ inline ModuleSetupService::ModuleSetupService(
                                spiffsAdapter(spiffsAdapter),
                                jsonConverter(jsonConverter),
                                boardTest(boardTest),
-                               udpManager(udpManager)
+                               udpManager(udpManager),
+                               hybridApiService(hybridApiService),
+                               clearModuleDataService(clearModuleDataService),
+                               arduinoAdapter(arduinoAdapter)
 {
 }
 
@@ -377,6 +393,10 @@ inline void ModuleSetupService::UserReConfigModeConfigure()
 inline void ModuleSetupService::ConfigureDoneModeConfigure()
 {
     setupWifiConnection();
+    
+    // Check if module was deleted from server while offline
+    checkModuleDeletionOnStartup();
+    
     setupMqttConnection();
     setupUdp();
 
@@ -403,6 +423,68 @@ inline void ModuleSetupService::ConfigureDoneModeConfigure()
     }
 
     log("SETUP: Module prepared for operation");
+}
+
+inline void ModuleSetupService::checkModuleDeletionOnStartup()
+{
+    // Only check if in configured done mode
+    if (!moduleConfig || !moduleConfig->getSettings())
+    {
+        return;
+    }
+    
+    ModuleModeEnum currentMode = static_cast<ModuleModeEnum>(
+        moduleConfig->getSettings()->getIfConfigured()
+    );
+    
+    if (currentMode != ModuleModeEnum::CONFIGURED_DONE)
+    {
+        log("SETUP: Skipping deletion check - module not in CONFIGURED_DONE mode");
+        return;
+    }
+
+    // Verify all required dependencies are available
+    if (!hybridApiService || !clearModuleDataService || !arduinoAdapter)
+    {
+        log("SETUP: Cannot check module deletion - missing required services");
+        return;
+    }
+
+    log("SETUP: Checking if module was deleted from server...");
+
+    // Query server for deletion status
+    bool isDeleted = false;
+    try
+    {
+        isDeleted = hybridApiService->checkIsModuleDeleted();
+    }
+    catch (...)
+    {
+        log("SETUP: Failed to check deletion status - continuing normal operation");
+        return;
+    }
+
+    if (isDeleted)
+    {
+        log("SETUP: Module is marked as DELETED on server - initiating factory reset");
+        
+        // Set module to unconfigured mode
+        moduleConfig->getSettings()->setConfigured(ModuleModeEnum::USER_CAN_CONFIGURE);
+        log("SETUP: Module mode set to USER_CAN_CONFIGURE");
+        
+        // Clear all data
+        clearModuleDataService->clearAllData();
+        log("SETUP: All module data cleared");
+        
+        // Restart to apply changes
+        log("SETUP: Restarting module to complete reset...");
+        arduinoAdapter->delay(1000); // Allow logs to flush
+        arduinoAdapter->restart();
+    }
+    else
+    {
+        log("SETUP: Module deletion check passed - continuing normal operation");
+    }
 }
 
 inline void ModuleSetupService::clearAllFileLog()

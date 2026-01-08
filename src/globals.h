@@ -405,7 +405,10 @@ ModuleSetupService moduleSetupService(
     &spiffsAdapter,
     &jsonConverter,
     &boardTest,
-    &udpManager);
+    &udpManager,
+    &hybridApiService,
+    &clearModuleDataService,
+    &arduinoAdapter);
 
 void initDependencies()
 {
