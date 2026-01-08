@@ -8,6 +8,7 @@
 #include "Core/Domain/Interfaces/ILogger.h"
 #include "Core/Domain/Interfaces/IDebugSystem.h"
 #include "Core/Domain/Interfaces/ISettings.h"
+#include "Core/Domain/Enums/ModuleModeEnum.h"
 #include <stdarg.h>
 #include <vector>
 
@@ -106,6 +107,14 @@ public:
             log("Cleared wasSensorScanPerformed flag");
         } else {
             log("WARNING: settings is null, cannot clear wasSensorScanPerformed flag");
+        }
+        
+        // Reset module mode to USER_CAN_CONFIGURE (factory reset state)
+        if (settings != nullptr) {
+            settings->setConfigured(ModuleModeEnum::USER_CAN_CONFIGURE);
+            log("Reset module mode to USER_CAN_CONFIGURE (42)");
+        } else {
+            log("WARNING: settings is null, cannot reset module mode");
         }
         
         log("Module data clearing completed. Success: %s", success ? "true" : "false");

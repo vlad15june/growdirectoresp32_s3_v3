@@ -295,7 +295,8 @@ inline void ModuleSetupService::handleModuleMode()
         isConfigured != ModuleModeEnum::USER_CAN_RE_CONFIGURE &&
         isConfigured != ModuleModeEnum::CONFIGURED_DONE)
     {
-        settings->setConfigured(ModuleModeEnum::AP_TEST_MODE);
+        // settings->setConfigured(ModuleModeEnum::AP_TEST_MODE);
+        settings->setConfigured(ModuleModeEnum::USER_CAN_CONFIGURE);
 
         log("SETUP: Updated configuration status to USER_CAN_CONFIGURE, needs restart");
     }
