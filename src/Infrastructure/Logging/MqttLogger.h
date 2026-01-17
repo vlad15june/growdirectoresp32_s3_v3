@@ -32,6 +32,16 @@ private:
         return (_mode == MqttLoggerMode::SerialOnly || _mode == MqttLoggerMode::MqttAndSerial);
     }
     
+    // Helper methods with channel override
+    bool shouldLogToMqtt(MqttLoggerMode mode) const {
+        return (mode == MqttLoggerMode::MqttOnly || mode == MqttLoggerMode::MqttAndSerial) && 
+               _mqttClient.connected();
+    }
+    
+    bool shouldLogToSerial(MqttLoggerMode mode) const {
+        return (mode == MqttLoggerMode::SerialOnly || mode == MqttLoggerMode::MqttAndSerial);
+    }
+    
     // Convert LogLevel to string
     const char* logLevelToString(LogLevel level) const {
         switch (level) {
@@ -130,6 +140,45 @@ public:
         }
     }
     
+    // New overloaded methods with channel override for default topic
+    void print(const char* message, MqttLoggerMode channelOverride) override {
+        if (shouldLogToMqtt(channelOverride)) {
+            String topic = getTopicWithModuleUid(_defaultTopic);
+            _mqttClient.publish(topic.c_str(), message);
+        }
+        
+        if (shouldLogToSerial(channelOverride)) {
+            Serial.print(message);
+        }
+    }
+    
+    void println(const char* message, MqttLoggerMode channelOverride) override {
+        if (shouldLogToMqtt(channelOverride)) {
+            String topic = getTopicWithModuleUid(_defaultTopic);
+            _mqttClient.publish(topic.c_str(), message);
+        }
+        
+        if (shouldLogToSerial(channelOverride)) {
+            Serial.println(message);
+        }
+    }
+    
+    void printf(const char* format, MqttLoggerMode channelOverride, ...) override {
+        va_list args;
+        va_start(args, channelOverride);
+        vsnprintf(_buffer, sizeof(_buffer), format, args);
+        va_end(args);
+        
+        if (shouldLogToMqtt(channelOverride)) {
+            String topic = getTopicWithModuleUid(_defaultTopic);
+            _mqttClient.publish(topic.c_str(), _buffer);
+        }
+        
+        if (shouldLogToSerial(channelOverride)) {
+            Serial.print(_buffer);
+        }
+    }
+    
     // Methods for specific topic
     void print(const char* topic, const char* message) override {
         String baseTopic = _defaultTopic + "/" + topic;
@@ -171,6 +220,51 @@ public:
         }
         
         if (shouldLogToSerial()) {
+            Serial.print(_buffer);
+        }
+    }
+    
+    // New overloaded methods with channel override for specific topic
+    void print(const char* topic, const char* message, MqttLoggerMode channelOverride) override {
+        String baseTopic = _defaultTopic + "/" + topic;
+        String fullTopic = getTopicWithModuleUid(baseTopic);
+        
+        if (shouldLogToMqtt(channelOverride)) {
+            _mqttClient.publish(fullTopic.c_str(), message);
+        }
+        
+        if (shouldLogToSerial(channelOverride)) {
+            Serial.print(message);
+        }
+    }
+    
+    void println(const char* topic, const char* message, MqttLoggerMode channelOverride) override {
+        String baseTopic = _defaultTopic + "/" + topic;
+        String fullTopic = getTopicWithModuleUid(baseTopic);
+        
+        if (shouldLogToMqtt(channelOverride)) {
+            _mqttClient.publish(fullTopic.c_str(), message);
+        }
+        
+        if (shouldLogToSerial(channelOverride)) {
+            Serial.println(message);
+        }
+    }
+    
+    void printf(const char* topic, const char* format, MqttLoggerMode channelOverride, ...) override {
+        va_list args;
+        va_start(args, channelOverride);
+        vsnprintf(_buffer, sizeof(_buffer), format, args);
+        va_end(args);
+        
+        String baseTopic = _defaultTopic + "/" + topic;
+        String fullTopic = getTopicWithModuleUid(baseTopic);
+        
+        if (shouldLogToMqtt(channelOverride)) {
+            _mqttClient.publish(fullTopic.c_str(), _buffer);
+        }
+        
+        if (shouldLogToSerial(channelOverride)) {
             Serial.print(_buffer);
         }
     }

@@ -68,6 +68,9 @@ namespace DebugFeatures {
     constexpr const char* SPIFFS_DEBUG = "SPIFFS";
 }
 
+// Forward declaration for MqttLoggerMode
+enum class MqttLoggerMode;
+
 // Debug feature interface
 class IDebugFeature
 {
@@ -79,6 +82,10 @@ public:
     virtual const char *getMqttTopic() const = 0;
     virtual bool isEnabled() const = 0;
     virtual void setEnabled(bool enabled) = 0;
+    
+    // Logging channel configuration
+    virtual MqttLoggerMode getLogChannel() const = 0;
+    virtual void setLogChannel(MqttLoggerMode channel) = 0;
 };
 
 // Debug system interface
@@ -88,9 +95,12 @@ public:
     virtual ~IDebugSystem() = default;
 
     // Feature management
-    virtual IDebugFeature *registerFeature(const char *name, const char *mqttTopic = nullptr, bool initialState = false) = 0;
+    virtual IDebugFeature *registerFeature(const char *name, const char *mqttTopic = nullptr, bool initialState = false, MqttLoggerMode channel = MqttLoggerMode::MqttAndSerial) = 0;
     virtual IDebugFeature *getFeature(const char *name) = 0;
     virtual void setDebugFeatureState(const char *feature, bool isEnabled) = 0;
+    
+    // Channel configuration management
+    virtual void setFeatureLogChannel(const char *featureName, MqttLoggerMode channel) = 0;
 
     // Check if a feature is enabled (for use in if statements)
     virtual bool isFeatureEnabled(const char *featureName) = 0;

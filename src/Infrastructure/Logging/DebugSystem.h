@@ -5,6 +5,7 @@
 #include <map>
 #include <vector>
 #include "Core/Domain/Interfaces/IDebugSystem.h"
+#include "Core/Domain/Interfaces/ILogger.h"
 
 class DebugFeature : public IDebugFeature
 {
@@ -12,15 +13,20 @@ private:
     const char *_name;
     const char *_mqttTopic;
     bool _enabled;
+    MqttLoggerMode _logChannel;
 
 public:
-    DebugFeature(const char *name, const char *mqttTopic = nullptr, bool initialState = false)
-        : _name(name), _mqttTopic(mqttTopic ? mqttTopic : name), _enabled(initialState) {}
+    DebugFeature(const char *name, const char *mqttTopic = nullptr, bool initialState = false, MqttLoggerMode channel = MqttLoggerMode::MqttAndSerial)
+        : _name(name), _mqttTopic(mqttTopic ? mqttTopic : name), _enabled(initialState), _logChannel(channel) {}
 
     const char *getName() const override { return _name; }
     const char *getMqttTopic() const override { return _mqttTopic; }
     bool isEnabled() const override { return _enabled; }
     void setEnabled(bool enabled) override { _enabled = enabled; }
+    
+    // Logging channel configuration
+    MqttLoggerMode getLogChannel() const override { return _logChannel; }
+    void setLogChannel(MqttLoggerMode channel) override { _logChannel = channel; }
 };
 
 class DebugSystem : public IDebugSystem
@@ -31,47 +37,47 @@ private:
     void initializeFeatures()
     {
         // Register all debug features with their default values
-        registerFeature(DebugFeatures::IP_CHANGE_DEBUG, "ip_local_change", true);
-        registerFeature(DebugFeatures::RULE_SENSOR_OFFLINE_DEBUG, "rule_sensor_offline", true);
-        registerFeature(DebugFeatures::REMOTE_SENSOR_RECEIVE_DEBUG, "remote_sensor_receive", false);
-        registerFeature(DebugFeatures::UDP_RECEIVE_DEBUG, "udp_receive", false);
-        registerFeature(DebugFeatures::UDP_SEND_DEBUG, "udp_send", false);
-        registerFeature(DebugFeatures::WIFI_DEBUG, "wifi", true);
-        registerFeature(DebugFeatures::HISTORY_DEBUG, "history", false);
-        registerFeature(DebugFeatures::TIME_DEBUG, "time", false);
-        registerFeature(DebugFeatures::TIME_SYNC_DEBUG, "time_sync", false);
-        registerFeature(DebugFeatures::NET_DEBUG, "net", true);
-        registerFeature(DebugFeatures::CONTROL_DEBUG, "control", false);
-        registerFeature(DebugFeatures::RULE_DEBUG, "rule", true);
-        registerFeature(DebugFeatures::RULE_SYNC_DEBUG, "rule_sync", true);
-        registerFeature(DebugFeatures::RULE_ON_DEBUG, "rule_on", true);
-        registerFeature(DebugFeatures::RULE_SENSOR_VALUE_DEBUG, "rule_sensor_value", false);
-        registerFeature(DebugFeatures::RULE_SUNRISE_DEBUG, "rule_sunrise", true);
-        registerFeature(DebugFeatures::MODULE_COMMAND_DEBUG, "module_command", true);
-        registerFeature(DebugFeatures::MODULE_MODE_DEBUG, "module_mode", true);
-        registerFeature(DebugFeatures::DEVICE_COMMAND_DEBUG, "device_command", true);
-        registerFeature(DebugFeatures::ANALOG_INPUT_DEVICE_COMMAND_DEBUG, "analog_input_device_command", true);
-        registerFeature(DebugFeatures::SETUP_SENSOR_DEBUG, "setup_sensor", true);
-        registerFeature(DebugFeatures::SENSOR_ERROR_DEBUG, "sensor_error", false);
-        registerFeature(DebugFeatures::SENSOR_DATA_DEBUG, "sensor_data", true);
-        registerFeature(DebugFeatures::DATA_DEBUG, "data", false);
-        registerFeature(DebugFeatures::SETTINGS_DEBUG, "settings", true);
-        registerFeature(DebugFeatures::SETUP_DEBUG, "setup", true);
-        registerFeature(DebugFeatures::TEST_DEBUG, "test", false);
-        registerFeature(DebugFeatures::LOG_DEBUG, "log", false);
-        registerFeature(DebugFeatures::FILE_LOG_DEBUG, "file_log", false);
-        registerFeature(DebugFeatures::FILE_DEBUG, "file", false);
-        registerFeature(DebugFeatures::DIAGNOSTIC_DEBUG, "diagnostic", true);
-        registerFeature(DebugFeatures::MQTT_DEBUG, "mqtt", true);
-        registerFeature(DebugFeatures::MQTT_COMMAND_DEBUG, "mqtt_command", true);
-        registerFeature(DebugFeatures::MQTT_CALLBACK_DEBUG, "mqtt_callback", true);
-        registerFeature(DebugFeatures::BUTTON_DEBUG, "button", false);
-        registerFeature(DebugFeatures::LED_DEBUG, "led", false);
-        registerFeature(DebugFeatures::SPIFFS_DEBUG, "spiffs", true);
-        registerFeature(DebugFeatures::UPDATE_FIRMWARE_DEBUG, "update_firmware", true);
-        registerFeature(DebugFeatures::LOOP_SERVICE_DEBUG, "loop_service", false);
-        registerFeature(DebugFeatures::CONFIG_WEB_SERVER, "config_web_server", true);
-        registerFeature(DebugFeatures::REPOSITORY_DEBUG, "config_web_server", true);        
+        registerFeature(DebugFeatures::IP_CHANGE_DEBUG, "ip_local_change", true, MqttLoggerMode::MqttAndSerial);
+        registerFeature(DebugFeatures::RULE_SENSOR_OFFLINE_DEBUG, "rule_sensor_offline", true, MqttLoggerMode::MqttAndSerial);
+        registerFeature(DebugFeatures::REMOTE_SENSOR_RECEIVE_DEBUG, "remote_sensor_receive", false, MqttLoggerMode::MqttAndSerial);
+        registerFeature(DebugFeatures::UDP_RECEIVE_DEBUG, "udp_receive", false, MqttLoggerMode::MqttAndSerial);
+        registerFeature(DebugFeatures::UDP_SEND_DEBUG, "udp_send", false, MqttLoggerMode::MqttAndSerial);
+        registerFeature(DebugFeatures::WIFI_DEBUG, "wifi", true, MqttLoggerMode::MqttAndSerial);
+        registerFeature(DebugFeatures::HISTORY_DEBUG, "history", false, MqttLoggerMode::MqttAndSerial);
+        registerFeature(DebugFeatures::TIME_DEBUG, "time", false, MqttLoggerMode::MqttAndSerial);
+        registerFeature(DebugFeatures::TIME_SYNC_DEBUG, "time_sync", false, MqttLoggerMode::MqttAndSerial);
+        registerFeature(DebugFeatures::NET_DEBUG, "net", true, MqttLoggerMode::MqttAndSerial);
+        registerFeature(DebugFeatures::CONTROL_DEBUG, "control", false, MqttLoggerMode::MqttAndSerial);
+        registerFeature(DebugFeatures::RULE_DEBUG, "rule", true, MqttLoggerMode::MqttAndSerial);
+        registerFeature(DebugFeatures::RULE_SYNC_DEBUG, "rule_sync", true, MqttLoggerMode::MqttAndSerial);
+        registerFeature(DebugFeatures::RULE_ON_DEBUG, "rule_on", true, MqttLoggerMode::MqttAndSerial);
+        registerFeature(DebugFeatures::RULE_SENSOR_VALUE_DEBUG, "rule_sensor_value", false, MqttLoggerMode::MqttAndSerial);
+        registerFeature(DebugFeatures::RULE_SUNRISE_DEBUG, "rule_sunrise", true, MqttLoggerMode::MqttAndSerial);
+        registerFeature(DebugFeatures::MODULE_COMMAND_DEBUG, "module_command", true, MqttLoggerMode::MqttAndSerial);
+        registerFeature(DebugFeatures::MODULE_MODE_DEBUG, "module_mode", true, MqttLoggerMode::MqttAndSerial);
+        registerFeature(DebugFeatures::DEVICE_COMMAND_DEBUG, "device_command", true, MqttLoggerMode::MqttAndSerial);
+        registerFeature(DebugFeatures::ANALOG_INPUT_DEVICE_COMMAND_DEBUG, "analog_input_device_command", true, MqttLoggerMode::MqttAndSerial);
+        registerFeature(DebugFeatures::SETUP_SENSOR_DEBUG, "setup_sensor", true, MqttLoggerMode::MqttAndSerial);
+        registerFeature(DebugFeatures::SENSOR_ERROR_DEBUG, "sensor_error", false, MqttLoggerMode::MqttAndSerial);
+        registerFeature(DebugFeatures::SENSOR_DATA_DEBUG, "sensor_data", true, MqttLoggerMode::MqttAndSerial);
+        registerFeature(DebugFeatures::DATA_DEBUG, "data", false, MqttLoggerMode::MqttAndSerial);
+        registerFeature(DebugFeatures::SETTINGS_DEBUG, "settings", true, MqttLoggerMode::MqttAndSerial);
+        registerFeature(DebugFeatures::SETUP_DEBUG, "setup", true, MqttLoggerMode::MqttAndSerial);
+        registerFeature(DebugFeatures::TEST_DEBUG, "test", false, MqttLoggerMode::MqttAndSerial);
+        registerFeature(DebugFeatures::LOG_DEBUG, "log", false, MqttLoggerMode::MqttAndSerial);
+        registerFeature(DebugFeatures::FILE_LOG_DEBUG, "file_log", false, MqttLoggerMode::MqttAndSerial);
+        registerFeature(DebugFeatures::FILE_DEBUG, "file", false, MqttLoggerMode::MqttAndSerial);
+        registerFeature(DebugFeatures::DIAGNOSTIC_DEBUG, "diagnostic", true, MqttLoggerMode::MqttAndSerial);
+        registerFeature(DebugFeatures::MQTT_DEBUG, "mqtt", true, MqttLoggerMode::MqttAndSerial);
+        registerFeature(DebugFeatures::MQTT_COMMAND_DEBUG, "mqtt_command", true, MqttLoggerMode::MqttAndSerial);
+        registerFeature(DebugFeatures::MQTT_CALLBACK_DEBUG, "mqtt_callback", true, MqttLoggerMode::MqttAndSerial);
+        registerFeature(DebugFeatures::BUTTON_DEBUG, "button", false, MqttLoggerMode::MqttAndSerial);
+        registerFeature(DebugFeatures::LED_DEBUG, "led", false, MqttLoggerMode::MqttAndSerial);
+        registerFeature(DebugFeatures::SPIFFS_DEBUG, "spiffs", true, MqttLoggerMode::MqttAndSerial);
+        registerFeature(DebugFeatures::UPDATE_FIRMWARE_DEBUG, "update_firmware", true, MqttLoggerMode::MqttAndSerial);
+        registerFeature(DebugFeatures::LOOP_SERVICE_DEBUG, "loop_service", false, MqttLoggerMode::MqttAndSerial);
+        registerFeature(DebugFeatures::CONFIG_WEB_SERVER, "config_web_server", true, MqttLoggerMode::MqttAndSerial);
+        registerFeature(DebugFeatures::REPOSITORY_DEBUG, "config_web_server", true, MqttLoggerMode::MqttAndSerial);        
     }
 
 public:
@@ -92,7 +98,7 @@ public:
     }
 
     // Register a new debug feature
-    IDebugFeature *registerFeature(const char *name, const char *mqttTopic = nullptr, bool initialState = false) override
+    IDebugFeature *registerFeature(const char *name, const char *mqttTopic = nullptr, bool initialState = false, MqttLoggerMode channel = MqttLoggerMode::MqttAndSerial) override
     {
         String nameStr(name);
 
@@ -103,7 +109,7 @@ public:
         }
 
         // Create a new feature and add it to the map
-        DebugFeature *feature = new DebugFeature(name, mqttTopic, initialState);
+        DebugFeature *feature = new DebugFeature(name, mqttTopic, initialState, channel);
         _features[nameStr] = feature;
         return feature;
     }
@@ -128,6 +134,16 @@ public:
         if (featurePtr)
         {
             featurePtr->setEnabled(isEnabled);
+        }
+    }
+    
+    // Set logging channel for an existing debug feature
+    void setFeatureLogChannel(const char *featureName, MqttLoggerMode channel) override
+    {
+        IDebugFeature *feature = getFeature(featureName);
+        if (feature)
+        {
+            feature->setLogChannel(channel);
         }
     }
 
