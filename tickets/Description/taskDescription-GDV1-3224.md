@@ -1,19 +1,22 @@
-изучи документацию:
+## Task Description:
+
+Add the ability to specify for each debug feature where logs should be output - only to MQTT, only to Serial, or to both channels simultaneously. Currently, the logger can direct output to different channels, but this setting is global for the entire logger. It is necessary that when registering each debug feature, you can specify its logging channel. For example, for the "ip_local_change" feature, logs should go only to MQTT, for "sensor_error" - only to Serial, and for "module_command" - to both channels. When the code checks if a debug feature is enabled and outputs a log, the system should automatically use the configured logging channel for that feature.
+
+## Questions About Task Description:
+1. Should the logging channel configuration (MQTT/Serial/Both) be global for the entire debug feature, or can it be changed in different parts of the code for the same feature?
+2. Should the logging channel configuration for debug features be persisted to permanent storage (SPIFFS/EEPROM), or is it sufficient to set it during initialization?
+3. Should there be the ability to change the logging channel for a debug feature via MQTT commands or web API during module operation?
+
+## Documentation to Review:
 [doc/projectArchitecture.md](../../doc/projectArchitecture.md)
 
-изучи ранее выполненые задачи
+## Previously Completed Related Tasks:
 [tickets/GDV1-3202.md](../GDV1-3202.md)
 
-изучи файлы кода
+## Code Files to Study:
 [src/Core/Domain/Interfaces/ILogger.h](../../src/Core/Domain/Interfaces/ILogger.h)
 [src/Core/Domain/Interfaces/IDebugSystem.h](../../src/Core/Domain/Interfaces/IDebugSystem.h)
 [src/Infrastructure/Logging/MqttLogger.h](../../src/Infrastructure/Logging/MqttLogger.h)
 [src/Infrastructure/Logging/DebugSystem.h](../../src/Infrastructure/Logging/DebugSystem.h)
 [src/Application/Services/Devices/DeviceService.h](../../src/Application/Services/Devices/DeviceService.h)
 
-вопросы по описанию задачи
-1. Должна ли настройка канала логирования (MQTT/Serial/Both) быть глобальной для всей debug-фичи или можно менять в разных местах кода для одной и той же фичи?
-2. Нужно ли сохранять настройку канала логирования для debug-фичи в постоянную память (SPIFFS/EEPROM) или достаточно задавать при инициализации?
-3. Должна ли быть возможность менять канал логирования для debug-фичи через MQTT команды или web API во время работы модуля?
-
-Добавить возможность указывать для каждой debug-фичи куда должны выводиться логи - только в MQTT, только в Serial или в оба канала одновременно. Сейчас логгер умеет направлять вывод в разные каналы, но эта настройка глобальная для всего логгера. Нужно чтобы при регистрации каждой debug-фичи можно было указать ее канал логирования. Например, для фичи "ip_local_change" логи должны идти только в MQTT, для "sensor_error" - только в Serial, а для "module_command" - в оба канала. Когда код проверяет включена ли debug-фича и выводит лог, система должна автоматически использовать настроенный для этой фичи канал логирования.
