@@ -62,7 +62,7 @@
 // #define DEVICE_STATE_STEP_ON "stepOn"
 // #define DEVICE_STATE_STEP_WAITING "stepWaiting"
 
-// // Sensor states
+// // Sensor states - see Core/Domain/Enums/SensorStateEnum.h
 // #define SENSOR_STATE_ONLINE "online"
 // #define SENSOR_STATE_DISCONNECTED "disconnected"
 

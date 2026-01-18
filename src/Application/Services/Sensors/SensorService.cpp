@@ -1,6 +1,7 @@
 #include "SensorService.h"
 #include "Core/Domain/Enums/BootTypeEnum.h"
 #include "Core/Domain/Enums/ModuleModeEnum.h"
+#include "Core/Domain/Enums/SensorStateEnum.h"
 #include <cstring>
 
 SensorService::SensorService(IModuleConfig *moduleConfig,
@@ -203,8 +204,9 @@ bool SensorService::readSensor(SensorEntity sensor)
         }
         else
         {
+            // Keep sensor active but mark as error when read fails
             sensorRepository->updateSensorStatus(sensor.uid.c_str(), sensor.isActive, true);
-            log("SensorService: Failed to read multi-channel sensor %s", sensor.uid.c_str());
+            log("SensorService: Failed to read multi-channel sensor %s, marking as error", sensor.uid.c_str());
             return false;
         }
     }
@@ -224,8 +226,9 @@ bool SensorService::readSensor(SensorEntity sensor)
         }
         else
         {
+            // Keep sensor active but mark as error when read fails
             sensorRepository->updateSensorStatus(sensor.uid.c_str(), sensor.isActive, true);
-            log("SensorService: Failed to read sensor %s", sensor.uid.c_str());
+            log("SensorService: Failed to read sensor %s, marking as error", sensor.uid.c_str());
             return false;
         }
     }
@@ -339,8 +342,8 @@ UpdateDto SensorService::createSensorUpdateDto()
             {
                 SensorDto sensorDto;
                 sensorDto.uid = channelValue.first;
-                sensorDto.value = channelValue.second;
-                sensorDto.state = sensor.isError ? "error" : (sensor.isActive ? "online" : "offline");
+                sensorDto.value = sensor.isError ? 0.0f : channelValue.second;
+                sensorDto.state = sensor.isError ? getSensorStateName(SENSOR_STATE_DISCONNECTED) : getSensorStateName(SENSOR_STATE_ONLINE);
 
                 dto.sensors.push_back(sensorDto);
             }
@@ -349,9 +352,8 @@ UpdateDto SensorService::createSensorUpdateDto()
         {
             SensorDto sensorDto;
             sensorDto.uid = sensor.uid;
-            // Get value from SensorValueModel for single-channel sensors
-            sensorDto.value = sensorValueModel->getSensorValue(sensor.uid);
-            sensorDto.state = sensor.isError ? "error" : (sensor.isActive ? "online" : "offline");
+            sensorDto.value = sensor.isError ? 0.0f : sensorValueModel->getSensorValue(sensor.uid);
+            sensorDto.state = sensor.isError ? getSensorStateName(SENSOR_STATE_DISCONNECTED) : getSensorStateName(SENSOR_STATE_ONLINE);
 
             dto.sensors.push_back(sensorDto);
         }
