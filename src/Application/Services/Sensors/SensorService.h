@@ -61,7 +61,15 @@ private:
             vsnprintf(buffer, sizeof(buffer), format, args);
             va_end(args);
     
-            logger->println(DebugFeatures::SENSOR_DATA_DEBUG, buffer);
+            IDebugFeature* feature = debugSystem->getFeature(DebugFeatures::SENSOR_DATA_DEBUG);
+            if (feature)
+            {
+                logger->println(DebugFeatures::SENSOR_DATA_DEBUG, buffer, feature->getLogChannel());
+            }
+            else
+            {
+                logger->println(DebugFeatures::SENSOR_DATA_DEBUG, buffer);
+            }
         }
     }
     

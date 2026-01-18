@@ -828,7 +828,7 @@ private:
 
     void log(const char *feature, const char *format, ...)
     {
-        if (debugSystem && debugSystem->isFeatureEnabled(feature))
+        if (debugSystem && debugSystem->isFeatureEnabled(feature) && logger)
         {
             char buffer[256];
             va_list args;
@@ -836,7 +836,15 @@ private:
             vsnprintf(buffer, sizeof(buffer), format, args);
             va_end(args);
 
-            logger->println(feature, buffer);
+            IDebugFeature* debugFeature = debugSystem->getFeature(feature);
+            if (debugFeature)
+            {
+                logger->println(feature, buffer, debugFeature->getLogChannel());
+            }
+            else
+            {
+                logger->println(feature, buffer);
+            }
         }
     }
 

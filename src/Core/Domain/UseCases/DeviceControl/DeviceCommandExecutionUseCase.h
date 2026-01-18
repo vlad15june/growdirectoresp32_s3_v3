@@ -274,7 +274,7 @@ private:
      */
     void log(const char *format, ...)
     {
-        if (debugSystem && debugSystem->isFeatureEnabled(DebugFeatures::DEVICE_COMMAND_DEBUG))
+        if (debugSystem && debugSystem->isFeatureEnabled(DebugFeatures::DEVICE_COMMAND_DEBUG) && logger)
         {
             char buffer[256];
             va_list args;
@@ -282,7 +282,15 @@ private:
             vsnprintf(buffer, sizeof(buffer), format, args);
             va_end(args);
 
-            logger->println(DebugFeatures::DEVICE_COMMAND_DEBUG, buffer);
+            IDebugFeature* debugFeature = debugSystem->getFeature(DebugFeatures::DEVICE_COMMAND_DEBUG);
+            if (debugFeature)
+            {
+                logger->println(DebugFeatures::DEVICE_COMMAND_DEBUG, buffer, debugFeature->getLogChannel());
+            }
+            else
+            {
+                logger->println(DebugFeatures::DEVICE_COMMAND_DEBUG, buffer);
+            }
         }
     }
 };

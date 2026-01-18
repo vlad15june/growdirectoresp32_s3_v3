@@ -28,7 +28,15 @@ protected:
             vsnprintf(buffer, sizeof(buffer), format, args);
             va_end(args);
 
-            _logger->println(DebugFeatures::MQTT_DEBUG, buffer);
+            IDebugFeature* debugFeature = _debugSystem->getFeature(DebugFeatures::MQTT_COMMAND_DEBUG);
+            if (debugFeature)
+            {
+                _logger->println(DebugFeatures::MQTT_COMMAND_DEBUG, buffer, debugFeature->getLogChannel());
+            }
+            else
+            {
+                _logger->println(DebugFeatures::MQTT_COMMAND_DEBUG, buffer);
+            }
         }
     }
 
