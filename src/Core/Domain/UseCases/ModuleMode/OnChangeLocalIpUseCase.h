@@ -109,7 +109,7 @@ public:
                 }
 
                 log("OnChangeLocalIpUseCase: Sending updated module structure to server");
-                bool sendSuccess = _apiService.sendToServerModuleStructure(_moduleStructure);
+                bool sendSuccess = _apiService.sendToServerModuleStructure(_moduleStructure, ApiPriority::BOTH);
                 if (!sendSuccess) {
                     log("NET: Failed to send structure after 3 attempts, restarting...");
                     _moduleConfig.setRequestedModuleMode(ModuleModeEnum::CONFIGURED_NEED_RESTART);

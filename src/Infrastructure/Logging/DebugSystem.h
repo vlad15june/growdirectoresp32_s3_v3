@@ -61,8 +61,8 @@ private:
         registerFeature(DebugFeatures::SENSOR_ERROR_DEBUG, "sensor_error", false, MqttLoggerMode::MqttAndSerial);
         registerFeature(DebugFeatures::SENSOR_DATA_DEBUG, "sensor_data", true, MqttLoggerMode::MqttAndSerial);
         registerFeature(DebugFeatures::DATA_DEBUG, "data", false, MqttLoggerMode::SerialOnly);
-        registerFeature(DebugFeatures::SETTINGS_DEBUG, "settings", true, MqttLoggerMode::SerialOnly);
-        registerFeature(DebugFeatures::SETUP_DEBUG, "setup", true, MqttLoggerMode::SerialOnly);
+        registerFeature(DebugFeatures::SETTINGS_DEBUG, "settings", true, MqttLoggerMode::MqttAndSerial);
+        registerFeature(DebugFeatures::SETUP_DEBUG, "setup", true, MqttLoggerMode::MqttAndSerial);
         registerFeature(DebugFeatures::TEST_DEBUG, "test", false, MqttLoggerMode::SerialOnly);
         registerFeature(DebugFeatures::LOG_DEBUG, "log", false, MqttLoggerMode::SerialOnly);
         registerFeature(DebugFeatures::FILE_LOG_DEBUG, "file_log", false, MqttLoggerMode::SerialOnly);

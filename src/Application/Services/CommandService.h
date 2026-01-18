@@ -9,6 +9,7 @@
 #include "Core/Domain/Interfaces/UseCases/IModuleCommandExecutionUseCase.h"
 #include "Core/Domain/Interfaces/UseCases/ISensorCommandUseCase.h"
 #include "Core/Domain/Interfaces/API/IHybridAPIService.h"
+#include "Core/Domain/Data/Models/ModuleStructure.h"
 #include "Core/Domain/Interfaces/ILogger.h"
 #include "Core/Domain/Interfaces/IDebugSystem.h"
 #include "Core/Domain/Enums/ModuleCommandEnum.h"
@@ -22,6 +23,7 @@ private:
     IModuleCommandExecutionUseCase *moduleCommandUseCase;
     ISensorCommandUseCase *sensorCommandUseCase;
     IHybridAPIService *hybridApiService;
+    ModuleStructure *moduleStructure;
     ILogger *logger;
     IDebugSystem *debugSystem;
     INTPTimeAdapter *timeAdapter;
@@ -34,6 +36,7 @@ public:
         IModuleCommandExecutionUseCase *moduleCommandUseCase,
         ISensorCommandUseCase *sensorCommandUseCase,
         IHybridAPIService *hybridApiService,
+        ModuleStructure *moduleStructure,
         ILogger *logger,
         IDebugSystem *debugSystem,
         INTPTimeAdapter *timeAdapter = nullptr,
@@ -42,6 +45,7 @@ public:
           moduleCommandUseCase(moduleCommandUseCase),
           sensorCommandUseCase(sensorCommandUseCase),
           hybridApiService(hybridApiService),
+          moduleStructure(moduleStructure),
           logger(logger),
           debugSystem(debugSystem),
           timeAdapter(timeAdapter),
@@ -475,6 +479,7 @@ private:
             {
                 std::vector<ModuleCommandExecutionResult> results = moduleCommandUseCase->executeCommands(validCommands);
                 std::vector<ModuleCommandUpdateDto> updates;
+                bool structureChanged = false;
                 
                 for (const auto& result : results)
                 {
@@ -493,6 +498,24 @@ private:
                         updateDto.errorMessage = result.errorMessage;
                         allCommandsSuccessful = false;
                     }
+                    else if (status == ModuleCommandStatus::DONE)
+                    {
+                        // Find the corresponding command by uid to check command type
+                        for (const auto& cmd : validCommands)
+                        {
+                            if (cmd.uid == result.uid)
+                            {
+                                ModuleCommandEnum commandEnum = getModuleCommandEnum(cmd.command);
+                                if (commandEnum == ModuleCommandEnum::SET_SENSOR_MODEL ||
+                                    commandEnum == ModuleCommandEnum::SCAN_SENSORS ||
+                                    commandEnum == ModuleCommandEnum::DELETE_SENSORS)
+                                {
+                                    structureChanged = true;
+                                }
+                                break;
+                            }
+                        }
+                    }
                     updates.push_back(updateDto);
 
                     log(DebugFeatures::MODULE_COMMAND_DEBUG,
@@ -503,6 +526,24 @@ private:
                 if (!updates.empty())
                 {
                     hybridApiService->sendModuleCommandExecutionResult(updates);
+                }
+                
+                // Send updated module structure to server if any command modified sensors
+                if (structureChanged && moduleStructure)
+                {
+                    log(DebugFeatures::MODULE_COMMAND_DEBUG,
+                        "CommandService: Sending updated module structure to server after sensor changes");
+                    
+                    bool sent = hybridApiService->sendToServerModuleStructure(*moduleStructure, ApiPriority::BOTH);
+                    if (sent)
+                    {
+                        log(DebugFeatures::MODULE_COMMAND_DEBUG,
+                            "CommandService: Successfully sent updated module structure");
+                    }
+                    else
+                    {
+                        logError("CommandService: Failed to send updated module structure");
+                    }
                 }
             }
             else

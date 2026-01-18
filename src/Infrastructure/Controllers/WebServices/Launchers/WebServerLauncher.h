@@ -26,7 +26,15 @@ private:
             vsnprintf(buffer, sizeof(buffer), format, args);
             va_end(args);
             
-            logger->println(DebugFeatures::SETUP_DEBUG, buffer);
+            IDebugFeature* feature = debugSystem->getFeature(DebugFeatures::SETUP_DEBUG);
+            if (feature)
+            {
+                logger->println(DebugFeatures::SETUP_DEBUG, buffer, feature->getLogChannel());
+            }
+            else
+            {
+                logger->println(DebugFeatures::SETUP_DEBUG, buffer);
+            }
         }
     }
 
