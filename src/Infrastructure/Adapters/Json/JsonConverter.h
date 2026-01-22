@@ -86,6 +86,32 @@ static std::vector<std::string> splitObjects(const std::string &arrayStr)
     return result;
 }
 
+// Helper function to convert internal pin numbering to external JSON format
+static int convertPinToJson(int internalPin) {
+    // Mapping: internal -> JSON
+    // 0 -> 4, 1 -> 3, 2 -> 2, 3 -> 1
+    switch (internalPin) {
+        case 0: return 4;
+        case 1: return 3;
+        case 2: return 2;
+        case 3: return 1;
+        default: return internalPin; // Return unchanged if not in mapping
+    }
+}
+
+// Helper function to convert external JSON pin numbering to internal format
+static int convertPinFromJson(int jsonPin) {
+    // Mapping: JSON -> internal
+    // 4 -> 0, 3 -> 1, 2 -> 2, 1 -> 3
+    switch (jsonPin) {
+        case 4: return 0;
+        case 3: return 1;
+        case 2: return 2;
+        case 1: return 3;
+        default: return jsonPin; // Return unchanged if not in mapping
+    }
+}
+
 static int extractIntValue(const std::string &src, const std::string &key)
 {
     auto keyPos = src.find("\"" + key + "\"");
@@ -236,7 +262,7 @@ public:
                 Sensor sensor;
                 sensor.uid = extractValue(sensorStr, "uid");
                 sensor.type = extractValue(sensorStr, "type");
-                sensor.pin = extractIntValue(sensorStr, "pin");
+                sensor.pin = convertPinFromJson(extractIntValue(sensorStr, "pin"));
                 sensor.group = extractIntValue(sensorStr, "group");
                 sensor.modelUid = extractValue(sensorStr, "modelUid");
                 node.sensors.push_back(sensor);
@@ -316,7 +342,7 @@ public:
                     oss << "{\"uid\":\"" << s.uid << "\"";
                     if (!s.type.empty())
                         oss << ",\"type\":\"" << s.type << "\"";
-                    oss << ",\"pin\":" << s.pin;
+                    oss << ",\"pin\":" << convertPinToJson(s.pin);
                     oss << ",\"group\":" << s.group;
                     oss << ",\"modelUid\":\"" << s.modelUid << "\"}";
                     if (j + 1 < node.sensors.size())

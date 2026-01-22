@@ -358,7 +358,7 @@ private:
         log(DebugFeatures::MODULE_COMMAND_DEBUG,
             "ModuleCommandUseCase: PingPin options: %s", moduleCommand.options.c_str());
 
-        int pin = extractJsonIntValue(moduleCommand.options, "pin");
+        int pin = convertPinFromJson(extractJsonIntValue(moduleCommand.options, "pin"));
         if (pin == 0)
         {
             return {ModuleCommandStatus::ERROR, "Missing or invalid pin in options"};
@@ -449,7 +449,7 @@ private:
         log(DebugFeatures::MODULE_COMMAND_DEBUG,
             "ModuleCommandUseCase: SetSensorModel options: %s", moduleCommand.options.c_str());
 
-        int pin = extractJsonIntValue(moduleCommand.options, "pin");
+        int pin = convertPinFromJson(extractJsonIntValue(moduleCommand.options, "pin"));
         std::string modelUid = extractJsonValue(moduleCommand.options, "uid");
 
         if (pin == 0 || modelUid.empty())
@@ -614,7 +614,7 @@ private:
         log(DebugFeatures::MODULE_COMMAND_DEBUG,
             "ModuleCommandUseCase: DeleteSensors options: %s", moduleCommand.options.c_str());
 
-        int pin = extractJsonIntValue(moduleCommand.options, "pin");
+        int pin = convertPinFromJson(extractJsonIntValue(moduleCommand.options, "pin"));
         if (pin == 0)
         {
             return {ModuleCommandStatus::ERROR, "Missing or invalid pin in options"};
@@ -727,7 +727,7 @@ private:
         log(DebugFeatures::MODULE_COMMAND_DEBUG,
             "ModuleCommandUseCase: ScanSensors options: %s", moduleCommand.options.c_str());
 
-        int pin = extractJsonIntValue(moduleCommand.options, "pin");
+        int pin = convertPinFromJson(extractJsonIntValue(moduleCommand.options, "pin"));
         if (pin == 0)
         {
             return {ModuleCommandStatus::ERROR, "Missing or invalid pin in options"};
@@ -1017,6 +1017,36 @@ private:
         {
             logError("ModuleCommandUseCase: Factory reset failed - could not clear all data");
             return {ModuleCommandStatus::ERROR, "Failed to clear module data"};
+        }
+    }
+
+    /**
+     * @brief Convert internal pin numbering to external JSON format
+     * Mapping: internal -> JSON (0 -> 4, 1 -> 3, 2 -> 2, 3 -> 1)
+     */
+    int convertPinToJson(int internalPin)
+    {
+        switch (internalPin) {
+            case 0: return 4;
+            case 1: return 3;
+            case 2: return 2;
+            case 3: return 1;
+            default: return internalPin;
+        }
+    }
+
+    /**
+     * @brief Convert external JSON pin numbering to internal format
+     * Mapping: JSON -> internal (4 -> 0, 3 -> 1, 2 -> 2, 1 -> 3)
+     */
+    int convertPinFromJson(int jsonPin)
+    {
+        switch (jsonPin) {
+            case 4: return 0;
+            case 3: return 1;
+            case 2: return 2;
+            case 1: return 3;
+            default: return jsonPin;
         }
     }
 
