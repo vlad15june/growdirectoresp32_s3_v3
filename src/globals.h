@@ -263,6 +263,7 @@ CommandService commandService(
     &moduleCommandExecutionUseCase,
     &sensorCommandUseCase,
     &hybridApiService,
+    &moduleStructure,
     &mqttLogger,
     &debugSystem,
     &ntpTimeAdapter,
