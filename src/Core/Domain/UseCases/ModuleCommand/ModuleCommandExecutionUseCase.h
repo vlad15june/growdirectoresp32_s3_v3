@@ -168,6 +168,9 @@ public:
                         auto result = handleSetSensorModel(moduleCommand);
                         status = result.first;
                         errorMessage = result.second;
+                        log(DebugFeatures::MODULE_COMMAND_DEBUG,
+                            "ModuleCommandUseCase: SET_SENSOR_MODEL executed - status: %s, error: %s",
+                            getModuleCommandStatusName(status).c_str(), errorMessage.c_str());
                         break;
                     }
                     case ModuleCommandEnum::DELETE_SENSORS:

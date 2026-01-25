@@ -506,11 +506,18 @@ private:
                             if (cmd.uid == result.uid)
                             {
                                 ModuleCommandEnum commandEnum = getModuleCommandEnum(cmd.command);
+                                log(DebugFeatures::MODULE_COMMAND_DEBUG,
+                                    "CommandService: Command completed successfully - type: %s (%d)",
+                                    cmd.command.c_str(), static_cast<int>(commandEnum));
+                                
                                 if (commandEnum == ModuleCommandEnum::SET_SENSOR_MODEL ||
                                     commandEnum == ModuleCommandEnum::SCAN_SENSORS ||
                                     commandEnum == ModuleCommandEnum::DELETE_SENSORS)
                                 {
                                     structureChanged = true;
+                                    log(DebugFeatures::MODULE_COMMAND_DEBUG,
+                                        "CommandService: Structure change flag set to TRUE for command: %s",
+                                        cmd.command.c_str());
                                 }
                                 break;
                             }
@@ -528,6 +535,10 @@ private:
                     hybridApiService->sendModuleCommandExecutionResult(updates);
                 }
                 
+                log(DebugFeatures::MODULE_COMMAND_DEBUG,
+                    "CommandService: After all commands - structureChanged: %s, moduleStructure: %p",
+                    structureChanged ? "true" : "false", moduleStructure);
+                
                 // Send updated module structure to server if any command modified sensors
                 if (structureChanged && moduleStructure)
                 {
@@ -544,6 +555,15 @@ private:
                     {
                         logError("CommandService: Failed to send updated module structure");
                     }
+                }
+                else if (structureChanged && !moduleStructure)
+                {
+                    logError("CommandService: Structure changed but moduleStructure is NULL!");
+                }
+                else if (!structureChanged)
+                {
+                    log(DebugFeatures::MODULE_COMMAND_DEBUG,
+                        "CommandService: Structure not changed, skipping module structure send");
                 }
             }
             else
