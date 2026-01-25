@@ -46,7 +46,15 @@ private:
             vsnprintf(buffer, sizeof(buffer), format, args);
             va_end(args);
 
-            _logger->println(DebugFeatures::NET_DEBUG, buffer);
+            IDebugFeature* debugFeature = _debugSystem->getFeature(DebugFeatures::NET_DEBUG);
+            if (debugFeature)
+            {
+                _logger->println(DebugFeatures::NET_DEBUG, buffer, debugFeature->getLogChannel());
+            }
+            else
+            {
+                _logger->println(DebugFeatures::NET_DEBUG, buffer);
+            }
         }
     }
 
