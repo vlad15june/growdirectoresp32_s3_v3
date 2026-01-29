@@ -4,6 +4,7 @@
 #include "Core/Domain/Interfaces/ISettings.h"
 #include <map>
 #include <string>
+#include <cstring>
 
 // Mock implementation of ISettings for testing
 class MockSettings : public ISettings
@@ -29,6 +30,8 @@ private:
         _byteValues["tempCoefVersion"] = 0;
         _byteValues["buttonPressedBeforeReboot"] = 0;
         _byteValues["noScanSensors"] = 0;
+        _byteValues["wasSensorScanPerformed"] = 0;
+        _byteValues["wasInitialSyncCompleted"] = 0;
 
         // Set default sensor types
         for (int i = 0; i < 4; i++)
@@ -307,6 +310,26 @@ public:
     void setNoScanSensors(uint8_t noScan) override
     {
         _byteValues["noScanSensors"] = noScan;
+    }
+
+    uint8_t getWasSensorScanPerformed() override
+    {
+        return _byteValues["wasSensorScanPerformed"];
+    }
+
+    void setWasSensorScanPerformed(uint8_t wasPerformed) override
+    {
+        _byteValues["wasSensorScanPerformed"] = wasPerformed;
+    }
+
+    uint8_t getWasInitialSyncCompleted() override
+    {
+        return _byteValues["wasInitialSyncCompleted"];
+    }
+
+    void setWasInitialSyncCompleted(uint8_t wasCompleted) override
+    {
+        _byteValues["wasInitialSyncCompleted"] = wasCompleted;
     }
 
     // Reset method to reset all values to defaults

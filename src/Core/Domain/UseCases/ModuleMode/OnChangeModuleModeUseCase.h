@@ -2,6 +2,7 @@
 #define ON_CHANGE_MODULE_MODE_USE_CASE_H
 
 #include <cstdarg>
+#include <cstdio>
 #include "Core/Domain/Interfaces/UseCases/IOnChangeModuleModeUseCase.h"
 #include "Core/Domain/Interfaces/Adapters/IArduinoAdapter.h"
 #include "Core/Domain/Interfaces/IModuleConfig.h"

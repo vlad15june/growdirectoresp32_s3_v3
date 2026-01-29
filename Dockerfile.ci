@@ -1,0 +1,41 @@
+FROM python:3.11-slim
+
+# Set env vars to avoid interactive prompts
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Install system dependencies
+# git: required by PlatformIO for some libraries
+# curl: useful utility
+# gcc/g++: required for native environment (unit tests)
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends git curl gcc g++ && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
+
+# Install PlatformIO
+RUN pip install --no-cache-dir -U platformio
+
+# Create a directory for caching platformio packages
+WORKDIR /tmp_build
+
+# Copy configuration files to trigger dependency installation
+COPY platformio.ini .
+COPY scripts/ ./scripts/
+
+# Install platform and libraries for the specific environments
+# We use a dummy run to force download of all dependencies
+# The build will fail because of missing source files, but dependencies will be cached
+# This ensures that when the container runs in CI, it doesn't need to download these again
+RUN pio run -e esp32-s3-devkitm-1 || true
+RUN pio run -e native || true
+
+# Clean up build artifacts to reduce image size, but keep .platformio folder
+# The .platformio folder is located in the user's home directory (~/.platformio)
+# We also remove the .cache directory which holds downloaded archives
+RUN rm -rf /tmp_build && \
+    rm -rf /root/.platformio/.cache
+
+# Set the working directory for the actual project
+WORKDIR /workspace
+
+CMD ["/bin/bash"]

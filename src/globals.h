@@ -65,7 +65,7 @@
 #include "Infrastructure/Adapters/Json/ArduinoJsonConverter.h"
 #include "Application/Services/DiagnosticService.h"
 #include "Infrastructure/Controllers/MQTT/MqttApiService.h"
-#include "Infrastructure/Controllers/API/HybridAPIService.h"
+#include "Infrastructure/Controllers/Api/HybridAPIService.h"
 #include "Infrastructure/Adapters/SPIFFS/SpiffsAdapter.h"
 #include "Infrastructure/Adapters/SPIFFS/SpiffsRuleDao.h"
 #include "Infrastructure/Adapters/SPIFFS/SpiffsSensorDao.h"

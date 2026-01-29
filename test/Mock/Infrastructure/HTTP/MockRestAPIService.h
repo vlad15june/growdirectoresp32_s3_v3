@@ -184,6 +184,8 @@ public:
     
     int getCountOffline() const override { return countOffline; }
     void resetCountOffline() override { countOffline = 0; }
+
+    bool checkIsModuleDeleted() override { return false; }
 };
 
 #endif // MOCK_REST_API_SERVICE_H

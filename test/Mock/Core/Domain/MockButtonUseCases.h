@@ -71,6 +71,10 @@ public:
     void clearSavedButtonState() override {
         clearSavedButtonStateCalled = true;
     }
+
+    void loop() override {
+        // Do nothing in mock
+    }
 };
 
 #endif // MOCK_BUTTON_USE_CASES_H

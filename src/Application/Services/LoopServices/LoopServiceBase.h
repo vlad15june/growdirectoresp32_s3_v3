@@ -13,6 +13,7 @@
 #include "Core/Domain/Interfaces/BoardTesting/IBoardTest.h"
 #include "Application/Interfaces/WebServices/IWebServerLooper.h"
 #include <stdarg.h>
+#include <cstdio>
 
 class LoopServiceBase : public ILoopService {
 protected:

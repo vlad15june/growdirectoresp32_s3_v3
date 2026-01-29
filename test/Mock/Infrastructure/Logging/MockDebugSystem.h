@@ -2,6 +2,7 @@
 #define MOCK_DEBUG_SYSTEM_H
 
 #include "Core/Domain/Interfaces/IDebugSystem.h"
+#include "Core/Domain/Interfaces/ILogger.h"
 #include <map>
 #include <string>
 #include <vector>
@@ -12,12 +13,14 @@ private:
     std::string name;
     std::string mqttTopic;
     bool enabled;
+    MqttLoggerMode logChannel;
 
 public:
-    MockDebugFeature(const char* featureName, const char* topic, bool initialState) 
-        : name(featureName ? featureName : ""), 
+    MockDebugFeature(const char* featureName, const char* topic, bool initialState, MqttLoggerMode channel = MqttLoggerMode::MqttAndSerial)
+        : name(featureName ? featureName : ""),
           mqttTopic(topic ? topic : ""),
-          enabled(initialState) {}
+          enabled(initialState),
+          logChannel(channel) {}
 
     const char* getName() const override {
         return name.c_str();
@@ -34,29 +37,41 @@ public:
     void setEnabled(bool newState) override {
         enabled = newState;
     }
+
+    MqttLoggerMode getLogChannel() const override {
+        return logChannel;
+    }
+
+    void setLogChannel(MqttLoggerMode channel) override {
+        logChannel = channel;
+    }
 };
 
 // Simplified MockDebugSystem
 class MockDebugSystem : public IDebugSystem {
 public:
     bool featureEnabled = true;
-    
-    IDebugFeature* registerFeature(const char* name, const char* mqttTopic = nullptr, bool initialState = false) override {
+
+    IDebugFeature* registerFeature(const char* name, const char* mqttTopic = nullptr, bool initialState = false, MqttLoggerMode channel = MqttLoggerMode::MqttAndSerial) override {
         return nullptr;
     }
-    
+
     IDebugFeature* getFeature(const char* name) override {
         return nullptr;
     }
-    
+
     void setDebugFeatureState(const char *feature, bool isEnabled) override {
         // Do nothing
     }
-    
+
+    void setFeatureLogChannel(const char *featureName, MqttLoggerMode channel) override {
+        // Do nothing
+    }
+
     bool isFeatureEnabled(const char* featureName) override {
         return featureEnabled;
     }
-    
+
     void reset() {
         featureEnabled = true;
     }

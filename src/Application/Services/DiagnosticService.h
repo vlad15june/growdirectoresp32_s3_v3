@@ -13,6 +13,8 @@
 #include "Infrastructure/Adapters/Time/INTPTimeAdapter.h"
 #include "Core/Domain/Enums/BootTypeEnum.h"
 #include "Core/Domain/Enums/ModuleModeEnum.h"
+#include <cstdarg>
+#include <cstdio>
 
 // Replace defines with enum
 enum DiagnosticsNetworkState {

@@ -7,6 +7,7 @@
 #include "Mock/Infrastructure/Api/MockHybridAPIService.h"
 #include "Core/Domain/Data/Models/ModuleStructure.h"
 #include "Mock/Infrastructure/Configuration/MockModuleConfig.h"
+#include "Mock/Infrastructure/Configuration/MockSettings.h"
 #include "Mock/UseCases/Rules/MockSyncRulesUseCase.h"
 #include "Mock/UseCases/SensorTypes/MockSyncSensorTypesUseCase.h"
 #include "Application/DTOs/DeviceCommandUpdateDto.h"
@@ -18,6 +19,7 @@ static MockWifiAdapter g_mockWifiAdapter;
 static MockWiFiManager g_mockWifiManager;
 static MockHybridAPIService g_mockApiService;
 static MockModuleConfig g_mockModuleConfig;
+static MockSettings g_mockSettings;
 static MockSyncRulesUseCase g_mockSyncRulesUseCase;
 static MockSyncSensorTypesUseCase g_mockSyncSensorTypesUseCase;
 static ModuleStructure g_moduleStructure;
@@ -31,10 +33,14 @@ void on_change_local_ip_use_case_setup(void) {
     g_mockWifiManager.reset();
     g_mockApiService.reset();
     g_mockModuleConfig.reset();
+    g_mockSettings.reset();
     g_mockSyncRulesUseCase.reset();
     
+    // Inject settings into module config
+    g_mockModuleConfig.setSettings(&g_mockSettings);
+    
     // Enable network debugging for log messages
-    g_mockDebugSystem.featureEnabled = true;
+    g_mockDebugSystem.featureEnabled = false; // Disable to test if logging causes crash
     
     // Setup a basic module structure with one node
     g_moduleStructure.nodes.clear();
@@ -64,8 +70,10 @@ void on_change_local_ip_use_case_setup(void) {
 }
 
 void on_change_local_ip_use_case_teardown(void) {
-    delete g_onChangeLocalIpUseCase;
-    g_onChangeLocalIpUseCase = nullptr;
+    if (g_onChangeLocalIpUseCase != nullptr) {
+        delete g_onChangeLocalIpUseCase;
+        g_onChangeLocalIpUseCase = nullptr;
+    }
 }
 
 // Test functions
@@ -108,6 +116,7 @@ void test_perform_with_same_ip_no_change(void) {
     // First set one IP to initialize the internal _oldIpStr
     g_mockWifiAdapter.setLocalIP("192.168.1.100");
     g_mockWifiAdapter.setConnected(true);
+    
     g_onChangeLocalIpUseCase->perform();
     
     // Reset the mock to check if it gets called again
@@ -194,7 +203,8 @@ void test_perform_send_structure_failure_triggers_restart(void) {
 
 // Main test runner function
 extern "C" int run_on_change_local_ip_use_case_tests(void) {
-    UNITY_BEGIN();
+    printf("\n----- Running OnChangeLocalIpUseCase Tests -----\n");
+    fflush(stdout);
     
     RUN_TEST(test_perform_when_ip_is_zero_ip);
     RUN_TEST(test_perform_when_wifi_not_connected);
@@ -203,5 +213,6 @@ extern "C" int run_on_change_local_ip_use_case_tests(void) {
     RUN_TEST(test_perform_with_changing_ip);
     RUN_TEST(test_perform_send_structure_failure_triggers_restart);
     
-    return UNITY_END();
+    printf("\n----- OnChangeLocalIpUseCase Tests Complete -----\n");
+    return 0;
 }

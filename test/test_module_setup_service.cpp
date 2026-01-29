@@ -97,6 +97,7 @@ static void module_setup_service_setup(void) {
         &g_mockDebugSystem,
         &g_mockModuleConfig,
         &g_mockLedAdapter,
+        nullptr, // buttonAdapter
         &g_mockLedUseCases,
         &g_mockButtonUseCases,
         &g_mockWifiAdapter,
@@ -182,7 +183,8 @@ static void test_setup_module_without_led_adapter(void) {
         &g_mockLogger,
         &g_mockDebugSystem,
         &g_mockModuleConfig,
-        nullptr,
+        nullptr, // ledAdapter
+        nullptr, // buttonAdapter
         &g_mockLedUseCases,
         &g_mockButtonUseCases,
         &g_mockWifiAdapter,
@@ -191,7 +193,7 @@ static void test_setup_module_without_led_adapter(void) {
         &g_mockLoopServiceFactory,
         &g_mockMqttManager
     );
-    
+
     // This should not crash and should still initialize the config
     g_moduleSetupService->setupModule();
     
@@ -211,6 +213,7 @@ static void test_setup_module_without_config(void) {
         &g_mockDebugSystem,
         nullptr,
         &g_mockLedAdapter,
+        nullptr, // buttonAdapter
         &g_mockLedUseCases,
         &g_mockButtonUseCases,
         &g_mockWifiAdapter,
@@ -253,7 +256,8 @@ static void test_setup_module_without_led_use_cases(void) {
         &g_mockDebugSystem,
         &g_mockModuleConfig,
         &g_mockLedAdapter,
-        nullptr,
+        nullptr, // buttonAdapter
+        nullptr, // ledUseCases
         &g_mockButtonUseCases,
         &g_mockWifiAdapter,
         &g_mockWiFiManager,
@@ -261,7 +265,7 @@ static void test_setup_module_without_led_use_cases(void) {
         &g_mockLoopServiceFactory,
         &g_mockMqttManager
     );
-    
+
     // This should not crash and should still initialize the config and LEDs
     g_moduleSetupService->setupModule();
     
@@ -363,7 +367,7 @@ static void test_module_mode_initialization_when_invalid(void) {
     if (debug_file != nullptr) fprintf(debug_file, "getIfConfigured = %d\n", g_mockSettings.getIfConfigured());
 
     TEST_ASSERT_TRUE(invalidMode != g_mockSettings.getIfConfigured());
-    TEST_ASSERT_EQUAL(ModuleModeEnum::AP_TEST_MODE, g_mockSettings.getIfConfigured());
+    TEST_ASSERT_EQUAL(ModuleModeEnum::USER_CAN_CONFIGURE, g_mockSettings.getIfConfigured());
     
     module_setup_service_teardown();
     if (debug_file != nullptr) fprintf(debug_file, "Finished test_module_mode_initialization_when_invalid\n");
@@ -380,6 +384,7 @@ static void test_setup_module_without_web_server_launcher(void) {
         &g_mockDebugSystem,
         &g_mockModuleConfig,
         &g_mockLedAdapter,
+        nullptr, // buttonAdapter
         &g_mockLedUseCases,
         &g_mockButtonUseCases,
         &g_mockWifiAdapter,
@@ -813,6 +818,7 @@ static void test_setup_ap_handles_missing_wifi_adapter() {
         &g_mockDebugSystem,
         &g_mockModuleConfig,
         &g_mockLedAdapter,
+        nullptr, // buttonAdapter
         &g_mockLedUseCases,
         &g_mockButtonUseCases,
         nullptr, // No WiFi adapter
@@ -900,6 +906,7 @@ static void test_setup_web_server_handles_null_launcher() {
         &g_mockDebugSystem,
         &g_mockModuleConfig,
         &g_mockLedAdapter,
+        nullptr, // buttonAdapter
         &g_mockLedUseCases,
         &g_mockButtonUseCases,
         &g_mockWifiAdapter,
@@ -953,6 +960,7 @@ static void test_get_loop_service_handles_null_factory() {
         &g_mockDebugSystem,
         &g_mockModuleConfig,
         &g_mockLedAdapter,
+        nullptr, // buttonAdapter
         &g_mockLedUseCases,
         &g_mockButtonUseCases,
         &g_mockWifiAdapter,
@@ -985,6 +993,7 @@ static void test_get_loop_service_handles_null_config() {
         &g_mockDebugSystem,
         nullptr,  // Null config
         &g_mockLedAdapter,
+        nullptr, // buttonAdapter
         &g_mockLedUseCases,
         &g_mockButtonUseCases,
         &g_mockWifiAdapter,
@@ -1093,6 +1102,7 @@ static void test_configure_done_mode_configure_sets_up_mqtt_connection() {
         &g_mockDebugSystem,
         &g_mockModuleConfig,
         &g_mockLedAdapter,
+        nullptr, // buttonAdapter
         &g_mockLedUseCases,
         &g_mockButtonUseCases,
         &g_mockWifiAdapter,
@@ -1128,6 +1138,7 @@ static void test_configure_done_mode_configure_handles_mqtt_connection_subscribe
         &g_mockDebugSystem,
         &g_mockModuleConfig,
         &g_mockLedAdapter,
+        nullptr, // buttonAdapter
         &g_mockLedUseCases,
         &g_mockButtonUseCases,
         &g_mockWifiAdapter,
@@ -1167,6 +1178,7 @@ static void test_configure_done_mode_configure_handles_missing_mqtt_manager() {
         &g_mockDebugSystem,
         &g_mockModuleConfig,
         &g_mockLedAdapter,
+        nullptr, // buttonAdapter
         &g_mockLedUseCases,
         &g_mockButtonUseCases,
         &g_mockWifiAdapter,
@@ -1237,6 +1249,7 @@ static void test_configure_done_mode_configure_handles_missing_wifi_manager() {
         &g_mockDebugSystem,
         &g_mockModuleConfig,
         &g_mockLedAdapter,
+        nullptr, // buttonAdapter
         &g_mockLedUseCases,
         &g_mockButtonUseCases,
         &g_mockWifiAdapter,
@@ -1357,6 +1370,7 @@ static void test_configure_done_mode_configure_handles_null_device_service() {
         &g_mockDebugSystem,
         &g_mockModuleConfig,
         &g_mockLedAdapter,
+        nullptr, // buttonAdapter
         &g_mockLedUseCases,
         &g_mockButtonUseCases,
         &g_mockWifiAdapter,
@@ -1424,6 +1438,7 @@ static void test_configure_done_mode_configure_sets_up_mqtt_topic_handlers_on_su
         &g_mockDebugSystem,
         &g_mockModuleConfig,
         &g_mockLedAdapter,
+        nullptr, // buttonAdapter
         &g_mockLedUseCases,
         &g_mockButtonUseCases,
         &g_mockWifiAdapter,
@@ -1463,6 +1478,7 @@ static void test_configure_done_mode_configure_do_not_sets_up_mqtt_topic_handler
         &g_mockDebugSystem,
         &g_mockModuleConfig,
         &g_mockLedAdapter,
+        nullptr, // buttonAdapter
         &g_mockLedUseCases,
         &g_mockButtonUseCases,
         &g_mockWifiAdapter,

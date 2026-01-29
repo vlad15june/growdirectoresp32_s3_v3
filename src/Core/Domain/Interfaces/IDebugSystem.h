@@ -3,6 +3,7 @@
 
 #include <map>
 #include <vector>
+#include "ILogger.h"
 
 // Debug feature constants
 namespace DebugFeatures {
@@ -67,9 +68,6 @@ namespace DebugFeatures {
     constexpr const char* UPDATE_FIRMWARE_DEBUG = "UPDATE_FIRMWARE";
     constexpr const char* SPIFFS_DEBUG = "SPIFFS";
 }
-
-// Forward declaration for MqttLoggerMode
-enum class MqttLoggerMode;
 
 // Debug feature interface
 class IDebugFeature

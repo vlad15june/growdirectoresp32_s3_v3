@@ -1,0 +1,176 @@
+image: atlassian/default-image:3
+
+definitions:
+  caches:
+    pio: ~/.platformio
+
+  steps:
+    - step: &build-base-image
+        name: Build and Push Base Image
+        services:
+          - docker
+        script:
+          - export REGISTRY="registry.digitalocean.com/grow-director-v3-registry"
+          - export IMAGE_TAG=$(git rev-parse --short "$BITBUCKET_COMMIT")
+          - |
+            if [ "$BITBUCKET_BRANCH" = "main" ]; then
+              export TARGET_ENV="production"
+            elif echo "$BITBUCKET_BRANCH" | grep -q "^release/"; then
+              export TARGET_ENV="stage"
+            else
+              export TARGET_ENV="develop"
+            fi
+          - export IMAGE_NAME="$REGISTRY/$TARGET_ENV/gd-firmware-ci"
+          - docker login --username $DOCKER_LOGIN --password $DOCKER_PASSWORD $REGISTRY
+          - docker build -f Dockerfile.ci -t "$IMAGE_NAME:$IMAGE_TAG" -t "$IMAGE_NAME:latest" .
+          - docker push --all-tags "$IMAGE_NAME"
+
+    - step: &test
+        name: Run Tests
+        script:
+          - VERSION=$(cat VERSION)
+          - export PLATFORMIO_BUILD_FLAGS="-DFIRMWARE_VERSION='${VERSION}'"
+          - pio test -e native -vvv
+
+    - step: &build
+        name: Build Firmware
+        script:
+          - VERSION=$(cat VERSION)
+          - VERSION_CLEAN=$(echo $VERSION | tr -d '"')
+          - BRANCH_SAFE=$(echo $BITBUCKET_BRANCH | sed 's/\//-/g')
+          - export PLATFORMIO_BUILD_FLAGS="-DFIRMWARE_VERSION='${VERSION}'"
+          - echo "Building firmware version ${VERSION_CLEAN} for branch ${BRANCH_SAFE}"
+          - pio run -e esp32-s3-devkitm-1
+          - mkdir -p artifacts
+          - cp .pio/build/esp32-s3-devkitm-1/firmware.bin artifacts/firmware-${VERSION_CLEAN}-${BRANCH_SAFE}.bin
+          - |
+            cat > artifacts/build-info.json << EOF
+            {
+              "version": "${VERSION_CLEAN}",
+              "branch": "${BITBUCKET_BRANCH}",
+              "commit": "${BITBUCKET_COMMIT}",
+              "build_number": "${BITBUCKET_BUILD_NUMBER}",
+              "timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            }
+            EOF
+          - echo "Build artifacts created:"
+          - ls -la artifacts/
+        artifacts:
+          - artifacts/**
+
+    # TODO: Need to implement upload to GD Api, it's only placeholder for now
+    # Requires: UPLOAD_URL, UPLOAD_API_KEY in deployment environment variables
+    # - step: &upload
+    #     name: Upload Firmware
+    #     script:
+    #       - VERSION=$(cat VERSION)
+    #       - VERSION_CLEAN=$(echo $VERSION | tr -d '"')
+    #       - BRANCH_SAFE=$(echo $BITBUCKET_BRANCH | sed 's/\//-/g')
+    #       - echo "Uploading firmware-${VERSION_CLEAN}-${BRANCH_SAFE}.bin to ${UPLOAD_URL}"
+    #       - |
+    #         curl -X POST "${UPLOAD_URL}/api/firmware/upload" \
+    #           -H "Authorization: Bearer ${UPLOAD_API_KEY}" \
+    #           -F "file=@artifacts/firmware-${VERSION_CLEAN}-${BRANCH_SAFE}.bin" \
+    #           -F "metadata=@artifacts/build-info.json"
+
+pipelines:
+  default:
+    - step:
+        <<: *test
+        image:
+          name: registry.digitalocean.com/grow-director-v3-registry/develop/gd-firmware-ci:latest
+          username: $DOCKER_LOGIN
+          password: $DOCKER_PASSWORD
+
+  branches:
+    develop:
+      - step:
+          <<: *build-base-image
+          condition:
+            changesets:
+              includePaths:
+                - "Dockerfile.ci"
+                - "platformio.ini"
+                - "scripts/**"
+      - step:
+          <<: *test
+          image:
+            name: registry.digitalocean.com/grow-director-v3-registry/develop/gd-firmware-ci:latest
+            username: $DOCKER_LOGIN
+            password: $DOCKER_PASSWORD
+      - step:
+          <<: *build
+          image:
+            name: registry.digitalocean.com/grow-director-v3-registry/develop/gd-firmware-ci:latest
+            username: $DOCKER_LOGIN
+            password: $DOCKER_PASSWORD
+      # TODO: Upload to GD Api
+      # - step:
+      #     <<: *upload
+      #     deployment: development
+      #     condition:
+      #       changesets:
+      #         includePaths:
+      #           - "VERSION"
+
+    # Staging environment - Tests and Build on every commit
+    'release/*':
+      - step:
+          <<: *build-base-image
+          condition:
+            changesets:
+              includePaths:
+                - "Dockerfile.ci"
+                - "platformio.ini"
+                - "scripts/**"
+      - step:
+          <<: *test
+          image:
+            name: registry.digitalocean.com/grow-director-v3-registry/stage/gd-firmware-ci:latest
+            username: $DOCKER_LOGIN
+            password: $DOCKER_PASSWORD
+      - step:
+          <<: *build
+          image:
+            name: registry.digitalocean.com/grow-director-v3-registry/stage/gd-firmware-ci:latest
+            username: $DOCKER_LOGIN
+            password: $DOCKER_PASSWORD
+      # TODO:: Upload to staging GD Api
+      # - step:
+      #     <<: *upload
+      #     deployment: staging
+      #     condition:
+      #       changesets:
+      #         includePaths:
+      #           - "VERSION"
+
+    # Production environment - Tests and Build on every commit
+    main:
+      - step:
+          <<: *build-base-image
+          condition:
+            changesets:
+              includePaths:
+                - "Dockerfile.ci"
+                - "platformio.ini"
+                - "scripts/**"
+      - step:
+          <<: *test
+          image:
+            name: registry.digitalocean.com/grow-director-v3-registry/production/gd-firmware-ci:latest
+            username: $DOCKER_LOGIN
+            password: $DOCKER_PASSWORD
+      - step:
+          <<: *build
+          image:
+            name: registry.digitalocean.com/grow-director-v3-registry/production/gd-firmware-ci:latest
+            username: $DOCKER_LOGIN
+            password: $DOCKER_PASSWORD
+      # TODO:: Upload to prod GD Api
+      # - step:
+      #     <<: *upload
+      #     deployment: production
+      #     condition:
+      #       changesets:
+      #         includePaths:
+      #           - "VERSION"
