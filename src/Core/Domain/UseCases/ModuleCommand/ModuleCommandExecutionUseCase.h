@@ -11,6 +11,7 @@
 #include "Core/Domain/Interfaces/API/IHybridAPIService.h"
 #include "Core/Domain/Interfaces/IClearModuleDataService.h"
 #include "Core/Domain/Data/Entities/Sensor/Sensor.h"
+#include "Core/Domain/Data/Models/ModuleStructure.h"
 #include "Core/Domain/Enums/ModuleCommandEnum.h"
 #include "Core/Domain/Enums/ModuleCommandStatus.h"
 #include "Core/Domain/Enums/SensorStatusEnum.h"
@@ -36,11 +37,12 @@ private:
     ISettings *settings;
     IHybridAPIService *hybridApiService;
     IClearModuleDataService *clearModuleDataService;
+    ModuleStructure *moduleStructure;
     static const unsigned long commandMaxAgeSeconds = 300;
 
 public:
-    ModuleCommandExecutionUseCase(ILogger *logger = nullptr, IDebugSystem *debugSystem = nullptr, INTPTimeAdapter *timeAdapter = nullptr, IFirmwareRemoteUpdate *firmwareUpdater = nullptr, IArduinoAdapter *arduinoAdapter = nullptr, ISensorRepository *sensorRepository = nullptr, ISensorTypeRepository *sensorTypeRepository = nullptr, ISensorReader *sensorReader = nullptr, IModuleConfig *moduleConfig = nullptr, ISettings *settings = nullptr, IHybridAPIService *hybridApiService = nullptr, IClearModuleDataService *clearModuleDataService = nullptr)
-        : logger(logger), debugSystem(debugSystem), timeAdapter(timeAdapter), firmwareUpdater(firmwareUpdater), arduinoAdapter(arduinoAdapter), sensorRepository(sensorRepository), sensorTypeRepository(sensorTypeRepository), sensorReader(sensorReader), moduleConfig(moduleConfig), settings(settings), hybridApiService(hybridApiService), clearModuleDataService(clearModuleDataService) {}
+    ModuleCommandExecutionUseCase(ILogger *logger = nullptr, IDebugSystem *debugSystem = nullptr, INTPTimeAdapter *timeAdapter = nullptr, IFirmwareRemoteUpdate *firmwareUpdater = nullptr, IArduinoAdapter *arduinoAdapter = nullptr, ISensorRepository *sensorRepository = nullptr, ISensorTypeRepository *sensorTypeRepository = nullptr, ISensorReader *sensorReader = nullptr, IModuleConfig *moduleConfig = nullptr, ISettings *settings = nullptr, IHybridAPIService *hybridApiService = nullptr, IClearModuleDataService *clearModuleDataService = nullptr, ModuleStructure *moduleStructure = nullptr)
+        : logger(logger), debugSystem(debugSystem), timeAdapter(timeAdapter), firmwareUpdater(firmwareUpdater), arduinoAdapter(arduinoAdapter), sensorRepository(sensorRepository), sensorTypeRepository(sensorTypeRepository), sensorReader(sensorReader), moduleConfig(moduleConfig), settings(settings), hybridApiService(hybridApiService), clearModuleDataService(clearModuleDataService), moduleStructure(moduleStructure) {}
     
     virtual ~ModuleCommandExecutionUseCase() = default;
 
@@ -587,12 +589,28 @@ private:
             }
         }
 
+        // Update module structure - remove all sensors from this pin
+        if (moduleStructure)
+        {
+            moduleStructure->removeSensorsByPin(pin);
+            log(DebugFeatures::MODULE_COMMAND_DEBUG,
+                "ModuleCommandUseCase: Cleared moduleStructure on pin %d", pin);
+        }
+
         // Save the new sensor first
         if (!sensorRepository->save(newSensorEntity))
         {
             log(DebugFeatures::MODULE_COMMAND_DEBUG,
                 "ModuleCommandUseCase: Failed to save sensor to repository");
             return {ModuleCommandStatus::ERROR, "Failed to save sensor"};
+        }
+
+        // Update module structure - add new sensor
+        if (moduleStructure)
+        {
+            moduleStructure->addSensor(newSensorEntity);
+            log(DebugFeatures::MODULE_COMMAND_DEBUG,
+                "ModuleCommandUseCase: Added new sensor to moduleStructure on pin %d", pin);
         }
 
         log(DebugFeatures::MODULE_COMMAND_DEBUG,
@@ -708,6 +726,14 @@ private:
             return {ModuleCommandStatus::ERROR, "Failed to delete some sensors"};
         }
 
+        // Update module structure - remove sensors from this pin
+        if (moduleStructure)
+        {
+            moduleStructure->removeSensorsByPin(pin);
+            log(DebugFeatures::MODULE_COMMAND_DEBUG,
+                "ModuleCommandUseCase: Removed sensors from moduleStructure on pin %d", pin);
+        }
+
         log(DebugFeatures::MODULE_COMMAND_DEBUG,
             "ModuleCommandUseCase: Successfully deleted %d sensor(s) from pin %d", 
             sensorsToDelete.size(), pin);
@@ -801,6 +827,14 @@ private:
                         log(DebugFeatures::MODULE_COMMAND_DEBUG,
                             "ModuleCommandUseCase: Successfully saved detected sensor %s to repository with NEW status", 
                             tempSensor.uid.c_str());
+                        
+                        // Update module structure - add detected sensor
+                        if (moduleStructure)
+                        {
+                            moduleStructure->addSensor(tempSensor);
+                            log(DebugFeatures::MODULE_COMMAND_DEBUG,
+                                "ModuleCommandUseCase: Added detected sensor to moduleStructure on pin %d", pin);
+                        }
                     }
                     else
                     {
@@ -860,6 +894,14 @@ private:
                                 log(DebugFeatures::MODULE_COMMAND_DEBUG,
                                     "ModuleCommandUseCase: Successfully saved detected sensor %s to repository with NEW status", 
                                     tempSensor.uid.c_str());
+                                
+                                // Update module structure - add detected sensor
+                                if (moduleStructure)
+                                {
+                                    moduleStructure->addSensor(tempSensor);
+                                    log(DebugFeatures::MODULE_COMMAND_DEBUG,
+                                        "ModuleCommandUseCase: Added detected sensor to moduleStructure on pin %d", pin);
+                                }
                             }
                             else
                             {

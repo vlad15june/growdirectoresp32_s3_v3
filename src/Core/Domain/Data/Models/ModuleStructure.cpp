@@ -2,6 +2,7 @@
 #define MODULE_STRUCTURE_CPP
 
 #include "ModuleStructure.h"
+#include "Core/Domain/Data/Entities/Sensor/Sensor.h"
 
 Sensor* ModuleStructure::findSensorByUid(const std::string& sensorUid) {
     for (Node& node : nodes) {
@@ -81,6 +82,51 @@ std::string ModuleStructure::getDeviceType() const {
     }
     
     return "unknown";
+}
+
+void ModuleStructure::addSensor(const SensorEntity& sensorEntity) {
+    // ESP32-S3 modules have only one node
+    if (nodes.empty()) {
+        return;
+    }
+    
+    Node& node = nodes[0];
+    
+    // Remove existing sensor with same UID if present
+    for (auto it = node.sensors.begin(); it != node.sensors.end(); ++it) {
+        if (it->uid == sensorEntity.uid) {
+            node.sensors.erase(it);
+            break;
+        }
+    }
+    
+    // Convert SensorEntity to Sensor and add to node
+    Sensor sensor;
+    sensor.uid = sensorEntity.uid;
+    sensor.type = sensorEntity.sensorType;
+    sensor.pin = sensorEntity.pin;
+    sensor.group = 0; // Default group
+    sensor.modelUid = sensorEntity.sensorTypeUid;
+    
+    node.sensors.push_back(sensor);
+}
+
+void ModuleStructure::removeSensorsByPin(int pin) {
+    // ESP32-S3 modules have only one node
+    if (nodes.empty()) {
+        return;
+    }
+    
+    Node& node = nodes[0];
+    
+    // Remove all sensors with matching pin
+    node.sensors.erase(
+        std::remove_if(node.sensors.begin(), node.sensors.end(),
+            [pin](const Sensor& sensor) {
+                return sensor.pin == pin;
+            }),
+        node.sensors.end()
+    );
 }
 
 #endif
