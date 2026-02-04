@@ -31,6 +31,9 @@
 #include "Core/Domain/Interfaces/API/IHybridAPIService.h"
 #include "Core/Domain/Interfaces/IClearModuleDataService.h"
 #include "Core/Domain/Interfaces/Adapters/IArduinoAdapter.h"
+#include <memory>
+#include <cstdarg>
+#include <cstdio>
 
 class IModuleSetupService
 {

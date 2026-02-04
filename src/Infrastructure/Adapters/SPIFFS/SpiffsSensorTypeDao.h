@@ -8,6 +8,9 @@
 #include "Core/Domain/Data/Entities/Sensor/SensorType.h"
 #include <string>
 #include <stdarg.h>
+#include <cstdio>
+#include <functional>
+#include <stdexcept>
 
 class SpiffsSensorTypeDao : public ISpiffsSensorTypeDao {
 protected:

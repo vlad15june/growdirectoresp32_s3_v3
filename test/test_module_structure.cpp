@@ -59,7 +59,8 @@ void test_module_structure_parse_and_serialize(void) {
 
     TEST_ASSERT_EQUAL(2, node.sensors.size());
     TEST_ASSERT_EQUAL_STRING("air_temp", node.sensors[0].type.c_str());
-    TEST_ASSERT_EQUAL(4, node.sensors[0].pin);
+    // pin 4 in JSON is converted to 0 internally by convertPinFromJson
+    TEST_ASSERT_EQUAL(0, node.sensors[0].pin);
 
     TEST_ASSERT_EQUAL(1, node.relays.size());
     TEST_ASSERT_EQUAL_STRING("84:F7:03:FE:88:30.00", node.relays[0].uid.c_str());

@@ -9,6 +9,8 @@
 #include "Core/Domain/Interfaces/IModuleConfig.h"
 #include "Core/Domain/Enums/ModuleModeEnum.h"
 #include "Core/Domain/Interfaces/IClearModuleDataService.h"
+#include <cstdarg>
+#include <cstdio>
 
 class ButtonUseCases : public IButtonUseCases {
 private:

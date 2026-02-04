@@ -1,4 +1,5 @@
 #include <unity.h>
+#include <stdio.h>
 
 // External test functions
 extern "C" void run_mock_settings_tests(void);
@@ -18,6 +19,14 @@ extern "C" void run_rule_converter_tests(void);
 extern "C" void run_update_dto_converter_tests(void);
 extern "C" int run_sensor_type_repository_tests(void);
 extern "C" int run_spiffs_sensor_type_dao_tests(void);
+
+void setUp(void) {
+    // set stuff up here
+}
+
+void tearDown(void) {
+    // clean stuff up here
+}
 
 static void setUp_module_config(void) {
     // Setup for each test

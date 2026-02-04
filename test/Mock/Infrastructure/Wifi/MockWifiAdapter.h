@@ -199,28 +199,20 @@ public:
         // Not implemented for mock
     }
     
-    // Multi-network functionality implementation
     bool addNetwork(const char* ssid, const char* password) override {
         addNetworkCalled = true;
-        NetworkCredentials creds;
-        creds.ssid = ssid;
-        creds.password = password;
-        savedNetworks.push_back(creds);
+        if (addNetworkSuccess) {
+            savedNetworks.push_back({ssid, password});
+        }
         return addNetworkSuccess;
     }
     
     bool connectToNetworks(unsigned long timeout = 20000) override {
         connectToNetworksCalled = true;
-        
-        if (savedNetworks.size() > 0 && connectToNetworksSuccess) {
-            // Simulate connecting to the first network
-            strncpy(lastSSID, savedNetworks[0].ssid.c_str(), sizeof(lastSSID));
-            strncpy(lastPassword, savedNetworks[0].password.c_str(), sizeof(lastPassword));
+        if (connectToNetworksSuccess && !savedNetworks.empty()) {
             connected = true;
-            return true;
         }
-        
-        return false;
+        return connectToNetworksSuccess;
     }
     
     void clearNetworks() override {

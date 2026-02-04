@@ -15,6 +15,8 @@
 #include "Application/DTOs/ModuleCommandUpdateDto.h"
 #include "Core/Domain/Data/Entities/Rule.h"
 #include "Application/DTOs/CommandResultDto.h"
+#include <cstdarg>
+#include <cstdio>
 
 /**
  * Implementation of hybrid API service that can use both REST and MQTT APIs

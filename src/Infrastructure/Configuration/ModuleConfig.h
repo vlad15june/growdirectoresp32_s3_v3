@@ -7,6 +7,8 @@
 #include "Core/Domain/Interfaces/ISettings.h"
 #include "Core/Domain/Interfaces/Adapters/IWifiAdapter.h" // Add include for IWifiAdapter
 #include "Infrastructure/Adapters/Time/INTPTimeAdapter.h"
+#include <cstdarg>
+#include <cstdio>
 
 #define CID_0 5
 #define CID_1 6
@@ -51,7 +53,10 @@ private:
     IWifiAdapter *wifiAdapter;
     ModuleModeEnum requestedModuleMode;
     ModuleModeEnum currentModuleMode;
-    static constexpr const char* FIRMWARE_VERSION = "2.1.19";
+#ifndef FIRMWARE_VERSION
+    #define FIRMWARE_VERSION "0.0.0-dev"
+#endif
+    static constexpr const char* firmwareVersion = FIRMWARE_VERSION;
         
     // LED arrays
     uint8_t* redLeds;
@@ -175,7 +180,8 @@ public:
           settings(settingsInstance), timeAdapter(timeAdapterInstance),
           wifiAdapter(wifiAdapterInstance),
           requestedModuleMode(ModuleModeEnum::USER_CAN_CONFIGURE),
-          currentModuleMode(ModuleModeEnum::USER_CAN_CONFIGURE) {}
+          currentModuleMode(ModuleModeEnum::USER_CAN_CONFIGURE),
+          redLeds(nullptr), greenLeds(nullptr) {}
           
     ~ModuleConfig() {
         if (redLeds != nullptr) {
@@ -366,7 +372,7 @@ public:
     }
     
     const char* getFirmwareVersion() const override {
-        return FIRMWARE_VERSION; //TODO: define in globals if not defined then use this
+        return firmwareVersion;
     }
     
     int getSensorPinCount() const override {

@@ -59,9 +59,9 @@ static void fill_module_structure_setup() {
         &g_testLogger,
         &g_testDebugSystem,
         &g_testModuleConfig,
-        nullptr, nullptr, nullptr, // LED and button components not needed
+        nullptr, nullptr, nullptr, nullptr, // ledAdapter, buttonAdapter, ledUseCases, buttonUseCases
         &g_testWifiAdapter,
-        nullptr, nullptr, nullptr, nullptr, // Other components not needed
+        nullptr, nullptr, nullptr, nullptr, // wifiManager, webServerLauncher, loopServiceFactory, mqttManager
         &g_testModuleStructure
     );
 }
@@ -367,9 +367,9 @@ static void test_fill_module_structure_handles_null_module_structure() {
         &g_testLogger,
         &g_testDebugSystem,
         &g_testModuleConfig,
-        nullptr, nullptr, nullptr,
+        nullptr, nullptr, nullptr, nullptr, // ledAdapter, buttonAdapter, ledUseCases, buttonUseCases
         &g_testWifiAdapter,
-        nullptr, nullptr, nullptr, nullptr,
+        nullptr, nullptr, nullptr, nullptr, // wifiManager, webServerLauncher, loopServiceFactory, mqttManager
         nullptr // No module structure
     );
     
@@ -391,9 +391,9 @@ static void test_fill_module_structure_handles_null_module_config() {
         &g_testLogger,
         &g_testDebugSystem,
         nullptr, // No module config
-        nullptr, nullptr, nullptr,
+        nullptr, nullptr, nullptr, nullptr, // ledAdapter, buttonAdapter, ledUseCases, buttonUseCases
         &g_testWifiAdapter,
-        nullptr, nullptr, nullptr, nullptr,
+        nullptr, nullptr, nullptr, nullptr, // wifiManager, webServerLauncher, loopServiceFactory, mqttManager
         &g_testModuleStructure
     );
     

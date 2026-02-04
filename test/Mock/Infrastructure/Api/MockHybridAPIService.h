@@ -251,6 +251,8 @@ public:
         mqttApiSendFailsValue = 0;
         apiSendFailRatioValue = 0.0f;
     }
+
+    bool checkIsModuleDeleted() override { return false; }
 };
 
 #endif // MOCK_HYBRID_API_SERVICE_H

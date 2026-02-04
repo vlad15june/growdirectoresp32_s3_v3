@@ -72,7 +72,36 @@ public:
             logFile.flush();
         }
     }
-    
+
+    // Log to default topic with channel override
+    void print(const char* message, MqttLoggerMode channelOverride) override {
+        printCalled = true;
+        lastMessage = message ? message : "";
+        if (logFile.is_open()) {
+            logFile << "[Mode:" << static_cast<int>(channelOverride) << "] "
+                   << (message ? message : "") << std::endl;
+            logFile.flush();
+        }
+    }
+
+    void println(const char* message, MqttLoggerMode channelOverride) override {
+        printCalled = true;
+        lastMessage = message ? message : "";
+        if (logFile.is_open()) {
+            logFile << "[Mode:" << static_cast<int>(channelOverride) << "] "
+                   << (message ? message : "") << std::endl;
+            logFile.flush();
+        }
+    }
+
+    void printf(const char* format, MqttLoggerMode channelOverride, ...) override {
+        printCalled = true;
+        if (logFile.is_open() && format) {
+            logFile << "[Mode:" << static_cast<int>(channelOverride) << "] printf: " << format << std::endl;
+            logFile.flush();
+        }
+    }
+
     void print(const char* topic, const char* message) override {
         printCalled = true;
         lastMessage = message ? message : "";
@@ -100,7 +129,36 @@ public:
             logFile.flush();
         }
     }
-    
+
+    // Log to specific topic with channel override
+    void print(const char* topic, const char* message, MqttLoggerMode channelOverride) override {
+        printCalled = true;
+        lastMessage = message ? message : "";
+        if (logFile.is_open()) {
+            logFile << "[" << (topic ? topic : "NULL") << "][Mode:" << static_cast<int>(channelOverride) << "] "
+                   << (message ? message : "") << std::endl;
+            logFile.flush();
+        }
+    }
+
+    void println(const char* topic, const char* message, MqttLoggerMode channelOverride) override {
+        printCalled = true;
+        lastMessage = message ? message : "";
+        if (logFile.is_open()) {
+            logFile << "[" << (topic ? topic : "NULL") << "][Mode:" << static_cast<int>(channelOverride) << "] "
+                   << (message ? message : "") << std::endl;
+            logFile.flush();
+        }
+    }
+
+    void printf(const char* topic, const char* format, MqttLoggerMode channelOverride, ...) override {
+        printCalled = true;
+        if (logFile.is_open() && topic && format) {
+            logFile << "[" << topic << "][Mode:" << static_cast<int>(channelOverride) << "] printf: " << format << std::endl;
+            logFile.flush();
+        }
+    }
+
     // Log to specific topic with custom mode
     void print(const char* topic, MqttLoggerMode mode, const char* message) override {
         printCalled = true;

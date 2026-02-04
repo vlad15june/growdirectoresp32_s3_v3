@@ -3,6 +3,7 @@
 
 #include "Core/Domain/Interfaces/Adapters/IArduinoAdapter.h"
 #include <map>
+#include <cstring>
 
 class MockArduinoAdapter : public IArduinoAdapter {
 public:

@@ -242,7 +242,7 @@ static void test_firmware_version(void) {
     const char* firmwareVersion = g_moduleConfig->getFirmwareVersion();
     TEST_ASSERT_NOT_NULL(firmwareVersion);
     TEST_ASSERT_TRUE(strlen(firmwareVersion) > 0);
-    TEST_ASSERT_EQUAL_STRING("2.1.1", firmwareVersion);
+    TEST_ASSERT_EQUAL_STRING(FIRMWARE_VERSION, firmwareVersion);
     module_config_teardown();
 }
 
