@@ -25,22 +25,20 @@ definitions:
           - docker build -f Dockerfile.ci -t "$IMAGE_NAME:$IMAGE_TAG" -t "$IMAGE_NAME:latest" .
           - docker push --all-tags "$IMAGE_NAME"
 
-    - step: &test
-        name: Run Tests
-        script:
-          - VERSION=$(cat VERSION)
-          - export PLATFORMIO_BUILD_FLAGS="-DFIRMWARE_VERSION='${VERSION}'"
-          - pio test -e native -vvv
-
-    - step: &build
-        name: Build Firmware
+    - step: &test-build
+        name: Test and Build Firmware
         script:
           - VERSION=$(cat VERSION)
           - VERSION_CLEAN=$(echo $VERSION | tr -d '"')
           - BRANCH_SAFE=$(echo $BITBUCKET_BRANCH | sed 's/\//-/g')
           - export PLATFORMIO_BUILD_FLAGS="-DFIRMWARE_VERSION='${VERSION}'"
+          
+          - echo "Running Tests..."
+          - pio test -e native -vvv
+          
           - echo "Building firmware version ${VERSION_CLEAN} for branch ${BRANCH_SAFE}"
           - pio run -e esp32-s3-devkitm-1
+          
           - mkdir -p artifacts
           - cp .pio/build/esp32-s3-devkitm-1/firmware.bin artifacts/firmware-${VERSION_CLEAN}-${BRANCH_SAFE}.bin
           - |
@@ -65,6 +63,19 @@ definitions:
           - VERSION_CLEAN=$(echo $VERSION | tr -d '"')
           - BRANCH_SAFE=$(echo $BITBUCKET_BRANCH | sed 's/\//-/g')
           - FIRMWARE_FILE="artifacts/firmware-${VERSION_CLEAN}-${BRANCH_SAFE}.bin"
+          - |
+            if [ "$BITBUCKET_BRANCH" = "main" ]; then
+              export UPLOAD_URL="https://gen3.api.growdirector.com"
+            elif [ "$BITBUCKET_BRANCH" = "develop" ]; then
+              export UPLOAD_URL="https://api-test.growdirector.com"
+            elif echo "$BITBUCKET_BRANCH" | grep -q "^release/"; then
+              export UPLOAD_URL="https://api.stage.k8s.growdirector.com"
+            fi
+          - |
+            if [ -z "$UPLOAD_URL" ]; then
+              echo "Error: UPLOAD_URL could not be determined for branch $BITBUCKET_BRANCH"
+              exit 1
+            fi
           - echo "Uploading ${FIRMWARE_FILE} to ${UPLOAD_URL}"
           - |
             if [ ! -f "${FIRMWARE_FILE}" ]; then
@@ -86,7 +97,7 @@ definitions:
 pipelines:
   default:
     - step:
-        <<: *test
+        <<: *test-build
         image:
           name: registry.digitalocean.com/grow-director-v3-registry/develop/gd-firmware-ci:latest
           username: $DOCKER_LOGIN
@@ -103,13 +114,7 @@ pipelines:
                 - "platformio.ini"
                 - "scripts/**"
       - step:
-          <<: *test
-          image:
-            name: registry.digitalocean.com/grow-director-v3-registry/develop/gd-firmware-ci:latest
-            username: $DOCKER_LOGIN
-            password: $DOCKER_PASSWORD
-      - step:
-          <<: *build
+          <<: *test-build
           image:
             name: registry.digitalocean.com/grow-director-v3-registry/develop/gd-firmware-ci:latest
             username: $DOCKER_LOGIN
@@ -117,12 +122,6 @@ pipelines:
       - step:
           <<: *upload
           deployment: development
-          image:
-            name: registry.digitalocean.com/grow-director-v3-registry/develop/gd-firmware-ci:latest
-            username: $DOCKER_LOGIN
-            password: $DOCKER_PASSWORD
-          variables:
-            UPLOAD_URL: "https://api-test.growdirector.com"
           condition:
             changesets:
               includePaths:
@@ -139,13 +138,7 @@ pipelines:
                 - "platformio.ini"
                 - "scripts/**"
       - step:
-          <<: *test
-          image:
-            name: registry.digitalocean.com/grow-director-v3-registry/stage/gd-firmware-ci:latest
-            username: $DOCKER_LOGIN
-            password: $DOCKER_PASSWORD
-      - step:
-          <<: *build
+          <<: *test-build
           image:
             name: registry.digitalocean.com/grow-director-v3-registry/stage/gd-firmware-ci:latest
             username: $DOCKER_LOGIN
@@ -153,12 +146,6 @@ pipelines:
       - step:
           <<: *upload
           deployment: staging
-          image:
-            name: registry.digitalocean.com/grow-director-v3-registry/stage/gd-firmware-ci:latest
-            username: $DOCKER_LOGIN
-            password: $DOCKER_PASSWORD
-          variables:
-            UPLOAD_URL: "https://api.stage.k8s.growdirector.com"
           condition:
             changesets:
               includePaths:
@@ -175,13 +162,7 @@ pipelines:
                 - "platformio.ini"
                 - "scripts/**"
       - step:
-          <<: *test
-          image:
-            name: registry.digitalocean.com/grow-director-v3-registry/production/gd-firmware-ci:latest
-            username: $DOCKER_LOGIN
-            password: $DOCKER_PASSWORD
-      - step:
-          <<: *build
+          <<: *test-build
           image:
             name: registry.digitalocean.com/grow-director-v3-registry/production/gd-firmware-ci:latest
             username: $DOCKER_LOGIN
@@ -189,12 +170,6 @@ pipelines:
       - step:
           <<: *upload
           deployment: production
-          image:
-            name: registry.digitalocean.com/grow-director-v3-registry/production/gd-firmware-ci:latest
-            username: $DOCKER_LOGIN
-            password: $DOCKER_PASSWORD
-          variables:
-            UPLOAD_URL: "https://gen3.api.growdirector.com"
           condition:
             changesets:
               includePaths:
