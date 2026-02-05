@@ -76,23 +76,59 @@ definitions:
               echo "Error: UPLOAD_URL could not be determined for branch $BITBUCKET_BRANCH"
               exit 1
             fi
-          - echo "Uploading ${FIRMWARE_FILE} to ${UPLOAD_URL}"
+          - |
+            echo "========================================"
+            echo "FIRMWARE UPLOAD"
+            echo "========================================"
+            echo "Environment:  ${BITBUCKET_DEPLOYMENT_ENVIRONMENT:-unknown}"
+            echo "Branch:       ${BITBUCKET_BRANCH}"
+            echo "Commit:       ${BITBUCKET_COMMIT}"
+            echo "Build:        ${BITBUCKET_BUILD_NUMBER}"
+            echo "Version:      ${VERSION_CLEAN}"
+            echo "Target URL:   ${UPLOAD_URL}"
+            echo "Firmware:     ${FIRMWARE_FILE}"
+            echo "========================================"
           - |
             if [ ! -f "${FIRMWARE_FILE}" ]; then
-              echo "Error: Firmware file ${FIRMWARE_FILE} not found!"
+              echo "ERROR: Firmware file not found!"
+              echo "Expected: ${FIRMWARE_FILE}"
+              echo "Available artifacts:"
               ls -la artifacts/
               exit 1
             fi
+            FILE_SIZE=$(stat -f%z "${FIRMWARE_FILE}" 2>/dev/null || stat -c%s "${FIRMWARE_FILE}" 2>/dev/null)
+            FILE_MD5=$(md5sum "${FIRMWARE_FILE}" 2>/dev/null | cut -d' ' -f1 || md5 -q "${FIRMWARE_FILE}" 2>/dev/null)
+            echo "File size:    ${FILE_SIZE} bytes"
+            echo "File MD5:     ${FILE_MD5}"
+            echo "========================================"
           - |
-            curl -X POST "${UPLOAD_URL}/api/v1/Firmware/upload" \
+            echo "Starting upload..."
+            RESPONSE_FILE=$(mktemp)
+            HTTP_CODE=$(curl -s -w "%{http_code}" -o "${RESPONSE_FILE}" \
+              -X POST "${UPLOAD_URL}/api/v1/Firmware/upload" \
               -H "X-CI-Token: ${CI_AUTH_TOKEN}" \
               -H "Content-Type: multipart/form-data" \
               -F "File=@${FIRMWARE_FILE}" \
               -F "Version=${VERSION_CLEAN}" \
               -F "Chip=S3" \
               -F "Board=0" \
-              -F "ReleaseNotes=Uploaded via Bitbucket Pipeline commit ${BITBUCKET_COMMIT}" \
-              --fail-with-body
+              -F "ReleaseNotes=Uploaded via Bitbucket Pipeline commit ${BITBUCKET_COMMIT}")
+
+            echo "========================================"
+            echo "RESPONSE"
+            echo "========================================"
+            echo "HTTP Status:  ${HTTP_CODE}"
+            echo "Response Body:"
+            cat "${RESPONSE_FILE}" | head -c 2000
+            echo ""
+            echo "========================================"
+            rm -f "${RESPONSE_FILE}"
+
+            if [ "${HTTP_CODE}" -lt 200 ] || [ "${HTTP_CODE}" -ge 300 ]; then
+              echo "UPLOAD FAILED with HTTP ${HTTP_CODE}"
+              exit 1
+            fi
+            echo "UPLOAD SUCCESSFUL"
 
 pipelines:
   default:
