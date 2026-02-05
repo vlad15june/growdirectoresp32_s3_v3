@@ -58,20 +58,30 @@ definitions:
         artifacts:
           - artifacts/**
 
-    # TODO: Need to implement upload to GD Api, it's only placeholder for now
-    # Requires: UPLOAD_URL, UPLOAD_API_KEY in deployment environment variables
-    # - step: &upload
-    #     name: Upload Firmware
-    #     script:
-    #       - VERSION=$(cat VERSION)
-    #       - VERSION_CLEAN=$(echo $VERSION | tr -d '"')
-    #       - BRANCH_SAFE=$(echo $BITBUCKET_BRANCH | sed 's/\//-/g')
-    #       - echo "Uploading firmware-${VERSION_CLEAN}-${BRANCH_SAFE}.bin to ${UPLOAD_URL}"
-    #       - |
-    #         curl -X POST "${UPLOAD_URL}/api/firmware/upload" \
-    #           -H "Authorization: Bearer ${UPLOAD_API_KEY}" \
-    #           -F "file=@artifacts/firmware-${VERSION_CLEAN}-${BRANCH_SAFE}.bin" \
-    #           -F "metadata=@artifacts/build-info.json"
+    - step: &upload
+        name: Upload Firmware
+        script:
+          - VERSION=$(cat VERSION)
+          - VERSION_CLEAN=$(echo $VERSION | tr -d '"')
+          - BRANCH_SAFE=$(echo $BITBUCKET_BRANCH | sed 's/\//-/g')
+          - FIRMWARE_FILE="artifacts/firmware-${VERSION_CLEAN}-${BRANCH_SAFE}.bin"
+          - echo "Uploading ${FIRMWARE_FILE} to ${UPLOAD_URL}"
+          - |
+            if [ ! -f "${FIRMWARE_FILE}" ]; then
+              echo "Error: Firmware file ${FIRMWARE_FILE} not found!"
+              ls -la artifacts/
+              exit 1
+            fi
+          - |
+            curl -X POST "${UPLOAD_URL}/api/v1/Firmware/upload" \
+              -H "X-CI-Token: ${CI_AUTH_TOKEN}" \
+              -H "Content-Type: multipart/form-data" \
+              -F "File=@${FIRMWARE_FILE}" \
+              -F "Version=${VERSION_CLEAN}" \
+              -F "Chip=S3" \
+              -F "Board=0" \
+              -F "ReleaseNotes=Uploaded via Bitbucket Pipeline commit ${BITBUCKET_COMMIT}" \
+              --fail-with-body
 
 pipelines:
   default:
@@ -104,14 +114,19 @@ pipelines:
             name: registry.digitalocean.com/grow-director-v3-registry/develop/gd-firmware-ci:latest
             username: $DOCKER_LOGIN
             password: $DOCKER_PASSWORD
-      # TODO: Upload to GD Api
-      # - step:
-      #     <<: *upload
-      #     deployment: development
-      #     condition:
-      #       changesets:
-      #         includePaths:
-      #           - "VERSION"
+      - step:
+          <<: *upload
+          deployment: development
+          image:
+            name: registry.digitalocean.com/grow-director-v3-registry/develop/gd-firmware-ci:latest
+            username: $DOCKER_LOGIN
+            password: $DOCKER_PASSWORD
+          variables:
+            UPLOAD_URL: "https://api-test.growdirector.com"
+          condition:
+            changesets:
+              includePaths:
+                - "VERSION"
 
     # Staging environment - Tests and Build on every commit
     'release/*':
@@ -135,14 +150,19 @@ pipelines:
             name: registry.digitalocean.com/grow-director-v3-registry/stage/gd-firmware-ci:latest
             username: $DOCKER_LOGIN
             password: $DOCKER_PASSWORD
-      # TODO:: Upload to staging GD Api
-      # - step:
-      #     <<: *upload
-      #     deployment: staging
-      #     condition:
-      #       changesets:
-      #         includePaths:
-      #           - "VERSION"
+      - step:
+          <<: *upload
+          deployment: staging
+          image:
+            name: registry.digitalocean.com/grow-director-v3-registry/stage/gd-firmware-ci:latest
+            username: $DOCKER_LOGIN
+            password: $DOCKER_PASSWORD
+          variables:
+            UPLOAD_URL: "https://api.stage.k8s.growdirector.com"
+          condition:
+            changesets:
+              includePaths:
+                - "VERSION"
 
     # Production environment - Tests and Build on every commit
     main:
@@ -166,11 +186,16 @@ pipelines:
             name: registry.digitalocean.com/grow-director-v3-registry/production/gd-firmware-ci:latest
             username: $DOCKER_LOGIN
             password: $DOCKER_PASSWORD
-      # TODO:: Upload to prod GD Api
-      # - step:
-      #     <<: *upload
-      #     deployment: production
-      #     condition:
-      #       changesets:
-      #         includePaths:
-      #           - "VERSION"
+      - step:
+          <<: *upload
+          deployment: production
+          image:
+            name: registry.digitalocean.com/grow-director-v3-registry/production/gd-firmware-ci:latest
+            username: $DOCKER_LOGIN
+            password: $DOCKER_PASSWORD
+          variables:
+            UPLOAD_URL: "https://gen3.api.growdirector.com"
+          condition:
+            changesets:
+              includePaths:
+                - "VERSION"
