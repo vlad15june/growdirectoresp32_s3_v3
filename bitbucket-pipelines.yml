@@ -111,8 +111,7 @@ definitions:
               -F "File=@${FIRMWARE_FILE}" \
               -F "Version=${VERSION_CLEAN}" \
               -F "Chip=S3" \
-              -F "Board=0" \
-              -F "ReleaseNotes=Uploaded via Bitbucket Pipeline commit ${BITBUCKET_COMMIT}")
+              -F "Board=0")
 
             echo "========================================"
             echo "RESPONSE"
