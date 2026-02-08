@@ -22,18 +22,13 @@ WORKDIR /tmp_build
 COPY platformio.ini .
 COPY scripts/ ./scripts/
 
-# Install platform and libraries for the specific environments
-# We use a dummy run to force download of all dependencies
-# The build will fail because of missing source files, but dependencies will be cached
-# This ensures that when the container runs in CI, it doesn't need to download these again
-RUN pio run -e esp32-s3-devkitm-1 || true
-RUN pio run -e native || true
+# Install all dependencies: platforms, toolchains, and libraries (incl. transitive)
+# pio pkg install reads lib_deps from platformio.ini directly — no source files needed
+RUN pio pkg install -e esp32-s3-devkitm-1 && \
+    pio pkg install -e native
 
-# Clean up build artifacts to reduce image size, but keep .platformio folder
-# The .platformio folder is located in the user's home directory (~/.platformio)
-# We also remove the .cache directory which holds downloaded archives
-RUN rm -rf /tmp_build && \
-    rm -rf /root/.platformio/.cache
+# Clean up temp build dir and download cache, keep ~/.platformio packages
+RUN rm -rf /tmp_build /root/.platformio/.cache
 
 # Set the working directory for the actual project
 WORKDIR /workspace
