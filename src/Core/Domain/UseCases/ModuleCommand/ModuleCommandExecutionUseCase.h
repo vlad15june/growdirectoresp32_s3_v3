@@ -364,7 +364,7 @@ private:
             "ModuleCommandUseCase: PingPin options: %s", moduleCommand.options.c_str());
 
         int pin = convertPinFromJson(extractJsonIntValue(moduleCommand.options, "pin"));
-        if (pin == 0)
+        if (pin < 0 || pin >= moduleConfig->getSensorPinCount())
         {
             return {ModuleCommandStatus::ERROR, "Missing or invalid pin in options"};
         }
@@ -636,7 +636,7 @@ private:
             "ModuleCommandUseCase: DeleteSensors options: %s", moduleCommand.options.c_str());
 
         int pin = convertPinFromJson(extractJsonIntValue(moduleCommand.options, "pin"));
-        if (pin == 0)
+        if (pin < 0 || pin >= moduleConfig->getSensorPinCount())
         {
             return {ModuleCommandStatus::ERROR, "Missing or invalid pin in options"};
         }
@@ -757,7 +757,7 @@ private:
             "ModuleCommandUseCase: ScanSensors options: %s", moduleCommand.options.c_str());
 
         int pin = convertPinFromJson(extractJsonIntValue(moduleCommand.options, "pin"));
-        if (pin == 0)
+        if (pin < 0 || pin >= moduleConfig->getSensorPinCount())
         {
             return {ModuleCommandStatus::ERROR, "Missing or invalid pin in options"};
         }
