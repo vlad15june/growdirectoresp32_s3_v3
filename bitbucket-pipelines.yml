@@ -41,6 +41,7 @@ definitions:
           
           - mkdir -p artifacts
           - cp .pio/build/esp32-s3-devkitm-1/firmware.bin artifacts/firmware-${VERSION_CLEAN}-${BRANCH_SAFE}.bin
+          - cp ReleaseNotes.md artifacts/release-notes-${VERSION_CLEAN}-${BRANCH_SAFE}.md
           - |
             cat > artifacts/build-info.json << EOF
             {
@@ -63,6 +64,7 @@ definitions:
           - VERSION_CLEAN=$(echo $VERSION | tr -d '"')
           - BRANCH_SAFE=$(echo $BITBUCKET_BRANCH | sed 's/\//-/g')
           - FIRMWARE_FILE="artifacts/firmware-${VERSION_CLEAN}-${BRANCH_SAFE}.bin"
+          - RELEASE_NOTES_FILE="artifacts/release-notes-${VERSION_CLEAN}-${BRANCH_SAFE}.md"
           - |
             if [ "$BITBUCKET_BRANCH" = "main" ]; then
               export UPLOAD_URL="https://gen3.api.growdirector.com"
@@ -87,11 +89,19 @@ definitions:
             echo "Version:      ${VERSION_CLEAN}"
             echo "Target URL:   ${UPLOAD_URL}"
             echo "Firmware:     ${FIRMWARE_FILE}"
+            echo "ReleaseNotes: ${RELEASE_NOTES_FILE}"
             echo "========================================"
           - |
             if [ ! -f "${FIRMWARE_FILE}" ]; then
               echo "ERROR: Firmware file not found!"
               echo "Expected: ${FIRMWARE_FILE}"
+              echo "Available artifacts:"
+              ls -la artifacts/
+              exit 1
+            fi
+            if [ ! -f "${RELEASE_NOTES_FILE}" ]; then
+              echo "ERROR: Release notes file not found!"
+              echo "Expected: ${RELEASE_NOTES_FILE}"
               echo "Available artifacts:"
               ls -la artifacts/
               exit 1
@@ -109,6 +119,7 @@ definitions:
               -H "X-CI-Token: ${CI_AUTH_TOKEN}" \
               -H "Content-Type: multipart/form-data" \
               -F "File=@${FIRMWARE_FILE}" \
+              -F "ReleaseNotes=<${RELEASE_NOTES_FILE}" \
               -F "Version=${VERSION_CLEAN}" \
               -F "Chip=S3" \
               -F "Board=0")
