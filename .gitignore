@@ -18,3 +18,4 @@ docs/
 .fake
 /.vscode
 firmware.bin
+tickets/.DS_Store
