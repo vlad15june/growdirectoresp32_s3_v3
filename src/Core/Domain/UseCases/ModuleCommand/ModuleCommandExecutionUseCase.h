@@ -457,7 +457,7 @@ private:
         int pin = convertPinFromJson(extractJsonIntValue(moduleCommand.options, "pin"));
         std::string modelUid = extractJsonValue(moduleCommand.options, "uid");
 
-        if (pin == 0 || modelUid.empty())
+        if ((pin < 0 || pin >= moduleConfig->getSensorPinCount()) || modelUid.empty())
         {
             return {ModuleCommandStatus::ERROR, "Missing pin or uid in options"};
         }
