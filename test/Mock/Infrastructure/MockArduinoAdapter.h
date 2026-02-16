@@ -77,6 +77,11 @@ public:
     unsigned long micros() override {
         return currentTime * 1000; // Convert ms to us
     }
+    
+    // Test helper method
+    void setMillis(unsigned long ms) {
+        currentMillis = ms;
+    }
 
     // Digital I/O
     void pinMode(uint8_t pin, uint8_t mode) override {

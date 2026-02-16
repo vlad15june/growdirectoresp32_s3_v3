@@ -26,6 +26,7 @@ public:
     bool sendCommandResultCalled = false;
     bool getRuleListCalled = false;
     bool getModuleCommandCalled = false;
+    bool getSensorTypesListCalled = false;
     
     // Return values
     bool initReturnValue = true;
@@ -44,6 +45,7 @@ public:
     std::vector<DeviceCommandDto> deviceCommandsReturnValue;
     std::vector<Rule> ruleListReturnValue;
     std::vector<ModuleCommandDto> moduleCommandsReturnValue;
+    std::vector<SensorType> sensorTypesListReturnValue;
     
     // Parameter storage
     ApiPriority currentApiPriority = ApiPriority::REST_PREFERRED;
@@ -88,6 +90,7 @@ public:
         sendCommandResultCalled = false;
         getRuleListCalled = false;
         getModuleCommandCalled = false;
+        getSensorTypesListCalled = false;
         
         initReturnValue = true;
         isModuleOnlineReturnValue = true;
@@ -102,6 +105,7 @@ public:
         sendModuleUpdateDataReturnValue = true;
         sendCommandResultReturnValue = true;
         deviceCommandReturnValue = DeviceCommandDto();
+        sensorTypesListReturnValue.clear();
         deviceCommandsReturnValue.clear();
         ruleListReturnValue.clear();
         moduleCommandsReturnValue.clear();
@@ -230,7 +234,8 @@ public:
     }
     
     std::vector<SensorType> getSensorTypesList() override {
-        return std::vector<SensorType>();
+        getSensorTypesListCalled = true;
+        return sensorTypesListReturnValue;
     }
     
     int getRestApiSendFails() const override {

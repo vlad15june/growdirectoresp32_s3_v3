@@ -19,6 +19,7 @@ extern "C" void run_rule_converter_tests(void);
 extern "C" void run_update_dto_converter_tests(void);
 extern "C" int run_sensor_type_repository_tests(void);
 extern "C" int run_spiffs_sensor_type_dao_tests(void);
+extern "C" int run_sync_sensor_types_use_case_tests(void);
 
 void setUp(void) {
     // set stuff up here
@@ -100,6 +101,9 @@ int main(void) {
     
     // Run tests for SpiffsSensorTypeDao  
     run_spiffs_sensor_type_dao_tests();
+    
+    // Run tests for SyncSensorTypesUseCase
+    run_sync_sensor_types_use_case_tests();
     
     return UNITY_END();
 }
