@@ -1,5 +1,12 @@
 # Release Notes
 
+## Version 2.1.24 (2026-02-16)
+
+### Fixed
+- **Build System**: Fixed compilation error in native test environment (missing `<cstdarg>` include for va_start/va_end macros)
+
+---
+
 ## Version 2.1.23 (2026-02-16)
 
 ### Fixed
