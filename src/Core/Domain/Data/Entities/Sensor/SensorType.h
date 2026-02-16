@@ -63,6 +63,10 @@ public:
     SensorProtocol protocol;
     bool isSupported;
     
+    // Timestamps
+    std::string createdAt;
+    std::string updatedAt;
+    
     // Array of individual sensor types
     std::vector<SubSensorType> sensorTypes;
     

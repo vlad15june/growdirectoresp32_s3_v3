@@ -249,6 +249,24 @@ private:
     }
     
     bool shouldUpdateSensorType(const SensorType& existingSensorType, const SensorType& newSensorType) {
+        // If updatedAt is empty in either existing or new sensor type, sync is required
+        if (existingSensorType.updatedAt.empty() || newSensorType.updatedAt.empty()) {
+            log("SYNC_SENSOR_TYPES: Sensor type %s has empty updatedAt (existing: %s, new: %s) - forcing update", 
+                newSensorType.uid.c_str(),
+                existingSensorType.updatedAt.empty() ? "empty" : existingSensorType.updatedAt.c_str(),
+                newSensorType.updatedAt.empty() ? "empty" : newSensorType.updatedAt.c_str());
+            return true;
+        }
+        
+        // Check if main sensor type updatedAt has changed
+        if (existingSensorType.updatedAt != newSensorType.updatedAt) {
+            log("SYNC_SENSOR_TYPES: Sensor type %s updatedAt changed: %s -> %s", 
+                newSensorType.uid.c_str(),
+                existingSensorType.updatedAt.c_str(),
+                newSensorType.updatedAt.c_str());
+            return true;
+        }
+        
         // Compare sub sensor types - check if any timestamp has changed
         if (existingSensorType.sensorTypes.size() != newSensorType.sensorTypes.size()) {
             return true;

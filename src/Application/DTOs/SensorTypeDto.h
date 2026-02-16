@@ -51,6 +51,9 @@ public:
     std::string protocol;
     bool isSupported;
     
+    std::string createdAt;
+    std::string updatedAt;
+    
     std::vector<SubSensorTypeDto> sensorTypes;
     
     std::string i2cAddress;

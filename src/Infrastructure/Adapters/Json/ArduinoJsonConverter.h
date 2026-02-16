@@ -1596,6 +1596,8 @@ public:
         sensorType.displayName = doc["displayName"] | "";
         sensorType.canScan = doc["canScan"] | true;
         sensorType.isSupported = doc["isSupported"] | true;
+        sensorType.createdAt = doc["createdAt"] | "";
+        sensorType.updatedAt = doc["updatedAt"] | "";
         
         std::string protocolStr = doc["protocol"] | "";
         sensorType.setProtocolFromString(protocolStr);
@@ -1708,6 +1710,13 @@ public:
             doc["protocol"] = protocolStr;
             
             doc["isSupported"] = sensorType.isSupported;
+            
+            if (!sensorType.createdAt.empty()) {
+                doc["createdAt"] = sensorType.createdAt;
+            }
+            if (!sensorType.updatedAt.empty()) {
+                doc["updatedAt"] = sensorType.updatedAt;
+            }
             
             // Handle optional string fields properly
             if (!sensorType.i2cAddress.empty()) {

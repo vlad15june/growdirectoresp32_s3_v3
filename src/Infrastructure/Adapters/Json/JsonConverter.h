@@ -1765,6 +1765,8 @@ private:
         sensorType.displayName = extractValue(jsonStr, "displayName");
         sensorType.canScan = extractBoolValue(jsonStr, "canScan");
         sensorType.isSupported = extractBoolValue(jsonStr, "isSupported");
+        sensorType.createdAt = extractValue(jsonStr, "createdAt");
+        sensorType.updatedAt = extractValue(jsonStr, "updatedAt");
         
         std::string protocolStr = extractValue(jsonStr, "protocol");
         sensorType.setProtocolFromString(protocolStr);
@@ -1817,6 +1819,10 @@ private:
         oss << ",\"canScan\":" << (sensorType.canScan ? "true" : "false");
         oss << ",\"protocol\":\"" << sensorType.getProtocolString() << "\"";
         oss << ",\"isSupported\":" << (sensorType.isSupported ? "true" : "false");
+        if (!sensorType.createdAt.empty())
+            oss << ",\"createdAt\":\"" << sensorType.createdAt << "\"";
+        if (!sensorType.updatedAt.empty())
+            oss << ",\"updatedAt\":\"" << sensorType.updatedAt << "\"";
         oss << ",\"i2cAddress\":\"" << sensorType.i2cAddress << "\"";
         oss << ",\"chipType\":\"" << sensorType.chipType << "\"";
         oss << ",\"modbusDeviceAddress\":" << sensorType.modbusDeviceAddress;
