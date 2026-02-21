@@ -218,3 +218,65 @@ When presenting results:
 - Explain Elasticsearch error messages
 - Suggest fixes for common query mistakes
 
+## 🔍 SENSOR SCANNING ANALYSIS (ESP32 Modules)
+
+### Quick Reference
+**Index:** `mqtt-*`  
+**Field:** `mqtt.topic` (NOT `topic`)  
+**Topics:**
+- `hardware/log/SETUP_SENSOR/[UID]` - sensor scanning logs
+- `hardware/structure/[UID]` - module structure
+
+### Analysis Steps
+
+**1. Download logs (specific time range):**
+```bash
+curl -k -X GET "https://5.161.157.194:9200/mqtt-*/_search" \
+  -H "Authorization: ApiKey bHNBWFY1d0I5Q2NsVXhHWE5VdUw6Y29vdVU5ZW1TWkNfMzR4RGYzWTJOZw==" \
+  -H "Content-Type: application/json" \
+  -d '{"query":{"bool":{"must":[{"match_phrase":{"mqtt.topic":"MODULE_UID"}},{"range":{"@timestamp":{"gte":"2026-02-19T05:34:00","lte":"2026-02-19T05:38:00"}}}]}},"size":5000,"sort":[{"@timestamp":{"order":"asc"}}]}' \
+  -o /tmp/logs.json
+```
+
+**2. Parse to text:**
+```bash
+jq -r '.hits.hits[] | "\(.["_source"]["@timestamp"]) | \(.["_source"].message)"' /tmp/logs.json > /tmp/logs.txt
+```
+
+**3. Analyze ports (0,1,2,3):**
+```bash
+for port in 0 1 2 3; do 
+  echo "PORT $port:"
+  grep "Ping device.*port $port.*received" /tmp/logs.txt | \
+    sed 's/.*device \([0-9]*\).*received \([0-9]*\) bytes.*/  Device \1: \2 bytes/' | \
+    sort | uniq -c
+done
+```
+
+**4. Find RAW DATA (critical!):**
+```bash
+grep "Raw bytes" /tmp/logs.txt
+```
+
+**5. Find READ VALUES:**
+```bash
+grep "Read value.*from device" /tmp/logs.txt
+```
+
+**6. Find VALIDATION ERRORS:**
+```bash
+grep "outside expected range" /tmp/logs.txt
+```
+
+**7. Full context (10 lines before/after):**
+```bash
+grep -B10 -A10 "outside expected range" /tmp/logs.txt
+```
+
+### Key Patterns
+- `0 bytes` = no response
+- `7 bytes` = valid ModBus response
+- `Raw bytes: 01 03 02 1C 0D 71 41` = actual data from device
+- `Read value 718.10` = parsed value
+- `outside expected range` = why sensor rejected
+
