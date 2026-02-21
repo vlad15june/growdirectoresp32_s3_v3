@@ -156,6 +156,7 @@ public:
 private:
     bool syncSensorTypesFromServer() {
         if (!_apiService || !_sensorTypeRepository) {
+            log("SYNC_SENSOR_TYPES: API service or repository not available");
             return false;
         }
         
@@ -168,6 +169,17 @@ private:
         }
         
         log("SYNC_SENSOR_TYPES: Received %d sensor types from server", static_cast<int>(serverSensorTypes.size()));
+        
+        // Log sensor type names for debugging
+        for (size_t i = 0; i < serverSensorTypes.size() && i < 5; i++) {
+            log("SYNC_SENSOR_TYPES: - Sensor type %d: %s (UID: %s)", 
+                i + 1, serverSensorTypes[i].name.c_str(), serverSensorTypes[i].uid.c_str());
+        }
+        if (serverSensorTypes.size() > 5) {
+            log("SYNC_SENSOR_TYPES: ... and %d more sensor types", 
+                static_cast<int>(serverSensorTypes.size()) - 5);
+        }
+        
         return processServerSensorTypes(serverSensorTypes);
     }
     

@@ -859,9 +859,14 @@ public:
             {
                 log("NET: HTTP Response code: %d", httpResponseCode);
                 
-                // Get response body
                 responseBody = _httpClient->getString();
-                log("NET: HTTP Response: %s", responseBody.c_str());
+                log("NET: getSensorTypesList - Response length: %d bytes", responseBody.length());
+                
+                if (responseBody.length() > 500) {
+                    log("NET: getSensorTypesList - Response (first 500 chars): %s...", responseBody.substr(0, 500).c_str());
+                } else {
+                    log("NET: getSensorTypesList - Response: %s", responseBody.c_str());
+                }
             }
             else
             {

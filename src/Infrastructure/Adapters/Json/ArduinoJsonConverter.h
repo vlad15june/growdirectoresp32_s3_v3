@@ -1585,10 +1585,14 @@ public:
 
     bool sensorTypeFromJson(const std::string &jsonStr, SensorType &sensorType) override
     {
-        DynamicJsonDocument doc(4096);
+        DynamicJsonDocument doc(8192);
+        
         DeserializationError error = deserializeJson(doc, jsonStr);
-        if (error)
+        if (error) {
+            Serial.printf("ArduinoJsonConverter: sensorTypeFromJson error: %s (JSON length: %d)\n", 
+                         error.c_str(), jsonStr.length());
             return false;
+        }
 
         // Parse main sensor type properties
         sensorType.uid = doc["uid"] | "";
@@ -1694,7 +1698,7 @@ public:
         Serial.printf("ArduinoJsonConverter: Free heap at start: %d\n", ESP.getFreeHeap());
         
         try {
-            DynamicJsonDocument doc(4096);
+            DynamicJsonDocument doc(8192);
             Serial.printf("ArduinoJsonConverter: Document created, capacity: %d\n", doc.capacity());
             
             // Main sensor type properties
@@ -1832,18 +1836,37 @@ public:
 
     bool sensorTypesFromJson(const std::string &jsonStr, std::vector<SensorType> &sensorTypes) override
     {
-        DynamicJsonDocument doc(8192);
+        DynamicJsonDocument doc(32768);
+        
+        Serial.printf("ArduinoJsonConverter: Parsing sensor types JSON (length: %d bytes)\n", jsonStr.length());
+        Serial.printf("ArduinoJsonConverter: Free heap before parsing: %d\n", ESP.getFreeHeap());
+        
         DeserializationError error = deserializeJson(doc, jsonStr);
-        if (error)
+        if (error) {
+            Serial.printf("ArduinoJsonConverter: JSON deserialization error: %s\n", error.c_str());
+            Serial.printf("ArduinoJsonConverter: Required capacity might be: %zu bytes\n", 
+                         error.code() == DeserializationError::NoMemory ? doc.capacity() * 2 : doc.capacity());
             return false;
+        }
+        
+        Serial.printf("ArduinoJsonConverter: JSON parsed successfully, memory used: %zu bytes\n", doc.memoryUsage());
+        Serial.printf("ArduinoJsonConverter: Free heap after parsing: %d\n", ESP.getFreeHeap());
 
         sensorTypes.clear();
-        for (JsonObject typeObj : doc.as<JsonArray>())
+        
+        if (!doc.is<JsonArray>()) {
+            Serial.printf("ArduinoJsonConverter: JSON is not an array\n");
+            return false;
+        }
+        
+        JsonArray arr = doc.as<JsonArray>();
+        Serial.printf("ArduinoJsonConverter: Processing %d sensor types\n", arr.size());
+        
+        for (JsonObject typeObj : arr)
         {
             SensorType sensorType;
 
-            // Copy to a separate document for individual processing
-            DynamicJsonDocument typeDoc(2048);
+            DynamicJsonDocument typeDoc(8192);
             JsonObject destObj = typeDoc.to<JsonObject>();
 
             // Copy all properties from the array element
@@ -1859,8 +1882,17 @@ public:
             if (sensorTypeFromJson(typeJson, sensorType))
             {
                 sensorTypes.push_back(sensorType);
+                Serial.printf("ArduinoJsonConverter: Successfully parsed sensor type '%s' (UID: %s)\n", 
+                             sensorType.name.c_str(), sensorType.uid.c_str());
+            }
+            else
+            {
+                Serial.printf("ArduinoJsonConverter: Failed to parse sensor type from JSON\n");
             }
         }
+        
+        Serial.printf("ArduinoJsonConverter: Total sensor types parsed: %d\n", sensorTypes.size());
+        Serial.printf("ArduinoJsonConverter: Free heap after processing: %d\n", ESP.getFreeHeap());
 
         return !sensorTypes.empty();
     }
