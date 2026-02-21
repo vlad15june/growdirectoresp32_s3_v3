@@ -1,5 +1,16 @@
 # Release Notes
 
+## Version 2.1.25 (2026-02-21)
+
+### Changed
+- **Logging Enhancement**: GDV1-3293 Improved logging for sensor type synchronization with detailed error messages, response length checks, and JSON parsing diagnostics
+- **Memory Optimization**: Increased JSON document buffer sizes for better handling of large sensor type responses (4KB→8KB for single types, 8KB→32KB for arrays)
+
+### Added
+- **Documentation**: Added comprehensive sensor scanning analysis and detailed sensor models documentation
+
+---
+
 ## Version 2.1.24 (2026-02-16)
 
 ### Fixed
