@@ -101,14 +101,6 @@ protected:
         return true;
     }
 
-    bool clear() override {
-        log("SpiffsSensorTypeDao: Clearing all data (removing file)");
-        if (filePath.empty()) initialize();
-        spiffsAdapter->RemoveFile(filePath.c_str());
-        log("SpiffsSensorTypeDao: Clear operation completed");
-        return true;
-    }
-
 public:
     SpiffsSensorTypeDao(ISpiffsAdapter* spiffsAdapter, IJsonConverter* jsonConverter, IDebugSystem* debugSystem = nullptr, ILogger* logger = nullptr)
         : spiffsAdapter(spiffsAdapter), jsonConverter(jsonConverter), debugSystem(debugSystem), logger(logger) {
@@ -116,6 +108,14 @@ public:
             throw std::invalid_argument("Adapters cannot be null");
         }
         initialize();
+    }
+
+    bool clear() override {
+        log("SpiffsSensorTypeDao: Clearing all data (removing file)");
+        if (filePath.empty()) initialize();
+        spiffsAdapter->RemoveFile(filePath.c_str());
+        log("SpiffsSensorTypeDao: Clear operation completed");
+        return true;
     }
 
     /**

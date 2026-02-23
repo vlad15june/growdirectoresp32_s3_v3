@@ -296,6 +296,63 @@ void test_sensor_type_repository_cache_invalidation(void) {
     tearDown_sensor_type_repository();
 }
 
+// Test clear method
+void test_sensor_type_repository_clear(void) {
+    setUp_sensor_type_repository();
+    
+    // Arrange - add multiple sensor types
+    SensorType sensor1 = createTestSensorType("clear-1", "clear1", SensorProtocol::ANALOG_PROTOCOL);
+    SensorType sensor2 = createTestSensorType("clear-2", "clear2", SensorProtocol::I2C_PROTOCOL);
+    SensorType sensor3 = createTestSensorType("clear-3", "clear3", SensorProtocol::MODBUS_PROTOCOL);
+    
+    repository->save(sensor1);
+    repository->save(sensor2);
+    repository->save(sensor3);
+    
+    // Verify data exists
+    TEST_ASSERT_EQUAL(3, repository->count());
+    TEST_ASSERT_TRUE(repository->exists("clear-1"));
+    
+    // Act - clear repository
+    bool clearResult = repository->clear();
+    
+    // Assert - all data should be removed
+    TEST_ASSERT_TRUE(clearResult);
+    TEST_ASSERT_EQUAL(0, repository->count());
+    TEST_ASSERT_FALSE(repository->exists("clear-1"));
+    TEST_ASSERT_FALSE(repository->exists("clear-2"));
+    TEST_ASSERT_FALSE(repository->exists("clear-3"));
+    
+    // Verify getAll returns empty
+    std::vector<SensorType> allTypes = repository->getAll();
+    TEST_ASSERT_EQUAL(0, allTypes.size());
+    
+    tearDown_sensor_type_repository();
+}
+
+// Test clear invalidates cache
+void test_sensor_type_repository_clear_invalidates_cache(void) {
+    setUp_sensor_type_repository();
+    
+    // Arrange - add sensor types and build cache
+    SensorType sensor1 = createTestSensorType("cache-clear-1", "cache1", SensorProtocol::ANALOG_PROTOCOL);
+    repository->save(sensor1);
+    repository->count(); // Build cache
+    
+    // Act - clear repository
+    repository->clear();
+    
+    // Add new sensor directly to mock storage
+    SensorType sensor2 = createTestSensorType("cache-clear-2", "cache2", SensorProtocol::I2C_PROTOCOL);
+    mockDao->addToStorage(sensor2);
+    
+    // Assert - cache should be invalidated, count should reflect new state
+    int count = repository->count();
+    TEST_ASSERT_EQUAL(1, count);
+    
+    tearDown_sensor_type_repository();
+}
+
 // Export test runner function
 extern "C" int run_sensor_type_repository_tests(void) {
     RUN_TEST(test_sensor_type_repository_get_valid_uid);
@@ -310,5 +367,7 @@ extern "C" int run_sensor_type_repository_tests(void) {
     RUN_TEST(test_sensor_type_repository_get_calibratable);
     RUN_TEST(test_sensor_type_repository_count);
     RUN_TEST(test_sensor_type_repository_cache_invalidation);
+    RUN_TEST(test_sensor_type_repository_clear);
+    RUN_TEST(test_sensor_type_repository_clear_invalidates_cache);
     return 0;
 }

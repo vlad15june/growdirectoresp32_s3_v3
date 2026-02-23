@@ -22,6 +22,7 @@ public:
     bool removeAllCalled;
     bool countCalled;
     bool existsCalled;
+    bool clearCalled;
     int saveCallCount;
     std::string lastGetUid;
     std::string lastSavedUid;
@@ -42,6 +43,7 @@ public:
         removeAllCalled = false;
         countCalled = false;
         existsCalled = false;
+        clearCalled = false;
         saveCallCount = 0;
         lastGetUid = "";
         lastSavedUid = "";

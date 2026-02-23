@@ -295,6 +295,58 @@ void test_spiffs_sensor_type_dao_get_by_name(void) {
     tearDown_spiffs_sensor_type_dao();
 }
 
+// Test clear method
+void test_spiffs_sensor_type_dao_clear(void) {
+    setUp_spiffs_sensor_type_dao();
+    
+    // Arrange - add multiple sensor types
+    SensorType sensor1 = createTestSensorType("clear-1", "clear1", SensorProtocol::ANALOG_PROTOCOL);
+    SensorType sensor2 = createTestSensorType("clear-2", "clear2", SensorProtocol::I2C_PROTOCOL);
+    SensorType sensor3 = createTestSensorType("clear-3", "clear3", SensorProtocol::MODBUS_PROTOCOL);
+    
+    dao->save(sensor1, "clear-1");
+    dao->save(sensor2, "clear-2");
+    dao->save(sensor3, "clear-3");
+    
+    // Verify data exists
+    std::vector<SensorType> beforeClear;
+    dao->getAll(beforeClear);
+    TEST_ASSERT_EQUAL(3, beforeClear.size());
+    
+    // Act - clear DAO
+    bool clearResult = dao->clear();
+    
+    // Assert - all data should be removed
+    TEST_ASSERT_TRUE(clearResult);
+    
+    std::vector<SensorType> afterClear;
+    dao->getAll(afterClear);
+    TEST_ASSERT_EQUAL(0, afterClear.size());
+    
+    // Verify getById returns false
+    SensorType retrieved;
+    TEST_ASSERT_FALSE(dao->getById("clear-1", retrieved));
+    
+    tearDown_spiffs_sensor_type_dao();
+}
+
+// Test clear with empty storage
+void test_spiffs_sensor_type_dao_clear_empty(void) {
+    setUp_spiffs_sensor_type_dao();
+    
+    // Act - clear empty DAO
+    bool clearResult = dao->clear();
+    
+    // Assert - should succeed
+    TEST_ASSERT_TRUE(clearResult);
+    
+    std::vector<SensorType> afterClear;
+    dao->getAll(afterClear);
+    TEST_ASSERT_EQUAL(0, afterClear.size());
+    
+    tearDown_spiffs_sensor_type_dao();
+}
+
 // Test error handling - SPIFFS failure
 void test_spiffs_sensor_type_dao_spiffs_failure(void) {
     setUp_spiffs_sensor_type_dao();
@@ -326,6 +378,8 @@ extern "C" int run_spiffs_sensor_type_dao_tests(void) {
     RUN_TEST(test_spiffs_sensor_type_dao_get_by_protocol);
     RUN_TEST(test_spiffs_sensor_type_dao_get_calibratable);
     RUN_TEST(test_spiffs_sensor_type_dao_get_by_name);
+    RUN_TEST(test_spiffs_sensor_type_dao_clear);
+    RUN_TEST(test_spiffs_sensor_type_dao_clear_empty);
     RUN_TEST(test_spiffs_sensor_type_dao_spiffs_failure);
     return 0;
 }
