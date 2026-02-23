@@ -1,5 +1,12 @@
 # Release Notes
 
+## Version 2.1.27 (2026-02-24)
+
+### Added
+- **Sync sensor models**: Added sync sensor models befor sensor scaning
+
+---
+
 ## Version 2.1.26 (2026-02-23)
 
 ### Added
