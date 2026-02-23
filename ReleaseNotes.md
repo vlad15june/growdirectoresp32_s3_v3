@@ -1,5 +1,12 @@
 # Release Notes
 
+## Version 2.1.26 (2026-02-23)
+
+### Added
+- **Reboot with Sensor Scan**: Implemented automatic clearing of previously scanned sensors and sensor types database on module reboot with sensor scanning (noScanSensors=false), enabling complete resynchronization with fresh sensor detection; enhanced ModBus address validation to include ADDED status sensors; improved duplicate address detection and logging throughout address management pipeline
+
+---
+
 ## Version 2.1.25 (2026-02-21)
 
 ### Changed
