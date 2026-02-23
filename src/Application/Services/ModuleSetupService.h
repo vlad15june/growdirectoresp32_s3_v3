@@ -31,6 +31,7 @@
 #include "Core/Domain/Interfaces/API/IHybridAPIService.h"
 #include "Core/Domain/Interfaces/IClearModuleDataService.h"
 #include "Core/Domain/Interfaces/Adapters/IArduinoAdapter.h"
+#include "Core/Domain/Interfaces/UseCases/SensorTypes/ISyncSensorTypesUseCase.h"
 #include <memory>
 #include <cstdarg>
 #include <cstdio>
@@ -74,6 +75,7 @@ private:
     IHybridAPIService *hybridApiService;
     IClearModuleDataService *clearModuleDataService;
     IArduinoAdapter *arduinoAdapter;
+    ISyncSensorTypesUseCase *syncSensorTypesUseCase;
 
     void log(const char *format, ...);
 
@@ -164,7 +166,8 @@ public:
         IUdpManager *udpManager = nullptr,
         IHybridAPIService *hybridApiService = nullptr,
         IClearModuleDataService *clearModuleDataService = nullptr,
-        IArduinoAdapter *arduinoAdapter = nullptr);
+        IArduinoAdapter *arduinoAdapter = nullptr,
+        ISyncSensorTypesUseCase *syncSensorTypesUseCase = nullptr);
 
     void setupModule() override;
     std::unique_ptr<ILoopService> getLoopService() override;
@@ -197,7 +200,8 @@ inline ModuleSetupService::ModuleSetupService(
     IUdpManager *udpManager,
     IHybridAPIService *hybridApiService,
     IClearModuleDataService *clearModuleDataService,
-    IArduinoAdapter *arduinoAdapter) : logger(logger),
+    IArduinoAdapter *arduinoAdapter,
+    ISyncSensorTypesUseCase *syncSensorTypesUseCase) : logger(logger),
                                debugSystem(debugSystem),
                                moduleConfig(moduleConfig),
                                ledAdapter(ledAdapter),
@@ -221,7 +225,8 @@ inline ModuleSetupService::ModuleSetupService(
                                udpManager(udpManager),
                                hybridApiService(hybridApiService),
                                clearModuleDataService(clearModuleDataService),
-                               arduinoAdapter(arduinoAdapter)
+                               arduinoAdapter(arduinoAdapter),
+                               syncSensorTypesUseCase(syncSensorTypesUseCase)
 {
 }
 
@@ -966,6 +971,56 @@ inline void ModuleSetupService::fillSensorModuleStructure(Node &node)
         return;
     }
 
+    // Check if sensor types are synchronized, if not - sync them first
+    if (sensorTypeRepository)
+    {
+        auto sensorTypes = sensorTypeRepository->getAll();
+        if (sensorTypes.empty())
+        {
+            log("SETUP: No sensor types found in repository, attempting synchronization");
+            if (syncSensorTypesUseCase)
+            {
+                if (syncSensorTypesUseCase->init())
+                {
+                    log("SETUP: Forcing sensor types synchronization");
+                    bool syncResult = syncSensorTypesUseCase->forceSync();
+                    if (syncResult)
+                    {
+                        log("SETUP: Sensor types synchronized successfully");
+                        // Verify that types were actually loaded
+                        sensorTypes = sensorTypeRepository->getAll();
+                        log("SETUP: Now have %zu sensor types available", sensorTypes.size());
+                    }
+                    else
+                    {
+                        log("SETUP: Failed to synchronize sensor types");
+                    }
+                }
+                else
+                {
+                    log("SETUP: Failed to initialize sensor types sync use case");
+                }
+            }
+            else
+            {
+                log("SETUP: Sensor types sync use case not available");
+            }
+            
+            // If still no sensor types after sync attempt, create placeholders
+            sensorTypes = sensorTypeRepository->getAll();
+            if (sensorTypes.empty())
+            {
+                log("SETUP: Still no sensor types available after sync attempt, creating placeholders");
+                createPlaceholderSensors(node);
+                return;
+            }
+        }
+        else
+        {
+            log("SETUP: Found %zu sensor types in repository", sensorTypes.size());
+        }
+    }
+
     processSensorsFromRepository(node);
     handleModbusAddressManagement(node);
 
@@ -1029,7 +1084,7 @@ inline void ModuleSetupService::addHydroSensors(Node &node)
                         tempSensor.isActive = true;
                         tempSensor.pin = pin;
                         char pinStr[3];
-                        sprintf(pinStr, "%02d", pin);
+                        snprintf(pinStr, sizeof(pinStr), "%02d", pin);
                         tempSensor.uid = moduleUid + "." + pinStr;
                         tempSensor.status = SensorStatusEnum::SENSOR_STATUS_NEW;
                         tempSensor.multiplier = analogConfig.multiplier;
@@ -1083,7 +1138,7 @@ inline void ModuleSetupService::addHydroSensors(Node &node)
                 sensor.type = "none";
 
                 char sensorId[10];
-                sprintf(sensorId, ".%02d", pin);
+                snprintf(sensorId, sizeof(sensorId), ".%02d", pin);
                 sensor.uid = macAddress + sensorId;
 
                 node.sensors.push_back(sensor);
@@ -1105,7 +1160,7 @@ inline void ModuleSetupService::addHydroSensors(Node &node)
             sensor.type = "none";
 
             char sensorId[10];
-            sprintf(sensorId, ".%02d", i);
+            snprintf(sensorId, sizeof(sensorId), ".%02d", i);
             sensor.uid = macAddress + sensorId;
 
             node.sensors.push_back(sensor);
@@ -1127,7 +1182,7 @@ inline void ModuleSetupService::addHydroPumps(Node &node)
         pump.pin = i + 1;
 
         char pumpId[10];
-        sprintf(pumpId, ".pm.%02d", i);
+        snprintf(pumpId, sizeof(pumpId), ".pm.%02d", i);
         pump.uid = macAddress + pumpId;
 
         node.pumps.push_back(pump);
@@ -1156,7 +1211,7 @@ inline void ModuleSetupService::fillDeviceModuleStructure(Node &node)
             relay.pin = i + 1;
 
             char relayId[10];
-            sprintf(relayId, ".%02d", i);
+            snprintf(relayId, sizeof(relayId), ".%02d", i);
             relay.uid = macAddress + relayId;
 
             node.relays.push_back(relay);
@@ -1176,7 +1231,7 @@ inline void ModuleSetupService::fillDeviceModuleStructure(Node &node)
             relay.pin = i + 1;
 
             char relayId[10];
-            sprintf(relayId, ".%02d", i);
+            snprintf(relayId, sizeof(relayId), ".%02d", i);
             relay.uid = macAddress + relayId;
 
             node.relays.push_back(relay);
@@ -1206,7 +1261,7 @@ inline void ModuleSetupService::fillAnalogInputDeviceStructure(Node &node)
         relay.pin = i + 1;
 
         char relayId[10];
-        sprintf(relayId, ".%02d", i);
+        snprintf(relayId, sizeof(relayId), ".%02d", i);
         relay.uid = macAddress + relayId;
 
         node.relays.push_back(relay);
@@ -1392,7 +1447,7 @@ inline void ModuleSetupService::scanPinForSensorTypes(int pin, Node &node)
         tempSensor.isActive = true;
         tempSensor.pin = pin;
         char pinStr[3];
-        sprintf(pinStr, "%02d", pin);
+        snprintf(pinStr, sizeof(pinStr), "%02d", pin);
         tempSensor.uid = moduleUid + "." + pinStr;
         tempSensor.status = SensorStatusEnum::SENSOR_STATUS_NEW;
 
@@ -1460,7 +1515,7 @@ inline void ModuleSetupService::scanPinForSensorTypes(int pin, Node &node)
             sensor.type = "none";
 
             char sensorId[20];
-            sprintf(sensorId, ".%02d.%02d", pin, i + 1);
+            snprintf(sensorId, sizeof(sensorId), ".%02d.%02d", pin, i + 1);
             sensor.uid = node.uid + sensorId;
 
             node.sensors.push_back(sensor);
@@ -1651,7 +1706,7 @@ inline void ModuleSetupService::createPlaceholderSensors(Node &node)
             sensor.type = "none";
 
             char sensorId[20];
-            sprintf(sensorId, ".%02d.%02d", sensorPin, i + 1);
+            snprintf(sensorId, sizeof(sensorId), ".%02d.%02d", sensorPin, i + 1);
             sensor.uid = nodeUid + sensorId;
 
             node.sensors.push_back(sensor);

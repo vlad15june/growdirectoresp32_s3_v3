@@ -409,7 +409,8 @@ ModuleSetupService moduleSetupService(
     &udpManager,
     &hybridApiService,
     &clearModuleDataService,
-    &arduinoAdapter);
+    &arduinoAdapter,
+    &syncSensorTypesUseCase);
 
 void initDependencies()
 {
