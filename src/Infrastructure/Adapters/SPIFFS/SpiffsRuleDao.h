@@ -85,6 +85,10 @@ public:
         return SpiffsDao<Rule>::getAll(entities);
     }
 
+    bool clear() override {
+        return SpiffsDao<Rule>::clear();
+    }
+
     // Implementation of ISpiffsRuleDao methods
     bool saveRule(const Rule& rule) override {
         if (rule.uid.empty()) return false;

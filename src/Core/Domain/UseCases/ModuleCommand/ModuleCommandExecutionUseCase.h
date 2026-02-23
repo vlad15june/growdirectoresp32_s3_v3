@@ -950,17 +950,49 @@ private:
         }
         
         // Check for noScanSensors flag in options
+        bool noScan = false;
         if (!moduleCommand.options.empty() && settings)
         {
             std::string noScanValue = extractJsonValue(moduleCommand.options, "noScanSensors");
             if (!noScanValue.empty())
             {
                 // Parse boolean value (accepts "true", "1", or true)
-                bool noScan = (noScanValue == "true" || noScanValue == "1");
+                noScan = (noScanValue == "true" || noScanValue == "1");
                 settings->setNoScanSensors(noScan ? 1 : 0);
                 
                 log(DebugFeatures::MODULE_COMMAND_DEBUG,
                     "ModuleCommandUseCase: Set noScanSensors flag to %d", noScan ? 1 : 0);
+            }
+        }
+        
+        // If noScan is false, clear sensor and sensor type data
+        if (!noScan)
+        {
+            log(DebugFeatures::MODULE_COMMAND_DEBUG,
+                "ModuleCommandUseCase: Clearing sensor data (noScan=false)");
+            
+            if (sensorRepository)
+            {
+                bool sensorsCleared = sensorRepository->clear();
+                log(DebugFeatures::MODULE_COMMAND_DEBUG,
+                    "ModuleCommandUseCase: Sensor data clear %s", sensorsCleared ? "successful" : "failed");
+            }
+            else
+            {
+                log(DebugFeatures::MODULE_COMMAND_DEBUG,
+                    "ModuleCommandUseCase: Sensor repository not available for clearing");
+            }
+            
+            if (sensorTypeRepository)
+            {
+                bool sensorTypesCleared = sensorTypeRepository->clear();
+                log(DebugFeatures::MODULE_COMMAND_DEBUG,
+                    "ModuleCommandUseCase: Sensor type data clear %s", sensorTypesCleared ? "successful" : "failed");
+            }
+            else
+            {
+                log(DebugFeatures::MODULE_COMMAND_DEBUG,
+                    "ModuleCommandUseCase: Sensor type repository not available for clearing");
             }
         }
         

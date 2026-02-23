@@ -167,4 +167,12 @@ public:
     bool isCacheCurrent() const {
         return isCacheValid;
     }
+
+    bool clear() override {
+        bool result = sensorTypeDao->clear();
+        if (result) {
+            invalidateCache();
+        }
+        return result;
+    }
 };

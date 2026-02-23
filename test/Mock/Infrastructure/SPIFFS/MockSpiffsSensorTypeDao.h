@@ -111,6 +111,12 @@ public:
         }
         return false;
     }
+
+    bool clear() override {
+        if (shouldFail) return false;
+        storage.clear();
+        return true;
+    }
 };
 
 #endif // MOCK_SPIFFS_SENSOR_TYPE_DAO_H

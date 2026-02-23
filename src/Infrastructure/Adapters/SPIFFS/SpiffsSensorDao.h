@@ -85,6 +85,10 @@ public:
         return SpiffsDao<SensorEntity>::getAll(entities);
     }
 
+    bool clear() override {
+        return SpiffsDao<SensorEntity>::clear();
+    }
+
     // Implementation of ISpiffsSensorDao methods
     bool saveSensor(const SensorEntity& sensor) override {
         if (sensor.uid.empty()) return false;

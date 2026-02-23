@@ -48,4 +48,10 @@ public:
      * @return true if the operation was successful, false otherwise
      */
     virtual bool getAll(std::vector<T>& entities) = 0;
+
+    /**
+     * @brief Clear all data from storage (remove file)
+     * @return true if the operation was successful, false otherwise
+     */
+    virtual bool clear() = 0;
 };

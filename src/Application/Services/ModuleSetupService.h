@@ -1737,10 +1737,18 @@ inline void ModuleSetupService::processSensorsFromRepository(Node &node)
 
 inline void ModuleSetupService::handleModbusAddressManagement(Node &node)
 {
+    log("SETUP: handleModbusAddressManagement called");
+    
     // Address validation and duplicate handling for Modbus sensors
-    if (!sensorRepository || !sensorReader)
+    if (!sensorRepository)
     {
-        log("SETUP: Skipping Modbus address management - missing dependencies");
+        log("SETUP: Skipping Modbus address management - sensorRepository is NULL");
+        return;
+    }
+    
+    if (!sensorReader)
+    {
+        log("SETUP: Skipping Modbus address management - sensorReader is NULL");
         return;
     }
 
@@ -1748,14 +1756,29 @@ inline void ModuleSetupService::handleModbusAddressManagement(Node &node)
 
     // Get all sensors again to include newly detected ones
     auto allSensorEntities = sensorRepository->getAll();
+    log("SETUP: Retrieved %zu sensor entities from repository", allSensorEntities.size());
+
+    if (allSensorEntities.empty())
+    {
+        log("SETUP: No sensors in repository, skipping address management");
+        return;
+    }
 
     // Collect all Modbus sensors and their addresses
     std::map<int, std::vector<SensorEntity *>> addressMap;
     std::vector<SensorEntity *> sensorsNeedingNewAddress;
 
+    log("SETUP: Calling collectModbusSensorsAndAddresses...");
     collectModbusSensorsAndAddresses(allSensorEntities, addressMap, sensorsNeedingNewAddress);
+    log("SETUP: collectModbusSensorsAndAddresses completed");
+    
+    log("SETUP: Calling findDuplicateAddresses...");
     findDuplicateAddresses(addressMap, sensorsNeedingNewAddress);
+    log("SETUP: findDuplicateAddresses completed");
+    
+    log("SETUP: Calling assignNewAddresses...");
     assignNewAddresses(sensorsNeedingNewAddress, addressMap);
+    log("SETUP: assignNewAddresses completed");
 }
 
 inline void ModuleSetupService::collectModbusSensorsAndAddresses(const std::vector<SensorEntity> &allSensorEntities,
@@ -1783,13 +1806,13 @@ inline void ModuleSetupService::collectModbusSensorsAndAddresses(const std::vect
             log("SETUP: Found ModBus sensor %s with address 0x%02X",
                 sensorEntity.uid.c_str(), sensorEntity.modbusDeviceAddress);
 
-            if (sensorEntity.status == SENSOR_STATUS_NEW)
+            if (sensorEntity.status == SENSOR_STATUS_NEW || sensorEntity.status == SENSOR_STATUS_ADDED)
             {
                 addedCount++;
                 int address = sensorEntity.modbusDeviceAddress;
 
-                log("SETUP: ModBus sensor %s has NEW status, checking address 0x%02X",
-                    sensorEntity.uid.c_str(), address);
+                log("SETUP: ModBus sensor %s has status %d, checking address 0x%02X",
+                    sensorEntity.uid.c_str(), sensorEntity.status, address);
 
                 // Check if address is outside valid range (MODBUS_ADDRESS_MIN-MODBUS_ADDRESS_MAX)
                 if (address < MODBUS_ADDRESS_MIN || address > MODBUS_ADDRESS_MAX)
@@ -1811,7 +1834,7 @@ inline void ModuleSetupService::collectModbusSensorsAndAddresses(const std::vect
             }
             else
             {
-                log("SETUP: ModBus sensor %s has status %d (not NEW), skipping",
+                log("SETUP: ModBus sensor %s has status %d (not NEW/ADDED), skipping address validation",
                     sensorEntity.uid.c_str(), sensorEntity.status);
             }
         }
@@ -1834,25 +1857,51 @@ inline void ModuleSetupService::collectModbusSensorsAndAddresses(const std::vect
 inline void ModuleSetupService::findDuplicateAddresses(const std::map<int, std::vector<SensorEntity *>> &addressMap,
                                                        std::vector<SensorEntity *> &sensorsNeedingNewAddress)
 {
+    log("SETUP: findDuplicateAddresses called with addressMap size: %zu", addressMap.size());
+    log("SETUP: sensorsNeedingNewAddress initial size: %zu", sensorsNeedingNewAddress.size());
+    
+    int duplicatesFound = 0;
+    int sensorsMarkedForChange = 0;
+    
     // Find duplicates and mark for address change (keep first, change others)
     for (const auto &pair : addressMap)
     {
         int address = pair.first;
         const auto &sensors = pair.second;
 
+        log("SETUP: Checking address 0x%02X with %zu sensors", address, sensors.size());
+        
         if (sensors.size() > 1)
         {
+            duplicatesFound++;
             log("SETUP: Found %zu sensors with duplicate address 0x%02X", sensors.size(), address);
+            
+            // Log all sensors at this address
+            for (size_t i = 0; i < sensors.size(); i++)
+            {
+                log("SETUP: Sensor %zu at address 0x%02X: UID=%s, Status=%d", 
+                    i, address, sensors[i]->uid.c_str(), sensors[i]->status);
+            }
 
             // Keep the first sensor, mark others for address change
+            log("SETUP: Keeping first sensor %s, marking others for address change", sensors[0]->uid.c_str());
             for (size_t i = 1; i < sensors.size(); i++)
             {
                 sensorsNeedingNewAddress.push_back(sensors[i]);
+                sensorsMarkedForChange++;
                 log("SETUP: Sensor %s marked for address change due to duplicate address 0x%02X",
                     sensors[i]->uid.c_str(), address);
             }
         }
+        else
+        {
+            log("SETUP: Address 0x%02X has only 1 sensor, no duplicates", address);
+        }
     }
+    
+    log("SETUP: findDuplicateAddresses completed - Duplicate addresses found: %d, Sensors marked for change: %d", 
+        duplicatesFound, sensorsMarkedForChange);
+    log("SETUP: sensorsNeedingNewAddress final size: %zu", sensorsNeedingNewAddress.size());
 }
 
 inline void ModuleSetupService::assignNewAddresses(std::vector<SensorEntity *> &sensorsNeedingNewAddress,

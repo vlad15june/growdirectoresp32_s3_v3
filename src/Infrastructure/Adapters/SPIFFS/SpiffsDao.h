@@ -169,6 +169,16 @@ public:
         log("SpiffsDao: JSON deserialization %s, entities count: %d", result ? "successful" : "failed", entities.size());
         return result;
     }
+
+    bool clear() override {
+        log("SpiffsDao: Clearing all data (removing file)");
+        if (filePath.empty()) initialize();
+        
+        // Just remove the file, no need to check if it exists first
+        spiffsAdapter->RemoveFile(filePath.c_str());
+        log("SpiffsDao: Clear operation completed");
+        return true;
+    }
 };
 
 // Force explicit template instantiation for Rule

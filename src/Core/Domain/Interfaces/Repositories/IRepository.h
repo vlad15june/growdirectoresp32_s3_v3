@@ -61,6 +61,12 @@ public:
      */
     virtual bool exists(const char* uid) = 0;
 
+    /**
+     * @brief Clear all data from storage (remove file)
+     * @return true if operation was successful, false otherwise
+     */
+    virtual bool clear() = 0;
+
     virtual ~IRepository() = default;
 };
 

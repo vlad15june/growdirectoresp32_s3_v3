@@ -203,6 +203,11 @@ public:
         }
         return nullptr;
     }
+
+    bool clear() override {
+        sensorTypes.clear();
+        return true;
+    }
 };
 
 #endif // MOCK_SENSOR_TYPE_REPOSITORY_H

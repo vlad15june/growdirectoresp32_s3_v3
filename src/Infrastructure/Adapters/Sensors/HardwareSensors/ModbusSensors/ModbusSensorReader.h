@@ -131,6 +131,16 @@ public:
             
             log("ModbusSensorReader: Ping device %d on port %d - received %d bytes", deviceAddress, portIndex, bytesRead);
             
+            if (bytesRead > 0) {
+                char hexBuffer[256] = "";
+                for (int i = 0; i < bytesRead && i < 32; i++) {
+                    char temp[4];
+                    snprintf(temp, sizeof(temp), "%02X ", response[i]);
+                    strcat(hexBuffer, temp);
+                }
+                log("ModbusSensorReader: Ping response bytes: %s", hexBuffer);
+            }
+            
             if (bytesRead >= 5 && response[0] == deviceAddress && response[1] == 0x03)
             {
                 log("ModbusSensorReader: Device %d responded to ping on port %d (attempt %d)", deviceAddress, portIndex, attempt);

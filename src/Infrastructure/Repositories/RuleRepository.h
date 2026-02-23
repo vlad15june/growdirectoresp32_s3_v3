@@ -66,6 +66,10 @@ public:
         return Repository<Rule>::exists(uid);
     }
 
+    bool clear() override {
+        return Repository<Rule>::clear();
+    }
+
     /**
      * @brief Get rules for a specific device
      * @param deviceUid Device unique identifier

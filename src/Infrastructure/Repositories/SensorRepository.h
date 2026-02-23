@@ -63,6 +63,10 @@ public:
         return Repository<SensorEntity>::exists(uid);
     }
 
+    bool clear() override {
+        return Repository<SensorEntity>::clear();
+    }
+
     // ISensorRepository implementations
     std::vector<SensorEntity> getSensorsByProtocol(const char* protocol) override {
         if (!protocol) return {};

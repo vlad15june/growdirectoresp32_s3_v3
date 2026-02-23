@@ -209,6 +209,22 @@ public:
     }
 
     /**
+     * @brief Clear all data from storage (remove file)
+     * @return true if operation was successful, false otherwise
+     */
+    bool clear() override {
+        log("Repository: Clearing all data from storage");
+        bool result = dao->clear();
+        if (result) {
+            log("Repository: Data cleared successfully, invalidating cache");
+            invalidateCache();
+        } else {
+            log("Repository: Failed to clear data");
+        }
+        return result;
+    }
+
+    /**
      * @brief Get the underlying DAO object
      * @return Pointer to the DAO object
      */
