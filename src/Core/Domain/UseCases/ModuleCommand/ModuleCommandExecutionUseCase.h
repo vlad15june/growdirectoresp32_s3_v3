@@ -971,9 +971,10 @@ private:
             log(DebugFeatures::MODULE_COMMAND_DEBUG,
                 "ModuleCommandUseCase: Clearing sensor data (noScan=false)");
             
-            if (sensorRepository)
+            if (sensorRepository) //TODO: need add new flag clearSensor
             {
-                bool sensorsCleared = sensorRepository->clear();
+                bool sensorsCleared = false;
+                // bool sensorsCleared = sensorRepository->clear();
                 log(DebugFeatures::MODULE_COMMAND_DEBUG,
                     "ModuleCommandUseCase: Sensor data clear %s", sensorsCleared ? "successful" : "failed");
             }
