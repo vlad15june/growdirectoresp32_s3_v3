@@ -1,5 +1,18 @@
 # Release Notes
 
+## Version 2.1.28 (2026-02-25)
+
+### Added
+- **SensorTypeRepository Logging**: Added debug logging support to `SensorTypeRepository` with `ILogger` and `IDebugSystem` dependencies for improved diagnostics across all repository operations
+- **SensorReader Logging**: Enhanced ModBus sensor scanning with detailed per-attempt, per-channel logging including register config, address, port, and read result
+
+### Changed
+- **MAX_SENSOR_CHANNELS Constant**: Replaced hardcoded value `3` with new `MAX_SENSOR_CHANNELS` (4) constant in sensor channel loop iterations
+- **Memory Optimization**: Increased JSON document buffer sizes for sensor type parsing (8KB→16KB for single type, 32KB→64KB and 8KB→64KB for arrays)
+- **Sensor Clear Disabled**: Temporarily disabled automatic sensor data clearing on reboot pending new `clearSensor` flag implementation
+
+---
+
 ## Version 2.1.27 (2026-02-24)
 
 ### Added
