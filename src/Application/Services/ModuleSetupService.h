@@ -202,31 +202,31 @@ inline ModuleSetupService::ModuleSetupService(
     IClearModuleDataService *clearModuleDataService,
     IArduinoAdapter *arduinoAdapter,
     ISyncSensorTypesUseCase *syncSensorTypesUseCase) : logger(logger),
-                               debugSystem(debugSystem),
-                               moduleConfig(moduleConfig),
-                               ledAdapter(ledAdapter),
-                               buttonAdapter(buttonAdapter),
-                               ledUseCases(ledUseCases),
-                               buttonUseCases(buttonUseCases),
-                               wifiAdapter(wifiAdapter),
-                               wifiManager(wifiManager),
-                               webServerLauncher(webServerLauncher),
-                               loopServiceFactory(loopServiceFactory),
-                               mqttManager(mqttManager),
-                               moduleStructure(moduleStructure),
-                               deviceService(deviceService),
-                               ruleService(ruleService),
-                               sensorRepository(sensorRepository),
-                               sensorTypeRepository(sensorTypeRepository),
-                               sensorReader(sensorReader),
-                               spiffsAdapter(spiffsAdapter),
-                               jsonConverter(jsonConverter),
-                               boardTest(boardTest),
-                               udpManager(udpManager),
-                               hybridApiService(hybridApiService),
-                               clearModuleDataService(clearModuleDataService),
-                               arduinoAdapter(arduinoAdapter),
-                               syncSensorTypesUseCase(syncSensorTypesUseCase)
+                                                       debugSystem(debugSystem),
+                                                       moduleConfig(moduleConfig),
+                                                       ledAdapter(ledAdapter),
+                                                       buttonAdapter(buttonAdapter),
+                                                       ledUseCases(ledUseCases),
+                                                       buttonUseCases(buttonUseCases),
+                                                       wifiAdapter(wifiAdapter),
+                                                       wifiManager(wifiManager),
+                                                       webServerLauncher(webServerLauncher),
+                                                       loopServiceFactory(loopServiceFactory),
+                                                       mqttManager(mqttManager),
+                                                       moduleStructure(moduleStructure),
+                                                       deviceService(deviceService),
+                                                       ruleService(ruleService),
+                                                       sensorRepository(sensorRepository),
+                                                       sensorTypeRepository(sensorTypeRepository),
+                                                       sensorReader(sensorReader),
+                                                       spiffsAdapter(spiffsAdapter),
+                                                       jsonConverter(jsonConverter),
+                                                       boardTest(boardTest),
+                                                       udpManager(udpManager),
+                                                       hybridApiService(hybridApiService),
+                                                       clearModuleDataService(clearModuleDataService),
+                                                       arduinoAdapter(arduinoAdapter),
+                                                       syncSensorTypesUseCase(syncSensorTypesUseCase)
 {
 }
 
@@ -240,7 +240,7 @@ inline void ModuleSetupService::log(const char *format, ...)
         vsnprintf(buffer, sizeof(buffer), format, args);
         va_end(args);
 
-        IDebugFeature* feature = debugSystem->getFeature(DebugFeatures::SETUP_DEBUG);
+        IDebugFeature *feature = debugSystem->getFeature(DebugFeatures::SETUP_DEBUG);
         if (feature)
         {
             logger->println(DebugFeatures::SETUP_DEBUG, buffer, feature->getLogChannel());
@@ -298,7 +298,7 @@ inline bool ModuleSetupService::setupButtons()
 
     uint8_t buttonPin = moduleConfig->getButtonPin();
     uint8_t buttonPins[1] = {buttonPin};
-    
+
     buttonAdapter->setupModuleButtons(buttonPins, 1);
 
     log("SETUP: Button initialized on pin: %d", buttonPin);
@@ -409,10 +409,10 @@ inline void ModuleSetupService::UserReConfigModeConfigure()
 inline void ModuleSetupService::ConfigureDoneModeConfigure()
 {
     setupWifiConnection();
-    
+
     // Check if module was deleted from server while offline
     checkModuleDeletionOnStartup();
-    
+
     setupMqttConnection();
     setupUdp();
 
@@ -448,11 +448,10 @@ inline void ModuleSetupService::checkModuleDeletionOnStartup()
     {
         return;
     }
-    
+
     ModuleModeEnum currentMode = static_cast<ModuleModeEnum>(
-        moduleConfig->getSettings()->getIfConfigured()
-    );
-    
+        moduleConfig->getSettings()->getIfConfigured());
+
     if (currentMode != ModuleModeEnum::CONFIGURED_DONE)
     {
         log("SETUP: Skipping deletion check - module not in CONFIGURED_DONE mode");
@@ -492,15 +491,15 @@ inline void ModuleSetupService::checkModuleDeletionOnStartup()
     if (isDeleted)
     {
         log("SETUP: Module is marked as DELETED on server - initiating factory reset");
-        
+
         // Set module to unconfigured mode
         moduleConfig->getSettings()->setConfigured(ModuleModeEnum::USER_CAN_CONFIGURE);
         log("SETUP: Module mode set to USER_CAN_CONFIGURE");
-        
+
         // Clear all data
         clearModuleDataService->clearAllData();
         log("SETUP: All module data cleared");
-        
+
         // Restart to apply changes
         log("SETUP: Restarting module to complete reset...");
         arduinoAdapter->delay(1000); // Allow logs to flush
@@ -843,7 +842,7 @@ inline void ModuleSetupService::addMultiChannelModbusSensor(Node &node, const Se
     {
         Sensor sensor;
         sensor.uid = sensorEntity.uid + "." + (config.channel < 10 ? "0" : "") + std::to_string(config.channel);
-        sensor.type = config.sensorType.empty() ? sensorEntity.sensorType : config.channelName;
+        sensor.type = config.sensorType.empty() ? sensorEntity.sensorType : config.sensorType;
         sensor.pin = sensorEntity.pin;
         sensor.group = sensorEntity.modbusDeviceAddress;
         sensor.modelUid = sensorEntity.sensorTypeUid;
@@ -878,7 +877,7 @@ inline void ModuleSetupService::addMultiChannelI2CSensor(Node &node, const Senso
     {
         Sensor sensor;
         sensor.uid = sensorEntity.uid + "." + (config.channel < 10 ? "0" : "") + std::to_string(config.channel);
-        sensor.type = config.sensorType.empty() ? sensorEntity.sensorType : config.channelName;
+        sensor.type = config.sensorType.empty() ? sensorEntity.sensorType : config.sensorType;
         sensor.pin = sensorEntity.pin;
         sensor.group = 1; // I2C typically uses a single address/group
         sensor.modelUid = sensorEntity.sensorTypeUid;
@@ -1005,7 +1004,7 @@ inline void ModuleSetupService::fillSensorModuleStructure(Node &node)
             {
                 log("SETUP: Sensor types sync use case not available");
             }
-            
+
             // If still no sensor types after sync attempt, create placeholders
             sensorTypes = sensorTypeRepository->getAll();
             if (sensorTypes.empty())
@@ -1516,6 +1515,19 @@ inline void ModuleSetupService::scanPinForSensorTypes(int pin, Node &node)
 
     if (isAdded == false)
     {
+        Sensor sensor;
+        sensor.pin = pin;
+        sensor.type = "none";
+
+        char sensorId[20];
+        snprintf(sensorId, sizeof(sensorId), ".%02d", pin);
+        sensor.uid = node.uid + sensorId;
+
+        node.sensors.push_back(sensor);
+
+        log("SETUP: Added placeholder sensor group %d, type: %s, pin: %d, uid: %s",
+            pin, sensor.type.c_str(), sensor.pin, sensor.uid.c_str());
+
         for (int i = 0; i < MAX_SENSOR_CHANNELS; i++)
         {
             Sensor sensor;
@@ -1707,6 +1719,19 @@ inline void ModuleSetupService::createPlaceholderSensors(Node &node)
 
     for (int sensorPin = 0; sensorPin < sensorPinCount; sensorPin++)
     {
+        Sensor sensor;
+        sensor.pin = sensorPin;
+        sensor.type = "none";
+
+        char sensorId[20];
+        snprintf(sensorId, sizeof(sensorId), ".%02d", sensorPin);
+        sensor.uid = node.uid + sensorId;
+
+        node.sensors.push_back(sensor);
+
+        log("SETUP: Added placeholder sensor group %d, type: %s, pin: %d, uid: %s",
+            sensorPin, sensor.type.c_str(), sensor.pin, sensor.uid.c_str());
+
         for (int i = 0; i < MAX_SENSOR_CHANNELS; i++) // NOTE: to support old sensors with MAX_SENSOR_CHANNELS channels
         {
             Sensor sensor;
@@ -1778,7 +1803,7 @@ inline void ModuleSetupService::processSensorsFromRepository(Node &node)
     // Check if sensor scanning should be skipped
     ISettings *settings = moduleConfig->getSettings();
     bool skipSensorScan = settings && settings->getNoScanSensors();
-    
+
     if (skipSensorScan)
     {
         log("SETUP: Skipping sensor scanning on empty pins (noScanSensors flag is set)");
@@ -1788,7 +1813,7 @@ inline void ModuleSetupService::processSensorsFromRepository(Node &node)
     {
         // Scan empty pins for additional sensors
         scanEmptyPinsForSensors(node, sensorEntities);
-        
+
         // Set flag indicating that sensor scan was performed
         if (settings)
         {
@@ -1801,14 +1826,14 @@ inline void ModuleSetupService::processSensorsFromRepository(Node &node)
 inline void ModuleSetupService::handleModbusAddressManagement(Node &node)
 {
     log("SETUP: handleModbusAddressManagement called");
-    
+
     // Address validation and duplicate handling for Modbus sensors
     if (!sensorRepository)
     {
         log("SETUP: Skipping Modbus address management - sensorRepository is NULL");
         return;
     }
-    
+
     if (!sensorReader)
     {
         log("SETUP: Skipping Modbus address management - sensorReader is NULL");
@@ -1834,11 +1859,11 @@ inline void ModuleSetupService::handleModbusAddressManagement(Node &node)
     log("SETUP: Calling collectModbusSensorsAndAddresses...");
     collectModbusSensorsAndAddresses(allSensorEntities, addressMap, sensorsNeedingNewAddress);
     log("SETUP: collectModbusSensorsAndAddresses completed");
-    
+
     log("SETUP: Calling findDuplicateAddresses...");
     findDuplicateAddresses(addressMap, sensorsNeedingNewAddress);
     log("SETUP: findDuplicateAddresses completed");
-    
+
     log("SETUP: Calling assignNewAddresses...");
     assignNewAddresses(sensorsNeedingNewAddress, addressMap);
     log("SETUP: assignNewAddresses completed");
@@ -1922,10 +1947,10 @@ inline void ModuleSetupService::findDuplicateAddresses(const std::map<int, std::
 {
     log("SETUP: findDuplicateAddresses called with addressMap size: %zu", addressMap.size());
     log("SETUP: sensorsNeedingNewAddress initial size: %zu", sensorsNeedingNewAddress.size());
-    
+
     int duplicatesFound = 0;
     int sensorsMarkedForChange = 0;
-    
+
     // Find duplicates and mark for address change (keep first, change others)
     for (const auto &pair : addressMap)
     {
@@ -1933,16 +1958,16 @@ inline void ModuleSetupService::findDuplicateAddresses(const std::map<int, std::
         const auto &sensors = pair.second;
 
         log("SETUP: Checking address 0x%02X with %zu sensors", address, sensors.size());
-        
+
         if (sensors.size() > 1)
         {
             duplicatesFound++;
             log("SETUP: Found %zu sensors with duplicate address 0x%02X", sensors.size(), address);
-            
+
             // Log all sensors at this address
             for (size_t i = 0; i < sensors.size(); i++)
             {
-                log("SETUP: Sensor %zu at address 0x%02X: UID=%s, Status=%d", 
+                log("SETUP: Sensor %zu at address 0x%02X: UID=%s, Status=%d",
                     i, address, sensors[i]->uid.c_str(), sensors[i]->status);
             }
 
@@ -1961,8 +1986,8 @@ inline void ModuleSetupService::findDuplicateAddresses(const std::map<int, std::
             log("SETUP: Address 0x%02X has only 1 sensor, no duplicates", address);
         }
     }
-    
-    log("SETUP: findDuplicateAddresses completed - Duplicate addresses found: %d, Sensors marked for change: %d", 
+
+    log("SETUP: findDuplicateAddresses completed - Duplicate addresses found: %d, Sensors marked for change: %d",
         duplicatesFound, sensorsMarkedForChange);
     log("SETUP: sensorsNeedingNewAddress final size: %zu", sensorsNeedingNewAddress.size());
 }
