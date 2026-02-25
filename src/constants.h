@@ -141,4 +141,7 @@
 #define MODBUS_ADDRESS_MIN 0x70
 #define MODBUS_ADDRESS_MAX 0x73
 
+// Maximum number of channels per sensor
+#define MAX_SENSOR_CHANNELS 4
+
 #endif // CONSTANTS_H

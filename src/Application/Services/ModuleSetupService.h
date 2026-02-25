@@ -1516,7 +1516,7 @@ inline void ModuleSetupService::scanPinForSensorTypes(int pin, Node &node)
 
     if (isAdded == false)
     {
-        for (int i = 0; i < 3; i++)
+        for (int i = 0; i < MAX_SENSOR_CHANNELS; i++)
         {
             Sensor sensor;
             sensor.pin = pin;
@@ -1707,7 +1707,7 @@ inline void ModuleSetupService::createPlaceholderSensors(Node &node)
 
     for (int sensorPin = 0; sensorPin < sensorPinCount; sensorPin++)
     {
-        for (int i = 0; i < 3; i++) // NOTE: to support old sensors with 3 channels
+        for (int i = 0; i < MAX_SENSOR_CHANNELS; i++) // NOTE: to support old sensors with MAX_SENSOR_CHANNELS channels
         {
             Sensor sensor;
             sensor.pin = sensorPin;
