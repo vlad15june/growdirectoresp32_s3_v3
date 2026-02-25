@@ -1698,7 +1698,7 @@ public:
         Serial.printf("ArduinoJsonConverter: Free heap at start: %d\n", ESP.getFreeHeap());
         
         try {
-            DynamicJsonDocument doc(8192);
+            DynamicJsonDocument doc(16384);
             Serial.printf("ArduinoJsonConverter: Document created, capacity: %d\n", doc.capacity());
             
             // Main sensor type properties
@@ -1836,7 +1836,7 @@ public:
 
     bool sensorTypesFromJson(const std::string &jsonStr, std::vector<SensorType> &sensorTypes) override
     {
-        DynamicJsonDocument doc(32768);
+        DynamicJsonDocument doc(65536);
         
         Serial.printf("ArduinoJsonConverter: Parsing sensor types JSON (length: %d bytes)\n", jsonStr.length());
         Serial.printf("ArduinoJsonConverter: Free heap before parsing: %d\n", ESP.getFreeHeap());
@@ -1903,7 +1903,7 @@ public:
         Serial.printf("ArduinoJsonConverter: Free heap at start: %d\n", ESP.getFreeHeap());
         
         try {
-            DynamicJsonDocument doc(8192);
+            DynamicJsonDocument doc(65536);
             Serial.printf("ArduinoJsonConverter: DynamicJsonDocument created, capacity: %d\n", doc.capacity());
             Serial.printf("ArduinoJsonConverter: Free heap after doc creation: %d\n", ESP.getFreeHeap());
             

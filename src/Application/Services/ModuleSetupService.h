@@ -1433,6 +1433,14 @@ inline void ModuleSetupService::scanPinForSensorTypes(int pin, Node &node)
         return;
     }
 
+    log("SETUP: Received %zu sensor types for scanning on pin %d:", allSensorTypes.size(), pin);
+    for (size_t i = 0; i < allSensorTypes.size(); i++)
+    {
+        log("SETUP:   [%zu] name: %s, uid: %s, protocol: %s",
+            i, allSensorTypes[i].name.c_str(), allSensorTypes[i].uid.c_str(),
+            allSensorTypes[i].getProtocolString().c_str());
+    }
+
     bool isAdded = false;
     std::string moduleUid = moduleConfig->getModuleUid();
     for (const auto &sensorType : allSensorTypes)

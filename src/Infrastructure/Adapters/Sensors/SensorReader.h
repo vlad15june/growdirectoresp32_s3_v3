@@ -330,15 +330,29 @@ private:
         log("SensorReader: Device responds at address %d, proceeding with scan", sensor.modbusDeviceAddress);
 
         bool scanSuccess = true;
+        log("SensorReader: Starting scan of sensor %s - checking %d register config(s) on port %d",
+            sensor.uid.c_str(), (int)sensor.modbusRegisterConfigs.size(), portIndex);
+
         for (const auto &config : sensor.modbusRegisterConfigs)
         {
             bool success = false;
             float dummyValue;
 
+            log("SensorReader: Scanning channel '%s' (register 0x%04X, fc 0x%02X) at device address %d on port %d, expected range [%.2f, %.2f]",
+                config.channelName.c_str(), config.startRegister, config.functionCode,
+                sensor.modbusDeviceAddress, portIndex,
+                config.canConnectMinValue, config.canConnectMaxValue);
+
             for (int attempt = 1; attempt <= 3; attempt++)
             {
+                log("SensorReader: Attempt %d/3 - reading channel '%s' at address %d, port %d",
+                    attempt, config.channelName.c_str(), sensor.modbusDeviceAddress, portIndex);
+
                 if (_modbusReader->readRegister(sensor.modbusDeviceAddress, config, dummyValue, portIndex))
                 {
+                    log("SensorReader: readRegister returned value %.2f for channel '%s' (attempt %d/3)",
+                        dummyValue, config.channelName.c_str(), attempt);
+
                     if (dummyValue >= config.canConnectMinValue && dummyValue <= config.canConnectMaxValue)
                     {
                         success = true;
@@ -351,6 +365,11 @@ private:
                         log("SensorReader: Read value %.2f is outside expected range [%.2f, %.2f] for channel %s",
                             dummyValue, config.canConnectMinValue, config.canConnectMaxValue, config.channelName.c_str());
                     }
+                }
+                else
+                {
+                    log("SensorReader: readRegister failed for channel '%s' (attempt %d/3) at address %d, port %d",
+                        config.channelName.c_str(), attempt, sensor.modbusDeviceAddress, portIndex);
                 }
 
                 if (attempt < 3)
@@ -372,6 +391,9 @@ private:
                 break;
             }
         }
+
+        log("SensorReader: Scan of sensor %s on port %d %s",
+            sensor.uid.c_str(), portIndex, scanSuccess ? "PASSED" : "FAILED");
 
         return scanSuccess;
     }

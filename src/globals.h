@@ -176,7 +176,7 @@ SpiffsSensorDao sensorDao(&spiffsAdapter, &jsonConverter, &debugSystem, &mqttLog
 SensorRepository sensorRepository(&sensorDao, &debugSystem, &mqttLogger);
 
 SpiffsSensorTypeDao sensorTypeDao(&spiffsAdapter, &jsonConverter, &debugSystem, &mqttLogger);
-SensorTypeRepository sensorTypeRepository(&sensorTypeDao);
+SensorTypeRepository sensorTypeRepository(&sensorTypeDao, &debugSystem, &mqttLogger);
 
 ClearModuleDataService clearModuleDataService(&ruleDao, &sensorDao, &sensorTypeDao, &mqttLogger, &debugSystem, &settings);
 
