@@ -1446,6 +1446,15 @@ inline void ModuleSetupService::scanPinForSensorTypes(int pin, Node &node)
     {
         mqttManager->loop(); // NOTE: not good solution - Keep MQTT responsive during potentially long operations
 
+        if (!sensorType.canScan || !sensorType.isSupported)
+        {
+            log("SETUP: Skipping sensor type %s (canScan=%s, isSupported=%s)",
+                sensorType.name.c_str(),
+                sensorType.canScan ? "true" : "false",
+                sensorType.isSupported ? "true" : "false");
+            continue;
+        }
+
         SensorEntity tempSensor;
         tempSensor.sensorType = sensorType.name;
         tempSensor.model = sensorType.name;
@@ -1528,21 +1537,21 @@ inline void ModuleSetupService::scanPinForSensorTypes(int pin, Node &node)
         log("SETUP: Added placeholder sensor group %d, type: %s, pin: %d, uid: %s",
             pin, sensor.type.c_str(), sensor.pin, sensor.uid.c_str());
 
-        for (int i = 0; i < MAX_SENSOR_CHANNELS; i++)
-        {
-            Sensor sensor;
-            sensor.pin = pin;
-            sensor.type = "none";
+        // for (int i = 0; i < MAX_SENSOR_CHANNELS; i++)
+        // {
+        //     Sensor sensor;
+        //     sensor.pin = pin;
+        //     sensor.type = "none";
 
-            char sensorId[20];
-            snprintf(sensorId, sizeof(sensorId), ".%02d.%02d", pin, i + 1);
-            sensor.uid = node.uid + sensorId;
+        //     char sensorId[20];
+        //     snprintf(sensorId, sizeof(sensorId), ".%02d.%02d", pin, i + 1);
+        //     sensor.uid = node.uid + sensorId;
 
-            node.sensors.push_back(sensor);
+        //     node.sensors.push_back(sensor);
 
-            log("SETUP: Added placeholder sensor group %d index %d, type: %s, pin: %d, uid: %s",
-                pin, i, sensor.type.c_str(), sensor.pin, sensor.uid.c_str());
-        }
+        //     log("SETUP: Added placeholder sensor group %d index %d, type: %s, pin: %d, uid: %s",
+        //         pin, i, sensor.type.c_str(), sensor.pin, sensor.uid.c_str());
+        // }
     }
 }
 
@@ -1648,6 +1657,7 @@ inline void ModuleSetupService::removeDisconnectedNewSensorPlaceholders(Node &no
                 sensor.uid = sensorEntity.uid + "." + (config.channel < 10 ? "0" : "") + std::to_string(config.channel);
                 sensor.type = "none";
                 sensor.pin = sensorEntity.pin;
+                sensor.group = 0;
 
                 node.sensors.push_back(sensor);
 
@@ -1663,6 +1673,7 @@ inline void ModuleSetupService::removeDisconnectedNewSensorPlaceholders(Node &no
                 sensor.uid = sensorEntity.uid + "." + (config.channel < 10 ? "0" : "") + std::to_string(config.channel);
                 sensor.type = "none";
                 sensor.pin = sensorEntity.pin;
+                sensor.group = 0;
 
                 node.sensors.push_back(sensor);
 
@@ -1732,21 +1743,21 @@ inline void ModuleSetupService::createPlaceholderSensors(Node &node)
         log("SETUP: Added placeholder sensor group %d, type: %s, pin: %d, uid: %s",
             sensorPin, sensor.type.c_str(), sensor.pin, sensor.uid.c_str());
 
-        for (int i = 0; i < MAX_SENSOR_CHANNELS; i++) // NOTE: to support old sensors with MAX_SENSOR_CHANNELS channels
-        {
-            Sensor sensor;
-            sensor.pin = sensorPin;
-            sensor.type = "none";
+        // for (int i = 0; i < MAX_SENSOR_CHANNELS; i++) // NOTE: to support old sensors with MAX_SENSOR_CHANNELS channels
+        // {
+        //     Sensor sensor;
+        //     sensor.pin = sensorPin;
+        //     sensor.type = "none";
 
-            char sensorId[20];
-            snprintf(sensorId, sizeof(sensorId), ".%02d.%02d", sensorPin, i + 1);
-            sensor.uid = nodeUid + sensorId;
+        //     char sensorId[20];
+        //     snprintf(sensorId, sizeof(sensorId), ".%02d.%02d", sensorPin, i + 1);
+        //     sensor.uid = nodeUid + sensorId;
 
-            node.sensors.push_back(sensor);
+        //     node.sensors.push_back(sensor);
 
-            log("SETUP: Added placeholder sensor group %d index %d, type: %s, pin: %d, uid: %s",
-                sensorPin, i, sensor.type.c_str(), sensor.pin, sensor.uid.c_str());
-        }
+        //     log("SETUP: Added placeholder sensor group %d index %d, type: %s, pin: %d, uid: %s",
+        //         sensorPin, i, sensor.type.c_str(), sensor.pin, sensor.uid.c_str());
+        // }
     }
 }
 
@@ -1794,7 +1805,6 @@ inline void ModuleSetupService::processSensorsFromRepository(Node &node)
                 log("SETUP: Sensor %s status is %s, adding placeholder with type 'none'",
                     sensorEntity.uid.c_str(), getSensorStatusName(sensorEntity.status));
                 removeDisconnectedNewSensorPlaceholders(node, sensorEntity);
-                sensorEntity.status = SENSOR_STATUS_DELETED;
             }
         }
         mqttManager->loop(); // NOTE: not good solution - Keep MQTT responsive during potentially long operations

@@ -91,24 +91,49 @@ void ModuleStructure::addSensor(const SensorEntity& sensorEntity) {
     }
     
     Node& node = nodes[0];
-    
-    // Remove existing sensor with same UID if present
-    for (auto it = node.sensors.begin(); it != node.sensors.end(); ++it) {
-        if (it->uid == sensorEntity.uid) {
-            node.sensors.erase(it);
-            break;
+
+    auto addOrReplace = [&](const Sensor& s) {
+        for (auto& existing : node.sensors) {
+            if (existing.uid == s.uid) {
+                existing = s;
+                return;
+            }
         }
+        node.sensors.push_back(s);
+    };
+
+    if (!sensorEntity.modbusRegisterConfigs.empty()) {
+        // Multi-channel ModBus: one Sensor per register config
+        for (const auto& config : sensorEntity.modbusRegisterConfigs) {
+            Sensor sensor;
+            sensor.uid = sensorEntity.uid + "." + (config.channel < 10 ? "0" : "") + std::to_string(config.channel);
+            sensor.type = config.sensorType.empty() ? sensorEntity.sensorType : config.sensorType;
+            sensor.pin = sensorEntity.pin;
+            sensor.group = sensorEntity.modbusDeviceAddress;
+            sensor.modelUid = sensorEntity.sensorTypeUid;
+            addOrReplace(sensor);
+        }
+    } else if (!sensorEntity.i2cRegisterConfigs.empty()) {
+        // Multi-channel I2C: one Sensor per register config
+        for (const auto& config : sensorEntity.i2cRegisterConfigs) {
+            Sensor sensor;
+            sensor.uid = sensorEntity.uid + "." + (config.channel < 10 ? "0" : "") + std::to_string(config.channel);
+            sensor.type = config.sensorType.empty() ? sensorEntity.sensorType : config.sensorType;
+            sensor.pin = sensorEntity.pin;
+            sensor.group = 1;
+            sensor.modelUid = sensorEntity.sensorTypeUid;
+            addOrReplace(sensor);
+        }
+    } else {
+        // Single-channel sensor
+        Sensor sensor;
+        sensor.uid = sensorEntity.uid + ".01";
+        sensor.type = sensorEntity.sensorType;
+        sensor.pin = sensorEntity.pin;
+        sensor.group = 1;
+        sensor.modelUid = sensorEntity.sensorTypeUid;
+        addOrReplace(sensor);
     }
-    
-    // Convert SensorEntity to Sensor and add to node
-    Sensor sensor;
-    sensor.uid = sensorEntity.uid;
-    sensor.type = sensorEntity.sensorType;
-    sensor.pin = sensorEntity.pin;
-    sensor.group = 0; // Default group
-    sensor.modelUid = sensorEntity.sensorTypeUid;
-    
-    node.sensors.push_back(sensor);
 }
 
 void ModuleStructure::removeSensorsByPin(int pin) {

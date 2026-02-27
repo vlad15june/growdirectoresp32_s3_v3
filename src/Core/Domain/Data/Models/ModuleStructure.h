@@ -9,7 +9,7 @@ class SensorEntity;
 
 class Sensor {
 public:
-    Sensor() = default;
+    Sensor() : pin(0), group(0) {}
     Sensor(const std::string& uid, const std::string& type, int pin)
         : uid(uid), type(type), pin(pin), group(0), modelUid("") {}
 
