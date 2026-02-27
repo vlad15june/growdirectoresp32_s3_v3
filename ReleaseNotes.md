@@ -1,5 +1,12 @@
 # Release Notes
 
+## Version 2.1.29 (2026-02-27)
+
+### Added
+- **Sensor Type Scan Filtering**: Sensor types with `canScan=false` or `isSupported=false` are now skipped during pin scanning, reducing unnecessary scan attempts
+
+---
+
 ## Version 2.1.28 (2026-02-25)
 
 ### Added
