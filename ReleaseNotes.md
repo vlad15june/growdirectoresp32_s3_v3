@@ -1,5 +1,19 @@
 # Release Notes
 
+## Version 2.1.30 (2026-03-09)
+
+### Added
+- **Sensor Scan Priority**: Sensor types received from the server can now specify a scan priority, enabling higher-priority sensor types to be scanned first during pin detection
+- **Auto-Fetch Sensor Types on Scan**: If no sensor type definitions are available on the device when a scan is triggered, the device now automatically downloads them from the server before starting the scan, eliminating the "no sensor types available" failure
+
+### Changed
+- **Sensor Type Synchronization Performance**: Sensor type synchronization now detects whether any changes actually occurred and skips writing to storage if nothing has changed, reducing unnecessary storage operations
+- **Multi-Channel Sensor Disconnect Reporting**: When a multi-channel sensor is in an error state (e.g., disconnected before any successful read after reboot), each individual channel is now reported to the server as disconnected rather than being silently omitted from the status update
+- **Delete Sensors Command Handling**: The "Delete Sensors" command is now executed as a full module command, ensuring it is properly validated and processed through the same pipeline as other sensor management commands
+- **Stale Sensor Data Cleanup**: When a sensor is deleted or replaced during a scan operation, any previously cached readings for that sensor are immediately removed so they do not appear in subsequent status updates sent to the server
+
+---
+
 ## Version 2.1.29 (2026-02-27)
 
 ### Added
