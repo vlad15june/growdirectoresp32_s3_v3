@@ -379,13 +379,23 @@ private:
         log(DebugFeatures::MODULE_COMMAND_DEBUG,
             "ModuleCommandUseCase: PingPin command - scanning pin %d", pin);
 
-        // Get all sensor types for scanning
-        auto allSensorTypes = sensorTypeRepository->getAll();
+        // Get only scannable sensor types
+        auto allSensorTypes = sensorTypeRepository->getCanScan();
         if (allSensorTypes.empty())
         {
             log(DebugFeatures::MODULE_COMMAND_DEBUG,
-                "ModuleCommandUseCase: No sensor types available for scanning");
+                "ModuleCommandUseCase: No scannable sensor types available for scanning");
             return {ModuleCommandStatus::ERROR, "No sensor types available"};
+        }
+
+        log(DebugFeatures::MODULE_COMMAND_DEBUG,
+            "ModuleCommandUseCase: PingPin - got %d scannable sensor type(s):",
+            static_cast<int>(allSensorTypes.size()));
+        for (const auto &st : allSensorTypes)
+        {
+            log(DebugFeatures::MODULE_COMMAND_DEBUG,
+                "ModuleCommandUseCase: PingPin -   [%s] uid=%s protocol=%s",
+                st.name.c_str(), st.uid.c_str(), st.getProtocolString().c_str());
         }
 
         // Try to detect any sensor on the pin
@@ -636,8 +646,13 @@ private:
             "ModuleCommandUseCase: DeleteSensors options: %s", moduleCommand.options.c_str());
 
         int pin = convertPinFromJson(extractJsonIntValue(moduleCommand.options, "pin"));
+        log(DebugFeatures::MODULE_COMMAND_DEBUG,
+            "ModuleCommandUseCase: DeleteSensors - parsed pin: %d, sensorPinCount: %d",
+            pin, moduleConfig ? moduleConfig->getSensorPinCount() : -1);
         if (pin < 0 || pin >= moduleConfig->getSensorPinCount())
         {
+            logError("ModuleCommandUseCase: DeleteSensors - invalid pin %d (valid range 0..%d), options: %s",
+                     pin, moduleConfig->getSensorPinCount() - 1, moduleCommand.options.c_str());
             return {ModuleCommandStatus::ERROR, "Missing or invalid pin in options"};
         }
 

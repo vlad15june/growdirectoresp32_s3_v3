@@ -342,7 +342,12 @@ private:
             "CommandService: Processing module command - command: %s",
             command.command.c_str());
 
-        if (isComplexModuleCommand(command.command))
+        bool isComplex = isComplexModuleCommand(command.command);
+        log(DebugFeatures::MODULE_COMMAND_DEBUG,
+            "CommandService: isComplexModuleCommand('%s') = %s",
+            command.command.c_str(), isComplex ? "true" : "false");
+
+        if (isComplex)
         {
             return processComplexModuleCommand(command);
         }
@@ -364,7 +369,8 @@ private:
         return command == ModuleCommandEnum::UPDATE_FIRMWARE ||
                command == ModuleCommandEnum::PING_PIN ||
                command == ModuleCommandEnum::SET_SENSOR_MODEL ||
-               command == ModuleCommandEnum::SCAN_SENSORS;
+               command == ModuleCommandEnum::SCAN_SENSORS ||
+               command == ModuleCommandEnum::DELETE_SENSORS;
     }
 
     std::vector<ModuleCommandDto> validateAndFilterModuleCommands(
@@ -447,8 +453,9 @@ private:
 
     bool processComplexModuleCommand(const CommandDto &command)
     {
-        logInfo("CommandService: Complex module command requested - command: %s, version: %s, url: %s",
-                command.command.c_str(), command.version.c_str(), command.url.c_str());
+        log(DebugFeatures::MODULE_COMMAND_DEBUG,
+            "CommandService: processComplexModuleCommand entered - command: %s",
+            command.command.c_str());
         
         if (!hybridApiService)
         {
@@ -457,22 +464,28 @@ private:
         }
 
         // Get module commands from API
+        log(DebugFeatures::MODULE_COMMAND_DEBUG,
+            "CommandService: Calling hybridApiService->getModuleCommand()");
         std::vector<ModuleCommandDto> moduleCommands = hybridApiService->getModuleCommand();
+        log(DebugFeatures::MODULE_COMMAND_DEBUG,
+            "CommandService: getModuleCommand returned %d command(s)", (int)moduleCommands.size());
+
         if (moduleCommands.empty())
         {
             log(DebugFeatures::MODULE_COMMAND_DEBUG,
-                "CommandService: No module commands received from server for complex command");
+                "CommandService: No module commands received from server - returning true");
             return true;
         }
-
-        log(DebugFeatures::MODULE_COMMAND_DEBUG,
-            "CommandService: Received %d module commands from server for complex command", moduleCommands.size());
 
         bool allCommandsSuccessful = true;
 
         if (moduleCommandUseCase)
         {
             std::vector<ModuleCommandDto> validCommands = validateAndFilterModuleCommands(moduleCommands, allCommandsSuccessful);
+            log(DebugFeatures::MODULE_COMMAND_DEBUG,
+                "CommandService: validateAndFilter: %d valid of %d, allSuccess=%s",
+                (int)validCommands.size(), (int)moduleCommands.size(),
+                allCommandsSuccessful ? "true" : "false");
 
             // Execute only valid commands
             if (!validCommands.empty())
@@ -495,6 +508,9 @@ private:
                     ModuleCommandStatus status = getModuleCommandStatus(result.status);
                     if (status == ModuleCommandStatus::ERROR)
                     {
+                        log(DebugFeatures::MODULE_COMMAND_DEBUG,
+                            "CommandService: Command uid=%s returned ERROR: %s",
+                            result.uid.c_str(), result.errorMessage.c_str());
                         updateDto.errorMessage = result.errorMessage;
                         allCommandsSuccessful = false;
                     }

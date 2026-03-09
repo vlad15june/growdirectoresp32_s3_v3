@@ -197,6 +197,16 @@ public:
         return result;
     }
 
+    std::vector<SensorType> getCanScan() override {
+        std::vector<SensorType> result;
+        for (const auto& sensorType : sensorTypes) {
+            if (sensorType.canScan) {
+                result.push_back(sensorType);
+            }
+        }
+        return result;
+    }
+
     SensorType* getSensorTypeByName(const std::string& name) override {
         for (auto& sensorType : sensorTypes) {
             if (sensorType.name == name) {

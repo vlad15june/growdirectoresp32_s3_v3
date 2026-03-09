@@ -14,5 +14,6 @@ public:
     virtual std::vector<SensorType> getI2CSensorTypes() = 0;
     virtual std::vector<SensorType> getModbusSensorTypes() = 0;
     virtual std::vector<SensorType> getCalibrableSensorTypes() = 0;
+    virtual std::vector<SensorType> getCanScan() = 0;
     virtual SensorType* getSensorTypeByName(const std::string& name) = 0;
 };

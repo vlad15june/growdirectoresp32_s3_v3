@@ -193,6 +193,18 @@ public:
         return sensorTypes;
     }
 
+    std::vector<SensorType> getCanScan() override {
+        loadCache();
+        std::vector<SensorType> result;
+        for (const auto& pair : cache) {
+            if (pair.second.canScan) {
+                result.push_back(pair.second);
+            }
+        }
+        log("SensorTypeRepository: getCanScan() returning %zu sensor types", result.size());
+        return result;
+    }
+
     SensorType* getSensorTypeByName(const std::string& name) override {
         loadCache();
         for (auto& pair : cache) {
