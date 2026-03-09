@@ -10,6 +10,7 @@
 #include "Core/Domain/Interfaces/Adapters/Json/IJsonConverter.h"
 #include "Infrastructure/Adapters/Time/INTPTimeAdapter.h"
 #include <cstdarg>
+#include <unordered_map>
 
 /**
  * Use case for synchronizing sensor types with the server
@@ -220,40 +221,44 @@ private:
     }
     
     int synchronizeSensorTypes(const std::vector<SensorType>& serverSensorTypes) {
+        // Load existing sensor types once into an in-memory map
+        std::vector<SensorType> toSave = _sensorTypeRepository->getAll();
+        std::unordered_map<std::string, size_t> toSaveIndex;
+        for (size_t i = 0; i < toSave.size(); i++) {
+            toSaveIndex[toSave[i].uid] = i;
+        }
+
         int syncedCount = 0;
-        
+
         for (const auto& serverSensorType : serverSensorTypes) {
             try {
-                // Check if sensor type already exists
-                auto existingSensorType = _sensorTypeRepository->get(serverSensorType.uid.c_str());
-                
-                if (existingSensorType.has_value()) {
-                    // Update existing sensor type if different
-                    if (shouldUpdateSensorType(existingSensorType.value(), serverSensorType)) {
-                        if (_sensorTypeRepository->save(serverSensorType)) {
-                            syncedCount++;
-                            log("SYNC_SENSOR_TYPES: Updated sensor type %s", serverSensorType.uid.c_str());
-                        } else {
-                            log("SYNC_SENSOR_TYPES: Failed to update sensor type %s", serverSensorType.uid.c_str());
-                        }
+                auto it = toSaveIndex.find(serverSensorType.uid);
+                if (it != toSaveIndex.end()) {
+                    if (shouldUpdateSensorType(toSave[it->second], serverSensorType)) {
+                        toSave[it->second] = serverSensorType;
+                        log("SYNC_SENSOR_TYPES: Marked sensor type %s for update", serverSensorType.uid.c_str());
                     } else {
-                        syncedCount++; // Already up to date
                         log("SYNC_SENSOR_TYPES: Sensor type %s already up to date", serverSensorType.uid.c_str());
                     }
                 } else {
-                    // Add new sensor type
-                    if (_sensorTypeRepository->save(serverSensorType)) {
-                        syncedCount++;
-                        log("SYNC_SENSOR_TYPES: Added new sensor type %s", serverSensorType.uid.c_str());
-                    } else {
-                        log("SYNC_SENSOR_TYPES: Failed to add sensor type %s", serverSensorType.uid.c_str());
-                    }
+                    toSaveIndex[serverSensorType.uid] = toSave.size();
+                    toSave.push_back(serverSensorType);
+                    log("SYNC_SENSOR_TYPES: Marked sensor type %s for addition", serverSensorType.uid.c_str());
                 }
+                syncedCount++;
             } catch (const std::exception& e) {
                 log("SYNC_SENSOR_TYPES: Exception synchronizing sensor type %s: %s", serverSensorType.uid.c_str(), e.what());
             }
         }
-        
+
+        // Single bulk write — 1 SPIFFS read (getAll above) + 1 SPIFFS write
+        int saved = _sensorTypeRepository->saveAll(toSave);
+        if (saved != static_cast<int>(toSave.size())) {
+            log("SYNC_SENSOR_TYPES: saveAll wrote %d of %d sensor types", saved, static_cast<int>(toSave.size()));
+            return 0;
+        }
+
+        log("SYNC_SENSOR_TYPES: Bulk saved %d sensor types to storage", saved);
         return syncedCount;
     }
     

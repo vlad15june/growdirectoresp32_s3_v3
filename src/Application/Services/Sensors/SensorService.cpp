@@ -348,6 +348,27 @@ UpdateDto SensorService::createSensorUpdateDto()
                 dto.sensors.push_back(sensorDto);
             }
         }
+        else if (sensor.isMultiChannel() && sensor.isError)
+        {
+            // No stored channel values (e.g., sensor disconnected before first successful read after reboot).
+            // Reconstruct channel UIDs from register configs and report each sub-sensor as disconnected.
+            for (const auto &regConfig : sensor.modbusRegisterConfigs)
+            {
+                SensorDto sensorDto;
+                sensorDto.uid = sensor.uid + "." + (regConfig.channel < 10 ? "0" : "") + std::to_string(regConfig.channel);
+                sensorDto.value = 0.0f;
+                sensorDto.state = getSensorStateName(SENSOR_STATE_DISCONNECTED);
+                dto.sensors.push_back(sensorDto);
+            }
+            for (const auto &regConfig : sensor.i2cRegisterConfigs)
+            {
+                SensorDto sensorDto;
+                sensorDto.uid = sensor.uid + "." + (regConfig.channel < 10 ? "0" : "") + std::to_string(regConfig.channel);
+                sensorDto.value = 0.0f;
+                sensorDto.state = getSensorStateName(SENSOR_STATE_DISCONNECTED);
+                dto.sensors.push_back(sensorDto);
+            }
+        }
         else
         {
             SensorDto sensorDto;

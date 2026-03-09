@@ -792,8 +792,32 @@ private:
         if (allSensorTypes.empty())
         {
             log(DebugFeatures::MODULE_COMMAND_DEBUG,
-                "ModuleCommandUseCase: No sensor types available for scanning");
-            return {ModuleCommandStatus::ERROR, "No sensor types available"};
+                "ModuleCommandUseCase: No sensor types in repository, fetching from server");
+
+            if (hybridApiService)
+            {
+                auto serverTypes = hybridApiService->getSensorTypesList();
+                if (!serverTypes.empty())
+                {
+                    sensorTypeRepository->saveAll(serverTypes);
+                    allSensorTypes = sensorTypeRepository->getAll();
+                    log(DebugFeatures::MODULE_COMMAND_DEBUG,
+                        "ModuleCommandUseCase: Fetched and saved %d sensor types from server",
+                        static_cast<int>(allSensorTypes.size()));
+                }
+                else
+                {
+                    log(DebugFeatures::MODULE_COMMAND_DEBUG,
+                        "ModuleCommandUseCase: Server returned no sensor types");
+                }
+            }
+
+            if (allSensorTypes.empty())
+            {
+                log(DebugFeatures::MODULE_COMMAND_DEBUG,
+                    "ModuleCommandUseCase: No sensor types available for scanning after sync");
+                return {ModuleCommandStatus::ERROR, "No sensor types available"};
+            }
         }
 
         ModuleCommandResult result;
