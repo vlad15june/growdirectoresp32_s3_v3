@@ -1775,6 +1775,7 @@ private:
         sensorType.chipType = extractValue(jsonStr, "chipType");
         sensorType.modbusDeviceAddress = extractIntValue(jsonStr, "modbusDeviceAddress");
         sensorType.baudRate = extractIntValue(jsonStr, "baudRate");
+        sensorType.priorityForScan = extractIntValue(jsonStr, "priorityForScan");
 
         // Legacy id for backward compatibility
         sensorType.id = extractIntValue(jsonStr, "id");
@@ -1827,6 +1828,7 @@ private:
         oss << ",\"chipType\":\"" << sensorType.chipType << "\"";
         oss << ",\"modbusDeviceAddress\":" << sensorType.modbusDeviceAddress;
         oss << ",\"baudRate\":" << sensorType.baudRate;
+        oss << ",\"priorityForScan\":" << sensorType.priorityForScan;
         
         // Add sensorTypes array - simplified (for complex serialization use ArduinoJsonConverter)
         oss << ",\"sensorTypes\":[";

@@ -64,6 +64,8 @@ public:
     std::string modbusRegisterConfig;
     std::string analogPinConfig;
 
+    int priorityForScan;
+
     // Legacy fields for backward compatibility
     int id;
 
@@ -72,5 +74,6 @@ public:
         isSupported(true),
         modbusDeviceAddress(1),
         baudRate(9600),
+        priorityForScan(0),
         id(0) {}
 };

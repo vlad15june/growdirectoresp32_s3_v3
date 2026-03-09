@@ -1610,6 +1610,7 @@ public:
         sensorType.chipType = doc["chipType"] | "";
         sensorType.modbusDeviceAddress = doc["modbusDeviceAddress"] | 1;
         sensorType.baudRate = doc["baudRate"] | 9600;
+        sensorType.priorityForScan = doc["priorityForScan"] | 0;
 
         // Parse legacy id for backward compatibility
         sensorType.id = doc["id"] | 0;
@@ -1732,6 +1733,7 @@ public:
             
             doc["modbusDeviceAddress"] = sensorType.modbusDeviceAddress;
             doc["baudRate"] = sensorType.baudRate;
+            doc["priorityForScan"] = sensorType.priorityForScan;
 
             // Legacy id for backward compatibility (if needed)
             if (sensorType.id != 0) {

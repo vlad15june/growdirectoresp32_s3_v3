@@ -81,6 +81,9 @@ public:
     
     std::vector<AnalogPinConfig> analogPinConfig;
 
+    // Scan priority - higher value means higher priority; sensor types with higher priority are scanned first
+    int priorityForScan;
+
     // Legacy compatibility - keeping id for backward compatibility
     int id; 
 
@@ -90,6 +93,7 @@ public:
         isSupported(true),
         modbusDeviceAddress(1),
         baudRate(9600),
+        priorityForScan(0),
         id(0) {}
 
     bool isAnalogSensor() const { return protocol == SensorProtocol::ANALOG_PROTOCOL; }
