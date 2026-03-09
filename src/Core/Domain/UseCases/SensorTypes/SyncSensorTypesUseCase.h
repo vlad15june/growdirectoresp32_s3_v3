@@ -229,6 +229,7 @@ private:
         }
 
         int syncedCount = 0;
+        bool changed = false;
 
         for (const auto& serverSensorType : serverSensorTypes) {
             try {
@@ -236,6 +237,8 @@ private:
                 if (it != toSaveIndex.end()) {
                     if (shouldUpdateSensorType(toSave[it->second], serverSensorType)) {
                         toSave[it->second] = serverSensorType;
+                        changed = true;
+                        syncedCount++;
                         log("SYNC_SENSOR_TYPES: Marked sensor type %s for update", serverSensorType.uid.c_str());
                     } else {
                         log("SYNC_SENSOR_TYPES: Sensor type %s already up to date", serverSensorType.uid.c_str());
@@ -243,12 +246,18 @@ private:
                 } else {
                     toSaveIndex[serverSensorType.uid] = toSave.size();
                     toSave.push_back(serverSensorType);
+                    changed = true;
+                    syncedCount++;
                     log("SYNC_SENSOR_TYPES: Marked sensor type %s for addition", serverSensorType.uid.c_str());
                 }
-                syncedCount++;
             } catch (const std::exception& e) {
                 log("SYNC_SENSOR_TYPES: Exception synchronizing sensor type %s: %s", serverSensorType.uid.c_str(), e.what());
             }
+        }
+
+        if (!changed) {
+            log("SYNC_SENSOR_TYPES: No changes detected, skipping save");
+            return 0;
         }
 
         // Single bulk write — 1 SPIFFS read (getAll above) + 1 SPIFFS write
