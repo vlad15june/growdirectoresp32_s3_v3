@@ -12,6 +12,7 @@
 #include "Core/Domain/Interfaces/IClearModuleDataService.h"
 #include "Core/Domain/Data/Entities/Sensor/Sensor.h"
 #include "Core/Domain/Data/Models/ModuleStructure.h"
+#include "Core/Domain/Data/Models/ISensorValueModel.h"
 #include "Core/Domain/Enums/ModuleCommandEnum.h"
 #include "Core/Domain/Enums/ModuleCommandStatus.h"
 #include "Core/Domain/Enums/SensorStatusEnum.h"
@@ -38,11 +39,12 @@ private:
     IHybridAPIService *hybridApiService;
     IClearModuleDataService *clearModuleDataService;
     ModuleStructure *moduleStructure;
+    ISensorValueModel *sensorValueModel;
     static const unsigned long commandMaxAgeSeconds = 300;
 
 public:
-    ModuleCommandExecutionUseCase(ILogger *logger = nullptr, IDebugSystem *debugSystem = nullptr, INTPTimeAdapter *timeAdapter = nullptr, IFirmwareRemoteUpdate *firmwareUpdater = nullptr, IArduinoAdapter *arduinoAdapter = nullptr, ISensorRepository *sensorRepository = nullptr, ISensorTypeRepository *sensorTypeRepository = nullptr, ISensorReader *sensorReader = nullptr, IModuleConfig *moduleConfig = nullptr, ISettings *settings = nullptr, IHybridAPIService *hybridApiService = nullptr, IClearModuleDataService *clearModuleDataService = nullptr, ModuleStructure *moduleStructure = nullptr)
-        : logger(logger), debugSystem(debugSystem), timeAdapter(timeAdapter), firmwareUpdater(firmwareUpdater), arduinoAdapter(arduinoAdapter), sensorRepository(sensorRepository), sensorTypeRepository(sensorTypeRepository), sensorReader(sensorReader), moduleConfig(moduleConfig), settings(settings), hybridApiService(hybridApiService), clearModuleDataService(clearModuleDataService), moduleStructure(moduleStructure) {}
+    ModuleCommandExecutionUseCase(ILogger *logger = nullptr, IDebugSystem *debugSystem = nullptr, INTPTimeAdapter *timeAdapter = nullptr, IFirmwareRemoteUpdate *firmwareUpdater = nullptr, IArduinoAdapter *arduinoAdapter = nullptr, ISensorRepository *sensorRepository = nullptr, ISensorTypeRepository *sensorTypeRepository = nullptr, ISensorReader *sensorReader = nullptr, IModuleConfig *moduleConfig = nullptr, ISettings *settings = nullptr, IHybridAPIService *hybridApiService = nullptr, IClearModuleDataService *clearModuleDataService = nullptr, ModuleStructure *moduleStructure = nullptr, ISensorValueModel *sensorValueModel = nullptr)
+        : logger(logger), debugSystem(debugSystem), timeAdapter(timeAdapter), firmwareUpdater(firmwareUpdater), arduinoAdapter(arduinoAdapter), sensorRepository(sensorRepository), sensorTypeRepository(sensorTypeRepository), sensorReader(sensorReader), moduleConfig(moduleConfig), settings(settings), hybridApiService(hybridApiService), clearModuleDataService(clearModuleDataService), moduleStructure(moduleStructure), sensorValueModel(sensorValueModel) {}
     
     virtual ~ModuleCommandExecutionUseCase() = default;
 
@@ -597,6 +599,18 @@ private:
                     "ModuleCommandUseCase: Warning - Failed to delete old sensor UID: %s",
                     sensorToDelete.uid.c_str());
             }
+
+            // Clear stale cached channel values so they don't appear in future update packets
+            if (sensorValueModel)
+            {
+                sensorValueModel->removeSensor(sensorToDelete.uid);
+            }
+        }
+
+        // Also clear any stale channel values for the new sensor's base UID (same key in sensorValueModel)
+        if (sensorValueModel)
+        {
+            sensorValueModel->removeSensor(newSensorEntity.uid);
         }
 
         // Update module structure - remove all sensors from this pin

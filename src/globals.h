@@ -213,9 +213,6 @@ HybridAPIService hybridApiService(
     &debugSystem,
     ApiPriority::BOTH);
 
-// Now we can create ModuleCommandExecutionUseCase with hybridApiService
-ModuleCommandExecutionUseCase moduleCommandExecutionUseCase(&mqttLogger, &debugSystem, &ntpTimeAdapter, &firmwareRemoteUpdate, &arduinoAdapter, &sensorRepository, &sensorTypeRepository, &sensorReader, &moduleConfig, &settings, &hybridApiService, &clearModuleDataService, &moduleStructure);
-
 SensorCommandUseCase sensorCommandUseCase(
     &moduleConfig,
     &settings,
@@ -258,6 +255,10 @@ WebServerLauncher webServerLauncher(
 
 // API Services already defined earlier before ModuleCommandExecutionUseCase
 
+SensorValueModel sensorValueModel;
+
+ModuleCommandExecutionUseCase moduleCommandExecutionUseCase(&mqttLogger, &debugSystem, &ntpTimeAdapter, &firmwareRemoteUpdate, &arduinoAdapter, &sensorRepository, &sensorTypeRepository, &sensorReader, &moduleConfig, &settings, &hybridApiService, &clearModuleDataService, &moduleStructure, &sensorValueModel);
+
 CommandService commandService(
     &deviceCommandExecutionUseCase,
     &moduleCommandExecutionUseCase,
@@ -298,8 +299,6 @@ DeviceService deviceService(
     &hybridApiService,
     &mqttLogger,
     &debugSystem);
-
-SensorValueModel sensorValueModel;
 
 EvaluateRulesUseCase evaluateRulesUseCase(
     &deviceModel,
