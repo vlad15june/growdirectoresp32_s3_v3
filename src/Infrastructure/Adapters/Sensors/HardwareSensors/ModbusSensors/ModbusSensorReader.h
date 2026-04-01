@@ -190,7 +190,7 @@ public:
         modbus->powerOnPort();
         _arduino.delay(1000);
 
-        bool success = modbus->writeRegister(0x0, 0x0001, (uint16_t)newAddress);
+        bool success = modbus->writeRegister((uint8_t)currentAddress, 0x0001, (uint16_t)newAddress);
 
         if (success)
         {
@@ -199,8 +199,21 @@ public:
         }
         else
         {
-            log("ModbusSensorReader: Failed to write new address %d to device %d on port %d", 
+            log("ModbusSensorReader: Failed to write new address %d to device %d on port %d, retrying with broadcast", 
                 newAddress, currentAddress, portIndex);
+
+            success = modbus->writeRegister(0x00, 0x0001, (uint16_t)newAddress);
+
+            if (success)
+            {
+                log("ModbusSensorReader: Successfully wrote new address %d via broadcast on port %d", 
+                    newAddress, portIndex);
+            }
+            else
+            {
+                log("ModbusSensorReader: Failed to write new address %d via broadcast on port %d", 
+                    newAddress, portIndex);
+            }
         }
 
         return success;
