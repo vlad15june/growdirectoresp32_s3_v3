@@ -122,9 +122,19 @@ public:
             request[6] = crc & 0xFF;
             request[7] = (crc >> 8);
 
+            char sendHexBuffer[256] = "";
+            for (int i = 0; i < (int)sizeof(request); i++) {
+                char temp[4];
+                snprintf(temp, sizeof(temp), "%02X ", request[i]);
+                strcat(sendHexBuffer, temp);
+            }
+            log("ModbusSensorReader: Ping sending bytes: %s", sendHexBuffer);
+
             modbus->sendData(request, sizeof(request));
 
-            _arduino.delay(200);
+            unsigned long responseDelay = 200 + (attempt - 1) * 2000;
+            log("ModbusSensorReader: Waiting %lu ms for response (attempt %d)", responseDelay, attempt);
+            _arduino.delay(responseDelay);
 
             uint8_t response[64];
             int bytesRead = modbus->readAvailable(response, sizeof(response));
