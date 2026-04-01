@@ -1,5 +1,12 @@
 # Release Notes
 
+## Version 2.1.31 (2026-04-01)
+
+### Changed
+- **Modbus Sensor Address Detection Reliability**: When a Modbus sensor does not respond during address detection, the device now waits progressively longer before each retry attempt, reducing the chance of missed responses from slow-starting sensors
+
+---
+
 ## Version 2.1.30 (2026-03-09)
 
 ### Added
