@@ -1,5 +1,12 @@
 # Release Notes
 
+## Version 2.1.33 (2026-04-01)
+
+### Changed
+- **Modbus Sensor Address Assignment Reliability**: When assigning a new address to a Modbus sensor fails using the device's current address, the device now automatically retries the operation using a broadcast command, increasing the success rate of address assignment in cases where a sensor does not respond to its known address
+
+---
+
 ## Version 2.1.32 (2026-04-01)
 
 ### Changed
