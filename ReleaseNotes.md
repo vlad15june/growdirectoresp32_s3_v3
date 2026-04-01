@@ -1,5 +1,13 @@
 # Release Notes
 
+## Version 2.1.32 (2026-04-01)
+
+### Changed
+- **Modbus Sensor Availability Check**: The device now queries each sensor type using its own configured register when checking whether a sensor is present on the bus, instead of always querying a fixed default register. This improves compatibility with sensor models that do not support the previously hardcoded register.
+- **Faster Modbus Detection Retry**: Reduced the wait time between each retry attempt during Modbus sensor detection, making the overall scan process complete faster when a sensor does not respond on the first attempt.
+
+---
+
 ## Version 2.1.31 (2026-04-01)
 
 ### Changed

@@ -14,7 +14,7 @@ public:
 
     virtual bool readRegister(uint8_t deviceAddress, const ModbusRegisterConfig &config, float &outValue, int portIndex = 0) = 0;
     
-    virtual bool pingAddress(uint8_t deviceAddress, int portIndex = 0) = 0;
+    virtual bool pingAddress(uint8_t deviceAddress, const ModbusRegisterConfig& config, int portIndex = 0) = 0;
 
     /**
      * @brief Write new address to Modbus sensor

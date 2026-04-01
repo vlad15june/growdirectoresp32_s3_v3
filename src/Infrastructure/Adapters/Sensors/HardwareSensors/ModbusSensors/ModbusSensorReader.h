@@ -97,7 +97,7 @@ public:
         return false;
     }
 
-    bool pingAddress(uint8_t deviceAddress, int portIndex = 0) override
+    bool pingAddress(uint8_t deviceAddress, const ModbusRegisterConfig& config, int portIndex = 0) override
     {
         if (portIndex < 0 || portIndex >= _modbusPorts.size())
         {
@@ -113,8 +113,9 @@ public:
 
             uint8_t request[8] = {
                 deviceAddress,
-                0x03,  // Function code: Read Holding Registers
-                0x00, 0x00,  // Starting register address (0x0000)
+                config.functionCode,
+                (uint8_t)(config.startRegister >> 8),
+                (uint8_t)(config.startRegister & 0xFF),
                 0x00, 0x01   // Number of registers to read (1)
             };
 
@@ -132,7 +133,7 @@ public:
 
             modbus->sendData(request, sizeof(request));
 
-            unsigned long responseDelay = 200 + (attempt - 1) * 2000;
+            unsigned long responseDelay = 200 + (attempt - 1) * 500;
             log("ModbusSensorReader: Waiting %lu ms for response (attempt %d)", responseDelay, attempt);
             _arduino.delay(responseDelay);
 
@@ -151,7 +152,7 @@ public:
                 log("ModbusSensorReader: Ping response bytes: %s", hexBuffer);
             }
             
-            if (bytesRead >= 5 && response[0] == deviceAddress && response[1] == 0x03)
+            if (bytesRead >= 5 && response[0] == deviceAddress && response[1] == config.functionCode)
             {
                 log("ModbusSensorReader: Device %d responded to ping on port %d (attempt %d)", deviceAddress, portIndex, attempt);
                 return true;

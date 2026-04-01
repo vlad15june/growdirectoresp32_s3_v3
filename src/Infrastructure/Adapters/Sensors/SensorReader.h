@@ -322,7 +322,7 @@ private:
             _arduino->delay(500);
         }
 
-        if (_modbusReader->pingAddress(sensor.modbusDeviceAddress, portIndex) == false)
+        if (_modbusReader->pingAddress(sensor.modbusDeviceAddress, sensor.modbusRegisterConfigs[0], portIndex) == false)
         {
             log("SensorReader: Device does not respond at address %d, skipping scan", sensor.modbusDeviceAddress);
             return false;
