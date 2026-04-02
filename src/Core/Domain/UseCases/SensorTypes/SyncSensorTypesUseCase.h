@@ -4,6 +4,7 @@
 #include "Core/Domain/Interfaces/UseCases/SensorTypes/ISyncSensorTypesUseCase.h"
 #include "Core/Domain/Interfaces/API/IHybridAPIService.h"
 #include "Core/Domain/Interfaces/Repositories/ISensorTypeRepository.h"
+#include "Core/Domain/Interfaces/Repositories/ISensorRepository.h"
 #include "Core/Domain/Interfaces/ILogger.h"
 #include "Core/Domain/Interfaces/IDebugSystem.h"
 #include "Core/Domain/Interfaces/Adapters/IArduinoAdapter.h"
@@ -19,6 +20,7 @@ class SyncSensorTypesUseCase : public ISyncSensorTypesUseCase {
 private:
     IHybridAPIService* _apiService;
     ISensorTypeRepository* _sensorTypeRepository;
+    ISensorRepository* _sensorRepository;
     ILogger* _logger;
     IDebugSystem* _debugSystem;
     IArduinoAdapter* _arduinoAdapter;
@@ -60,9 +62,11 @@ public:
         INTPTimeAdapter* ntpTimeAdapter,
         IJsonConverter* jsonConverter = nullptr,
         ILogger* logger = nullptr,
-        IDebugSystem* debugSystem = nullptr
+        IDebugSystem* debugSystem = nullptr,
+        ISensorRepository* sensorRepository = nullptr
     ) : _apiService(apiService),
         _sensorTypeRepository(sensorTypeRepository),
+        _sensorRepository(sensorRepository),
         _logger(logger),
         _debugSystem(debugSystem),
         _arduinoAdapter(arduinoAdapter),
@@ -230,6 +234,7 @@ private:
 
         int syncedCount = 0;
         bool changed = false;
+        std::vector<SensorType> changedSensorTypes;
 
         for (const auto& serverSensorType : serverSensorTypes) {
             try {
@@ -239,6 +244,7 @@ private:
                         toSave[it->second] = serverSensorType;
                         changed = true;
                         syncedCount++;
+                        changedSensorTypes.push_back(serverSensorType);
                         log("SYNC_SENSOR_TYPES: Marked sensor type %s for update", serverSensorType.uid.c_str());
                     } else {
                         log("SYNC_SENSOR_TYPES: Sensor type %s already up to date", serverSensorType.uid.c_str());
@@ -248,6 +254,7 @@ private:
                     toSave.push_back(serverSensorType);
                     changed = true;
                     syncedCount++;
+                    changedSensorTypes.push_back(serverSensorType);
                     log("SYNC_SENSOR_TYPES: Marked sensor type %s for addition", serverSensorType.uid.c_str());
                 }
             } catch (const std::exception& e) {
@@ -268,7 +275,59 @@ private:
         }
 
         log("SYNC_SENSOR_TYPES: Bulk saved %d sensor types to storage", saved);
+
+        // Update existing sensors with data from changed/added sensor types
+        if (_sensorRepository && !changedSensorTypes.empty()) {
+            updateSensorsForChangedSensorTypes(changedSensorTypes);
+        }
+
         return syncedCount;
+    }
+
+    void updateSensorsForChangedSensorTypes(const std::vector<SensorType>& changedSensorTypes) {
+        // Build a lookup map from sensor type UID to sensor type
+        std::unordered_map<std::string, const SensorType*> changedMap;
+        for (const auto& st : changedSensorTypes) {
+            changedMap[st.uid] = &st;
+        }
+
+        std::vector<SensorEntity> allSensors = _sensorRepository->getAll();
+        int updatedCount = 0;
+
+        for (auto& sensor : allSensors) {
+            if (sensor.sensorTypeUid.empty()) continue;
+
+            auto it = changedMap.find(sensor.sensorTypeUid);
+            if (it == changedMap.end()) continue;
+
+            const SensorType* sensorType = it->second;
+            bool wasUpdated = false;
+
+            // Update Modbus register configs and baud rate
+            if (sensor.isModbusSensor() && !sensorType->modbusRegisterConfig.empty()) {
+                sensor.modbusRegisterConfigs = sensorType->modbusRegisterConfig;
+                sensor.baudRate = sensorType->baudRate;
+                wasUpdated = true;
+            }
+
+            // Update I2C register configs
+            if (sensor.isI2CSensor() && !sensorType->i2cRegisterConfig.empty()) {
+                sensor.i2cRegisterConfigs = sensorType->i2cRegisterConfig;
+                wasUpdated = true;
+            }
+
+            if (wasUpdated) {
+                if (_sensorRepository->save(sensor)) {
+                    updatedCount++;
+                    log("SYNC_SENSOR_TYPES: Updated sensor %s registers from sensor type %s",
+                        sensor.uid.c_str(), sensorType->uid.c_str());
+                } else {
+                    log("SYNC_SENSOR_TYPES: Failed to update sensor %s", sensor.uid.c_str());
+                }
+            }
+        }
+
+        log("SYNC_SENSOR_TYPES: Updated %d sensors from changed sensor types", updatedCount);
     }
     
     bool shouldUpdateSensorType(const SensorType& existingSensorType, const SensorType& newSensorType) {

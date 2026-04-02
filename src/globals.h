@@ -324,7 +324,8 @@ SyncSensorTypesUseCase syncSensorTypesUseCase(
     &ntpTimeAdapter,
     &jsonConverter,
     &mqttLogger,
-    &debugSystem);
+    &debugSystem,
+    &sensorRepository);
 
 OnChangeLocalIpUseCase onChangeLocalIpUseCase(
     wifiAdapter,
