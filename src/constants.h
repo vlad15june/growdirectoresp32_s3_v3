@@ -141,6 +141,9 @@
 #define MODBUS_ADDRESS_MIN 0x70
 #define MODBUS_ADDRESS_MAX 0x73
 
+// Temporary address used during sensor scanning to avoid broadcast conflicts
+#define MODBUS_SCAN_ADDRESS 0x22
+
 // Maximum number of channels per sensor
 #define MAX_SENSOR_CHANNELS 4
 
