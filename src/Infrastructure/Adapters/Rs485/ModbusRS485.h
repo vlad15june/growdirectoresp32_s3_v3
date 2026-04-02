@@ -139,6 +139,48 @@ public:
         return false;
     }
 
+    bool writeSingleRegister(int slaveAddress, int registerAddress, uint16_t value) override
+    {
+        // Modbus function code 0x06 (Write Single Register)
+        uint8_t request[8] = {
+            (uint8_t)slaveAddress,
+            0x06,  // Function code: Write Single Register
+            (uint8_t)(registerAddress >> 8),   // Register address high byte
+            (uint8_t)(registerAddress & 0xFF), // Register address low byte
+            (uint8_t)(value >> 8),             // Value high byte
+            (uint8_t)(value & 0xFF)            // Value low byte
+        };
+
+        uint16_t crc = calculateCRC(request, 6);
+        request[6] = crc & 0xFF;
+        request[7] = (crc >> 8);
+
+        sendData(request, sizeof(request));
+
+        _arduino.delay(300);
+
+        uint8_t response[8];
+        int bytesRead = readAvailable(response, sizeof(response));
+
+        Serial.printf("[%s] WriteSingleRegister response: %d bytes received\n", _portName, bytesRead);
+
+        if (bytesRead >= 6 && response[0] == slaveAddress && response[1] == 0x06)
+        {
+            Serial.printf("[%s] Successfully wrote register 0x%04X = 0x%04X to device %d (FC06)\n",
+                         _portName, registerAddress, value, slaveAddress);
+            return true;
+        }
+        else if (bytesRead > 0 && response[1] >= 0x80)
+        {
+            Serial.printf("[%s] Exception response (0x%02X) when writing register to device %d (FC06)\n",
+                         _portName, response[1], slaveAddress);
+            return false;
+        }
+
+        Serial.printf("[%s] Failed to write register to device %d (FC06)\n", _portName, slaveAddress);
+        return false;
+    }
+
     bool powerOnPort() override
     {
         if (_isPoweredOn)

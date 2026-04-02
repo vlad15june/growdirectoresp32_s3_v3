@@ -28,6 +28,9 @@ public:
     // Write register using Modbus function code 0x10 (Preset Multiple Registers)
     virtual bool writeRegister(int slaveAddress, int registerAddress, uint16_t value) = 0;
 
+    // Write single register using Modbus function code 0x06 (Write Single Register)
+    virtual bool writeSingleRegister(int slaveAddress, int registerAddress, uint16_t value) = 0;
+
     // Power control methods
     // Returns true if state changed, false if already in that state
     virtual bool powerOnPort() = 0;
