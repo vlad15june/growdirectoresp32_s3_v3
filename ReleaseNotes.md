@@ -1,5 +1,13 @@
 # Release Notes
 
+## Version 2.1.34 (2026-04-02)
+
+### Changed
+- **Sensor Configuration Auto-Update on Sync**: When the server updates a sensor type's configuration (e.g., communication settings for a specific sensor model), the device now automatically applies those updated settings to all already-registered sensors of that type. Previously, connected sensors retained their original configuration even after the server changed the sensor type definition.
+- **Modbus Address Assignment Strategy**: The device now first attempts to assign a new Modbus address using a broadcast command. If that fails, it retries using a different broadcast method, improving compatibility with sensor models that do not respond to the previous assignment approach.
+
+---
+
 ## Version 2.1.33 (2026-04-01)
 
 ### Changed
