@@ -1,5 +1,12 @@
 # Release Notes
 
+## Version 2.1.35 (2026-04-02)
+
+### Changed
+- **Modbus Sensor Detection During Scan**: When scanning a pin for Modbus sensors, the device now first attempts to assign a temporary address to any sensor found on the bus before detection. This improves the ability to discover and register sensors that have not yet been assigned a unique address, reducing missed detections in environments where multiple unaddressed sensors may be present.
+
+---
+
 ## Version 2.1.34 (2026-04-02)
 
 ### Changed
