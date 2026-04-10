@@ -1,0 +1,811 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GrowDirector — Workflow MVP</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:13px;background:#F5F5F5;color:#1A1A1A;display:flex;min-height:100vh}
+.sidebar{width:190px;background:white;border-right:1px solid #E5E5E5;display:flex;flex-direction:column;flex-shrink:0;min-height:100vh}
+.logo{padding:14px 16px;display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600;border-bottom:1px solid #E5E5E5}
+.lmark{width:26px;height:26px;background:#2C7A57;border-radius:6px;display:flex;align-items:center;justify-content:center}
+.lmark svg{width:14px;height:14px;fill:white}
+.nav{padding:8px}
+.ni{display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:8px;color:#666;cursor:pointer;font-size:13px;margin-bottom:2px}
+.ni:hover{background:#F5F5F5}
+.ni.on{background:#2C7A57;color:white}
+.ni svg{width:14px;height:14px;flex-shrink:0}
+.new-btn{margin:4px 10px 10px;padding:9px;background:#2C7A57;color:white;border-radius:8px;text-align:center;font-size:12px;font-weight:600;cursor:pointer}
+.new-btn:hover{background:#1E5C3E}
+.wfl{padding:0 10px 10px}
+.wl-label{font-size:10px;font-weight:600;color:#999;letter-spacing:.06em;text-transform:uppercase;padding:8px 2px 4px}
+.wi{display:flex;align-items:center;gap:7px;padding:6px 8px;border-radius:6px;cursor:pointer;color:#666;font-size:12px}
+.wi:hover{background:#F5F5F5}
+.wi.on{background:#F0FAF5;color:#1A1A1A;font-weight:500}
+.dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+.dg{background:#2C7A57}.dgr{background:#CCC}
+.main{flex:1;padding:22px 28px;overflow-y:auto;min-width:0}
+.toprow{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:16px}
+.wftitle{font-size:20px;font-weight:600}
+.wfsub{font-size:12px;color:#888;margin-top:3px}
+.trow{display:flex;align-items:center;gap:8px}
+.tlabel{font-size:12px;color:#888}
+.tog{width:40px;height:22px;border-radius:11px;position:relative;cursor:pointer;flex-shrink:0}
+.tog.off{background:#E5E5E5}
+.tog.on{background:#2C7A57}
+.tok{width:18px;height:18px;border-radius:50%;background:white;position:absolute;top:2px;transition:left .15s;box-shadow:0 1px 3px rgba(0,0,0,.2)}
+.tog.off .tok{left:2px}
+.tog.on .tok{left:20px}
+.card{background:white;border:1px solid #E8E8E8;border-radius:12px;padding:16px 20px;margin-bottom:10px}
+.ch{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
+.ct{font-size:14px;font-weight:600;display:flex;align-items:center;gap:7px}
+.ct svg{width:15px;height:15px;color:#888;flex-shrink:0}
+.slabel{font-size:10px;font-weight:600;color:#999;letter-spacing:.06em;text-transform:uppercase;margin-bottom:6px}
+.seg{display:flex;border:1px solid #E5E5E5;border-radius:7px;overflow:hidden;width:fit-content}
+.sb{padding:7px 18px;font-size:12px;cursor:pointer;background:white;color:#666;border:none;font-family:inherit}
+.sb.on{background:#2C7A57;color:white;font-weight:600}
+.frow{display:flex;gap:8px;align-items:center;margin-bottom:8px}
+select,input[type=number],input[type=time]{padding:6px 8px;border:1px solid #E5E5E5;border-radius:7px;font-size:12px;background:white;color:#1A1A1A;font-family:inherit}
+select{appearance:none;cursor:pointer;background-image:url("data:image/svg+xml,%3Csvg width='10' height='6' viewBox='0 0 10 6' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%23999' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 8px center;padding-right:24px}
+input[type=number]{text-align:center}
+input[type=time]{width:100px}
+.fsel{flex:1}
+.unit{font-size:11px;color:#888}
+.addlink{font-size:12px;color:#2C7A57;cursor:pointer;margin-top:8px;display:inline-flex;align-items:center;gap:4px}
+.addlink:hover{text-decoration:underline}
+.hint{font-size:11px;color:#AAA;margin-top:5px}
+.days{display:flex;gap:5px;margin-top:8px}
+.day{width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;cursor:pointer;border:1px solid #E5E5E5;background:white;color:#888}
+.day:hover{border-color:#2C7A57;color:#2C7A57}
+.day.on{background:#2C7A57;color:white;border-color:#2C7A57}
+.trow2{display:flex;align-items:center;gap:12px;margin-top:8px}
+.arrsep{color:#CCC;font-size:16px}
+.chips{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px}
+.chip{display:flex;align-items:center;gap:7px;background:#1C1C1C;color:white;padding:5px 12px;border-radius:16px;font-size:12px;font-weight:500}
+.chip span{opacity:.5;cursor:pointer;font-size:14px}
+.addtime{font-size:12px;color:#2C7A57;cursor:pointer}
+.sched-type{display:flex;gap:6px;margin-bottom:12px}
+.stb{padding:6px 14px;border:1px solid #E5E5E5;border-radius:7px;font-size:12px;cursor:pointer;background:white;color:#666;font-family:inherit}
+.stb.on{background:#1C1C1C;color:white;border-color:#1C1C1C}
+.sh{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
+.sdesc{font-size:12px;color:#888;margin-bottom:12px;line-height:1.5;border-left:3px solid #E5E5E5;padding-left:10px}
+.addbtn{padding:7px 14px;background:white;border:1px solid #E5E5E5;border-radius:7px;font-size:12px;cursor:pointer;display:flex;align-items:center;gap:6px;color:#1A1A1A;font-family:inherit}
+.addbtn:hover{background:#F5F5F5}
+
+/* ── Sensor steps ── */
+/* Column headers */
+.col-hdr-s{display:flex;align-items:center;padding:4px 16px 4px 8px;font-size:10px;font-weight:600;color:#AAA;letter-spacing:.04em;text-transform:uppercase;border-bottom:1px solid #F0F0F0;margin-bottom:4px;gap:0}
+.hdr-dev{width:280px;flex-shrink:0;padding:0 3px}
+.hdr-sensor{width:280px;flex-shrink:0;padding:0 3px}
+.hdr-from{width:60px;flex-shrink:0;text-align:center}
+.hdr-cur{width:64px;flex-shrink:0;text-align:center}
+.hdr-until{width:60px;flex-shrink:0;text-align:center}
+.hdr-spacer{flex:1}
+.hdr-at{width:124px;flex-shrink:0;padding:0 3px}
+.hdr-params{width:168px;flex-shrink:0;padding:0 3px}
+.hdr-status{width:72px;flex-shrink:0;text-align:right;padding:0 3px}
+
+/* Step card */
+.step-card{border:1px solid #ECECEC;border-radius:10px;margin-bottom:8px;background:white;transition:border-color .15s}
+.step-card.has-conflict{border-color:#F59E0B;border-left:4px solid #F59E0B;background:#FFFDF5}
+.step-card.has-rule{border-color:#F09595;border-left:4px solid #E24B4A;background:#FFF8F8}
+/* Conflict device select highlight */
+.dev-select-conflict{border-color:#F59E0B !important;background:#FFFBEB !important}
+.dev-select-rule{border-color:#F09595 !important;background:#FFF0F0 !important;color:#A32D2D !important}
+.step-card:hover{border-color:#C8E6D8}
+.step-card.st-running{border-color:#2C7A57;border-left:3px solid #2C7A57}
+.step-card.st-done{opacity:.85}
+.step-card.st-error{border-color:#E24B4A;border-left:3px solid #E24B4A}
+
+/* Grid layout — all rows share same column tracks */
+.step-grid{display:grid;grid-template-columns:20px 24px 280px 280px 60px 64px 60px 1fr 124px 168px 72px 24px;align-items:center;padding:4px 8px 10px;row-gap:4px}
+/* drag | # | device | sensor | from | current | until | spacer | action-type | params | status | del */
+.g-cell{display:flex;align-items:center;padding:0 3px;height:32px}
+.g-cell.center{justify-content:center}
+.g-cell.right{justify-content:flex-end}
+.g-cell select{width:100%;font-size:11px;padding:5px 22px 5px 7px;height:28px}
+.g-cell input[type=number]{width:52px;text-align:center;font-size:12px;padding:4px;height:28px;border:1px solid #E5E5E5;border-radius:7px;background:white;font-family:inherit}
+.g-cell input.hi{border-color:#F59E0B;background:#FFFBEB}
+.cur-box{width:52px;text-align:center;font-size:12px;font-weight:600;color:#2C7A57;background:#F0FAF5;border:1px solid #C8E6D8;border-radius:7px;padding:4px;height:28px;display:flex;align-items:center;justify-content:center}
+.col-params{width:160px;flex-shrink:0;display:flex;gap:5px;align-items:center}
+
+/* status */
+.col-status{width:64px;flex-shrink:0;display:flex;justify-content:flex-end}
+
+/* delete */
+.col-del{width:20px;flex-shrink:0;display:flex;justify-content:center}
+
+/* logic badge between sensor rows — indent to align after device+sensor */
+.logic-sep{display:flex;align-items:center;gap:0;padding:0 10px 0 calc(16px + 22px + 280px + 6px + 10px)}
+.logic-line{flex:1;height:1px;background:#EBEBEB}
+.logic-pill{font-size:10px;font-weight:700;letter-spacing:.06em;padding:2px 10px;border-radius:10px;cursor:pointer;user-select:none;flex-shrink:0}
+.logic-and{background:#E6F1FB;color:#185FA5}
+.logic-or{background:#FAEEDA;color:#854F0B}
+/* param field: input on top, label below */
+.nf{display:flex;flex-direction:column;align-items:center;gap:2px}
+.nfl{font-size:9px;color:#AAA;font-weight:600;letter-spacing:.04em;text-transform:uppercase;white-space:nowrap}
+.nf input{text-align:center;font-size:12px;padding:4px;height:28px;border:1px solid #E5E5E5;border-radius:7px;background:white;font-family:inherit}
+
+.add-sensor-link{font-size:11px;color:#2C7A57;cursor:pointer;padding:5px 10px 6px calc(16px + 22px + 280px + 10px);display:flex;align-items:center;gap:3px;border-top:1px solid #F6F6F6}
+.add-sensor-link:hover{text-decoration:underline}
+
+.sdel{color:#CCC;cursor:pointer;font-size:16px;line-height:1}
+.sdel:hover{color:#E24B4A}
+
+.sstatus{font-size:11px;padding:3px 8px;border-radius:5px;flex-shrink:0;font-weight:600;white-space:nowrap}
+.st-done-b{background:#E1F5EE;color:#085041}
+.st-run-b{background:#E6F1FB;color:#0C447C}
+.st-pend-b{background:#F5F5F5;color:#888}
+.st-err-b{background:#FCEBEB;color:#A32D2D}
+
+/* ── Schedule steps ── */
+.col-hdr-sc{display:flex;align-items:center;padding:4px 16px 4px 8px;font-size:10px;font-weight:600;color:#AAA;letter-spacing:.04em;text-transform:uppercase;border-bottom:1px solid #F0F0F0;margin-bottom:4px;gap:0}
+.sc-hdr-drag{width:20px;flex-shrink:0}
+.sc-hdr-num{width:24px;flex-shrink:0}
+.sc-hdr-dev{width:280px;flex-shrink:0;padding:0 3px}
+.sc-hdr-spacer{flex:1}
+.sc-hdr-action{width:124px;flex-shrink:0;padding:0 3px}
+.sc-hdr-params{width:220px;flex-shrink:0;padding:0 3px}
+.sc-hdr-status{width:72px;flex-shrink:0;text-align:right;padding:0 3px}
+.sc-hdr-del{width:24px;flex-shrink:0}
+/* schedule step grid — mirrors sensor grid structure */
+.step-grid-sc{display:grid;grid-template-columns:20px 24px 280px 1fr 124px 220px 72px 24px;align-items:flex-start;padding:4px 8px 10px}
+
+.savebar{display:flex;justify-content:flex-end;padding-top:6px}
+.savebtn{padding:10px 26px;background:#1C1C1C;color:white;border-radius:9px;font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:8px;border:none;font-family:inherit}
+.savebtn:hover{background:#333}
+.mbadge{font-size:11px;padding:3px 10px;border-radius:12px;font-weight:600}
+.mb-s{background:#E1F5EE;color:#085041}
+.mb-sc{background:#E6F1FB;color:#0C447C}
+/* collapsible cards */
+.card-collapsible .ch{cursor:pointer;margin-bottom:0;user-select:none}
+.card-collapsible .ch:hover .ct{color:#2C7A57}
+.card-collapsible .card-body{overflow:hidden;transition:max-height .25s ease,opacity .2s ease,padding-top .25s ease}
+.card-collapsible .card-body.open{max-height:600px;opacity:1;padding-top:14px}
+.card-collapsible .card-body.closed{max-height:0;opacity:0;padding-top:0}
+.chevron{width:16px;height:16px;color:#AAA;flex-shrink:0;transition:transform .2s ease}
+.chevron.open{transform:rotate(0deg)}
+.chevron.closed{transform:rotate(-90deg)}
+/* step card highlight overrides */
+.step-card{border:1px solid #B5D4F4;border-left:4px solid #378ADD}
+.step-card:hover{border-color:#85B7EB;border-left-color:#185FA5}
+.step-card.st-running{border:1px solid #B5D4F4;border-left:4px solid #378ADD;background:#F0F7FF}
+.step-card.st-done{border:1px solid #B5D4F4;border-left:4px solid #378ADD;background:#FBFBFB;opacity:.7}
+.step-card.st-error{border:1px solid #F09595;border-left:4px solid #E24B4A;background:#FFF8F8}
+
+
+.wftitle-wrap{display:flex;align-items:center;gap:8px}
+.wftitle{font-size:20px;font-weight:600;border:none;background:transparent;font-family:inherit;color:#1A1A1A;outline:none;min-width:60px;padding:2px 4px;border-radius:5px}
+.wftitle:hover{background:#F5F5F5}
+.wftitle:focus{background:#F0F7FF;border-bottom:2px solid #378ADD}
+.edit-icon{color:#CCC;font-size:13px;cursor:pointer}
+.priority-wrap{display:flex;align-items:center;gap:6px}
+.priority-label{font-size:12px;color:#888}
+.priority-sel{font-size:12px;padding:4px 24px 4px 8px;border:1px solid #E5E5E5;border-radius:7px;background:white;font-family:inherit;appearance:none;background-image:url("data:image/svg+xml,%3Csvg width='10' height='6' viewBox='0 0 10 6' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%23999' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 8px center;cursor:pointer}
+.wf-status{font-size:11px;padding:3px 10px;border-radius:12px;font-weight:600}
+.wfs-idle{background:#F5F5F5;color:#888}
+.wfs-running{background:#E6F1FB;color:#0C447C}
+.wfs-completed{background:#E1F5EE;color:#085041}
+.wfs-error{background:#FCEBEB;color:#A32D2D}
+.terminate-btn{padding:5px 12px;background:white;border:1px solid #E24B4A;border-radius:7px;font-size:12px;color:#E24B4A;cursor:pointer;font-family:inherit;font-weight:500}
+.terminate-btn:hover{background:#FFF0F0}
+.confirm-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.35);z-index:100;align-items:center;justify-content:center}
+.confirm-overlay.show{display:flex}
+.confirm-box{background:white;border-radius:12px;padding:24px 28px;max-width:360px;width:90%;box-shadow:0 8px 32px rgba(0,0,0,.15)}
+.confirm-title{font-size:15px;font-weight:600;margin-bottom:8px}
+.confirm-desc{font-size:13px;color:#666;margin-bottom:20px;line-height:1.5}
+.confirm-actions{display:flex;gap:8px;justify-content:flex-end}
+.confirm-cancel{padding:8px 16px;border:1px solid #E5E5E5;border-radius:7px;font-size:13px;cursor:pointer;background:white;font-family:inherit}
+.confirm-ok{padding:8px 16px;border:none;border-radius:7px;font-size:13px;cursor:pointer;background:#E24B4A;color:white;font-weight:600;font-family:inherit}
+.notif-row{display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid #F5F5F5}
+.notif-row:last-child{border-bottom:none}
+/* Workflow status selector */
+.status-sel{appearance:none;border:none;font-size:12px;font-weight:700;padding:4px 20px 4px 10px;border-radius:20px;cursor:pointer;font-family:inherit;background-image:url("data:image/svg+xml,%3Csvg width='10' height='6' viewBox='0 0 10 6' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%23999' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 6px center;outline:none}
+.status-sel.s-idle{background-color:#F0F0F0;color:#666}
+.status-sel.s-running{background-color:#DBEAFE;color:#1D4ED8}
+.status-sel.s-completed{background-color:#D1FAE5;color:#065F46}
+.status-sel.s-error{background-color:#FEE2E2;color:#991B1B}
+.status-sel.s-sync{background-color:#FEF3C7;color:#92400E}
+/* Conflict banner inside step */
+.conflict-banner{display:flex;align-items:center;gap:6px;background:#FFFBEB;border:1px solid #F59E0B;border-radius:6px;padding:5px 10px;font-size:11px;color:#92400E;margin:0 8px 6px}
+.conflict-banner svg{flex-shrink:0;width:13px;height:13px}
+
+.notif-label{font-size:13px;color:#1A1A1A}
+.notif-default{font-size:11px;color:#AAA;margin-top:1px}
+
+/* Trigger sensors */
+.trig-sensor-row{display:flex;gap:8px;align-items:center;margin-bottom:8px;padding:8px 10px;background:#F9F9F9;border-radius:8px;border:1px solid #EFEFEF}
+.trig-sensor-del{color:#CCC;cursor:pointer;font-size:16px;margin-left:auto}
+.trig-sensor-del:hover{color:#E24B4A}
+.logic-toggle-row{display:flex;align-items:center;gap:8px;margin:4px 0 8px}
+.logic-toggle-label{font-size:12px;color:#888}
+.logic-btn{padding:4px 12px;font-size:11px;font-weight:700;border-radius:6px;cursor:pointer;border:1px solid #E5E5E5;background:white;font-family:inherit;letter-spacing:.04em}
+.logic-btn.and-on{background:#E6F1FB;color:#185FA5;border-color:#B5D4F4}
+.logic-btn.or-on{background:#FAEEDA;color:#854F0B;border-color:#FAC775}
+</style>
+</head>
+<body>
+
+<div class="sidebar">
+  <div class="logo">
+    <div class="lmark"><svg viewBox="0 0 14 14"><polygon points="7,1 13,12 1,12"/></svg></div>
+    GrowDirector
+  </div>
+  <div class="nav">
+    <div class="ni"><svg viewBox="0 0 16 16" fill="currentColor"><path d="M8 1a7 7 0 100 14A7 7 0 008 1zm0 2a5 5 0 110 10A5 5 0 018 3z"/></svg>Climate</div>
+    <div class="ni"><svg viewBox="0 0 16 16" fill="currentColor"><rect x="2" y="4" width="12" height="8" rx="1"/></svg>Equipment</div>
+    <div class="ni on"><svg viewBox="0 0 16 16" fill="currentColor"><path d="M3 3h10v2H3zM3 7h7v2H3zM3 11h5v2H3z"/></svg>Workflows</div>
+  </div>
+  <div class="new-btn">+ New Workflow</div>
+  <div class="wfl">
+    <div class="wl-label">Active</div>
+    <div class="wi"><div class="dot dg"></div>Workflow 7</div>
+    <div class="wi"><div class="dot dg"></div>Workflow 5</div>
+    <div class="wi on"><div class="dot dg"></div>cooling</div>
+    <div class="wl-label">Inactive</div>
+    <div class="wi"><div class="dot dgr"></div>irrigation</div>
+    <div class="wi"><div class="dot dg"></div>temp</div>
+  </div>
+</div>
+
+<div class="main">
+  <div class="confirm-overlay" id="term-overlay">
+    <div class="confirm-box">
+      <div class="confirm-title">Stop Workflow?</div>
+      <div class="confirm-desc">All devices turned on by this Workflow will be switched off immediately.</div>
+      <div class="confirm-actions">
+        <button class="confirm-cancel" onclick="document.getElementById('term-overlay').classList.remove('show')">Cancel</button>
+        <button class="confirm-ok" onclick="terminateWorkflow()">Terminate</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="toprow" style="align-items:center">
+    <div style="display:flex;align-items:center;gap:16px">
+      <div class="wftitle-wrap">
+        <input class="wftitle" id="wf-name" value="cooling" oninput="syncName()" size="10" />
+        <span class="edit-icon" onclick="document.getElementById('wf-name').focus()">&#9998;</span>
+      </div>
+      <div style="width:1px;height:24px;background:#E5E5E5;flex-shrink:0"></div>
+      <div class="wfsub" id="wfsub">3 steps &middot; Sensor mode</div>
+      <div class="priority-wrap">
+        <span class="priority-label">Priority</span>
+        <select class="priority-sel"><option>1</option><option>2</option><option  selected>3</option><option>4</option><option>5</option><option>6</option><option>7</option><option>8</option><option>9</option><option>10</option></select>
+      </div>
+    </div>
+    <div class="trow" style="gap:10px">
+      <select class="status-sel s-idle" id="wf-status-sel" onchange="changeStatus(this.value)">
+        <option value="idle">&#11044; Idle</option>
+        <option value="running">&#11044; Running</option>
+        <option value="completed">&#11044; Completed</option>
+        <option value="error">&#11044; Error</option>
+        <option value="sync">&#11044; Synchronizing</option>
+      </select>
+      <div style="width:1px;height:24px;background:#E5E5E5;flex-shrink:0"></div>
+      <button class="terminate-btn" onclick="document.getElementById('term-overlay').classList.add('show')">&#9724; Terminate</button>
+      <span class="tlabel">Disabled</span>
+      <div class="tog off" onclick="this.classList.toggle('off');this.classList.toggle('on')"><div class="tok"></div></div>
+    </div>
+  </div>
+
+  <!-- Trigger -->
+  <div class="card card-collapsible">
+    <div class="ch" onclick="toggleCard('trigger-body','trigger-chev')">
+      <div class="ct">
+        <svg class="chevron open" id="trigger-chev" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6l4 4 4-4"/></svg>
+        Trigger
+      </div>
+      <div class="mbadge mb-s" id="mbadge">Sensor</div>
+    </div>
+    <div class="card-body open" id="trigger-body">
+    <div class="slabel">Trigger mode</div>
+    <div class="seg" style="margin-bottom:16px">
+      <button class="sb on" id="btn-s" onclick="setMode('sensor')">Sensor</button>
+      <button class="sb" id="btn-sc" onclick="setMode('schedule')">Schedule</button>
+    </div>
+
+    <div id="sensor-cfg">
+      <div class="slabel">Sensors</div>
+      <div id="trig-sensors"></div>
+      <div id="logic-toggle-row" class="logic-toggle-row" style="display:none">
+        <span class="logic-toggle-label">Logic:</span>
+        <button class="logic-btn and-on" id="logic-and-btn" onclick="setLogic('AND')">AND</button>
+        <button class="logic-btn" id="logic-or-btn" onclick="setLogic('OR')">OR</button>
+        <span style="font-size:11px;color:#AAA" id="logic-desc">All conditions must be met simultaneously</span>
+      </div>
+      <div class="addlink" onclick="addTriggerSensor()">+ Add Sensor</div>
+      <div class="hint" style="margin-top:8px">Activation delay: condition must hold continuously before Workflow starts.</div>
+      <div class="frow" style="margin-top:8px">
+        <input type="number" value="10" style="width:70px">
+        <span class="unit">seconds</span>
+      </div>
+    </div>
+
+    <div id="schedule-cfg" style="display:none">
+      <div class="slabel">Schedule type</div>
+      <div class="sched-type">
+        <button class="stb on" id="btn-ta" onclick="setST('ta')">Trigger at</button>
+        <button class="stb" id="btn-rp" onclick="setST('rp')">Repeat</button>
+      </div>
+      <div id="ta-cfg">
+        <div style="font-size:12px;color:#888;margin-bottom:10px">Start a new run only at these exact times.</div>
+        <div class="chips">
+          <div class="chip">08:00 <span>×</span></div>
+          <div class="chip">19:00 <span>×</span></div>
+        </div>
+        <div class="addtime">+ Add time</div>
+      </div>
+      <div id="rp-cfg" style="display:none">
+        <div style="font-size:12px;color:#888;margin-bottom:10px">Repeat on a fixed interval on selected days.</div>
+        <div class="frow" style="align-items:center">
+          <span style="font-size:12px;color:#888">Every</span>
+          <input type="number" value="30" style="width:70px">
+          <select style="width:110px">
+            <option>minutes</option>
+            <option>hours</option>
+          </select>
+        </div>
+      </div>
+      <div class="slabel" style="margin-top:12px">Repeat on</div>
+      <div class="days">
+        <div class="day">Mo</div><div class="day on">Tu</div><div class="day on">We</div>
+        <div class="day on">Th</div><div class="day on">Fr</div><div class="day on">Sa</div><div class="day">Su</div>
+      </div>
+    </div>
+    </div><!-- /card-body trigger -->
+  </div>
+
+  <!-- Active Hours -->
+  <div class="card card-collapsible">
+    <div class="ch" onclick="toggleCard('ah-body','ah-chev')">
+      <div class="ct">
+        <svg class="chevron closed" id="ah-chev" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6l4 4 4-4"/></svg>
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" style="width:15px;height:15px;color:#888"><circle cx="8" cy="8" r="6"/><path d="M8 5v3l2 2"/></svg>
+        Active Hours
+      </div>
+      <div class="trow" onclick="event.stopPropagation()">
+        <span class="tlabel" id="ah-summary" style="font-size:11px;color:#2C7A57;font-weight:500">06:00 – 15:00 · Mo–Fr, Su</span>
+        <span class="tlabel">Enabled</span>
+        <div class="tog on" onclick="this.classList.toggle('off');this.classList.toggle('on')"><div class="tok"></div></div>
+      </div>
+    </div>
+    <div class="card-body closed" id="ah-body">
+      <div class="trow2">
+        <div><div class="slabel">From</div><input type="time" value="06:00"></div>
+        <span class="arrsep">→</span>
+        <div><div class="slabel">Until</div><input type="time" value="15:00"></div>
+      </div>
+      <div class="slabel" style="margin-top:12px">Active Days</div>
+      <div class="days">
+        <div class="day on">Mo</div><div class="day on">Tu</div><div class="day on">We</div>
+        <div class="day on">Th</div><div class="day on">Fr</div><div class="day">Sa</div><div class="day on">Su</div>
+      </div>
+    </div>
+  </div>
+
+
+
+  <!-- Notifications -->
+  <div class="card card-collapsible">
+    <div class="ch" onclick="toggleCard('notif-body','notif-chev')">
+      <div class="ct">
+        <svg class="chevron closed" id="notif-chev" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6l4 4 4-4"/></svg>
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" style="width:15px;height:15px;color:#888"><path d="M8 2a5 5 0 015 5v2l1.5 2.5H1.5L3 9V7a5 5 0 015-5zM6.5 13.5a1.5 1.5 0 003 0"/></svg>
+        Notifications
+      </div>
+      <span style="font-size:11px;color:#2C7A57;font-weight:500">Push &middot; 3 on</span>
+    </div>
+    <div class="card-body closed" id="notif-body">
+      <div class="notif-row">
+        <div><div class="notif-label">On completion</div><div class="notif-default">Default: on</div></div>
+        <div class="tog on" onclick="this.classList.toggle('off');this.classList.toggle('on')"><div class="tok"></div></div>
+      </div>
+      <div class="notif-row">
+        <div><div class="notif-label">On failure</div><div class="notif-default">Default: on</div></div>
+        <div class="tog on" onclick="this.classList.toggle('off');this.classList.toggle('on')"><div class="tok"></div></div>
+      </div>
+      <div class="notif-row">
+        <div><div class="notif-label">On device conflict</div><div class="notif-default">Default: on</div></div>
+        <div class="tog on" onclick="this.classList.toggle('off');this.classList.toggle('on')"><div class="tok"></div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Steps -->
+  <div class="card">
+    <div class="sh">
+      <div class="ct">Steps</div>
+      <button class="addbtn" onclick="addStep()">+ Add Step</button>
+    </div>
+    <div class="sdesc" id="sdesc">After the trigger fires, sensor value is checked at each step. Steps can run in parallel — next step activates when the previous one has started and its sensor condition is met.</div>
+
+    <!-- Sensor mode steps -->
+    <div id="steps-s">
+      <div class="col-hdr-s">
+        <div style="width:20px;flex-shrink:0"></div>
+        <div style="width:24px;flex-shrink:0"></div>
+        <div class="hdr-dev">Device</div>
+        <div class="hdr-sensor">Sensor</div>
+        <div class="hdr-from">From</div>
+        <div class="hdr-cur">Current</div>
+        <div class="hdr-until">Until</div>
+        <div class="hdr-spacer"></div>
+        <div class="hdr-at">Action Type</div>
+        <div class="hdr-params">Params</div>
+        <div class="hdr-status">Status</div>
+        <div style="width:24px;flex-shrink:0"></div>
+      </div>
+      <div id="sensor-steps"></div>
+    </div>
+
+    <!-- Schedule mode steps -->
+    <div id="steps-sc" style="display:none">
+      <div class="col-hdr-sc">
+        <div class="sc-hdr-drag"></div>
+        <div class="sc-hdr-num"></div>
+        <div class="sc-hdr-dev">Device</div>
+        <div class="sc-hdr-spacer"></div>
+        <div class="sc-hdr-action">Action</div>
+        <div class="sc-hdr-params">Params</div>
+        <div class="sc-hdr-status">Status</div>
+        <div class="sc-hdr-del"></div>
+      </div>
+      <div id="schedule-steps"></div>
+    </div>
+  </div>
+
+  <div class="savebar">
+    <button class="savebtn">
+      <svg width="14" height="14" viewBox="0 0 16 16" fill="white"><path d="M3 2h8l3 3v9a1 1 0 01-1 1H3a1 1 0 01-1-1V3a1 1 0 011-1zm5 11a2 2 0 100-4 2 2 0 000 4zm1-7H4V4h5v2z"/></svg>
+      Save Changes
+    </button>
+  </div>
+</div>
+
+<script>
+const deviceList = [
+  {name:'Fan 1',               status:'available'},
+  {name:'Fan 2',               status:'conflict', conflictWith:'Workflow 5'},
+  {name:'Fan 3',               status:'available'},
+  {name:'Open Thermal Screen', status:'rule',     conflictWith:'Rule: Night Ventilation'},
+  {name:'Side Vent',           status:'available'},
+  {name:'Irrigation Valves',   status:'available'},
+  {name:'Drip Line A',         status:'conflict', conflictWith:'Workflow 7'},
+  {name:'Drip Line B',         status:'available'},
+  {name:'CO₂ Injector',         status:'rule',     conflictWith:'Rule: CO₂ Control'},
+  {name:'Heater 1',            status:'available'},
+  {name:'Heater 2',            status:'available'},
+  {name:'Circulation Pump',    status:'available'},
+];
+const devices = deviceList.map(d=>d.name);
+function deviceOptionHtml(sel){
+  return deviceList.map(d=>{
+    const suffix = d.status==='rule' ? ' ● (Rule)' : d.status==='conflict' ? ' ● (Conflict)' : '';
+    const tip = d.status!=='available' ? ' title="'+d.conflictWith+'"' : '';
+    const dis = d.status==='rule' ? ' disabled' : '';
+    const col = d.status==='rule' ? 'color:#A32D2D' : d.status==='conflict' ? 'color:#B45309' : '';
+    return '<option value="'+d.name+'"'+(d.name===sel?' selected':'')+dis+tip+(col?' style="'+col+'"':'')+'>'+d.name+suffix+'</option>';
+  }).join('');
+}
+const sensorTypes = ['Temperature','Humidity','CO₂','Light','pH','EC','ORP'];
+const sensorUnits = {Temperature:'°C',Humidity:'%','CO₂':'ppm',Light:'lux',pH:'pH',EC:'mS/cm',ORP:'mV'};
+
+let globalLogic = 'AND';
+
+let triggerSensors = [
+  {sensor:'Temperature', op:'Higher than', val:26},
+  {sensor:'Humidity', op:'Lower than', val:40}
+];
+
+let sensorSteps = [
+  {device:'Fan 1', type:'stepper', sensors:[
+    {sensor:'Temperature', from:22, current:'24.1', until:25},
+    {sensor:'Humidity',    from:40, current:'--',   until:40}
+  ], run:30, wait:10, status:'done'},
+  {device:'Heater 1', type:'loop', sensors:[
+    {sensor:'Temperature', from:28, current:'24.1', until:24},
+    {sensor:'Humidity',    from:40, current:'38',   until:35}
+  ], times:5, on:20, off:10, status:'running'},
+  {device:'Fan 2', type:'regular', sensors:[
+    {sensor:'Temperature', from:20, current:'24.1', until:25},
+    {sensor:'Humidity',    from:35, current:'38',   until:40}
+  ], status:'pending'},
+];
+
+let scheduleSteps = [
+  {device:'Fan 1',           action:'on',    status:'done'},
+  {device:'Heater 1',        action:'pulse', onDur:10, offDur:30, cycles:6, status:'running'},
+  {device:'Irrigation Valves', action:'off', status:'pending'},
+];
+
+/* ── Trigger ── */
+function changeStatus(val){
+  const sel = document.getElementById('wf-status-sel');
+  sel.className = 'status-sel s-'+val;
+}
+
+function syncName(){
+  const v = document.getElementById('wf-name').value||'Workflow';
+  const wi = document.querySelector('.wi.on');
+  if(wi){ const nodes = wi.childNodes; nodes[nodes.length-1].textContent = v; }
+}
+function terminateWorkflow(){
+  document.getElementById('term-overlay').classList.remove('show');
+  document.getElementById('wf-status').textContent = 'Completed';
+  document.getElementById('wf-status').className = 'wf-status wfs-completed';
+  sensorSteps.forEach(s=>s.status='done');
+  scheduleSteps.forEach(s=>s.status='done');
+  renderSensorSteps(); renderScheduleSteps();
+}
+function renderTriggerSensors(){
+  const c = document.getElementById('trig-sensors');
+  c.innerHTML = triggerSensors.map((s,i) => `
+    <div class="trig-sensor-row">
+      <select style="width:130px" onchange="triggerSensors[${i}].sensor=this.value;syncStepSensors();renderTriggerSensors();renderSensorSteps()">
+        ${sensorTypes.map(t=>`<option${t===s.sensor?' selected':''}>${t}</option>`).join('')}
+      </select>
+      <select style="width:130px" onchange="triggerSensors[${i}].op=this.value">
+        ${['Higher than','Lower than','Equal to','Between','Not between'].map(o=>`<option${o===s.op?' selected':''}>${o}</option>`).join('')}
+      </select>
+      <input type="number" value="${s.val}" style="width:64px" onchange="triggerSensors[${i}].val=+this.value">
+      <span class="unit">${sensorUnits[s.sensor]||''}</span>
+      ${triggerSensors.length>1?`<span class="trig-sensor-del" onclick="removeTriggerSensor(${i})">×</span>`:''}
+    </div>
+  `).join('');
+  document.getElementById('logic-toggle-row').style.display = triggerSensors.length > 1 ? 'flex' : 'none';
+}
+
+function addTriggerSensor(){
+  if(triggerSensors.length >= 3) return;
+  const used = triggerSensors.map(s=>s.sensor);
+  const next = sensorTypes.find(s=>!used.includes(s)) || sensorTypes[0];
+  triggerSensors.push({sensor:next, op:'Higher than', val:20});
+  // Don't auto-add to steps — user adds sensor rows manually per step
+  renderTriggerSensors();
+  renderSensorSteps();
+}
+
+function removeTriggerSensor(i){
+  const removed = triggerSensors[i].sensor;
+  triggerSensors.splice(i,1);
+  // Remove that sensor from all step sensor arrays by name
+  sensorSteps.forEach(step => {
+    step.sensors = step.sensors.filter(sr => sr.sensor !== removed);
+  });
+  renderTriggerSensors();
+  renderSensorSteps();
+}
+
+function syncStepSensors(){
+  sensorSteps.forEach(step => {
+    triggerSensors.forEach((t,i) => {
+      if(step.sensors[i]) step.sensors[i].sensor = t.sensor;
+    });
+  });
+}
+
+function setLogic(l){
+  globalLogic = l;
+  document.getElementById('logic-and-btn').className = 'logic-btn' + (l==='AND'?' and-on':'');
+  document.getElementById('logic-or-btn').className  = 'logic-btn' + (l==='OR'?' or-on':'');
+  document.getElementById('logic-desc').textContent = l==='AND'
+    ? 'All conditions must be met simultaneously'
+    : 'Any one condition is sufficient';
+  renderSensorSteps();
+}
+
+/* ── Sensor steps ── */
+function statusInfo(s){ return {
+  cls:   {done:'st-done',running:'st-running',pending:'',error:'st-error'}[s]||'',
+  badge: {done:'st-done-b',running:'st-run-b',pending:'st-pend-b',error:'st-err-b'}[s]||'st-pend-b',
+  label: {done:'Done',running:'Running',pending:'Pending',error:'Error'}[s]||'Pending'
+};}
+
+function renderSensorSteps(){
+  const c = document.getElementById('sensor-steps');
+
+  c.innerHTML = sensorSteps.map((step, si) => {
+    const st = statusInfo(step.status);
+    // sensors in this step that are still valid (present in trigger)
+    const triggerNames = triggerSensors.map(t => t.sensor);
+    step.sensors = step.sensors.filter(sr => triggerNames.includes(sr.sensor));
+    if(step.sensors.length === 0 && triggerSensors.length > 0)
+      step.sensors.push({sensor: triggerSensors[0].sensor, from: triggerSensors[0].val, current:'--', until: triggerSensors[0].val});
+
+    const devInfo = deviceList.find(d=>d.name===step.device)||{status:'available'};
+    const stepHasMulti = step.sensors.length > 1;
+
+    const rowsHtml = step.sensors.map((sr, ri) => {
+      const isFirst = ri === 0;
+      const isNotLast = ri < step.sensors.length - 1;
+
+      const sensorOpts = triggerSensors.map(t =>
+        `<option value="${t.sensor}"${t.sensor===sr.sensor?' selected':''}>${t.sensor}</option>`
+      ).join('');
+
+      // col 1: drag
+      const drag = `<div class="g-cell center" style="color:#CCC;font-size:13px;cursor:grab">${isFirst?'⠿':''}</div>`;
+      // col 2: #
+      const num = `<div class="g-cell center" style="font-size:11px;color:#AAA;font-weight:600">${isFirst?si+1:''}</div>`;
+      // col 3: device (first row only)
+      const dev = isFirst
+        ? `<div class="g-cell"><select class="${devInfo.status==='conflict'?'dev-select-conflict':devInfo.status==='rule'?'dev-select-rule':''}" onchange="sensorSteps[${si}].device=this.value;renderSensorSteps()">${deviceOptionHtml(step.device)}</select></div>`
+        : `<div class="g-cell"></div>`;
+      // col 4: sensor name only — pure single line
+      const sensor = `<div class="g-cell">
+          <select style="width:100%;height:28px" onchange="sensorSteps[${si}].sensors[${ri}].sensor=this.value" ${triggerSensors.length<=1?'disabled':''}>${sensorOpts}</select>
+        </div>`;
+
+      // After the full data row, insert a mini logic badge row spanning sensor column only
+      const logicRow = (stepHasMulti && isNotLast) ? `
+        <div style="grid-column:1/4"></div>
+        <div style="grid-column:4/5;padding:0 3px 3px"><span class="logic-pill ${globalLogic==='AND'?'logic-and':'logic-or'}">${globalLogic}</span></div>
+        <div style="grid-column:5/13"></div>
+      ` : '';
+      // col 5: from
+      const from = `<div class="g-cell center">
+          <input type="number" value="${sr.from}" class="hi" onchange="sensorSteps[${si}].sensors[${ri}].from=+this.value">
+        </div>`;
+      // col 6: current
+      const cur = `<div class="g-cell center">
+          <div class="cur-box">${sr.current}</div>
+        </div>`;
+      // col 7: until
+      const until = `<div class="g-cell center">
+          <input type="number" value="${sr.until}" onchange="sensorSteps[${si}].sensors[${ri}].until=+this.value">
+        </div>`;
+      // col 8: spacer
+      const spacer = `<div class="g-cell"></div>`;
+      // col 9: action type (first row only)
+      const at = isFirst
+        ? `<div class="g-cell" style="align-items:flex-start"><select onchange="changeSensorType(${si},this.value)">${['regular','stepper','loop'].map(t=>`<option value="${t}"${step.type===t?' selected':''}>${{regular:'Regular',stepper:'Stepper Motor',loop:'Loop'}[t]}</option>`).join('')}</select></div>`
+        : `<div class="g-cell"></div>`;
+      // col 10: params (first row only)
+      const params = isFirst
+        ? `<div class="g-cell" style="gap:5px;align-items:flex-start">${paramsHtml(step, si)}</div>`
+        : `<div class="g-cell"></div>`;
+      // col 11: status (first row only)
+      const status = isFirst
+        ? `<div class="g-cell right" style="align-items:flex-start;padding-top:5px"><span class="sstatus ${st.badge}">${st.label}</span></div>`
+        : `<div class="g-cell"></div>`;
+      // col 12: del
+      const del = isFirst
+        ? `<div class="g-cell center" style="align-items:flex-start;padding-top:6px"><span class="sdel" onclick="removeSensorStep(${si})">×</span></div>`
+        : `<div class="g-cell center" style="align-items:flex-start;padding-top:6px"><span class="sdel" onclick="removeSensorRow(${si},${ri})">×</span></div>`;
+
+      return drag+num+dev+sensor+from+cur+until+spacer+at+params+status+del+logicRow;
+    }).join('');
+
+    const usedInStep = step.sensors.map(sr => sr.sensor);
+    const availableToAdd = triggerSensors.filter(t => !usedInStep.includes(t.sensor));
+    const addRowHtml = availableToAdd.length > 0
+      ? `<div class="add-sensor-link" onclick="addSensorRow(${si})">+ ${availableToAdd[0].sensor} row</div>` : '';
+
+    const conflictBanner = devInfo.status==='conflict'
+      ? `<div class="conflict-banner"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 2l6 12H2L8 2z"/><path d="M8 7v3M8 11.5v.5"/></svg>Device shared with <strong>${devInfo.conflictWith}</strong> — priority determines control during execution.</div>`
+      : devInfo.status==='rule'
+      ? `<div class="conflict-banner" style="background:#FFF0F0;border-color:#F09595;color:#A32D2D"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 2l6 12H2L8 2z"/><path d="M8 7v3M8 11.5v.5"/></svg>Device assigned to <strong>${devInfo.conflictWith}</strong> — unavailable for this Workflow.</div>`
+      : '';
+    const cardExtraCls = devInfo.status==='conflict' ? ' has-conflict' : devInfo.status==='rule' ? ' has-rule' : '';
+    return `<div class="step-card ${st.cls}${cardExtraCls}">${conflictBanner}<div class="step-grid">${rowsHtml}</div>${addRowHtml}</div>`;
+  }).join('');
+}
+
+function paramsHtml(step, si){
+  if(step.type==='regular') return '<span style="font-size:11px;color:#CCC">—</span>';
+  if(step.type==='stepper') return `
+    <div class="nf"><input type="number" value="${step.run||30}" style="width:50px;height:28px" onchange="sensorSteps[${si}].run=+this.value"><span class="nfl">Run (s)</span></div>
+    <div class="nf"><input type="number" value="${step.wait||10}" style="width:50px;height:28px" onchange="sensorSteps[${si}].wait=+this.value"><span class="nfl">Wait (s)</span></div>`;
+  if(step.type==='loop') return `
+    <div class="nf"><input type="number" value="${step.times||5}" style="width:44px;height:28px" onchange="sensorSteps[${si}].times=+this.value"><span class="nfl">Times</span></div>
+    <div class="nf"><input type="number" value="${step.on||20}" style="width:44px;height:28px" onchange="sensorSteps[${si}].on=+this.value"><span class="nfl">On (s)</span></div>
+    <div class="nf"><input type="number" value="${step.off||10}" style="width:44px;height:28px" onchange="sensorSteps[${si}].off=+this.value"><span class="nfl">Off (s)</span></div>`;
+  return '';
+}
+
+function changeSensorType(i,val){ sensorSteps[i].type=val; renderSensorSteps(); }
+function removeSensorStep(i){ sensorSteps.splice(i,1); renderSensorSteps(); }
+function removeSensorRow(si,ri){
+  if(sensorSteps[si].sensors.length<=1) return;
+  sensorSteps[si].sensors.splice(ri,1);
+  renderSensorSteps();
+}
+function addSensorRow(si){
+  const usedInStep = sensorSteps[si].sensors.map(r => r.sensor);
+  const next = triggerSensors.find(t => !usedInStep.includes(t.sensor));
+  if(next) sensorSteps[si].sensors.push({sensor: next.sensor, from: next.val, current:'--', until: next.val});
+  renderSensorSteps();
+}
+
+/* ── Schedule steps ── */
+function renderScheduleSteps(){
+  const c = document.getElementById('schedule-steps');
+  c.innerHTML = scheduleSteps.map((s,i) => {
+    const st = statusInfo(s.status);
+    const params = s.action==='pulse' ? `
+      <div class="nf"><input type="number" value="${s.onDur||10}" style="width:50px;height:28px" onchange="scheduleSteps[${i}].onDur=+this.value"><span class="nfl">On (s)</span></div>
+      <div class="nf"><input type="number" value="${s.offDur||30}" style="width:50px;height:28px" onchange="scheduleSteps[${i}].offDur=+this.value"><span class="nfl">Off (s)</span></div>
+      <div class="nf"><input type="number" value="${s.cycles||5}" style="width:44px;height:28px" onchange="scheduleSteps[${i}].cycles=+this.value"><span class="nfl">Cycles</span></div>`
+      : `<span style="font-size:11px;color:#CCC">—</span>`;
+    const devInfoSc = deviceList.find(d=>d.name===s.device)||{status:'available'};
+    const conflictBannerSc = devInfoSc.status==='conflict'
+      ? `<div class="conflict-banner"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 2l6 12H2L8 2z"/><path d="M8 7v3M8 11.5v.5"/></svg>Device shared with <strong>${devInfoSc.conflictWith}</strong> — priority determines control.</div>`
+      : devInfoSc.status==='rule'
+      ? `<div class="conflict-banner" style="background:#FFF0F0;border-color:#F09595;color:#A32D2D"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 2l6 12H2L8 2z"/><path d="M8 7v3M8 11.5v.5"/></svg>Device assigned to <strong>${devInfoSc.conflictWith}</strong> — unavailable for this Workflow.</div>`
+      : '';
+    const cardExtraClsSc = devInfoSc.status==='conflict' ? ' has-conflict' : devInfoSc.status==='rule' ? ' has-rule' : '';
+    return `
+      <div class="step-card ${st.cls}${cardExtraClsSc}">${conflictBannerSc}
+        <div class="step-grid-sc">
+          <div class="g-cell center" style="color:#CCC;font-size:13px;cursor:grab">⠿</div>
+          <div class="g-cell center" style="font-size:11px;color:#AAA;font-weight:600">${i+1}</div>
+          <div class="g-cell"><select style="width:100%;height:28px" onchange="scheduleSteps[${i}].device=this.value">${deviceOptionHtml(s.device)}</select></div>
+          <div class="g-cell"></div>
+          <div class="g-cell" style="align-items:flex-start"><select style="width:100%;height:28px" onchange="changeSchedAction(${i},this.value)">
+            <option value="on"${s.action==='on'?' selected':''}>On</option>
+            <option value="off"${s.action==='off'?' selected':''}>Off</option>
+            <option value="pulse"${s.action==='pulse'?' selected':''}>Pulse</option>
+          </select></div>
+          <div class="g-cell" style="gap:5px;align-items:flex-start">${params}</div>
+          <div class="g-cell right" style="align-items:flex-start;padding-top:5px"><span class="sstatus ${st.badge}">${st.label}</span></div>
+          <div class="g-cell center" style="align-items:flex-start;padding-top:6px"><span class="sdel" onclick="removeSchedStep(${i})">×</span></div>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+function changeSchedAction(i,val){ scheduleSteps[i].action=val; renderScheduleSteps(); }
+function removeSchedStep(i){ scheduleSteps.splice(i,1); renderScheduleSteps(); }
+
+function addStep(){
+  const isSensor = document.getElementById('btn-s').classList.contains('on');
+  if(isSensor){
+    const sensors = triggerSensors.map(t=>({sensor:t.sensor, from:t.val, current:'--', until:t.val}));
+    sensorSteps.push({device:devices[0], type:'regular', sensors, status:'pending'});
+    renderSensorSteps();
+  } else {
+    scheduleSteps.push({device:devices[0], action:'on', status:'pending'});
+    renderScheduleSteps();
+  }
+}
+
+function setMode(m){
+  const s = m==='sensor';
+  document.getElementById('btn-s').className='sb'+(s?' on':'');
+  document.getElementById('btn-sc').className='sb'+(!s?' on':'');
+  document.getElementById('sensor-cfg').style.display=s?'':'none';
+  document.getElementById('schedule-cfg').style.display=s?'none':'';
+  document.getElementById('steps-s').style.display=s?'':'none';
+  document.getElementById('steps-sc').style.display=s?'none':'';
+  document.getElementById('mbadge').textContent=s?'Sensor':'Schedule';
+  document.getElementById('mbadge').className='mbadge '+(s?'mb-s':'mb-sc');
+  document.getElementById('wfsub').textContent=(s?sensorSteps.length:scheduleSteps.length)+' steps · '+(s?'Sensor':'Schedule')+' mode';
+  document.getElementById('sdesc').textContent=s
+    ?'After the trigger fires, sensor value is checked at each step. Steps can run in parallel — next step activates when the previous one has started and its sensor condition is met.'
+    :'After the trigger fires, steps execute in order. Command is sent to the device and the next step activates once the command is accepted.';
+}
+
+function setST(t){
+  document.getElementById('btn-ta').className='stb'+(t==='ta'?' on':'');
+  document.getElementById('btn-rp').className='stb'+(t==='rp'?' on':'');
+  document.getElementById('ta-cfg').style.display=t==='ta'?'':'none';
+  document.getElementById('rp-cfg').style.display=t==='rp'?'':'none';
+}
+
+function toggleCard(bodyId, chevId){
+  const body = document.getElementById(bodyId);
+  const chev = document.getElementById(chevId);
+  const isOpen = body.classList.contains('open');
+  body.classList.toggle('open', !isOpen);
+  body.classList.toggle('closed', isOpen);
+  chev.classList.toggle('open', !isOpen);
+  chev.classList.toggle('closed', isOpen);
+}
+
+renderTriggerSensors();
+renderSensorSteps();
+renderScheduleSteps();
+</script>
+</body>
+</html>
