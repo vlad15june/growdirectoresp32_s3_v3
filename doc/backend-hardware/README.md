@@ -21,14 +21,14 @@ graph TB
     MQTT -- "subscribe commands" --> HW
     HW -- "MQTT: updates, state, structure" --> MQTT
     MQTT -- "subscribe hardware topics" --> BE
-    HW -- "HTTP REST: polling, workflow, rules" --> BE
+    HW -- "HTTP REST: polling, device state" --> BE
     BE --- PG
     BE --- RD
 ```
 
 **Key asymmetry:**
-- **Backend → Hardware**: MQTT only (device commands, rule notifications, workflow commands, module commands)
-- **Hardware → Backend**: MQTT primary for push updates; HTTP REST for polling and workflow reporting
+- **Backend → Hardware**: MQTT only (device commands, rule notifications, module commands)
+- **Hardware → Backend**: MQTT primary for push updates; HTTP REST for polling and device state reporting
 
 ---
 
@@ -51,7 +51,7 @@ graph TB
 
 | Topic | Direction | Purpose |
 |-------|-----------|---------|
-| `GrowDirectorMqttTopic/{gdUid}` | BE → HW | All outbound commands (device, rule, workflow, module) — differentiated by `type` field |
+| `GrowDirectorMqttTopic/{gdUid}` | BE → HW | All outbound commands (device, rule, module) — differentiated by `type` field |
 
 All outbound commands share one topic. The `type` field routes them on hardware:
 
@@ -59,7 +59,6 @@ All outbound commands share one topic. The `type` field routes them on hardware:
 |---|---|
 | `DeviceCommandNotification` | Manual device on/off |
 | `RuleCommandNotification` | Rule created / updated / deleted |
-| `WorkflowCommandNotification` | Workflow activate / deactivate |
 | `ModuleCommandNotification` | Reboot / firmware update |
 
 ### HTTP Endpoints (Hardware → Backend, polling)
@@ -71,7 +70,6 @@ Hardware polls these on startup and on-demand. No MQTT equivalent.
 | `GET /api/v1/Hardware/rulelist` | Polling | Download all active rules on startup or after restart |
 | `GET /api/v1/Hardware/devices_command` | Polling | Fetch pending device commands (HTTP fallback) |
 | `GET /api/v1/Hardware/module_command` | Polling | Fetch pending module commands (HTTP fallback) |
-| `GET /api/v1/Hardware/workflow` | Polling | Download active workflow graph |
 | `GET /api/v1/Hardware/sensor_value` | On-demand | Current sensor values (used by rule evaluation) |
 | `GET /api/v1/Hardware/sensor_models` | Startup | Sensor model configuration metadata |
 | `GET /api/v1/Hardware/account` | Startup | Account info for the module |
@@ -88,8 +86,6 @@ Hardware POSTs these as alternatives to MQTT push topics.
 | `POST /api/v1/Hardware/update` | `hardware/update/{gdUid}` | Submit sensor/device update |
 | `POST /api/v1/Hardware/diagnostic` | `hardware/diagnostic/{gdUid}` | Submit diagnostic info |
 | `POST /api/v1/Hardware/Rules/state` | `hardware/rules/state/{gdUid}` | Rule sync state report |
-| `POST /api/v1/Hardware/workflow/{uid}/state` | _(HTTP only)_ | Workflow sync state |
-| `POST /api/v1/Hardware/workflow/{uid}/execution` | _(HTTP only)_ | Workflow execution progress |
 
 > **Deduplication:** `CacheDeduplicationService` prevents double-processing when the same update arrives via both MQTT and HTTP. Key: `(MessageType, GrowDirectorUid, Timestamp)`.
 
@@ -115,7 +111,6 @@ Hardware POSTs these as alternatives to MQTT push topics.
 | Periodic hardware updates & connectivity | [02-hardware-update.md](./02-hardware-update.md) | Sensor/device updates, offline detection, offline history |
 | Rules (sensor/schedule automations) | [03-rules.md](./03-rules.md) | Rule lifecycle: create → download → eval on hardware → state |
 | Manual device commands | [../../architecture-ru/manual-device-command-flow.md](../../architecture-ru/manual-device-command-flow.md) _(ru)_ | User-initiated on/off commands |
-| Workflow system | [../workflow-system.md](../workflow-system.md) | Graph-based automation executed on hardware |
 | Diagnostics & module commands | [04-diagnostics.md](./04-diagnostics.md) | Reboot, firmware update, diagnostic reporting |
 
 ---
