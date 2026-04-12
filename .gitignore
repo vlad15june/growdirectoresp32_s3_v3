@@ -1,6 +1,4 @@
 .idea/
-CLAUDE.md
-docs/
 .platformio/
 .pio_temp_core/
 *.log
@@ -14,6 +12,7 @@ docs/
 /led_use_cases_test_debug.log
 /button_use_cases_test_debug.log
 /.DS_Store
+/.specs-repo.local
 
 .fake
 /.vscode
