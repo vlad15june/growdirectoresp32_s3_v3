@@ -20,4 +20,5 @@ firmware.bin
 tickets/.DS_Store
 tickets/Description/2591/.DS_Store
 .venv/
-src/test_scripts/module_logs_*.txt
+test_scripts/module_logs_*.txt
+tickets/Description/.DS_Store
