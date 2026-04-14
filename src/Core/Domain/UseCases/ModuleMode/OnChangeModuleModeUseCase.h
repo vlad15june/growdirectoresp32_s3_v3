@@ -46,8 +46,15 @@ public:
             {
             case CONFIGURED_NEED_RESTART:
                 log("OnChangeModuleModeUseCase: NEED_RESTART detected - immediate restart without saving mode");
-                _moduleConfig.getSettings()->setBootType(BOOT_TYPE_USER);
-                log("OnChangeModuleModeUseCase: Set boot type to USER");
+                if (_moduleConfig.getSettings()->getBootType() != BOOT_TYPE_TECHNICAL)
+                {
+                    _moduleConfig.getSettings()->setBootType(BOOT_TYPE_USER);
+                    log("OnChangeModuleModeUseCase: Set boot type to USER");
+                }
+                else
+                {
+                    log("OnChangeModuleModeUseCase: Keeping boot type TECHNICAL (set by diagnostic)");
+                }
                 _arduinoAdapter.delay(100);
                 restart();
                 break;

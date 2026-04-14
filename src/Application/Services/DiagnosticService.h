@@ -314,6 +314,7 @@ public:
         if (_mqttManager != nullptr)
         {
             _mqttConnected = _mqttManager->isConnected();
+            _mqttWasConnected = _mqttConnected;
         }
     }
 
