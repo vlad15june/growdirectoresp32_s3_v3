@@ -1507,6 +1507,42 @@ static void test_configure_done_mode_configure_do_not_sets_up_mqtt_topic_handler
     if (debug_file != nullptr) fprintf(debug_file, "Finished test_configure_done_mode_configure_do_not_sets_up_mqtt_topic_handlers_on_unsuccessful_connection\n");
 }
 
+static void test_handle_module_mode_sets_no_scan_sensors_flag_when_button_pressed() {
+    module_setup_service_setup();
+
+    // Button is pressed at startup
+    g_mockButtonUseCases.checkButtonResult = true;
+    g_mockButtonUseCases.buttonPressedResult = true;
+
+    g_mockSettings.setConfigured(ModuleModeEnum::CONFIGURED_DONE);
+    g_mockSettings.setNoScanSensors(0);
+
+    ModuleSetupServiceTestHelper::callHandleModuleMode(g_moduleSetupService);
+
+    // noScanSensors must be set
+    TEST_ASSERT_EQUAL(1, g_mockSettings.getNoScanSensors());
+
+    module_setup_service_teardown();
+}
+
+static void test_handle_module_mode_does_not_set_no_scan_sensors_flag_when_button_not_pressed() {
+    module_setup_service_setup();
+
+    // Button is NOT pressed
+    g_mockButtonUseCases.checkButtonResult = false;
+    g_mockButtonUseCases.buttonPressedResult = false;
+
+    g_mockSettings.setConfigured(ModuleModeEnum::CONFIGURED_DONE);
+    g_mockSettings.setNoScanSensors(0);
+
+    ModuleSetupServiceTestHelper::callHandleModuleMode(g_moduleSetupService);
+
+    // noScanSensors must remain 0
+    TEST_ASSERT_EQUAL(0, g_mockSettings.getNoScanSensors());
+
+    module_setup_service_teardown();
+}
+
 // Main test runner function
 extern "C" int run_module_setup_service_tests(void) {
     if (debug_file != nullptr) fprintf(debug_file, "\n----- Running ModuleSetupService Tests -----\n");
@@ -1560,7 +1596,11 @@ extern "C" int run_module_setup_service_tests(void) {
     RUN_TEST(test_configure_done_mode_configure_handles_device_service_init_failure);
     RUN_TEST(test_configure_done_mode_configure_handles_null_device_service);
     RUN_TEST(test_device_service_not_initialized_in_other_modes);
-    
+
+    // Button pressed -> noScanSensors flag tests
+    RUN_TEST(test_handle_module_mode_sets_no_scan_sensors_flag_when_button_pressed);
+    RUN_TEST(test_handle_module_mode_does_not_set_no_scan_sensors_flag_when_button_not_pressed);
+
     if (debug_file != nullptr) fprintf(debug_file, "\n----- ModuleSetupService Tests Complete -----\n");
     
     return 0;

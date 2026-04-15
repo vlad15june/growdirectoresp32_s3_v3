@@ -335,6 +335,12 @@ inline void ModuleSetupService::handleModuleMode()
 
     buttonUseCases->checkButtonPressedWhenOn();
 
+    if (buttonUseCases->isButtonPressedWhenOn() && settings)
+    {
+        settings->setNoScanSensors(1);
+        log("SETUP: Button pressed at startup, noScanSensors flag set");
+    }
+
     moduleConfig->setRequestedModuleMode(static_cast<ModuleModeEnum>(isConfigured));
     moduleConfig->setCurrentModuleMode(static_cast<ModuleModeEnum>(isConfigured));
     log("SETUP: Requested module mode set to: %d", isConfigured);
