@@ -1,5 +1,13 @@
 # Release Notes
 
+## Version 2.1.36 (2026-04-15)
+
+### Added
+- **Skip Sensor Scan After Factory Reset**: After a factory reset, the module now skips sensor scanning on the first boot following reconfiguration. On the second boot, the full sensor scan is performed automatically. This prevents incorrect scan results that can occur when the module has not yet fully settled after a reset.
+- **Skip Sensor Scan When Button Held at Startup**: When the module's physical button is held during power-on, sensor scanning is skipped for that boot, allowing the module to start without altering the existing sensor configuration.
+
+---
+
 ## Version 2.1.35 (2026-04-02)
 
 ### Changed
