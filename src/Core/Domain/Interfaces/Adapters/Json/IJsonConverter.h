@@ -3,6 +3,7 @@
 
 #include <string>
 #include <vector>
+#include "Core/Domain/Data/Entities/WifiNetworkEntry.h"
 #include "Core/Domain/Data/Models/ModuleStructure.h"
 #include "Application/DTOs/DiagnosticDto.h"
 #include "Core/Domain/Data/Entities/Rule.h"
@@ -61,6 +62,8 @@ public:
     virtual std::string i2cRegisterConfigToJson(const I2CRegisterConfig &config) = 0;
     virtual bool i2cRegisterConfigsFromJson(const std::string &jsonStr, std::vector<I2CRegisterConfig> &configs) = 0;
     virtual std::string i2cRegisterConfigsToJson(const std::vector<I2CRegisterConfig> &configs) = 0;
+    virtual bool wifiNetworksFromJson(const std::string &jsonStr, std::vector<WifiNetworkEntry> &networks) = 0;
+    virtual std::string wifiNetworksToJson(const std::vector<WifiNetworkEntry> &networks) = 0;
     virtual ~IJsonConverter() = default;
 };
 

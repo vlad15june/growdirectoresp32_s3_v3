@@ -147,8 +147,6 @@ MqttManager mqttManager(
     &topicHandlerFactory,
     &wifiAdapter);  // Pass WiFi adapter
 
-WiFiManager wifiManager(&wifiAdapter, &settings, &mqttLogger, &debugSystem);
-
 // Using default NTP server with UTC offset of 0 and daylight offset of 0
 NTPTimeAdapter ntpTimeAdapter(&mqttLogger, &debugSystem, &settings);
 
@@ -168,6 +166,8 @@ DeviceCommandExecutionUseCase deviceCommandExecutionUseCase(
 FirmwareRemoteUpdate firmwareRemoteUpdate(&mqttLogger, &debugSystem, &settings);
 
 SpiffsAdapter spiffsAdapter(&mqttLogger, &debugSystem);
+
+WiFiManager wifiManager(&wifiAdapter, &settings, &mqttLogger, &debugSystem, &spiffsAdapter, &jsonConverter);
 
 SpiffsRuleDao ruleDao(&spiffsAdapter, &jsonConverter, &debugSystem, &mqttLogger);
 RuleRepository ruleRepository(&ruleDao, &ntpTimeAdapter, &debugSystem, &mqttLogger);
@@ -257,7 +257,7 @@ WebServerLauncher webServerLauncher(
 
 SensorValueModel sensorValueModel;
 
-ModuleCommandExecutionUseCase moduleCommandExecutionUseCase(&mqttLogger, &debugSystem, &ntpTimeAdapter, &firmwareRemoteUpdate, &arduinoAdapter, &sensorRepository, &sensorTypeRepository, &sensorReader, &moduleConfig, &settings, &hybridApiService, &clearModuleDataService, &moduleStructure, &sensorValueModel);
+ModuleCommandExecutionUseCase moduleCommandExecutionUseCase(&mqttLogger, &debugSystem, &ntpTimeAdapter, &firmwareRemoteUpdate, &arduinoAdapter, &sensorRepository, &sensorTypeRepository, &sensorReader, &moduleConfig, &settings, &hybridApiService, &clearModuleDataService, &moduleStructure, &sensorValueModel, &wifiManager);
 
 CommandService commandService(
     &deviceCommandExecutionUseCase,

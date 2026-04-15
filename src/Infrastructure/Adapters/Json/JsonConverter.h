@@ -2,6 +2,7 @@
 #define JSON_CONVERTER_H
 
 #include "Core/Domain/Interfaces/Adapters/Json/IJsonConverter.h"
+#include "Core/Domain/Data/Entities/WifiNetworkEntry.h"
 #include "Core/Domain/Data/Models/ModuleStructure.h"
 #include "Application/DTOs/DiagnosticDto.h"
 #include "Application/DTOs/UpdateDto.h"
@@ -1877,6 +1878,36 @@ private:
         {
             oss << sensorTypeToJson(sensorTypes[i]);
             if (i + 1 < sensorTypes.size())
+                oss << ",";
+        }
+        oss << "]";
+        return oss.str();
+    }
+
+    bool wifiNetworksFromJson(const std::string &jsonStr, std::vector<WifiNetworkEntry> &networks) override
+    {
+        networks.clear();
+        if (jsonStr.empty())
+            return false;
+        auto objects = splitObjects(jsonStr);
+        for (const auto &obj : objects)
+        {
+            std::string ssid = extractValue(obj, "ssid");
+            std::string password = extractValue(obj, "password");
+            if (!ssid.empty() && !password.empty())
+                networks.push_back({ssid, password});
+        }
+        return !networks.empty();
+    }
+
+    std::string wifiNetworksToJson(const std::vector<WifiNetworkEntry> &networks) override
+    {
+        std::ostringstream oss;
+        oss << "[";
+        for (size_t i = 0; i < networks.size(); ++i)
+        {
+            oss << "{\"ssid\":\"" << networks[i].ssid << "\",\"password\":\"" << networks[i].password << "\"}";
+            if (i + 1 < networks.size())
                 oss << ",";
         }
         oss << "]";

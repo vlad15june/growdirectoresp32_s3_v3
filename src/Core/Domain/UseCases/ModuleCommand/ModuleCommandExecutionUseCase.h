@@ -10,12 +10,17 @@
 #include "Core/Domain/Interfaces/Adapters/Sensors/ISensorReader.h"
 #include "Core/Domain/Interfaces/API/IHybridAPIService.h"
 #include "Core/Domain/Interfaces/IClearModuleDataService.h"
+#include "Core/Domain/Interfaces/IModuleConfig.h"
+#include "Core/Domain/Interfaces/ISettings.h"
+#include "Core/Domain/Interfaces/IWifiManager.h"
 #include "Core/Domain/Data/Entities/Sensor/Sensor.h"
 #include "Core/Domain/Data/Models/ModuleStructure.h"
 #include "Core/Domain/Data/Models/ISensorValueModel.h"
 #include "Core/Domain/Enums/ModuleCommandEnum.h"
 #include "Core/Domain/Enums/ModuleCommandStatus.h"
 #include "Core/Domain/Enums/SensorStatusEnum.h"
+#include "Core/Domain/Enums/BootTypeEnum.h"
+#include "Core/Domain/Enums/ModuleModeEnum.h"
 #include "Infrastructure/Adapters/Time/INTPTimeAdapter.h" //TODO: move to Core/Domain/Interfaces/Adapters/Time/INTPTimeAdapter.h
 #include "constants.h"
 #include <string>
@@ -40,11 +45,12 @@ private:
     IClearModuleDataService *clearModuleDataService;
     ModuleStructure *moduleStructure;
     ISensorValueModel *sensorValueModel;
+    IWifiManager *wifiManager;
     static const unsigned long commandMaxAgeSeconds = 300;
 
 public:
-    ModuleCommandExecutionUseCase(ILogger *logger = nullptr, IDebugSystem *debugSystem = nullptr, INTPTimeAdapter *timeAdapter = nullptr, IFirmwareRemoteUpdate *firmwareUpdater = nullptr, IArduinoAdapter *arduinoAdapter = nullptr, ISensorRepository *sensorRepository = nullptr, ISensorTypeRepository *sensorTypeRepository = nullptr, ISensorReader *sensorReader = nullptr, IModuleConfig *moduleConfig = nullptr, ISettings *settings = nullptr, IHybridAPIService *hybridApiService = nullptr, IClearModuleDataService *clearModuleDataService = nullptr, ModuleStructure *moduleStructure = nullptr, ISensorValueModel *sensorValueModel = nullptr)
-        : logger(logger), debugSystem(debugSystem), timeAdapter(timeAdapter), firmwareUpdater(firmwareUpdater), arduinoAdapter(arduinoAdapter), sensorRepository(sensorRepository), sensorTypeRepository(sensorTypeRepository), sensorReader(sensorReader), moduleConfig(moduleConfig), settings(settings), hybridApiService(hybridApiService), clearModuleDataService(clearModuleDataService), moduleStructure(moduleStructure), sensorValueModel(sensorValueModel) {}
+    ModuleCommandExecutionUseCase(ILogger *logger = nullptr, IDebugSystem *debugSystem = nullptr, INTPTimeAdapter *timeAdapter = nullptr, IFirmwareRemoteUpdate *firmwareUpdater = nullptr, IArduinoAdapter *arduinoAdapter = nullptr, ISensorRepository *sensorRepository = nullptr, ISensorTypeRepository *sensorTypeRepository = nullptr, ISensorReader *sensorReader = nullptr, IModuleConfig *moduleConfig = nullptr, ISettings *settings = nullptr, IHybridAPIService *hybridApiService = nullptr, IClearModuleDataService *clearModuleDataService = nullptr, ModuleStructure *moduleStructure = nullptr, ISensorValueModel *sensorValueModel = nullptr, IWifiManager *wifiManager = nullptr)
+        : logger(logger), debugSystem(debugSystem), timeAdapter(timeAdapter), firmwareUpdater(firmwareUpdater), arduinoAdapter(arduinoAdapter), sensorRepository(sensorRepository), sensorTypeRepository(sensorTypeRepository), sensorReader(sensorReader), moduleConfig(moduleConfig), settings(settings), hybridApiService(hybridApiService), clearModuleDataService(clearModuleDataService), moduleStructure(moduleStructure), sensorValueModel(sensorValueModel), wifiManager(wifiManager) {}
     
     virtual ~ModuleCommandExecutionUseCase() = default;
 
@@ -258,10 +264,27 @@ private:
         log(DebugFeatures::MODULE_COMMAND_DEBUG,
             "ModuleCommandUseCase: Adding WiFi - SSID: %s", ssid.c_str());
 
-        // TODO: Implement addWifiToFile functionality
-        // addWifiToFile(ssid, password);
-        
-        return {ModuleCommandStatus::DONE, ""};
+        if (!wifiManager)
+        {
+            log(DebugFeatures::MODULE_COMMAND_DEBUG,
+                "ModuleCommandUseCase: WiFi manager not available");
+            return {ModuleCommandStatus::ERROR, "WiFi manager not available"};
+        }
+
+        bool result = wifiManager->addWifiNetwork(ssid.c_str(), password.c_str());
+
+        if (result)
+        {
+            log(DebugFeatures::MODULE_COMMAND_DEBUG,
+                "ModuleCommandUseCase: WiFi network added successfully - SSID: %s", ssid.c_str());
+            return {ModuleCommandStatus::DONE, ""};
+        }
+        else
+        {
+            log(DebugFeatures::MODULE_COMMAND_DEBUG,
+                "ModuleCommandUseCase: Failed to add WiFi network - SSID: %s", ssid.c_str());
+            return {ModuleCommandStatus::ERROR, "Failed to add WiFi network"};
+        }
     }
 
     /**

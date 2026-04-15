@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Core/Domain/Interfaces/Adapters/Json/IJsonConverter.h"
+#include "Core/Domain/Data/Entities/WifiNetworkEntry.h"
 #include "Application/DTOs/UpdateDto.h"
 #include "Application/DTOs/CommandDto.h"
 #include "Application/DTOs/CommandResultDto.h"
@@ -2145,5 +2146,42 @@ public:
         }
 
         return !commands.empty();
+    }
+
+    bool wifiNetworksFromJson(const std::string &jsonStr, std::vector<WifiNetworkEntry> &networks) override
+    {
+        networks.clear();
+        if (jsonStr.empty())
+            return false;
+        DynamicJsonDocument doc(4096);
+        DeserializationError error = deserializeJson(doc, jsonStr);
+        if (error)
+            return false;
+        if (!doc.is<JsonArray>())
+            return false;
+        for (JsonObject netObj : doc.as<JsonArray>())
+        {
+            WifiNetworkEntry entry;
+            entry.ssid = netObj["ssid"] | "";
+            entry.password = netObj["password"] | "";
+            if (!entry.ssid.empty() && !entry.password.empty())
+                networks.push_back(entry);
+        }
+        return !networks.empty();
+    }
+
+    std::string wifiNetworksToJson(const std::vector<WifiNetworkEntry> &networks) override
+    {
+        DynamicJsonDocument doc(4096);
+        JsonArray arr = doc.to<JsonArray>();
+        for (const auto &entry : networks)
+        {
+            JsonObject obj = arr.createNestedObject();
+            obj["ssid"] = entry.ssid;
+            obj["password"] = entry.password;
+        }
+        std::string output;
+        serializeJson(doc, output);
+        return output;
     }
 };
