@@ -136,6 +136,19 @@ bool WiFiManager::setupWifiConnection() {
 }
 
 bool WiFiManager::addWifiNetwork(const char* ssid, const char* password) {
+    // Before overwriting settings, ensure the existing EEPROM credentials are persisted to file
+    if (_settings)
+    {
+        char oldSsid[BUFSIZE] = {0};
+        char oldPassword[BUFSIZE] = {0};
+        _settings->getSsid(oldSsid);
+        _settings->getPassword(oldPassword);
+        if (oldSsid[0] != '\0')
+        {
+            saveNetworkToFile(oldSsid, oldPassword);
+            log("SETUP: Preserved existing EEPROM network to file: %s", oldSsid);
+        }
+    }
     _settings->setSsid(ssid);
     _settings->setPassword(password);
     saveNetworkToFile(ssid, password);

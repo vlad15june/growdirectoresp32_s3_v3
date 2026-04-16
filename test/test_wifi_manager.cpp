@@ -132,6 +132,24 @@ void test_setup_falls_back_to_eeprom_when_file_empty(void) {
     tearDown_wifi_manager();
 }
 
+// addWifiNetwork() preserves existing EEPROM credentials in the file before overwriting them
+void test_add_wifi_preserves_existing_eeprom_credentials(void) {
+    setUp_wifi_manager();
+
+    // MockSettings defaults: ssid="MockSSID", password="MockPassword" — not yet in file
+    wifiManager->addWifiNetwork("NewSSID", "NewPass");
+
+    std::string content = mockSpiffs->readSPIFFSstr("/wifiNetworks.json");
+    // Old EEPROM credentials must be saved to file before being overwritten
+    TEST_ASSERT_TRUE(content.find("MockSSID") != std::string::npos);
+    TEST_ASSERT_TRUE(content.find("MockPassword") != std::string::npos);
+    // New credentials must also be present
+    TEST_ASSERT_TRUE(content.find("NewSSID") != std::string::npos);
+    TEST_ASSERT_TRUE(content.find("NewPass") != std::string::npos);
+
+    tearDown_wifi_manager();
+}
+
 extern "C" int run_wifi_manager_tests(void) {
     RUN_TEST(test_add_wifi_saves_to_file);
     RUN_TEST(test_add_wifi_deduplicates_by_ssid);
@@ -139,5 +157,6 @@ extern "C" int run_wifi_manager_tests(void) {
     RUN_TEST(test_add_wifi_registers_with_adapter);
     RUN_TEST(test_setup_loads_from_file);
     RUN_TEST(test_setup_falls_back_to_eeprom_when_file_empty);
+    RUN_TEST(test_add_wifi_preserves_existing_eeprom_credentials);
     return 0;
 }
