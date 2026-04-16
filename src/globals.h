@@ -228,7 +228,7 @@ OnChangeModuleModeUseCase moduleModeUseCase(
 
 LedUseCases ledUseCases(&ledAdapter, &moduleConfig, &arduinoAdapter, &mqttLogger, &debugSystem, &deviceModel);
 
-ButtonUseCases buttonUseCases(&buttonAdapter, &mqttLogger, &debugSystem, 0, &settings, &moduleConfig, &clearModuleDataService);
+ButtonUseCases buttonUseCases(&buttonAdapter, &mqttLogger, &debugSystem, 0, &settings, &moduleConfig, &clearModuleDataService, &arduinoAdapter);
 
 ModuleConfigurationWebServer moduleConfigurationWebServer(
     webServer,

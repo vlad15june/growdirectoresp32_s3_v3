@@ -22,3 +22,4 @@ tickets/Description/2591/.DS_Store
 .venv/
 test_scripts/module_logs_*.txt
 tickets/Description/.DS_Store
+test_scripts/.DS_Store

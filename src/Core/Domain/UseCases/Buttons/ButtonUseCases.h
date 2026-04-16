@@ -9,6 +9,7 @@
 #include "Core/Domain/Interfaces/IModuleConfig.h"
 #include "Core/Domain/Enums/ModuleModeEnum.h"
 #include "Core/Domain/Interfaces/IClearModuleDataService.h"
+#include "Core/Domain/Interfaces/Adapters/IArduinoAdapter.h"
 #include <cstdarg>
 #include <cstdio>
 
@@ -20,6 +21,7 @@ private:
     ISettings *settings;
     IModuleConfig* moduleConfig;
     IClearModuleDataService* clearModuleDataService;
+    IArduinoAdapter* arduinoAdapter;
     const uint8_t buttonIndex;
     bool isSystemOn;
     bool buttonPressedState;
@@ -47,10 +49,12 @@ public:
     ButtonUseCases(IButtonAdapter* adapter, ILogger* loggerInstance = nullptr, 
                   IDebugSystem* debugSystemInstance = nullptr, uint8_t index = 0,
                   ISettings* settingsInstance = nullptr, IModuleConfig* moduleConfigInstance = nullptr,
-                  IClearModuleDataService* clearModuleDataServiceInstance = nullptr)
+                  IClearModuleDataService* clearModuleDataServiceInstance = nullptr,
+                  IArduinoAdapter* arduinoAdapterInstance = nullptr)
         : buttonAdapter(adapter), logger(loggerInstance), debugSystem(debugSystemInstance), 
           settings(settingsInstance), moduleConfig(moduleConfigInstance), 
-          clearModuleDataService(clearModuleDataServiceInstance), buttonIndex(index), isSystemOn(false), 
+          clearModuleDataService(clearModuleDataServiceInstance), arduinoAdapter(arduinoAdapterInstance),
+          buttonIndex(index), isSystemOn(false), 
           buttonPressedState(false), buttonWasPressedBeforeReboot(false), lastPressTime(0) {
         if (settings != nullptr) {
             buttonWasPressedBeforeReboot = settings->getButtonPressedBeforeReboot() != 0;
@@ -166,6 +170,9 @@ public:
                 log("Module data cleared");
             }
             moduleConfig->setRequestedModuleMode(ModuleModeEnum::USER_CAN_CONFIGURE);
+            if (arduinoAdapter) {
+                arduinoAdapter->restart();
+            }
         }
         else if (isAddModeRequested()) {
             log("Add mode requested - switching to USER_CAN_RE_CONFIGURE mode");
