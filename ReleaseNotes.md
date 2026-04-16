@@ -1,5 +1,12 @@
 # Release Notes
 
+## Version 2.1.37 (2026-04-16)
+
+### Changed
+- **Automatic Restart After Factory Reset via Button**: When a factory reset is triggered by holding the physical button, the device now automatically restarts after clearing all module data. Previously, the device required a manual power cycle to apply the reset.
+
+---
+
 ## Version 2.1.36 (2026-04-15)
 
 ### Added
