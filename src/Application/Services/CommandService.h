@@ -370,7 +370,8 @@ private:
                command == ModuleCommandEnum::PING_PIN ||
                command == ModuleCommandEnum::SET_SENSOR_MODEL ||
                command == ModuleCommandEnum::SCAN_SENSORS ||
-               command == ModuleCommandEnum::DELETE_SENSORS;
+               command == ModuleCommandEnum::DELETE_SENSORS ||
+               command == ModuleCommandEnum::ADD_WIFI;
     }
 
     std::vector<ModuleCommandDto> validateAndFilterModuleCommands(

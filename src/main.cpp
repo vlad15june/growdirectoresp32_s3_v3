@@ -303,6 +303,7 @@ void setup()
   // spiffsAdapter.RemoveFile("/data/sensorTypes.json");
   // spiffsAdapter.RemoveFile("/data/sensors.json");
   // spiffsAdapter.RemoveFile("/sensors/sensors.json");
+  // spiffsAdapter.RemoveFile("/wifiNetworks.json");
 
   // Create and store test sensor types
   // createTestSensorTypes();

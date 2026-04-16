@@ -73,7 +73,6 @@ public:
                 return handleBlinkingStop("", options);
             case ModuleCommandEnum::REBOOT:
             {
-                // Create a ModuleCommandDto for reboot with options
                 ModuleCommandDto moduleCommand;
                 moduleCommand.command = command;
                 moduleCommand.options = options;
