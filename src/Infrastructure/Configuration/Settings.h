@@ -44,6 +44,7 @@ private:
     static const int EEPROM_NO_SCAN_SENSORS = 552;
     static const int EEPROM_WAS_SENSOR_SCAN_PERFORMED = 554;
     static const int EEPROM_WAS_INITIAL_SYNC_COMPLETED = 556;
+    static const int EEPROM_NEED_CLEAR_SPIFFS = 558;
 
     void log(const char *format, ...)
     {
@@ -382,6 +383,18 @@ public:
     {
         log("SETTINGS: wasInitialSyncCompleted = %d", wasCompleted);
         _eeprom.writeByte(EEPROM_WAS_INITIAL_SYNC_COMPLETED, wasCompleted);
+        _eeprom.commit();
+    }
+
+    uint8_t getNeedClearSpiffs() override
+    {
+        return _eeprom.readByte(EEPROM_NEED_CLEAR_SPIFFS);
+    }
+
+    void setNeedClearSpiffs(uint8_t needClear) override
+    {
+        log("SETTINGS: needClearSpiffs = %d", needClear);
+        _eeprom.writeByte(EEPROM_NEED_CLEAR_SPIFFS, needClear);
         _eeprom.commit();
     }
 };

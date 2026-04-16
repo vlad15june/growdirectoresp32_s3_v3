@@ -32,6 +32,7 @@ private:
         _byteValues["noScanSensors"] = 0;
         _byteValues["wasSensorScanPerformed"] = 0;
         _byteValues["wasInitialSyncCompleted"] = 0;
+        _byteValues["needClearSpiffs"] = 0;
 
         // Set default sensor types
         for (int i = 0; i < 4; i++)
@@ -330,6 +331,16 @@ public:
     void setWasInitialSyncCompleted(uint8_t wasCompleted) override
     {
         _byteValues["wasInitialSyncCompleted"] = wasCompleted;
+    }
+
+    uint8_t getNeedClearSpiffs() override
+    {
+        return _byteValues["needClearSpiffs"];
+    }
+
+    void setNeedClearSpiffs(uint8_t needClear) override
+    {
+        _byteValues["needClearSpiffs"] = needClear;
     }
 
     // Reset method to reset all values to defaults

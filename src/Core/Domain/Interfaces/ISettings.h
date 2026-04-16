@@ -6,6 +6,9 @@
 // Buffer size for string operations
 #define BUFSIZE 40
 
+// Sentinel byte written to EEPROM to request SPIFFS files removal on next boot
+#define NEED_CLEAR_SPIFFS_MARKER 0xA5
+
 // Sensor type constants
 #define NOT_CONNECTED 0
 
@@ -85,6 +88,10 @@ public:
     // Initial sync completed flag methods
     virtual uint8_t getWasInitialSyncCompleted() = 0;
     virtual void setWasInitialSyncCompleted(uint8_t wasCompleted) = 0;
+
+    // Pending SPIFFS clear flag (set by clearAllData, consumed on next boot)
+    virtual uint8_t getNeedClearSpiffs() = 0;
+    virtual void setNeedClearSpiffs(uint8_t needClear) = 0;
 };
 
 // Default implementation of destructor

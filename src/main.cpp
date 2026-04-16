@@ -305,6 +305,16 @@ void setup()
   // spiffsAdapter.RemoveFile("/sensors/sensors.json");
   // spiffsAdapter.RemoveFile("/wifiNetworks.json");
 
+  if (settings.getNeedClearSpiffs() == NEED_CLEAR_SPIFFS_MARKER) {
+    Serial.println("needClearSpiffs flag set — removing SPIFFS files");
+    spiffsAdapter.RemoveFile("/data/sensorTypes.json");
+    spiffsAdapter.RemoveFile("/data/sensors.json");
+    spiffsAdapter.RemoveFile("/sensors/sensors.json");
+    spiffsAdapter.RemoveFile("/wifiNetworks.json");
+    settings.setNeedClearSpiffs(0);
+    Serial.println("SPIFFS files removed, needClearSpiffs flag cleared");
+  }
+
   // Create and store test sensor types
   // createTestSensorTypes();
 

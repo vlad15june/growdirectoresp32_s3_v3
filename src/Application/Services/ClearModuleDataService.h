@@ -119,6 +119,9 @@ public:
         if (settings != nullptr) {
             settings->setConfigured(ModuleModeEnum::USER_CAN_CONFIGURE);
             log("Reset module mode to USER_CAN_CONFIGURE (42)");
+
+            settings->setNeedClearSpiffs(NEED_CLEAR_SPIFFS_MARKER);
+            log("Set needClearSpiffs flag: SPIFFS files will be deleted on next boot");
         } else {
             log("WARNING: settings is null, cannot reset module mode");
         }

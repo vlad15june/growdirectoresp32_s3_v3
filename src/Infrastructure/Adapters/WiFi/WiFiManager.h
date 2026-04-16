@@ -56,9 +56,11 @@ private:
             return 0;
         std::vector<WifiNetworkEntry> networks;
         _jsonConverter->wifiNetworksFromJson(content, networks);
-        for (const auto& entry : networks)
+        log("SETUP: Networks in file: %d", static_cast<int>(networks.size()));
+        for (int i = 0; i < static_cast<int>(networks.size()); i++)
         {
-            _wifiAdapter->addNetwork(entry.ssid.c_str(), entry.password.c_str());
+            log("SETUP:   [%d] SSID: %s", i, networks[i].ssid.c_str());
+            _wifiAdapter->addNetwork(networks[i].ssid.c_str(), networks[i].password.c_str());
         }
         return static_cast<int>(networks.size());
     }
