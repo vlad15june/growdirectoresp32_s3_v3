@@ -1,5 +1,16 @@
 # Release Notes
 
+## Version 2.1.38 (2026-04-16)
+
+### Added
+- **Remote Wi-Fi Network Management**: The server can now send an "Add Wi-Fi" command to register a new Wi-Fi network on the device. The new credentials are saved persistently and the device will try to connect to any of the stored networks on the next boot. Previously configured networks are preserved and not overwritten.
+- **Multi-Network Wi-Fi Support**: The device now maintains a list of known Wi-Fi networks and automatically connects to whichever one is available, instead of only ever connecting to a single hardcoded network.
+
+### Changed
+- **SPIFFS Storage Cleanup on Factory Reset**: When a factory reset is performed (via server command or physical button), all locally stored data files — including sensor configurations and saved Wi-Fi network lists — are now fully removed on the next boot. Previously, only the configuration stored in internal memory was cleared, leaving behind residual data files.
+
+---
+
 ## Version 2.1.37 (2026-04-16)
 
 ### Changed
