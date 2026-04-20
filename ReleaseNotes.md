@@ -1,5 +1,12 @@
 # Release Notes
 
+## Version 2.1.39 (2026-04-20)
+
+### Changed
+- **Modbus Address Assignment Retry Logic**: When assigning a new address to a Modbus sensor, the device now makes up to three attempts using the primary method before falling back to an alternative broadcast approach. This improves the reliability of address assignment for sensors that may not respond immediately on the first or second try.
+
+---
+
 ## Version 2.1.38 (2026-04-16)
 
 ### Added
