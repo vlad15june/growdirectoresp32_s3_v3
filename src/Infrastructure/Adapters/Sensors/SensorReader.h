@@ -319,7 +319,7 @@ private:
 
         if (stateChanged && _arduino)
         {
-            _arduino->delay(500);
+            _arduino->delay(3000);
         }
 
         if (_modbusReader->pingAddress(sensor.modbusDeviceAddress, sensor.modbusRegisterConfigs[0], portIndex) == false)

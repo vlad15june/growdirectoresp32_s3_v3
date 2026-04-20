@@ -184,11 +184,25 @@ public:
 
         IModbusRS485* modbus = _modbusPorts[portIndex];
 
-        powerOffAllPorts();
-        _arduino.delay(500);
+        bool targetJustTurnedOn = modbus->powerOnPort();
 
-        modbus->powerOnPort();
-        _arduino.delay(1000);
+        for (int i = 0; i < (int)_modbusPorts.size(); i++)
+        {
+            if (i != portIndex)
+            {
+                _modbusPorts[i]->powerOffPort();
+            }
+        }
+
+        if (targetJustTurnedOn)
+        {
+            log("ModbusSensorReader: Target port %d was off, warmup 5s", portIndex);
+            _arduino.delay(5000);
+        }
+        else
+        {
+            log("ModbusSensorReader: Target port %d was already on, skipping warmup delay", portIndex);
+        }
 
         bool success = false;
 
