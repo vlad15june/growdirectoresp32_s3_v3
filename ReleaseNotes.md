@@ -1,5 +1,13 @@
 # Release Notes
 
+## Version 2.1.41 (2026-04-20)
+
+### Changed
+- **Modbus Sensor Power-Up Timing**: When assigning an address to a Modbus sensor, the device now powers on only the target sensor port while powering off all others, instead of shutting everything down first. The warmup waiting period is now dynamic: if the port was already on, no waiting time is added; if the port was just turned on, the device waits 5 seconds for the hardware to stabilize before proceeding. This reduces unnecessary delays and improves the reliability of address assignment.
+- **Sensor Detection Delay After Port Power Change**: When a sensor port changes its power state during a scan, the device now waits 3 seconds before attempting to detect the sensor, instead of the previous 0.5 seconds. This gives hardware more time to stabilize and reduces false "sensor not found" results.
+
+---
+
 ## Version 2.1.39 (2026-04-20)
 
 ### Changed
