@@ -23,6 +23,7 @@
 #include "Core/Domain/Enums/ModuleModeEnum.h"
 #include "Infrastructure/Adapters/Time/INTPTimeAdapter.h" //TODO: move to Core/Domain/Interfaces/Adapters/Time/INTPTimeAdapter.h
 #include "constants.h"
+#include <cstdarg>
 #include <string>
 
 /**
