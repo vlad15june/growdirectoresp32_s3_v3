@@ -190,28 +190,41 @@ public:
         modbus->powerOnPort();
         _arduino.delay(1000);
 
-        bool success = modbus->writeRegister(0x00, 0x0001, (uint16_t)newAddress);
+        bool success = false;
 
-        if (success)
+        for (int attempt = 1; attempt <= 3 && !success; attempt++)
         {
-            log("ModbusSensorReader: Successfully wrote new address %d to device %d on port %d", 
-                newAddress, currentAddress, portIndex);
+            log("ModbusSensorReader: Broadcast FC16 write attempt %d/3 for new address %d on port %d",
+                attempt, newAddress, portIndex);
+
+            success = modbus->writeRegister(0x00, 0x0001, (uint16_t)newAddress);
+
+            if (success)
+            {
+                log("ModbusSensorReader: Successfully wrote new address %d to device %d on port %d (attempt %d/3)",
+                    newAddress, currentAddress, portIndex, attempt);
+            }
+            else if (attempt < 3)
+            {
+                _arduino.delay(500);
+            }
         }
-        else
+
+        if (!success)
         {
-            log("ModbusSensorReader: Failed to write new address %d to device %d on port %d, retrying with FC06 broadcast", 
+            log("ModbusSensorReader: Failed to write new address %d to device %d on port %d after 3 FC16 attempts, retrying with FC06 broadcast",
                 newAddress, currentAddress, portIndex);
 
             success = modbus->writeSingleRegister(0x00, 0x0000, (uint16_t)newAddress);
 
             if (success)
             {
-                log("ModbusSensorReader: Successfully wrote new address %d via FC06 broadcast on port %d", 
+                log("ModbusSensorReader: Successfully wrote new address %d via FC06 broadcast on port %d",
                     newAddress, portIndex);
             }
             else
             {
-                log("ModbusSensorReader: Failed to write new address %d via FC06 broadcast on port %d", 
+                log("ModbusSensorReader: Failed to write new address %d via FC06 broadcast on port %d",
                     newAddress, portIndex);
             }
         }
