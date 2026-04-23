@@ -1,101 +1,151 @@
-# JIG ↔ прошивка — что сломано
+# JIG — правки в прошивке
 
-Сравнение: старая прошивка [old/aptestmode.h](../old/aptestmode.h) + [old/server_communication.h](../old/server_communication.h) vs новая [src/Infrastructure/BoardTesting/BoardTest.h](../src/Infrastructure/BoardTesting/BoardTest.h) + [src/Infrastructure/Controllers/WebServices/TestModeWebServer.h](../src/Infrastructure/Controllers/WebServices/TestModeWebServer.h).
+Конкретные точки изменения. Формат: файл:строка → было / стало.
 
-Тест-сценарий JIG: [hydro_s3_com.test](../../GrowDirector_prog/py/run_test_scripts/hydro_s3_com.test), парсер boot: [board_to_42.py](../../GrowDirector_prog/py/board_to_42/board_to_42.py).
+## Boot
 
-Вывод: **двух строк мало**. Ниже все места, где ответы прошивки не совпадают с тем, что JIG ожидает. Без правок в них тест падает уже через 2-3 шага после boot.
+### [ModuleSetupService.h:322](../src/Application/Services/ModuleSetupService.h#L322)
+```cpp
+log("SETUP: Current configuration status: %d", isConfigured);
+```
+→
+```cpp
+log("SETUP: isConfigured = %d", isConfigured);
+```
 
----
-
-## 1. Boot output (обязательно, иначе не дойдёт до команд)
-
-| Ожидает JIG (подстрока) | Сейчас прошивка | Файл |
-|---|---|---|
-| `SETUP: isConfigured = <N>` | `SETUP: Current configuration status: 166` | [ModuleSetupService.h:322](../src/Application/Services/ModuleSetupService.h#L322) |
-| `SETUP: done` | `SETUP: Module setup completed` + `SETUP: Creating loop service for module mode: 166` | [ModuleSetupService.h:1376](../src/Application/Services/ModuleSetupService.h#L1376) |
-
-Порядок важен: `isConfigured =` должен идти до `SETUP: done`. В строке с `isConfigured =` не должно быть других цифр кроме режима — JIG берёт все digits из строки.
-
----
-
-## 2. Команды UART — несовпадения ответов
-
-Все критичные случаи из `hydro_s3_com.test`. Фрагмент теста `UUT|<cmd>|<type>|<expected>`.
-
-| Команда | Ожидает JIG | Прошивка возвращает | Статус | Где чинить |
-|---|---|---|---|---|
-| `#read_module_type%` | `HYDRO` (type=11, **критический**, exact + не логировать) | `Type:3 SubType:0` | ❌ падает сразу | [BoardTest.h:503-513](../src/Infrastructure/BoardTesting/BoardTest.h#L503) |
-| `#check_fs%` | `done` (exact) | `FileSystem:OK` | ❌ | [BoardTest.h:515-521](../src/Infrastructure/BoardTesting/BoardTest.h#L515) |
-| `#led_g -ch N -v M%` | `{LEDGN=M}` (exact) | `led_g_chN=M` | ❌ | [BoardTest.h:1156-1190](../src/Infrastructure/BoardTesting/BoardTest.h#L1156) |
-| `#led_r -ch N -v M%` | `{LEDRN=M}` (exact) | `led_r_chN=M` | ❌ | там же |
-| `#read_pg_3_3%` | `{3.3V:Ok}` (exact) | `1000` | ❌ stub | [BoardTest.h:960-969](../src/Infrastructure/BoardTesting/BoardTest.h#L960) |
-| `#read_pg_5_0%` | `{5.0V:Ok}` (exact) | `1000` | ❌ stub | [BoardTest.h:971-980](../src/Infrastructure/BoardTesting/BoardTest.h#L971) |
-| `#set_ref_voltage -ch N%` | `TSN=0` (exact) | `TSN=1500` | ❌ залит хардкод 1500 | [BoardTest.h:872-887](../src/Infrastructure/BoardTesting/BoardTest.h#L872) |
-| `#clr_ref_voltage -ch N%` | `TSN=1` (exact) | `TSN=0` | ❌ перепутана семантика | [BoardTest.h:889-904](../src/Infrastructure/BoardTesting/BoardTest.h#L889) |
-| `#read_adc -ch N%` | диапазон `min:max` (e.g. `996:1913`) | `chN=2000` всегда | ❌ hardcoded 2000, реального ADC нет | [BoardTest.h:906-920](../src/Infrastructure/BoardTesting/BoardTest.h#L906) |
-| `#do_orp -v 0%` | `{DO active}` | `{DO active}` | ✅ |   |
-| `#do_orp -v 1%` | `{ORP active}` | `{DO active}` (всегда) | ❌ параметр -v игнорируется | [BoardTest.h:1210-1217](../src/Infrastructure/BoardTesting/BoardTest.h#L1210) |
-| `#set_pump -ch N -v M%` | `chN=M` (exact) | `set_pump_stub` | ❌ stub, пин не дёргается | [BoardTest.h:1201-1208](../src/Infrastructure/BoardTesting/BoardTest.h#L1201) |
-| `#pump_ps_status -ch N%` | `PPSN=0` / `PPSN=1` | `PPSN=<read>` | ⚠ формат OK, но зависит от корректного `moduleConfig->getPumpStatusPins()` и `getPumpPins()` — если пины не привязаны в ModuleConfig для HYDRO, будет `pump_ps_status_error_pins_not_configured` | [BoardTest.h:1464-1498](../src/Infrastructure/BoardTesting/BoardTest.h#L1464) |
-| `#read_mac_address%` | любой ответ (type=0) | MAC | ✅ |   |
-| `#read_version%` | любой ответ | version | ✅ |   |
-| `#init_rtc3028%` | `RTC 3028 online!` | `RTC 3028 online!` | ⚠ stub, не инициализирует реальный RTC — если его нет на плате, тест всё равно «пройдёт» | [BoardTest.h:523-530](../src/Infrastructure/BoardTesting/BoardTest.h#L523) |
-| `#read_rtc3028%` | startsWith `RTC time is` | `RTC time is 2024-01-01 12:00:00` | ⚠ stub, фиксированная дата | [BoardTest.h:532-539](../src/Infrastructure/BoardTesting/BoardTest.h#L532) |
-| `#set_test_button N%` | `Ok` (exact) | `Ok` | ✅ |   |
-| `#get_test_button%` | `pressed` / `not pressed` | то же | ✅ |   |
-| `#set_test_success%` | `ok` (run_test_scripts подменит на "Operation mode") | `ok` + restart | ✅ |   |
+### [ModuleSetupService.h:1376](../src/Application/Services/ModuleSetupService.h#L1376)
+```cpp
+log("SETUP: Module setup completed");
+```
+→
+```cpp
+log("SETUP: Module setup completed");
+log("SETUP: done");
+```
 
 ---
 
-## 3. HTTP endpoint (WiFi-часть теста)
+## UART-команды
 
-JIG шлёт GET на `http://192.168.0.1/read_mac_address` и ждёт `{mac=…`.
+### `#read_module_type%` — [BoardTest.h:503-513](../src/Infrastructure/BoardTesting/BoardTest.h#L503)
+было:
+```cpp
+snprintf(buffer, sizeof(buffer), "Type:%d SubType:%d", moduleType, moduleSubType);
+```
+стало:
+```cpp
+const char* name = "UNKNOWN";
+if (moduleType == MODULE_TYPE_HYDRO)                                   name = "HYDRO";
+else if (moduleType == MODULE_TYPE_SENSOR)                             name = "SENSOR";
+else if (moduleType == MODULE_TYPE_DEVICE && moduleSubType == MODULE_SUBTYPE_RELAY)  name = "RELAY";
+else if (moduleType == MODULE_TYPE_DEVICE && moduleSubType == MODULE_SUBTYPE_SOKET)  name = "SOCKET";
+else if (moduleType == MODULE_TYPE_DEVICE && moduleSubType == MODULE_SUBTYPE_DIMMER) name = "DIMMER";
+arduinoAdapter->serialPrintln(name);
+```
 
-| Endpoint | Ожидает JIG (startsWith) | Прошивка | Статус |
-|---|---|---|---|
-| `/read_mac_address` | `{mac=` | `{mac=<MAC>}` | ✅ [TestModeWebServer.h:269-282](../src/Infrastructure/Controllers/WebServices/TestModeWebServer.h#L269) |
+### `#check_fs%` — [BoardTest.h:515-521](../src/Infrastructure/BoardTesting/BoardTest.h#L515)
+было: `"FileSystem:OK"` → стало: `"done"` (если SPIFFS смонтирован, иначе `"fail"`).
 
-AP поднимается корректно (`HydroDirector__…`, IP 192.168.0.1, pwd 123456789). WiFi-тест должен работать **если** UUT до него доживёт.
+### `#led_g` / `#led_r` — [BoardTest.h:1181](../src/Infrastructure/BoardTesting/BoardTest.h#L1181)
+было:
+```cpp
+snprintf(response, sizeof(response), "%s_ch%d=%d",
+         isRed ? "led_r" : "led_g", channel, arduinoAdapter->digitalRead(pin));
+```
+стало:
+```cpp
+snprintf(response, sizeof(response), "{LED%s%d=%d}",
+         isRed ? "R" : "G", channel, arduinoAdapter->digitalRead(pin));
+```
+
+### `#read_pg_3_3` / `#read_pg_5_0` / `#read_pg_5_5` — [BoardTest.h:960-991](../src/Infrastructure/BoardTesting/BoardTest.h#L960)
+сейчас все три печатают `"1000"`. Нужно реально читать power-good пины и выдавать `{3.3V:Ok}` / `{3.3V:Fail}` (аналогично для 5.0/5.5). Старый код в [old/aptestmode.h:215-240](../old/aptestmode.h#L215) делегировал в `readPowerGood33/50/55(response)` — этих функций в новой прошивке нет, нужно перенести.
+
+### `#set_ref_voltage` / `#clr_ref_voltage` — [BoardTest.h:872-904](../src/Infrastructure/BoardTesting/BoardTest.h#L872)
+сейчас hardcoded `TS<n>=1500` и `TS<n>=0`. Внутри закомментирован рабочий код. Надо:
+1. Раскомментировать его.
+2. Обеспечить `pin_TST_SNS` не `nullptr` (см. раздел "initializePinArrays" ниже).
+
+Ожидания JIG: `set` → `TSN=0`, `clr` → `TSN=1`.
+
+### `#read_adc -ch N%` — [BoardTest.h:906-920](../src/Infrastructure/BoardTesting/BoardTest.h#L906)
+сейчас всегда `chN=2000`. Раскомментировать:
+```cpp
+int value = arduinoAdapter->analogRead(adcPin[channel]);
+snprintf(response, sizeof(response), "ch%d=%d", channel, value);
+```
+и инициализировать `adcPin`.
+
+### `#do_orp -v M%` — [BoardTest.h:1210-1217](../src/Infrastructure/BoardTesting/BoardTest.h#L1210)
+было: всегда `"{DO active}"`. Стало — как в [old/aptestmode.h:442-458](../old/aptestmode.h#L442):
+```cpp
+inline void BoardTest::handleDoOrp(const std::string &cmd)
+{
+    size_t vPos = cmd.find("-v ");
+    if (vPos != std::string::npos) {
+        int v = std::stoi(cmd.substr(vPos + 3));
+        arduinoAdapter->pinMode(DO_ORP, arduinoAdapter->getPinModeOutput());
+        arduinoAdapter->digitalWrite(DO_ORP, v == 1 ? 1 : 0);
+    }
+    int state = arduinoAdapter->digitalRead(DO_ORP);
+    arduinoAdapter->serialPrintln(state == 0 ? "{DO active}" : "{ORP active}");
+}
+```
++ инициализировать `DO_ORP`.
+
+### `#set_pump -ch N -v M%` — [BoardTest.h:1201-1208](../src/Infrastructure/BoardTesting/BoardTest.h#L1201)
+сейчас `"set_pump_stub"`. Стало:
+```cpp
+int ch = extractIntParameter(cmd, "-ch");
+int v  = extractIntParameter(cmd, "-v");
+uint8_t* pumps = moduleConfig->getPumpPins();
+arduinoAdapter->pinMode(pumps[ch], arduinoAdapter->getPinModeOutput());
+arduinoAdapter->digitalWrite(pumps[ch], v == 1 ? 1 : 0);
+char r[16]; snprintf(r, sizeof(r), "ch%d=%d", ch, arduinoAdapter->digitalRead(pumps[ch]));
+arduinoAdapter->serialPrintln(r);
+```
+
+### `#read_pump -ch N%` — [BoardTest.h:1192-1199](../src/Infrastructure/BoardTesting/BoardTest.h#L1192)
+сейчас `"read_pump_stub"`. Аналогично, но только читать.
+
+### `#read_dimmer` / `#on_dimmer` / `#set_dimmer` — [BoardTest.h:1228-1253](../src/Infrastructure/BoardTesting/BoardTest.h#L1228)
+все три stub'ы. Порт логики из [old/aptestmode.h:483-528](../old/aptestmode.h#L483). Нужны пины `DIM_OFF[]`, `V_DIM[]` и `ledcSetup/Write`.
+
+### `#scan_i2c` / `#read_i2c` / `#write_i2c` / `#Tibbit_read_i2c` — [BoardTest.h:922-958](../src/Infrastructure/BoardTesting/BoardTest.h#L922)
+все возвращают stub-строки или формат, не совпадающий со старым (`addr = %d is ok` / `addr = %d is read_i2c_error %d`). `#scan_i2c` возвращает `scan_i2c_stub` вместо списка адресов.
+
+### `#clear_all_file_log` / `#write_diagnostic` / `#read_startup_log` — [BoardTest.h:1069-1094](../src/Infrastructure/BoardTesting/BoardTest.h#L1069)
+все stub'ы. В `hydro_s3_com.test` не используются, но используются в sensor/server-тестах.
 
 ---
 
-## 4. Итоговый список правок (по приоритету)
+## ModuleConfig — отсутствующие методы
 
-### Блокеры (без них тест останавливается на первых шагах)
+`BoardTest.h` использует поля `pin_TST_SNS`, `adcPin`, `DO_ORP`, `EC_SDN`, `DIM_OFF`, `V_DIM`, `PUMP_HYDRO`, `pin_SENSOR_PS`, `buttonPin`. Массивы объявлены в приватных полях `BoardTest`, но никто их не инициализирует — [initializePinArrays](../src/Infrastructure/BoardTesting/BoardTest.h#L800) трогает только `pin` (relay).
 
-1. **`SETUP: isConfigured = %d`** — добавить в [ModuleSetupService.h:322](../src/Application/Services/ModuleSetupService.h#L322).
-2. **`SETUP: done`** — добавить финальной строкой в [ModuleSetupService.h:1376](../src/Application/Services/ModuleSetupService.h#L1376) (после `Module setup completed`).
-3. **`#read_module_type%`** → возвращать `HYDRO` / `SENSOR` / `DIMMER` / `SOCKET` / `RELAY` / `DRY_CONTACT` по `moduleType`/`moduleSubType` ([BoardTest.h:503-513](../src/Infrastructure/BoardTesting/BoardTest.h#L503)). Тест помечен как критический (`type=11`) — при fail вся пачка прекращается.
-4. **`#check_fs%`** → печатать `done` если SPIFFS смонтирован ([BoardTest.h:515-521](../src/Infrastructure/BoardTesting/BoardTest.h#L515)).
-5. **`#led_g` / `#led_r`** → формат `{LEDG<ch>=<v>}` / `{LEDR<ch>=<v>}` ([BoardTest.h:1181](../src/Infrastructure/BoardTesting/BoardTest.h#L1181)).
+В [IModuleConfig.h:40-42](../src/Core/Domain/Interfaces/IModuleConfig.h#L40) есть только `getSensorPowerPins / getPumpPins / getPumpStatusPins`. Нужно добавить в интерфейс и в реализацию [ModuleConfig.h](../src/Infrastructure/Configuration/ModuleConfig.h):
 
-### Функциональные stub'ы (реального hardware-теста не происходит)
+```cpp
+virtual uint8_t* getTestSensorPins() const = 0;   // pin_TST_SNS (4 штуки)
+virtual uint8_t* getAdcPins() const = 0;          // adcPin (4 штуки)
+virtual uint8_t  getDoOrpPin() const = 0;         // DO_ORP
+virtual uint8_t  getEcSdnPin() const = 0;         // EC_SDN
+virtual uint8_t* getDimmerOffPins() const = 0;    // DIM_OFF (2)
+virtual uint8_t* getDimmerVoltagePins() const = 0;// V_DIM (2)
+```
 
-6. **`#read_pg_3_3` / `#read_pg_5_0`** → `{3.3V:Ok}` / `{5.0V:Ok}` при валидном уровне, иначе `{3.3V:Fail}`. Сейчас возвращают `1000`.
-7. **`#set_ref_voltage` / `#clr_ref_voltage`** → реально дёргать `pin_TST_SNS[channel]` и читать его (закомментированный код в `BoardTest.h:876-882`/`893-899` уже это делал — нужно раскомментировать и обеспечить инициализацию `pin_TST_SNS` в `initializePinArrays`, сейчас для него init отсутствует).
-8. **`#read_adc -ch N%`** → реально читать `analogRead(adcPin[channel])`. Сейчас всегда `2000` — все диапазоны в тесте (`0:100`, `996:1913`, `3454:5003` и т.п.) **не совпадут** со значением 2000.
-9. **`#set_pump -ch N -v M%`** → реально переключать `PUMP_HYDRO[channel]` и возвращать `chN=M`. Сейчас просто `set_pump_stub`.
-10. **`#do_orp -v M%`** → при `-v 1` печатать `{ORP active}`, переключать пин `DO_ORP`. Сейчас всегда `{DO active}`.
-11. **`#pump_ps_status`** — убедиться, что `moduleConfig->getPumpStatusPins()` и `getPumpPins()` возвращают валидные массивы для HYDRO (иначе будет `pump_ps_status_error_pins_not_configured`).
+Константы пинов взять из старого кода (`pin_TST_SNS`, `ADC`, `DO_ORP`, `EC_SDN`, `DIM_OFF`, `V_DIM`) — их в текущем `ModuleConfig.h` вообще нет.
 
-### Stub'ы, которые «проходят», но ничего не проверяют
-
-12. **`#init_rtc3028` / `#read_rtc3028`** — сейчас возвращают захардкоженные строки без общения с RTC по I²C. Формально тест JIG пройдёт, фактически RTC не проверяется.
+После этого [initializePinArrays](../src/Infrastructure/BoardTesting/BoardTest.h#L800) должен для `MODULE_TYPE_HYDRO`/`MODULE_TYPE_SENSOR` заполнить `pin_TST_SNS`, `adcPin`, `pin_SENSOR_PS`, `PUMP_HYDRO`, `DO_ORP`, `EC_SDN` из `moduleConfig`, и выставить pinMode OUTPUT + начальные уровни (см. [old/aptestmode.h:600-611](../old/aptestmode.h#L600)).
 
 ---
 
-## 5. `initializePinArrays` — дыра
+## Что НЕ трогать — работает
 
-В [BoardTest.h:800-829](../src/Infrastructure/BoardTesting/BoardTest.h#L800) инициализируются только `pin` (relay) и LEDs. **Не инициализируются** для HYDRO/SENSOR: `pin_TST_SNS`, `adcPin`, `pin_SENSOR_PS`, `PUMP_HYDRO`, `DIM_OFF`, `V_DIM`, `DO_ORP`, `EC_SDN`, `buttonPin` (buttonPin читается в `setupDevicesForTest`, остальных нет).
-
-Пока эти массивы `nullptr`, все команды выше, которые их используют, либо упадут в guard-ветке, либо вернут hardcoded значения. Нужно либо добавить инициализацию по типу модуля (как в старом `setupDevicesForTest` из [old/aptestmode.h:600-654](../old/aptestmode.h#L600)), либо брать пины напрямую из `moduleConfig` в каждом handler.
-
----
-
-## Короткий ответ
-
-- Одними двумя строками boot не обойтись — тест упадёт на `#read_module_type%` (критический) через секунду после загрузки.
-- Минимум 5 блокеров (раздел 4.1) — без них JIG останавливается на первых 5-10 командах.
-- Ещё ~6 команд возвращают hardcoded/stub-значения (раздел 4.2) — они формально могут дать «ложно-PASS» или «ложно-FAIL» в зависимости от диапазонов в тесте; реального теста железа не происходит.
-- Инициализация пинов для HYDRO/SENSOR неполная — это первопричина того, что многие handler'ы свели к stub'ам.
+- `#read_mac_address%` — OK
+- `#read_version%` — OK
+- `#set_test_button` / `#get_test_button` — OK
+- `#set_test_success%` — OK (возвращает `ok` + restart)
+- `#init_rtc3028` / `#read_rtc3028` — stub, но формат совпадает с ожиданиями (прошивка их фактически не тестирует)
+- AP (`HydroDirector__…`, 192.168.0.1, pwd `123456789`) — OK
+- HTTP `/read_mac_address` → `{mac=<MAC>}` — OK
