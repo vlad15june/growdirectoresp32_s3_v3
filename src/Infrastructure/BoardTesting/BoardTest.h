@@ -7,6 +7,7 @@
 #include "Core/Domain/Interfaces/ILogger.h"
 #include "Core/Domain/Interfaces/IDebugSystem.h"
 #include "Core/Domain/Interfaces/Adapters/IWifiAdapter.h"
+#include "Core/Domain/Enums/FileSystemStatusEnum.h"
 #include "Infrastructure/Adapters/Rs485/ModbusRS485.h"
 #include <string>
 #include <cstring>
@@ -506,17 +507,31 @@ inline void BoardTest::handleReadModuleType()
     {
         int moduleType = moduleConfig->getModuleType();
         int moduleSubType = moduleConfig->getModuleSubType();
-        char buffer[32];
-        snprintf(buffer, sizeof(buffer), "Type:%d SubType:%d", moduleType, moduleSubType);
-        arduinoAdapter->serialPrintln(buffer);
+        const char* name = "UNKNOWN";
+        if (moduleType == MODULE_TYPE_HYDRO)
+            name = "HYDRO";
+        else if (moduleType == MODULE_TYPE_SENSOR)
+            name = "SENSOR";
+        else if (moduleType == MODULE_TYPE_DEVICE && moduleSubType == MODULE_SUBTYPE_RELAY)
+            name = "RELAY";
+        else if (moduleType == MODULE_TYPE_DEVICE && moduleSubType == MODULE_SUBTYPE_SOKET)
+            name = "SOCKET";
+        else if (moduleType == MODULE_TYPE_ANALOG_INPUT_DEVICE && moduleSubType == MODULE_SUBTYPE_DIMMER)
+            name = "DIMMER";
+        arduinoAdapter->serialPrintln(name);
     }
 }
 
 inline void BoardTest::handleCheckFileSystem()
 {
-    if (arduinoAdapter)
+    if (arduinoAdapter && moduleConfig)
     {
-        arduinoAdapter->serialPrintln("FileSystem:OK");
+        FileSystemStatusEnum status = moduleConfig->getFileSystemStatus();
+        arduinoAdapter->serialPrintln(getFileSystemStatusName(status));
+    }
+    else if (arduinoAdapter)
+    {
+        arduinoAdapter->serialPrintln("done");
     }
 }
 
@@ -826,6 +841,93 @@ inline void BoardTest::initializePinArrays()
             }
         }
     }
+
+    if (moduleType == MODULE_TYPE_HYDRO || moduleType == MODULE_TYPE_SENSOR)
+    {
+        // Initialize sensor reference voltage test pins
+        uint8_t *testSensorPins = moduleConfig->getTestSensorPins();
+        if (testSensorPins)
+        {
+            if (pin_TST_SNS) delete[] pin_TST_SNS;
+            pin_TST_SNS = new uint8_t[4];
+            for (int i = 0; i < 4; i++)
+            {
+                pin_TST_SNS[i] = testSensorPins[i];
+                arduinoAdapter->pinMode(pin_TST_SNS[i], arduinoAdapter->getPinModeOutput());
+                arduinoAdapter->digitalWrite(pin_TST_SNS[i], arduinoAdapter->getDigitalHigh()); // Off reference voltage
+            }
+        }
+
+        // Initialize ADC input pins
+        uint8_t *adcPins = moduleConfig->getAdcPins();
+        if (adcPins)
+        {
+            if (adcPin) delete[] adcPin;
+            adcPin = new uint8_t[4];
+            for (int i = 0; i < 4; i++)
+            {
+                adcPin[i] = adcPins[i];
+            }
+        }
+
+        // Initialize sensor power supply pins
+        uint8_t *sensorPsPins = moduleConfig->getSensorPowerPins();
+        if (sensorPsPins)
+        {
+            if (pin_SENSOR_PS) delete[] pin_SENSOR_PS;
+            pin_SENSOR_PS = new uint8_t[4];
+            for (int i = 0; i < 4; i++)
+            {
+                pin_SENSOR_PS[i] = sensorPsPins[i];
+                arduinoAdapter->pinMode(pin_SENSOR_PS[i], arduinoAdapter->getPinModeOutput());
+            }
+        }
+
+        // Initialize pump pins (for HYDRO)
+        if (moduleType == MODULE_TYPE_HYDRO)
+        {
+            uint8_t *pumpPins = moduleConfig->getPumpPins();
+            if (pumpPins)
+            {
+                if (PUMP_HYDRO) delete[] PUMP_HYDRO;
+                PUMP_HYDRO = new uint8_t[4];
+                for (int i = 0; i < 4; i++)
+                {
+                    PUMP_HYDRO[i] = pumpPins[i];
+                    arduinoAdapter->pinMode(PUMP_HYDRO[i], arduinoAdapter->getPinModeOutput());
+                }
+            }
+
+            // Initialize DO/ORP pin
+            DO_ORP = moduleConfig->getDoOrpPin();
+            arduinoAdapter->pinMode(DO_ORP, arduinoAdapter->getPinModeOutput());
+
+            // Initialize EC_SDN pin
+            EC_SDN = moduleConfig->getEcSdnPin();
+            arduinoAdapter->pinMode(EC_SDN, arduinoAdapter->getPinModeOutput());
+        }
+    }
+
+    if (moduleType == MODULE_TYPE_ANALOG_INPUT_DEVICE && moduleSubType == MODULE_SUBTYPE_DIMMER)
+    {
+        uint8_t *dimOffPins = moduleConfig->getDimmerOffPins();
+        uint8_t *vDimPins   = moduleConfig->getDimmerVoltagePins();
+        if (dimOffPins && vDimPins)
+        {
+            if (DIM_OFF) delete[] DIM_OFF;
+            if (V_DIM)   delete[] V_DIM;
+            DIM_OFF = new uint8_t[2];
+            V_DIM   = new uint8_t[2];
+            for (int i = 0; i < 2; i++)
+            {
+                DIM_OFF[i] = dimOffPins[i];
+                V_DIM[i]   = vDimPins[i];
+                arduinoAdapter->pinMode(DIM_OFF[i], arduinoAdapter->getPinModeOutput());
+                arduinoAdapter->pinMode(V_DIM[i], arduinoAdapter->getPinModeOutput());
+                arduinoAdapter->digitalWrite(DIM_OFF[i], arduinoAdapter->getDigitalLow()); // Off dimmer
+            }
+        }
+    }
 }
 
 inline void BoardTest::initializeLedArrays()
@@ -872,51 +974,39 @@ inline void BoardTest::initializeLedArrays()
 inline void BoardTest::handleSetRefVoltage(const std::string &cmd)
 {
     int channel = extractIntParameter(cmd, "-ch");
-    // if (pin_TST_SNS && arduinoAdapter && channel >= 0 && channel < 4)
-    // {
-    //     arduinoAdapter->digitalWrite(pin_TST_SNS[channel], arduinoAdapter->getDigitalLow());
-    //     arduinoAdapter->delay(300);
-    //     char response[32];
-    //     snprintf(response, sizeof(response), "TS%d=%d", channel, arduinoAdapter->digitalRead(pin_TST_SNS[channel]));
-    //     arduinoAdapter->serialPrintln(response);
-    // }
-
-    char response[32];
-    snprintf(response, sizeof(response), "TS%d=%d", channel, 1500);
-    arduinoAdapter->serialPrintln(response);
+    if (pin_TST_SNS && arduinoAdapter && channel >= 0 && channel < 4)
+    {
+        arduinoAdapter->digitalWrite(pin_TST_SNS[channel], arduinoAdapter->getDigitalLow());
+        arduinoAdapter->delay(300);
+        char response[32];
+        snprintf(response, sizeof(response), "TS%d=%d", channel, arduinoAdapter->digitalRead(pin_TST_SNS[channel]));
+        arduinoAdapter->serialPrintln(response);
+    }
 }
 
 inline void BoardTest::handleClrRefVoltage(const std::string &cmd)
 {
     int channel = extractIntParameter(cmd, "-ch");
-    // if (pin_TST_SNS && arduinoAdapter && channel >= 0 && channel < 4)
-    // {
-    //     arduinoAdapter->digitalWrite(pin_TST_SNS[channel], arduinoAdapter->getDigitalHigh());
-    //     arduinoAdapter->delay(300);
-    //     char response[32];
-    //     snprintf(response, sizeof(response), "TS%d=%d", channel, arduinoAdapter->digitalRead(pin_TST_SNS[channel]));
-    //     arduinoAdapter->serialPrintln(response);
-    // }
-
-    char response[32];
-    snprintf(response, sizeof(response), "TS%d=%d", channel, 0);
-    arduinoAdapter->serialPrintln(response);
+    if (pin_TST_SNS && arduinoAdapter && channel >= 0 && channel < 4)
+    {
+        arduinoAdapter->digitalWrite(pin_TST_SNS[channel], arduinoAdapter->getDigitalHigh());
+        arduinoAdapter->delay(300);
+        char response[32];
+        snprintf(response, sizeof(response), "TS%d=%d", channel, arduinoAdapter->digitalRead(pin_TST_SNS[channel]));
+        arduinoAdapter->serialPrintln(response);
+    }
 }
 
 inline void BoardTest::handleReadADC(const std::string &cmd)
 {
     int channel = extractIntParameter(cmd, "-ch");
-    // if (adcPin && arduinoAdapter && channel >= 0 && channel < 4)
-    // {
-    //     int value = arduinoAdapter->analogRead(adcPin[channel]);
-    //     char response[32];
-    //     snprintf(response, sizeof(response), "ch%d=%d", channel, value);
-    //     arduinoAdapter->serialPrintln(response);
-    // }
-
-    char response[32];
-    snprintf(response, sizeof(response), "ch%d=%d", channel, 2000);
-    arduinoAdapter->serialPrintln(response);
+    if (adcPin && arduinoAdapter && channel >= 0 && channel < 4)
+    {
+        int value = arduinoAdapter->analogRead(adcPin[channel]);
+        char response[32];
+        snprintf(response, sizeof(response), "ch%d=%d", channel, value);
+        arduinoAdapter->serialPrintln(response);
+    }
 }
 
 inline void BoardTest::handleReadI2C(const std::string &cmd)
@@ -959,34 +1049,34 @@ inline void BoardTest::handleWriteI2C(const std::string &cmd)
 
 inline void BoardTest::handleReadPowerGood33()
 {
-    if (arduinoAdapter)
+    if (arduinoAdapter && moduleConfig)
     {
-        uint16_t responseType = 1000;
-        char response[32];
-        snprintf(response, sizeof(response), "%d", responseType);
-        arduinoAdapter->serialPrintln(response);
+        uint8_t pin = moduleConfig->getPowerGood33Pin();
+        arduinoAdapter->pinMode(pin, arduinoAdapter->getPinModeInput());
+        int val = arduinoAdapter->digitalRead(pin);
+        arduinoAdapter->serialPrintln(val == arduinoAdapter->getDigitalHigh() ? "{3.3V:Ok}" : "{3.3V:Fail}");
     }
 }
 
 inline void BoardTest::handleReadPowerGood50()
 {
-    if (arduinoAdapter)
+    if (arduinoAdapter && moduleConfig)
     {
-        uint16_t responseType = 1000;
-        char response[32];
-        snprintf(response, sizeof(response), "%d", responseType);
-        arduinoAdapter->serialPrintln(response);
+        uint8_t pin = moduleConfig->getPowerGood50Pin();
+        arduinoAdapter->pinMode(pin, arduinoAdapter->getPinModeInput());
+        int val = arduinoAdapter->digitalRead(pin);
+        arduinoAdapter->serialPrintln(val == arduinoAdapter->getDigitalHigh() ? "{5.0V:Ok}" : "{5.0V:Fail}");
     }
 }
 
 inline void BoardTest::handleReadPowerGood55()
 {
-    if (arduinoAdapter)
+    if (arduinoAdapter && moduleConfig)
     {
-        uint16_t responseType = 1000;
-        char response[32];
-        snprintf(response, sizeof(response), "%d", responseType);
-        arduinoAdapter->serialPrintln(response);
+        uint8_t pin = moduleConfig->getPowerGood55Pin();
+        arduinoAdapter->pinMode(pin, arduinoAdapter->getPinModeInput());
+        int val = arduinoAdapter->digitalRead(pin);
+        arduinoAdapter->serialPrintln(val == arduinoAdapter->getDigitalHigh() ? "{5.5V:Ok}" : "{5.5V:Fail}");
     }
 }
 
@@ -1178,8 +1268,8 @@ inline void BoardTest::handleLedControl(const std::string &cmd, bool isRed)
         arduinoAdapter->digitalWrite(pin, value);
 
         char response[32];
-        snprintf(response, sizeof(response), "%s_ch%d=%d",
-                 isRed ? "led_r" : "led_g", channel,
+        snprintf(response, sizeof(response), "{LED%s%d=%d}",
+                 isRed ? "R" : "G", channel,
                  arduinoAdapter->digitalRead(pin));
         arduinoAdapter->serialPrintln(response);
     }
@@ -1191,64 +1281,116 @@ inline void BoardTest::handleLedControl(const std::string &cmd, bool isRed)
 
 inline void BoardTest::handleReadPump(const std::string &cmd)
 {
-    // Stub: Pump reading
-    if (arduinoAdapter)
+    int channel = extractIntParameter(cmd, "-ch");
+    if (PUMP_HYDRO && arduinoAdapter && channel >= 0 && channel < 4)
     {
-        arduinoAdapter->serialPrintln("read_pump_stub");
+        arduinoAdapter->pinMode(PUMP_HYDRO[channel], arduinoAdapter->getPinModeOutput());
+        char response[16];
+        snprintf(response, sizeof(response), "ch%d=%d", channel, arduinoAdapter->digitalRead(PUMP_HYDRO[channel]));
+        arduinoAdapter->serialPrintln(response);
     }
 }
 
 inline void BoardTest::handleSetPump(const std::string &cmd)
 {
-    // Stub: Pump setting
-    if (arduinoAdapter)
+    int ch = extractIntParameter(cmd, "-ch");
+    int v  = extractIntParameter(cmd, "-v");
+    if (PUMP_HYDRO && arduinoAdapter && ch >= 0 && ch < 4)
     {
-        arduinoAdapter->serialPrintln("set_pump_stub");
+        arduinoAdapter->pinMode(PUMP_HYDRO[ch], arduinoAdapter->getPinModeOutput());
+        arduinoAdapter->digitalWrite(PUMP_HYDRO[ch], v == 1 ? arduinoAdapter->getDigitalHigh() : arduinoAdapter->getDigitalLow());
+        char response[16];
+        snprintf(response, sizeof(response), "ch%d=%d", ch, arduinoAdapter->digitalRead(PUMP_HYDRO[ch]));
+        arduinoAdapter->serialPrintln(response);
     }
 }
 
 inline void BoardTest::handleDoOrp(const std::string &cmd)
 {
-    // Stub: DO/ORP control
-    if (arduinoAdapter)
+    if (!arduinoAdapter)
+        return;
+
+    size_t vPos = cmd.find("-v ");
+    if (vPos != std::string::npos)
     {
-        arduinoAdapter->serialPrintln("{DO active}");
+        int v = std::stoi(cmd.substr(vPos + 3));
+        arduinoAdapter->pinMode(DO_ORP, arduinoAdapter->getPinModeOutput());
+        arduinoAdapter->digitalWrite(DO_ORP, v == 1 ? arduinoAdapter->getDigitalHigh() : arduinoAdapter->getDigitalLow());
     }
+    int state = arduinoAdapter->digitalRead(DO_ORP);
+    arduinoAdapter->serialPrintln(state == 0 ? "{DO active}" : "{ORP active}");
 }
 
 inline void BoardTest::handleEcSdn(const std::string &cmd)
 {
-    // Stub: EC SDN control
-    if (arduinoAdapter)
+    if (!arduinoAdapter)
+        return;
+
+    size_t vPos = cmd.find("-v ");
+    if (vPos != std::string::npos)
     {
-        arduinoAdapter->serialPrintln("{EC On}");
+        int v = std::stoi(cmd.substr(vPos + 3));
+        // EC On = LOW, EC Off = HIGH
+        uint8_t level = (v == 1) ? arduinoAdapter->getDigitalLow() : arduinoAdapter->getDigitalHigh();
+        arduinoAdapter->pinMode(EC_SDN, arduinoAdapter->getPinModeOutput());
+        arduinoAdapter->digitalWrite(EC_SDN, level);
     }
+    int state = arduinoAdapter->digitalRead(EC_SDN);
+    arduinoAdapter->serialPrintln(state == 0 ? "{EC On}" : "{EC Off}");
 }
 
 inline void BoardTest::handleReadDimmer(const std::string &cmd)
 {
-    // Stub: Dimmer reading
-    if (arduinoAdapter)
+    int channel = extractIntParameter(cmd, "-ch");
+    if (channel != 1) channel = 0;
+    if (DIM_OFF && V_DIM && arduinoAdapter)
     {
-        arduinoAdapter->serialPrintln("read_dimmer_stub");
+        char response[32];
+        snprintf(response, sizeof(response), "ch%d=%d->%u",
+                 channel,
+                 arduinoAdapter->digitalRead(DIM_OFF[channel]),
+                 arduinoAdapter->ledcReadChannel(static_cast<uint8_t>(channel)));
+        arduinoAdapter->serialPrintln(response);
     }
 }
 
 inline void BoardTest::handleOnDimmer(const std::string &cmd)
 {
-    // Stub: Dimmer on/off
-    if (arduinoAdapter)
+    int channel = extractIntParameter(cmd, "-ch");
+    int onOff   = extractIntParameter(cmd, "-v");
+    if (channel != 1) channel = 0;
+    if (onOff != 1)   onOff   = 0;
+    if (DIM_OFF && V_DIM && arduinoAdapter)
     {
-        arduinoAdapter->serialPrintln("on_dimmer_stub");
+        arduinoAdapter->digitalWrite(DIM_OFF[channel], onOff == 1 ? arduinoAdapter->getDigitalHigh() : arduinoAdapter->getDigitalLow());
+        if (onOff == 1)
+        {
+            arduinoAdapter->ledcSetupChannel(static_cast<uint8_t>(channel), 5000, 8);
+            arduinoAdapter->ledcAttach(V_DIM[channel], static_cast<uint8_t>(channel));
+        }
+        else
+        {
+            arduinoAdapter->ledcDetach(V_DIM[channel]);
+        }
+        char response[16];
+        snprintf(response, sizeof(response), "ch%d=%d", channel, arduinoAdapter->digitalRead(DIM_OFF[channel]));
+        arduinoAdapter->serialPrintln(response);
     }
 }
 
 inline void BoardTest::handleSetDimmer(const std::string &cmd)
 {
-    // Stub: Dimmer value setting
+    int channel = extractIntParameter(cmd, "-ch");
+    int value   = extractIntParameter(cmd, "-v");
+    if (channel != 1) channel = 0;
+    if (value < 0) value = 0;
+    if (value > 255) value = 255;
     if (arduinoAdapter)
     {
-        arduinoAdapter->serialPrintln("set_dimmer_stub");
+        arduinoAdapter->ledcWriteChannel(static_cast<uint8_t>(channel), static_cast<uint32_t>(value));
+        char response[16];
+        snprintf(response, sizeof(response), "ch%d=%d", channel, value);
+        arduinoAdapter->serialPrintln(response);
     }
 }
 

@@ -113,6 +113,13 @@ public:
         analogWriteCalled = true;
         // Could store the analog output value if needed
     }
+
+    // LEDC PWM (stub implementations for testing)
+    void ledcSetupChannel(uint8_t channel, double freq, uint8_t resolution) override {}
+    void ledcAttach(uint8_t pin, uint8_t channel) override {}
+    void ledcDetach(uint8_t pin) override {}
+    void ledcWriteChannel(uint8_t channel, uint32_t duty) override {}
+    uint32_t ledcReadChannel(uint8_t channel) override { return 0; }
     
     // Serial communication
     void serialBegin(unsigned long baud) override {

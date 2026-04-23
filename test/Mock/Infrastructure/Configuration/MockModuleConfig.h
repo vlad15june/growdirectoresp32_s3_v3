@@ -29,6 +29,7 @@ private:
     uint8_t _ledsCount;
     ModuleModeEnum _requestedModuleMode = ModuleModeEnum::CONFIGURED_DONE;
     ModuleModeEnum _currentModuleMode = ModuleModeEnum::CONFIGURED_DONE;
+    FileSystemStatusEnum _fileSystemStatus = FILE_SYSTEM_STATUS_NONE;
     std::string _moduleUid;
     std::string _firmwareVersion;
     int _sensorPinCount;
@@ -176,6 +177,41 @@ public:
     uint8_t* getPumpStatusPins() const override { 
         static uint8_t pins[] = {13, 14, 15, 16}; 
         return pins; 
+    }
+
+    uint8_t* getTestSensorPins() const override {
+        static uint8_t pins[] = {0, 0, 0, 0};
+        return pins;
+    }
+
+    uint8_t* getAdcPins() const override {
+        static uint8_t pins[] = {0, 0, 0, 0};
+        return pins;
+    }
+
+    uint8_t getDoOrpPin() const override { return 0; }
+    uint8_t getEcSdnPin() const override { return 0; }
+
+    uint8_t* getDimmerOffPins() const override {
+        static uint8_t pins[] = {0, 0};
+        return pins;
+    }
+
+    uint8_t* getDimmerVoltagePins() const override {
+        static uint8_t pins[] = {0, 0};
+        return pins;
+    }
+
+    uint8_t getPowerGood33Pin() const override { return 0; }
+    uint8_t getPowerGood50Pin() const override { return 0; }
+    uint8_t getPowerGood55Pin() const override { return 0; }
+
+    FileSystemStatusEnum getFileSystemStatus() const override {
+        return _fileSystemStatus;
+    }
+
+    void setFileSystemStatus(FileSystemStatusEnum status) override {
+        _fileSystemStatus = status;
     }
     
     void setSensorPinCount(int count) {

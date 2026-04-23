@@ -65,6 +65,27 @@ public:
     void analogWrite(uint8_t pin, int val) override {
         ::analogWrite(pin, val);
     }
+
+    // LEDC PWM (ESP32 hardware PWM for dimmer control)
+    void ledcSetupChannel(uint8_t channel, double freq, uint8_t resolution) override {
+        ::ledcSetup(channel, freq, resolution);
+    }
+
+    void ledcAttach(uint8_t pin, uint8_t channel) override {
+        ::ledcAttachPin(pin, channel);
+    }
+
+    void ledcDetach(uint8_t pin) override {
+        ::ledcDetachPin(pin);
+    }
+
+    void ledcWriteChannel(uint8_t channel, uint32_t duty) override {
+        ::ledcWrite(channel, duty);
+    }
+
+    uint32_t ledcReadChannel(uint8_t channel) override {
+        return ::ledcRead(channel);
+    }
     
     // Serial communication
     void serialBegin(unsigned long baud) override {

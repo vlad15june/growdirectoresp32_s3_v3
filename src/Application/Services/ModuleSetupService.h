@@ -319,7 +319,7 @@ inline void ModuleSetupService::handleModuleMode()
     }
 
     uint8_t isConfigured = settings->getIfConfigured();
-    log("SETUP: Current configuration status: %d", isConfigured);
+    log("SETUP: isConfigured = %d", isConfigured);
 
     if (isConfigured != ModuleModeEnum::CONFIGURED_NEED_RESTART &&
         isConfigured != ModuleModeEnum::AP_TEST_MODE &&
@@ -1374,6 +1374,7 @@ inline void ModuleSetupService::setupModule()
     }
 
     log("SETUP: Module setup completed");
+    log("SETUP: done");
 }
 
 inline std::unique_ptr<ILoopService> ModuleSetupService::getLoopService()
