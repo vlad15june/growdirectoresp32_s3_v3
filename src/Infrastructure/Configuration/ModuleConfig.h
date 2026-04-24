@@ -54,7 +54,7 @@ private:
     ModuleModeEnum requestedModuleMode;
     ModuleModeEnum currentModuleMode;
 #ifndef FIRMWARE_VERSION
-    #define FIRMWARE_VERSION "0.0.0-dev"
+    #define FIRMWARE_VERSION "2.1.27"
 #endif
     static constexpr const char* firmwareVersion = FIRMWARE_VERSION;
         

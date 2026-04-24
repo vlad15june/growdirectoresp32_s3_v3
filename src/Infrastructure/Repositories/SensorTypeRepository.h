@@ -37,15 +37,15 @@ private:
             log("SensorTypeRepository: Loading cache from storage");
             cache.clear();
             std::vector<SensorType> sensorTypes;
-            if (sensorTypeDao->getAll(sensorTypes)) {
+            if (sensorTypeDao->getAll(sensorTypes) && !sensorTypes.empty()) {
                 for (const auto& sensorType : sensorTypes) {
                     cache[sensorType.uid] = sensorType;
                 }
                 log("SensorTypeRepository: Loaded %zu sensor types into cache", sensorTypes.size());
+                isCacheValid = true;
             } else {
                 log("SensorTypeRepository: Failed to load sensor types from storage");
             }
-            isCacheValid = true;
         }
     }
 

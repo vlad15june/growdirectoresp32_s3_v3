@@ -77,15 +77,21 @@ public:
         }
     }
 
-    void RewriteToFile(const char* filePath, const char* body) override {
+    bool RewriteToFile(const char* filePath, const char* body) override {
         File file = SPIFFS.open(filePath, "w");
         if (!file) {
             log("Failed to open file for writing: %s", filePath);
-            return;
+            return false;
         }
+        size_t bodyLen = strlen(body);
         size_t written = file.print(body);
         file.close();
+        if (written != bodyLen) {
+            log("Write incomplete: expected %d, wrote %d bytes to %s", bodyLen, written, filePath);
+            return false;
+        }
         log("Wrote %d bytes to file: %s", written, filePath);
+        return true;
     }
 
     bool directoryExists(const char* path) override {

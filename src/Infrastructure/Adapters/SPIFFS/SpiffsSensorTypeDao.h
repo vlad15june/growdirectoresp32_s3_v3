@@ -239,14 +239,26 @@ public:
             log("SpiffsSensorTypeDao: ERROR - Exception in JSON serialization!");
             return false;
         }
+
+        // Guard: if entities are non-empty but serialization produced "[]" or empty,
+        // something went wrong — abort to avoid overwriting valid data with an empty file.
+        if (!entities.empty() && (jsonStr.empty() || jsonStr == "[]")) {
+            log("SpiffsSensorTypeDao: ERROR - JSON serialization produced empty result for %d entities, aborting write",
+                static_cast<int>(entities.size()));
+            return false;
+        }
         
         log("SpiffsSensorTypeDao: Starting file write to: %s", filePath.c_str());
         try {
-            spiffsAdapter->RewriteToFile(filePath.c_str(), jsonStr.c_str());
-            log("SpiffsSensorTypeDao: File write complete");
+            bool writeOk = spiffsAdapter->RewriteToFile(filePath.c_str(), jsonStr.c_str());
 #ifdef ESP_PLATFORM
             log("SpiffsSensorTypeDao: Free heap after file write: %d", ESP.getFreeHeap());
 #endif
+            if (!writeOk) {
+                log("SpiffsSensorTypeDao: ERROR - File write failed for %s", filePath.c_str());
+                return false;
+            }
+            log("SpiffsSensorTypeDao: File write complete");
         } catch (...) {
             log("SpiffsSensorTypeDao: ERROR - Exception in file write!");
             return false;

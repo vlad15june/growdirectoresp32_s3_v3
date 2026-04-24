@@ -66,10 +66,12 @@ public:
         }
     }
     
-    void RewriteToFile(const char* filePath, const char* body) override {
+    bool RewriteToFile(const char* filePath, const char* body) override {
         if (!shouldFail) {
             fileSystem[filePath] = body;
+            return true;
         }
+        return false;
     }
     
     bool directoryExists(const char* path) override {

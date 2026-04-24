@@ -149,9 +149,9 @@ public:
         std::string jsonStr = entitiesToJson(entities);
         log("SpiffsDao: JSON serialization complete, length: %d", jsonStr.length());
         
-        spiffsAdapter->RewriteToFile(filePath.c_str(), jsonStr.c_str());
-        log("SpiffsDao: File write complete");
-        return true;
+        bool result = spiffsAdapter->RewriteToFile(filePath.c_str(), jsonStr.c_str());
+        log("SpiffsDao: File write %s", result ? "complete" : "failed");
+        return result;
     }
 
     bool getAll(std::vector<T>& entities) override {
