@@ -196,8 +196,8 @@ public:
 
         if (targetJustTurnedOn)
         {
-            log("ModbusSensorReader: Target port %d was off, warmup 5s", portIndex);
-            _arduino.delay(5000);
+            log("ModbusSensorReader: Target port %d was off, warmup 10s", portIndex);
+            _arduino.delay(10000);
         }
         else
         {
