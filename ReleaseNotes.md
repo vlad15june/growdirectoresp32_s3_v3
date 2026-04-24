@@ -1,5 +1,12 @@
 # Release Notes
 
+## Version 2.1.44 (2026-04-24)
+
+### Fixed
+- **Sensor Type Installation**: GDV1-3420 Fixed critical bug where sensor model installation failed with "Sensor type not found" after syncing types from the server. When the device was running low on memory, saving the sensor type list to storage failed silently — the stored file was overwritten with an empty list, and the device then cached that empty list as valid, making all sensor types permanently unavailable until reboot. The device now: validates that the data was saved correctly before accepting the result; never saves an empty list when real data existed; treats a missing or empty sensor type list as an error rather than a valid cached state.
+
+---
+
 ## Version 2.1.41 (2026-04-20)
 
 ### Changed
