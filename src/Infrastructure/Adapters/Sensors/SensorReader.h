@@ -319,7 +319,8 @@ private:
 
         if (stateChanged && _arduino)
         {
-            _arduino->delay(3000);
+            log("SensorReader: Port state changed, warmup 10s");
+            _arduino->delay(10000);
         }
 
         if (_modbusReader->pingAddress(sensor.modbusDeviceAddress, sensor.modbusRegisterConfigs[0], portIndex) == false)
