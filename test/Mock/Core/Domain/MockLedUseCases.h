@@ -14,6 +14,11 @@ public:
     int blinkYellowCount = 0;
     int loopCount = 0;
 
+    bool setBlinkingCalled = false;
+    bool setBlinkingValue = false;
+    int setBlinkingCount = 0;
+    bool blinkingState = false;
+
     // Reset all state for fresh test
     void reset() {
         onLoadCalled = false;
@@ -24,6 +29,10 @@ public:
         blinkGreenCount = 0;
         blinkYellowCount = 0;
         loopCount = 0;
+        setBlinkingCalled = false;
+        setBlinkingValue = false;
+        setBlinkingCount = 0;
+        blinkingState = false;
     }
 
     // Implementations of the interface methods
@@ -48,6 +57,17 @@ public:
     void loop() override {
         loopCalled = true;
         loopCount++;
+    }
+
+    void setBlinking(bool blinking) override {
+        setBlinkingCalled = true;
+        setBlinkingValue = blinking;
+        setBlinkingCount++;
+        blinkingState = blinking;
+    }
+
+    bool isBlinking() const override {
+        return blinkingState;
     }
 };
 

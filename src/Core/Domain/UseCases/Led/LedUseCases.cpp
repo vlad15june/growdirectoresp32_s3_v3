@@ -57,6 +57,17 @@ void LedUseCases::ledBlinkYellow2Times()
 {
 }
 
+void LedUseCases::setBlinking(bool blinking)
+{
+    _blinking = blinking;
+    log("setBlinking: %s", blinking ? "ON" : "OFF");
+}
+
+bool LedUseCases::isBlinking() const
+{
+    return _blinking;
+}
+
 // Main loop for managing LED states based on module configuration
 void LedUseCases::loop()
 {
@@ -77,6 +88,29 @@ void LedUseCases::loop()
     uint8_t configStatus = settings->getIfConfigured();
     unsigned long currentTime = arduinoAdapter->millis();
     uint8_t ledsCount = moduleConfig->getLedsCount();
+
+    if (_blinking)
+    {
+        if (currentTime - lastBlinkTime > (ledState ? BLINK_FAST_ON_TIME : BLINK_FAST_OFF_TIME))
+        {
+            lastBlinkTime = currentTime;
+            ledState = !ledState;
+
+            ledAdapter->setAllGreenLedOff();
+
+            if (ledState)
+            {
+                ledAdapter->setAllRedLedOn();
+            }
+            else
+            {
+                ledAdapter->setAllRedLedOff();
+            }
+
+            log("Blinking mode: Red LED state: %s", ledState ? "ON" : "OFF");
+        }
+        return;
+    }
 
     // Handle LED states based on module configuration status
     switch (configStatus)

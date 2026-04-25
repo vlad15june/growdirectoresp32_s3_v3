@@ -6,18 +6,21 @@
 #include "Mock/Infrastructure/Wifi/MockWiFiManager.h"
 #include "Mock/Infrastructure/Logging/MockLogger.h"
 #include "Mock/Infrastructure/Logging/MockDebugSystem.h"
+#include "Mock/Core/Domain/MockLedUseCases.h"
 #include "Application/DTOs/ModuleCommandDto.h"
 #include "Core/Domain/Enums/ModuleCommandStatus.h"
 
 static MockWiFiManager* mockWiFiManager;
 static MockLogger* mockLogger;
 static MockDebugSystem* mockDebugSystem;
+static MockLedUseCases* mockLedUseCases;
 static ModuleCommandExecutionUseCase* useCase;
 
 void setUp_module_command_execution_use_case(void) {
     mockWiFiManager = new MockWiFiManager();
     mockLogger = new MockLogger();
     mockDebugSystem = new MockDebugSystem();
+    mockLedUseCases = new MockLedUseCases();
 
     mockDebugSystem->registerFeature(DebugFeatures::MODULE_COMMAND_DEBUG);
     mockDebugSystem->setDebugFeatureState(DebugFeatures::MODULE_COMMAND_DEBUG, true);
@@ -37,17 +40,20 @@ void setUp_module_command_execution_use_case(void) {
         nullptr,         // clearModuleDataService
         nullptr,         // moduleStructure
         nullptr,         // sensorValueModel
-        mockWiFiManager  // wifiManager
+        mockWiFiManager, // wifiManager
+        mockLedUseCases  // ledUseCases
     );
 }
 
 void tearDown_module_command_execution_use_case(void) {
     delete useCase;
+    delete mockLedUseCases;
     delete mockDebugSystem;
     delete mockLogger;
     delete mockWiFiManager;
 
     useCase = nullptr;
+    mockLedUseCases = nullptr;
     mockDebugSystem = nullptr;
     mockLogger = nullptr;
     mockWiFiManager = nullptr;
@@ -179,6 +185,68 @@ void test_add_wifi_no_wifi_manager(void) {
     TEST_ASSERT_EQUAL_STRING("Error", results[0].status.c_str());
 }
 
+void test_blinking_start_calls_led_use_case(void) {
+    setUp_module_command_execution_use_case();
+
+    bool ok = useCase->execute("BlinkingStart", "", "cmd-bs-1", "");
+
+    TEST_ASSERT_TRUE(ok);
+    TEST_ASSERT_TRUE(mockLedUseCases->setBlinkingCalled);
+    TEST_ASSERT_TRUE(mockLedUseCases->setBlinkingValue);
+    TEST_ASSERT_EQUAL(1, mockLedUseCases->setBlinkingCount);
+
+    tearDown_module_command_execution_use_case();
+}
+
+void test_blinking_stop_calls_led_use_case(void) {
+    setUp_module_command_execution_use_case();
+
+    bool ok = useCase->execute("BlinkingStop", "", "cmd-bs-2", "");
+
+    TEST_ASSERT_TRUE(ok);
+    TEST_ASSERT_TRUE(mockLedUseCases->setBlinkingCalled);
+    TEST_ASSERT_FALSE(mockLedUseCases->setBlinkingValue);
+    TEST_ASSERT_EQUAL(1, mockLedUseCases->setBlinkingCount);
+
+    tearDown_module_command_execution_use_case();
+}
+
+void test_blinking_start_no_led_use_case(void) {
+    MockLogger logger;
+    MockDebugSystem debugSystem;
+    debugSystem.registerFeature(DebugFeatures::MODULE_COMMAND_DEBUG);
+
+    ModuleCommandExecutionUseCase ucNoLed(
+        &logger, &debugSystem,
+        nullptr, nullptr, nullptr, nullptr, nullptr, nullptr,
+        nullptr, nullptr, nullptr, nullptr, nullptr, nullptr,
+        nullptr,  // wifiManager
+        nullptr   // ledUseCases = nullptr
+    );
+
+    bool ok = ucNoLed.execute("BlinkingStart", "", "cmd-bs-3", "");
+
+    TEST_ASSERT_FALSE(ok);
+}
+
+void test_blinking_stop_no_led_use_case(void) {
+    MockLogger logger;
+    MockDebugSystem debugSystem;
+    debugSystem.registerFeature(DebugFeatures::MODULE_COMMAND_DEBUG);
+
+    ModuleCommandExecutionUseCase ucNoLed(
+        &logger, &debugSystem,
+        nullptr, nullptr, nullptr, nullptr, nullptr, nullptr,
+        nullptr, nullptr, nullptr, nullptr, nullptr, nullptr,
+        nullptr,  // wifiManager
+        nullptr   // ledUseCases = nullptr
+    );
+
+    bool ok = ucNoLed.execute("BlinkingStop", "", "cmd-bs-4", "");
+
+    TEST_ASSERT_FALSE(ok);
+}
+
 extern "C" int run_module_command_execution_use_case_tests(void) {
     RUN_TEST(test_add_wifi_success);
     RUN_TEST(test_add_wifi_failure);
@@ -186,5 +254,9 @@ extern "C" int run_module_command_execution_use_case_tests(void) {
     RUN_TEST(test_add_wifi_missing_ssid);
     RUN_TEST(test_add_wifi_missing_password);
     RUN_TEST(test_add_wifi_no_wifi_manager);
+    RUN_TEST(test_blinking_start_calls_led_use_case);
+    RUN_TEST(test_blinking_stop_calls_led_use_case);
+    RUN_TEST(test_blinking_start_no_led_use_case);
+    RUN_TEST(test_blinking_stop_no_led_use_case);
     return 0;
 }

@@ -31,6 +31,8 @@ private:
     unsigned long lastBlinkTime = 0;
     bool ledState = false;
 
+    bool _blinking = false;
+
     void log(const char* format, ...);
 
 public:
@@ -50,6 +52,9 @@ public:
     
     // LED state management based on module configuration
     void loop() override;
+
+    void setBlinking(bool blinking) override;
+    bool isBlinking() const override;
 };
 
 #endif // LED_USE_CASES_H

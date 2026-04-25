@@ -13,6 +13,7 @@
 #include "Core/Domain/Interfaces/IModuleConfig.h"
 #include "Core/Domain/Interfaces/ISettings.h"
 #include "Core/Domain/Interfaces/IWifiManager.h"
+#include "Core/Domain/Interfaces/UseCases/ILedUseCases.h"
 #include "Core/Domain/Data/Entities/Sensor/Sensor.h"
 #include "Core/Domain/Data/Models/ModuleStructure.h"
 #include "Core/Domain/Data/Models/ISensorValueModel.h"
@@ -47,11 +48,12 @@ private:
     ModuleStructure *moduleStructure;
     ISensorValueModel *sensorValueModel;
     IWifiManager *wifiManager;
+    ILedUseCases *ledUseCases;
     static const unsigned long commandMaxAgeSeconds = 300;
 
 public:
-    ModuleCommandExecutionUseCase(ILogger *logger = nullptr, IDebugSystem *debugSystem = nullptr, INTPTimeAdapter *timeAdapter = nullptr, IFirmwareRemoteUpdate *firmwareUpdater = nullptr, IArduinoAdapter *arduinoAdapter = nullptr, ISensorRepository *sensorRepository = nullptr, ISensorTypeRepository *sensorTypeRepository = nullptr, ISensorReader *sensorReader = nullptr, IModuleConfig *moduleConfig = nullptr, ISettings *settings = nullptr, IHybridAPIService *hybridApiService = nullptr, IClearModuleDataService *clearModuleDataService = nullptr, ModuleStructure *moduleStructure = nullptr, ISensorValueModel *sensorValueModel = nullptr, IWifiManager *wifiManager = nullptr)
-        : logger(logger), debugSystem(debugSystem), timeAdapter(timeAdapter), firmwareUpdater(firmwareUpdater), arduinoAdapter(arduinoAdapter), sensorRepository(sensorRepository), sensorTypeRepository(sensorTypeRepository), sensorReader(sensorReader), moduleConfig(moduleConfig), settings(settings), hybridApiService(hybridApiService), clearModuleDataService(clearModuleDataService), moduleStructure(moduleStructure), sensorValueModel(sensorValueModel), wifiManager(wifiManager) {}
+    ModuleCommandExecutionUseCase(ILogger *logger = nullptr, IDebugSystem *debugSystem = nullptr, INTPTimeAdapter *timeAdapter = nullptr, IFirmwareRemoteUpdate *firmwareUpdater = nullptr, IArduinoAdapter *arduinoAdapter = nullptr, ISensorRepository *sensorRepository = nullptr, ISensorTypeRepository *sensorTypeRepository = nullptr, ISensorReader *sensorReader = nullptr, IModuleConfig *moduleConfig = nullptr, ISettings *settings = nullptr, IHybridAPIService *hybridApiService = nullptr, IClearModuleDataService *clearModuleDataService = nullptr, ModuleStructure *moduleStructure = nullptr, ISensorValueModel *sensorValueModel = nullptr, IWifiManager *wifiManager = nullptr, ILedUseCases *ledUseCases = nullptr)
+        : logger(logger), debugSystem(debugSystem), timeAdapter(timeAdapter), firmwareUpdater(firmwareUpdater), arduinoAdapter(arduinoAdapter), sensorRepository(sensorRepository), sensorTypeRepository(sensorTypeRepository), sensorReader(sensorReader), moduleConfig(moduleConfig), settings(settings), hybridApiService(hybridApiService), clearModuleDataService(clearModuleDataService), moduleStructure(moduleStructure), sensorValueModel(sensorValueModel), wifiManager(wifiManager), ledUseCases(ledUseCases) {}
     
     virtual ~ModuleCommandExecutionUseCase() = default;
 
@@ -348,12 +350,16 @@ private:
      */
     bool handleBlinkingStart(const std::string &uid, const std::string &commandOptions)
     {
-        // TODO: Implement blinking start logic
-        void* module = getModuleByUid(uid);
-        if (!module) {
+        if (!ledUseCases)
+        {
+            log(DebugFeatures::MODULE_COMMAND_DEBUG,
+                "ModuleCommandUseCase: BlinkingStart - ledUseCases not available");
             return false;
         }
-        // Start blinking logic here
+
+        ledUseCases->setBlinking(true);
+        log(DebugFeatures::MODULE_COMMAND_DEBUG,
+            "ModuleCommandUseCase: BlinkingStart - identification mode enabled");
         return true;
     }
 
@@ -365,12 +371,16 @@ private:
      */
     bool handleBlinkingStop(const std::string &uid, const std::string &commandOptions)
     {
-        // TODO: Implement blinking stop logic
-        void* module = getModuleByUid(uid);
-        if (!module) {
+        if (!ledUseCases)
+        {
+            log(DebugFeatures::MODULE_COMMAND_DEBUG,
+                "ModuleCommandUseCase: BlinkingStop - ledUseCases not available");
             return false;
         }
-        // Stop blinking logic here
+
+        ledUseCases->setBlinking(false);
+        log(DebugFeatures::MODULE_COMMAND_DEBUG,
+            "ModuleCommandUseCase: BlinkingStop - identification mode disabled");
         return true;
     }
 
