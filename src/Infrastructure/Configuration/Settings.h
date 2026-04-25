@@ -42,7 +42,6 @@ private:
     static const int EEPROM_ADDRES_MODULE_COMMAND_UID = 500;
     static const int EEPROM_BUTTON_PRESSED_BEFORE_REBOOT = 550;
     static const int EEPROM_NO_SCAN_SENSORS = 552;
-    static const int EEPROM_WAS_SENSOR_SCAN_PERFORMED = 554;
     static const int EEPROM_WAS_INITIAL_SYNC_COMPLETED = 556;
     static const int EEPROM_NEED_CLEAR_SPIFFS = 558;
 
@@ -362,18 +361,6 @@ public:
         _eeprom.commit();
     }
 
-    uint8_t getWasSensorScanPerformed() override
-    {
-        return _eeprom.readByte(EEPROM_WAS_SENSOR_SCAN_PERFORMED);
-    }
-
-    void setWasSensorScanPerformed(uint8_t wasPerformed) override
-    {
-        log("SETTINGS: wasSensorScanPerformed = %d", wasPerformed);
-        _eeprom.writeByte(EEPROM_WAS_SENSOR_SCAN_PERFORMED, wasPerformed);
-        _eeprom.commit();
-    }
-    
     uint8_t getWasInitialSyncCompleted() override
     {
         return _eeprom.readByte(EEPROM_WAS_INITIAL_SYNC_COMPLETED);

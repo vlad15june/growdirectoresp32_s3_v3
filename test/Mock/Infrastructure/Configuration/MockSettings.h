@@ -30,7 +30,6 @@ private:
         _byteValues["tempCoefVersion"] = 0;
         _byteValues["buttonPressedBeforeReboot"] = 0;
         _byteValues["noScanSensors"] = 0;
-        _byteValues["wasSensorScanPerformed"] = 0;
         _byteValues["wasInitialSyncCompleted"] = 0;
         _byteValues["needClearSpiffs"] = 0;
 
@@ -311,16 +310,6 @@ public:
     void setNoScanSensors(uint8_t noScan) override
     {
         _byteValues["noScanSensors"] = noScan;
-    }
-
-    uint8_t getWasSensorScanPerformed() override
-    {
-        return _byteValues["wasSensorScanPerformed"];
-    }
-
-    void setWasSensorScanPerformed(uint8_t wasPerformed) override
-    {
-        _byteValues["wasSensorScanPerformed"] = wasPerformed;
     }
 
     uint8_t getWasInitialSyncCompleted() override

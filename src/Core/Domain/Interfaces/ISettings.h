@@ -81,10 +81,6 @@ public:
     virtual uint8_t getNoScanSensors() = 0;
     virtual void setNoScanSensors(uint8_t noScan) = 0;
     
-    // Sensor scan performed flag methods
-    virtual uint8_t getWasSensorScanPerformed() = 0;
-    virtual void setWasSensorScanPerformed(uint8_t wasPerformed) = 0;
-    
     // Initial sync completed flag methods
     virtual uint8_t getWasInitialSyncCompleted() = 0;
     virtual void setWasInitialSyncCompleted(uint8_t wasCompleted) = 0;

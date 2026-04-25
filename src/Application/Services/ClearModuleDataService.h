@@ -101,18 +101,14 @@ public:
             success = false;
         }
         
-        // Clear sensor scan performed flag
         if (settings != nullptr) {
-            settings->setWasSensorScanPerformed(0);
-            log("Cleared wasSensorScanPerformed flag");
-            
             settings->setWasInitialSyncCompleted(0);
             log("Cleared wasInitialSyncCompleted flag");
 
             settings->setNoScanSensors(1);
             log("Set noScanSensors flag: first boot after factory reset will skip scan, second boot will scan");
         } else {
-            log("WARNING: settings is null, cannot clear wasSensorScanPerformed flag");
+            log("WARNING: settings is null, cannot clear settings flags");
         }
         
         // Reset module mode to USER_CAN_CONFIGURE (factory reset state)

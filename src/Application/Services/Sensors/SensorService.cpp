@@ -32,9 +32,7 @@ SensorService::SensorService(IModuleConfig *moduleConfig,
       mqttManager(mqttManager),
       lastSensorReadTime(0),
       lastSensorUpdateTime(0),
-      lastUdpSendTime(0),
-      rebootScheduledTime(0),
-      rebootScheduled(false)
+      lastUdpSendTime(0)
 {
 }
 
@@ -80,37 +78,6 @@ bool SensorService::init()
 void SensorService::loop()
 {
     unsigned long currentTime = arduinoAdapter->millis();
-
-    // Check if sensor scan was never performed and schedule reboot if needed
-    if (!rebootScheduled && moduleConfig)
-    {
-        ISettings *settings = moduleConfig->getSettings();
-        if (settings && settings->getWasSensorScanPerformed() == 0)
-        {
-            log("SensorService: Sensor scan was never performed, scheduling reboot in 5 seconds");
-            rebootScheduledTime = currentTime;
-            rebootScheduled = true;
-
-            // Enable sensor scanning on next boot
-            settings->setNoScanSensors(0);
-        }
-    }
-
-    // Execute reboot if scheduled and time has elapsed
-    if (rebootScheduled && (currentTime - rebootScheduledTime >= REBOOT_DELAY_FOR_SCAN))
-    {
-        log("SensorService: Rebooting module to perform sensor scan");
-        if (moduleConfig)
-        {
-            ISettings *settings = moduleConfig->getSettings();
-            if (settings)
-            {
-                settings->setBootType(BOOT_TYPE_TECHNICAL);
-            }
-            moduleConfig->setRequestedModuleMode(CONFIGURED_NEED_RESTART);
-        }
-        return; // Module will restart via main loop
-    }
 
     auto activeSensors = sensorRepository->getActiveSensors();
     if (activeSensors.empty())

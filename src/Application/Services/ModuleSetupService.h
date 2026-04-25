@@ -1826,7 +1826,6 @@ inline void ModuleSetupService::processSensorsFromRepository(Node &node)
         }
 
         settings->setNoScanSensors(false);
-        settings->setWasSensorScanPerformed(1);
         return;
     }
 
@@ -1875,8 +1874,7 @@ inline void ModuleSetupService::processSensorsFromRepository(Node &node)
 
     if (settings)
     {
-        settings->setWasSensorScanPerformed(1);
-        log("SETUP: Sensor scan completed, wasSensorScanPerformed flag set");
+        log("SETUP: Sensor scan completed");
     }
 }
 
