@@ -1,5 +1,15 @@
 # Release Notes
 
+## Version 2.1.46 (2026-04-25)
+
+### Added
+- **LED Identification Mode**: GDV1-3421 The device now supports remote LED blinking commands from the server. When a `BlinkingStart` command is received, all LEDs switch to a fast red blinking pattern so the physical device can be visually identified in the installation. The blinking stops and normal LED behaviour resumes when a `BlinkingStop` command is received.
+
+### Changed
+- **Startup Sensor Scan Behaviour**: GDV1-3424 Removed a mechanism that forced the device to restart itself after 5 seconds if no sensor scan had been performed. The device no longer tracks or stores this scan state between reboots, simplifying startup behaviour.
+
+---
+
 ## Version 2.1.45 (2026-04-25)
 
 ### Changed
