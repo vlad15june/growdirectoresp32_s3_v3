@@ -1,5 +1,12 @@
 # Release Notes
 
+## Version 2.1.45 (2026-04-25)
+
+### Changed
+- **Faster Sensor Initialization on Boot**: GDV1-3420 When the device has previously performed a full sensor scan, it can now start up in an accelerated mode: all previously registered sensors are loaded and activated immediately without re-scanning each port one by one. Modbus ports are powered on or off according to the saved sensor configuration, and the device waits for hardware to stabilize only when the port state actually changed. This significantly reduces the time needed for the device to become operational after a restart.
+
+---
+
 ## Version 2.1.44 (2026-04-24)
 
 ### Fixed
