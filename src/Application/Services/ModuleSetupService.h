@@ -1026,8 +1026,17 @@ inline void ModuleSetupService::fillSensorModuleStructure(Node &node)
         }
     }
 
+    ISettings *settingsForFastPath = moduleConfig ? moduleConfig->getSettings() : nullptr;
+    bool noScanWasSet = settingsForFastPath && settingsForFastPath->getNoScanSensors();
     processSensorsFromRepository(node);
-    handleModbusAddressManagement(node);
+    if (!noScanWasSet)
+    {
+        handleModbusAddressManagement(node);
+    }
+    else
+    {
+        log("SETUP: noScanSensors flag was set - skipping handleModbusAddressManagement");
+    }
 
     log("SETUP: Sensor module structure filled with %zu sensors", node.sensors.size());
 }
@@ -1793,9 +1802,33 @@ inline void ModuleSetupService::createPlaceholderSensors(Node &node)
 
 inline void ModuleSetupService::processSensorsFromRepository(Node &node)
 {
-    // Read actual sensors from repository
     auto sensorEntities = sensorRepository->getAll();
     log("SETUP: Found %zu sensors in repository", sensorEntities.size());
+
+    ISettings *settings = moduleConfig->getSettings();
+    bool skipSensorScan = settings && settings->getNoScanSensors();
+
+    if (skipSensorScan)
+    {
+        log("SETUP: noScanSensors flag is set - skipping existing sensor verification and empty pin scan");
+
+        for (auto &sensorEntity : sensorEntities)
+        {
+            log("SETUP: Adding sensor %s to structure without verification (noScanSensors)",
+                sensorEntity.uid.c_str());
+            addSensorToStructure(node, sensorEntity);
+            mqttManager->loop();
+        }
+
+        if (sensorReader)
+        {
+            sensorReader->prepareSensorsForReading(sensorEntities);
+        }
+
+        settings->setNoScanSensors(false);
+        settings->setWasSensorScanPerformed(1);
+        return;
+    }
 
     for (auto &sensorEntity : sensorEntities)
     {
@@ -1813,7 +1846,6 @@ inline void ModuleSetupService::processSensorsFromRepository(Node &node)
                 getSensorStatusName(sensorEntity.status));
         }
 
-        // Check if sensor is online, if yes then add to structure, if not then mark it as type none
         if (sensorReader && sensorReader->scanSensor(sensorEntity))
         {
             log("SETUP: Sensor %s is online, adding to structure", sensorEntity.uid.c_str());
@@ -1827,7 +1859,6 @@ inline void ModuleSetupService::processSensorsFromRepository(Node &node)
             if (sensorEntity.status == SENSOR_STATUS_ADDED)
             {
                 log("SETUP: Sensor %s was previously added but is now offline, updating status to ERROR", sensorEntity.uid.c_str());
-                // Add the sensor to structure with its original type (not as placeholder)
                 addSensorToStructure(node, sensorEntity);
             }
             else
@@ -1837,29 +1868,15 @@ inline void ModuleSetupService::processSensorsFromRepository(Node &node)
                 removeDisconnectedNewSensorPlaceholders(node, sensorEntity);
             }
         }
-        mqttManager->loop(); // NOTE: not good solution - Keep MQTT responsive during potentially long operations
+        mqttManager->loop();
     }
 
-    // Check if sensor scanning should be skipped
-    ISettings *settings = moduleConfig->getSettings();
-    bool skipSensorScan = settings && settings->getNoScanSensors();
+    scanEmptyPinsForSensors(node, sensorEntities);
 
-    if (skipSensorScan)
+    if (settings)
     {
-        log("SETUP: Skipping sensor scanning on empty pins (noScanSensors flag is set)");
-        settings->setNoScanSensors(false); // Reset flag after use
-    }
-    else
-    {
-        // Scan empty pins for additional sensors
-        scanEmptyPinsForSensors(node, sensorEntities);
-
-        // Set flag indicating that sensor scan was performed
-        if (settings)
-        {
-            settings->setWasSensorScanPerformed(1);
-            log("SETUP: Sensor scan completed, wasSensorScanPerformed flag set");
-        }
+        settings->setWasSensorScanPerformed(1);
+        log("SETUP: Sensor scan completed, wasSensorScanPerformed flag set");
     }
 }
 

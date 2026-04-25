@@ -919,6 +919,38 @@ public:
             commandDto.command = extractValue(jsonStr, "command");
             commandDto.version = extractValue(jsonStr, "version");
             commandDto.url = extractValue(jsonStr, "url");
+
+            std::string optionsObj = extractJsonObject(jsonStr, "options");
+            std::string topNoScan = extractValue(jsonStr, "noScanSensors");
+
+            if (!optionsObj.empty())
+            {
+                if (!topNoScan.empty() && optionsObj.find("\"noScanSensors\"") == std::string::npos)
+                {
+                    size_t closeBrace = optionsObj.rfind('}');
+                    if (closeBrace != std::string::npos)
+                    {
+                        std::string injected = "\"noScanSensors\":\"" + topNoScan + "\"";
+                        bool needsComma = false;
+                        for (size_t i = closeBrace; i > 0; --i)
+                        {
+                            char c = optionsObj[i - 1];
+                            if (c == '{') break;
+                            if (!std::isspace(static_cast<unsigned char>(c)))
+                            {
+                                needsComma = true;
+                                break;
+                            }
+                        }
+                        optionsObj.insert(closeBrace, (needsComma ? "," : "") + injected);
+                    }
+                }
+                commandDto.options = optionsObj;
+            }
+            else if (!topNoScan.empty())
+            {
+                commandDto.options = "{\"noScanSensors\":\"" + topNoScan + "\"}";
+            }
         }
 
         // SensorTypeCommandNotification fields

@@ -846,6 +846,29 @@ public:
             commandDto.command = doc["command"] | "";
             commandDto.version = doc["version"] | "";
             commandDto.url = doc["url"] | "";
+
+            DynamicJsonDocument optionsDoc(512);
+            JsonObject optionsObj = optionsDoc.to<JsonObject>();
+
+            if (doc.containsKey("options") && doc["options"].is<JsonObject>())
+            {
+                for (JsonPair kv : doc["options"].as<JsonObject>())
+                {
+                    optionsObj[kv.key()] = kv.value();
+                }
+            }
+
+            if (doc.containsKey("noScanSensors") && !optionsObj.containsKey("noScanSensors"))
+            {
+                optionsObj["noScanSensors"] = doc["noScanSensors"];
+            }
+
+            if (optionsObj.size() > 0)
+            {
+                std::string optionsJson;
+                serializeJson(optionsObj, optionsJson);
+                commandDto.options = optionsJson;
+            }
         }
 
         // SensorTypeCommandNotification fields

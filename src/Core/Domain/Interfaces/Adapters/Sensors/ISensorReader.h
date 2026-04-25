@@ -3,6 +3,7 @@
 
 #include "Core/Domain/Data/Entities/Sensor/Sensor.h"
 #include "Core/Domain/Data/Models/SensorReadResult.h"
+#include <vector>
 
 class ISensorReader
 {
@@ -52,6 +53,8 @@ public:
      * @return true if address was written successfully, false otherwise
      */
     virtual bool writeSensorAddress(const SensorEntity& sensor, int newAddress) = 0;
+
+    virtual void prepareSensorsForReading(const std::vector<SensorEntity>& sensors) = 0;
 };
 
 #endif // I_SENSOR_READER_H

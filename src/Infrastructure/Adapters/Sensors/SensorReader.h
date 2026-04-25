@@ -197,7 +197,111 @@ public:
         }
     }
 
+    void prepareSensorsForReading(const std::vector<SensorEntity>& sensors) override
+    {
+        bool hasModbus = false;
+        for (const auto& sensor : sensors)
+        {
+            if (sensor.protocol == "ModBus")
+            {
+                hasModbus = true;
+                break;
+            }
+        }
+
+        if (hasModbus)
+        {
+            prepareModbusSensors(sensors);
+        }
+    }
+
 private:
+    void prepareModbusSensors(const std::vector<SensorEntity>& sensors)
+    {
+        if (!_modbusReader)
+        {
+            return;
+        }
+
+        initModbusReader(sensors);
+        bool stateChanged = configureModbusPortsPower(sensors);
+        warmupModbusPortsIfChanged(stateChanged);
+    }
+
+    void initModbusReader(const std::vector<SensorEntity>& sensors)
+    {
+        unsigned long baud = 9600;
+        for (const auto& sensor : sensors)
+        {
+            if (sensor.protocol == "ModBus" && sensor.baudRate > 0)
+            {
+                baud = sensor.baudRate;
+                break;
+            }
+        }
+        _modbusReader->init(baud);
+        log("SensorReader: Initialized Modbus reader at %lu baud", baud);
+    }
+
+    bool configureModbusPortsPower(const std::vector<SensorEntity>& sensors)
+    {
+        const int portCount = 4;
+        bool portNeedsPower[portCount] = {false, false, false, false};
+
+        for (const auto& sensor : sensors)
+        {
+            if (sensor.protocol != "ModBus")
+            {
+                continue;
+            }
+            int portIndex = sensor.pin;
+            if (portIndex >= 0 && portIndex < portCount)
+            {
+                portNeedsPower[portIndex] = true;
+            }
+        }
+
+        bool stateChanged = false;
+        for (int i = 0; i < portCount; i++)
+        {
+            if (portNeedsPower[i])
+            {
+                if (_modbusReader->powerOnPort(i))
+                {
+                    stateChanged = true;
+                    log("SensorReader: Powered on port %d for active sensor", i);
+                }
+                else
+                {
+                    log("SensorReader: Port %d already powered on", i);
+                }
+            }
+            else
+            {
+                if (_modbusReader->powerOffPort(i))
+                {
+                    stateChanged = true;
+                    log("SensorReader: Powered off unused port %d", i);
+                }
+                else
+                {
+                    log("SensorReader: Port %d already powered off", i);
+                }
+            }
+        }
+
+        return stateChanged;
+    }
+
+    void warmupModbusPortsIfChanged(bool stateChanged)
+    {
+        if (stateChanged && _arduino)
+        {
+            log("SensorReader: Port state changed, warmup 10s");
+            _arduino->delay(10000);
+        }
+    }
+
     bool readAnalogSensor(const SensorEntity &sensor, float &outValue)
     {
         if (!_analogReader)
