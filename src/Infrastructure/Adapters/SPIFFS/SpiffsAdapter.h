@@ -39,12 +39,47 @@ public:
     }
 
     void initSPIFFS() override {
-        if (!SPIFFS.begin(true)) {
-            log("SPIFFS Mount Failed");
-            fileSystemStatus = FILE_SYSTEM_STATUS_FAIL;
-        } else {
-            log("SPIFFS Mounted successfully");
+        unsigned long t0 = millis();
+        Serial.print("SPIFFS: begin(false)...");
+        Serial.flush();
+        bool mounted = SPIFFS.begin(false);
+        Serial.printf(" %s in %lu ms\n", mounted ? "ok" : "fail", millis() - t0);
+        Serial.flush();
+
+        if (mounted) {
+            Serial.println("SPIFFS Mounted successfully");
             fileSystemStatus = FILE_SYSTEM_STATUS_DONE;
+            return;
+        }
+
+        SPIFFS.end();
+
+        t0 = millis();
+        Serial.print("SPIFFS: format()...");
+        Serial.flush();
+        bool formatted = SPIFFS.format();
+        Serial.printf(" %s in %lu ms\n", formatted ? "ok" : "fail", millis() - t0);
+        Serial.flush();
+
+        if (!formatted) {
+            Serial.println("SPIFFS: format failed");
+            fileSystemStatus = FILE_SYSTEM_STATUS_FAIL;
+            return;
+        }
+
+        t0 = millis();
+        Serial.print("SPIFFS: begin(false) after format...");
+        Serial.flush();
+        mounted = SPIFFS.begin(false);
+        Serial.printf(" %s in %lu ms\n", mounted ? "ok" : "fail", millis() - t0);
+        Serial.flush();
+
+        if (mounted) {
+            Serial.println("SPIFFS Mounted successfully");
+            fileSystemStatus = FILE_SYSTEM_STATUS_DONE;
+        } else {
+            Serial.println("SPIFFS Mount Failed");
+            fileSystemStatus = FILE_SYSTEM_STATUS_FAIL;
         }
     }
 
