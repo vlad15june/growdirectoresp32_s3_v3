@@ -6,6 +6,7 @@
 #include <Arduino.h>
 #include <FS.h>
 #include <SPIFFS.h>
+#include <esp_partition.h>
 #include <stdarg.h>
 #include <string>
 
@@ -52,25 +53,31 @@ public:
             return;
         }
 
-        SPIFFS.end();
-
-        t0 = millis();
-        Serial.print("SPIFFS: format()...");
-        Serial.flush();
-        bool formatted = SPIFFS.format();
-        Serial.printf(" %s in %lu ms\n", formatted ? "ok" : "fail", millis() - t0);
-        Serial.flush();
-
-        if (!formatted) {
-            Serial.println("SPIFFS: format failed");
+        const esp_partition_t* part = esp_partition_find_first(
+            ESP_PARTITION_TYPE_DATA, ESP_PARTITION_SUBTYPE_DATA_SPIFFS, NULL);
+        if (part == NULL) {
+            Serial.println("SPIFFS: partition not found");
             fileSystemStatus = FILE_SYSTEM_STATUS_FAIL;
             return;
         }
 
         t0 = millis();
-        Serial.print("SPIFFS: begin(false) after format...");
+        Serial.printf("SPIFFS: erasing partition (%u bytes)...", part->size);
         Serial.flush();
-        mounted = SPIFFS.begin(false);
+        esp_err_t err = esp_partition_erase_range(part, 0, part->size);
+        Serial.printf(" %s in %lu ms\n", err == ESP_OK ? "ok" : "fail", millis() - t0);
+        Serial.flush();
+
+        if (err != ESP_OK) {
+            Serial.println("SPIFFS: partition erase failed");
+            fileSystemStatus = FILE_SYSTEM_STATUS_FAIL;
+            return;
+        }
+
+        t0 = millis();
+        Serial.print("SPIFFS: begin(true) after erase...");
+        Serial.flush();
+        mounted = SPIFFS.begin(true);
         Serial.printf(" %s in %lu ms\n", mounted ? "ok" : "fail", millis() - t0);
         Serial.flush();
 
