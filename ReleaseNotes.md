@@ -1,5 +1,12 @@
 # Release Notes
 
+## Version 2.1.47 (2026-04-28)
+
+### Changed
+- **Sensor Scan Behaviour on Server-Initiated Reboot**: GDV1-3431 When the server sends a reboot command without an explicit sensor scan override, the device now always defaults to performing a full sensor scan on the next startup. Previously, the scan skip flag could retain a stale value from a prior operation, causing the device to unexpectedly skip sensor scanning after a server-triggered restart.
+
+---
+
 ## Version 2.1.46 (2026-04-25)
 
 ### Added
