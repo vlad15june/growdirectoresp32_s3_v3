@@ -1035,20 +1035,21 @@ private:
             return false;
         }
         
-        // Check for noScanSensors flag in options
         bool noScan = false;
-        if (!moduleCommand.options.empty() && settings)
+        if (settings)
         {
-            std::string noScanValue = extractJsonValue(moduleCommand.options, "noScanSensors");
-            if (!noScanValue.empty())
+            if (!moduleCommand.options.empty())
             {
-                // Parse boolean value (accepts "true", "1", or true)
-                noScan = (noScanValue == "true" || noScanValue == "1");
-                settings->setNoScanSensors(noScan ? 1 : 0);
-                
-                log(DebugFeatures::MODULE_COMMAND_DEBUG,
-                    "ModuleCommandUseCase: Set noScanSensors flag to %d", noScan ? 1 : 0);
+                std::string noScanValue = extractJsonValue(moduleCommand.options, "noScanSensors");
+                if (!noScanValue.empty())
+                {
+                    noScan = (noScanValue == "true" || noScanValue == "1");
+                }
             }
+            settings->setNoScanSensors(noScan ? 1 : 0);
+            log(DebugFeatures::MODULE_COMMAND_DEBUG,
+                "ModuleCommandUseCase: Reboot - Set noScanSensors flag to %d (default 0 if absent)",
+                noScan ? 1 : 0);
         }
         
         // If noScan is false, clear sensor and sensor type data
