@@ -1332,6 +1332,17 @@ inline void ModuleSetupService::fillModuleStructure()
 
 inline void ModuleSetupService::setupModule()
 {
+    if (spiffsAdapter)
+    {
+        ISettings *settings = moduleConfig ? moduleConfig->getSettings() : nullptr;
+        bool skipFormat = settings && settings->getIfConfigured() == ModuleModeEnum::AP_TEST_MODE;
+        spiffsAdapter->initSPIFFS(skipFormat);
+    }
+    else
+    {
+        log("SETUP: SPIFFS adapter not available");
+    }
+    
     if (!initializeModuleConfiguration())
     {
         log("SETUP: Module setup failed - unable to initialize configuration");
