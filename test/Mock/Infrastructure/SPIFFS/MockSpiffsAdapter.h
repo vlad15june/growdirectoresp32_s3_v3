@@ -50,7 +50,7 @@ public:
     }
     
     // ISpiffsAdapter interface implementation
-    void initSPIFFS() override {
+    void initSPIFFS(bool skipFormat = false) override {
         // Mock implementation - does nothing
     }
     
