@@ -319,7 +319,6 @@ inline void ModuleSetupService::handleModuleMode()
     }
 
     uint8_t isConfigured = settings->getIfConfigured();
-    log("SETUP: isConfigured = %d", isConfigured);
 
     if (isConfigured != ModuleModeEnum::CONFIGURED_NEED_RESTART &&
         isConfigured != ModuleModeEnum::AP_TEST_MODE &&
@@ -328,10 +327,10 @@ inline void ModuleSetupService::handleModuleMode()
         isConfigured != ModuleModeEnum::CONFIGURED_DONE)
     {
         settings->setConfigured(ModuleModeEnum::AP_TEST_MODE);
-        // settings->setConfigured(ModuleModeEnum::USER_CAN_CONFIGURE);
-
-        log("SETUP: Updated configuration status to USER_CAN_CONFIGURE, needs restart");
+        isConfigured = ModuleModeEnum::AP_TEST_MODE;
     }
+
+    log("SETUP: isConfigured = %d", isConfigured);
 
     buttonUseCases->checkButtonPressedWhenOn();
 
@@ -1333,17 +1332,6 @@ inline void ModuleSetupService::fillModuleStructure()
 
 inline void ModuleSetupService::setupModule()
 {
-    if (spiffsAdapter)
-    {
-        ISettings *settings = moduleConfig ? moduleConfig->getSettings() : nullptr;
-        bool skipFormat = settings && settings->getIfConfigured() == ModuleModeEnum::AP_TEST_MODE;
-        spiffsAdapter->initSPIFFS(skipFormat);
-    }
-    else
-    {
-        log("SETUP: SPIFFS adapter not available");
-    }
-
     if (!initializeModuleConfiguration())
     {
         log("SETUP: Module setup failed - unable to initialize configuration");

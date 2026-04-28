@@ -301,8 +301,11 @@ void setup()
 
   settings.begin();
   uint8_t bootMode = settings.getIfConfigured();
-  bool isTestMode = (bootMode == ModuleModeEnum::AP_TEST_MODE);
-  spiffsAdapter.initSPIFFS(isTestMode);
+  bool needsSpiffs = (bootMode == ModuleModeEnum::USER_CAN_CONFIGURE ||
+                      bootMode == ModuleModeEnum::USER_CAN_RE_CONFIGURE ||
+                      bootMode == ModuleModeEnum::CONFIGURED_DONE ||
+                      bootMode == ModuleModeEnum::CONFIGURED_NEED_RESTART);
+  spiffsAdapter.initSPIFFS(!needsSpiffs);
   // spiffsAdapter.RemoveFile("/data/sensorTypes.json");
   // spiffsAdapter.RemoveFile("/data/sensors.json");
   // spiffsAdapter.RemoveFile("/sensors/sensors.json");
