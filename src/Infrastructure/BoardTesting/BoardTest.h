@@ -452,6 +452,10 @@ inline void BoardTest::handleReadVersion()
         std::string version = moduleConfig->getFirmwareVersion();
         arduinoAdapter->serialPrintln(version.c_str());
     }
+    else if (arduinoAdapter)
+    {
+        arduinoAdapter->serialPrintln("read_version_error_no_config");
+    }
 }
 
 inline void BoardTest::handleReadMacAddress()
@@ -519,6 +523,10 @@ inline void BoardTest::handleReadModuleType()
         else if (moduleType == MODULE_TYPE_ANALOG_INPUT_DEVICE && moduleSubType == MODULE_SUBTYPE_DIMMER)
             name = "DIMMER";
         arduinoAdapter->serialPrintln(name);
+    }
+    else if (arduinoAdapter)
+    {
+        arduinoAdapter->serialPrintln("read_module_type_error_no_config");
     }
 }
 
@@ -1441,7 +1449,7 @@ inline int BoardTest::extractIntParameter(const std::string &cmd, const std::str
             endPos = cmd.length();
 
         std::string valueStr = cmd.substr(pos, endPos - pos);
-        return std::stoi(valueStr);
+        try { return std::stoi(valueStr); } catch (...) { return -1; }
     }
     return -1;
 }

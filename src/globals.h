@@ -382,7 +382,8 @@ LoopServiceFactory loopServiceFactory(
     &sensorService,
     &ruleService,
     &testModeWebServer,
-    &clearModuleDataService);
+    &clearModuleDataService,
+    &boardTest);
 
 ModuleSetupService moduleSetupService(
     &mqttLogger,

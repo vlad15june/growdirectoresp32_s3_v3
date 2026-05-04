@@ -1334,9 +1334,7 @@ inline void ModuleSetupService::setupModule()
 {
     if (spiffsAdapter)
     {
-        ISettings *settings = moduleConfig ? moduleConfig->getSettings() : nullptr;
-        bool skipFormat = settings && settings->getIfConfigured() == ModuleModeEnum::AP_TEST_MODE;
-        spiffsAdapter->initSPIFFS(skipFormat);
+        spiffsAdapter->initSPIFFS();
     }
     else
     {

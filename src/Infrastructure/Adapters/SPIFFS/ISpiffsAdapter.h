@@ -6,7 +6,7 @@ class ISpiffsAdapter {
 public:
     virtual ~ISpiffsAdapter() = default;
 
-    virtual void initSPIFFS(bool skipFormat = false) = 0;
+    virtual void initSPIFFS() = 0;
     virtual std::string readSPIFFSstr(const char* filePath) = 0;
     virtual void RemoveFile(const char* filePath) = 0;
     virtual void RewriteToFile(const char* filePath, const char* body) = 0;

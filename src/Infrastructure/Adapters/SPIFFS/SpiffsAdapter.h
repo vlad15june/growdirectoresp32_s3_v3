@@ -39,7 +39,7 @@ public:
         }
     }
 
-    void initSPIFFS(bool skipFormat = false) override {
+    void initSPIFFS() override {
         unsigned long t0 = millis();
         Serial.print("SPIFFS: begin(false)...");
         Serial.flush();
@@ -50,12 +50,6 @@ public:
         if (mounted) {
             Serial.println("SPIFFS Mounted successfully");
             fileSystemStatus = FILE_SYSTEM_STATUS_DONE;
-            return;
-        }
-
-        if (skipFormat) {
-            Serial.println("SPIFFS: skip format (test mode)");
-            fileSystemStatus = FILE_SYSTEM_STATUS_FAIL;
             return;
         }
 
