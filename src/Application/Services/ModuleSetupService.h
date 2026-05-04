@@ -617,7 +617,7 @@ inline char *ModuleSetupService::generateSSID(const char *wifiPrefix, const char
     char randomPart[10];
     int randomNum = (int)(random(1000) % 1000);
     log("SETUP: Generating random part for SSID: %d", randomNum);
-    snprintf(randomPart, sizeof(randomPart), "_%d", randomNum);
+    snprintf(randomPart, sizeof(randomPart), "_%03d", randomNum);
 
     size_t prefixLen = strlen(wifiPrefix);
     size_t macLen = strlen(macAddress);
