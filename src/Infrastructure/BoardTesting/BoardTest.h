@@ -44,7 +44,13 @@ private:
     ModbusRS485* currentModbus;
     HardwareSerial* testSerial;
 
+    // Non-blocking button test state
+    bool buttonTestActive;
+    unsigned long buttonTestStart;
+    uint32_t buttonTestTimeoutMs;
+
     void processCommand(const std::string &command);
+    void updateButtonTest();
 
     // Command handlers
     void handleRestart();
@@ -142,7 +148,10 @@ inline BoardTest::BoardTest(
                                  DO_ORP(0),
                                  EC_SDN(0),
                                  currentModbus(nullptr),
-                                 testSerial(nullptr)
+                                 testSerial(nullptr),
+                                 buttonTestActive(false),
+                                 buttonTestStart(0),
+                                 buttonTestTimeoutMs(0)
 {
     initializePinArrays();
 }
@@ -210,6 +219,8 @@ inline void BoardTest::processTestCommands()
 {
     if (!arduinoAdapter)
         return;
+
+    updateButtonTest();
 
     while (arduinoAdapter->serialAvailable())
     {
@@ -1397,34 +1408,47 @@ inline void BoardTest::handleSetTestButton(const std::string &cmd)
         return;
     }
 
-    // Extract timeout parameter (format: #set_test_button 10%)
-    int timeout = extractIntParameter(cmd, "");  // Extract the number directly after command
-    if (timeout == -1) {
-        // Try to extract number from the command string
-        size_t pos = cmd.find("#set_test_button");
-        if (pos != std::string::npos) {
-            pos += strlen("#set_test_button");
-            while (pos < cmd.length() && cmd[pos] == ' ') pos++; // Skip spaces
-            size_t endPos = cmd.find('%', pos);
-            if (endPos == std::string::npos) endPos = cmd.length();
-            
-            if (pos < endPos) {
-                std::string timeoutStr = cmd.substr(pos, endPos - pos);
-                try {
-                    timeout = std::stoi(timeoutStr);
-                } catch (...) {
-                    timeout = 10; // Default timeout
-                }
-            }
+    int timeout = -1;
+    size_t pos = cmd.find("#set_test_button");
+    if (pos != std::string::npos) {
+        pos += strlen("#set_test_button");
+        while (pos < cmd.length() && cmd[pos] == ' ') pos++;
+        size_t endPos = cmd.find('%', pos);
+        if (endPos == std::string::npos) endPos = cmd.length();
+        if (pos < endPos) {
+            std::string timeoutStr = cmd.substr(pos, endPos - pos);
+            try { timeout = std::stoi(timeoutStr); } catch (...) { timeout = -1; }
         }
     }
-    
-    if (timeout <= 0) {
-        timeout = 10; // Default timeout
-    }
+    if (timeout <= 0) timeout = 10;
+
+    resultTestButton = false;
+    buttonTestActive = true;
+    buttonTestStart = arduinoAdapter->millis();
+    buttonTestTimeoutMs = static_cast<uint32_t>(timeout) * 1000U;
 
     arduinoAdapter->serialPrintln("Ok");
-    resultTestButton = testButton(timeout);
+}
+
+inline void BoardTest::updateButtonTest()
+{
+    if (!buttonTestActive || !arduinoAdapter || !moduleConfig) return;
+
+    uint8_t pin = moduleConfig->getButtonPin();
+    if (pin == 0) {
+        buttonTestActive = false;
+        return;
+    }
+
+    if (arduinoAdapter->digitalRead(pin) == BUTTON_PRESSED) {
+        resultTestButton = true;
+        buttonTestActive = false;
+        return;
+    }
+
+    if ((arduinoAdapter->millis() - buttonTestStart) >= buttonTestTimeoutMs) {
+        buttonTestActive = false;
+    }
 }
 
 inline void BoardTest::handleGetTestButton()
