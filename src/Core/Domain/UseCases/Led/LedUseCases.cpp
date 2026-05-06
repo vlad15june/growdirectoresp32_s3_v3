@@ -2,13 +2,15 @@
 
 // Constructor
 LedUseCases::LedUseCases(ILedAdapter *adapter, IModuleConfig *moduleConfig, IArduinoAdapter *arduinoAdapter,
-                         ILogger *loggerInstance, IDebugSystem *debugSystemInstance, IDeviceModel *deviceModel)
+                         ILogger *loggerInstance, IDebugSystem *debugSystemInstance, IDeviceModel *deviceModel,
+                         INetworkStatusProvider *networkStatusProvider)
     : ledAdapter(adapter),
       moduleConfig(moduleConfig),
       arduinoAdapter(arduinoAdapter),
       logger(loggerInstance),
       debugSystem(debugSystemInstance),
-      deviceModel(deviceModel)
+      deviceModel(deviceModel),
+      networkStatusProvider(networkStatusProvider)
 {
 }
 
@@ -158,6 +160,29 @@ void LedUseCases::loop()
         break;
 
     case ModuleModeEnum::CONFIGURED_DONE:
+        if (networkStatusProvider != nullptr && networkStatusProvider->isNetworkOffline())
+        {
+            if (currentTime - lastBlinkTime > (ledState ? BLINK_SLOW_ON_TIME : BLINK_SLOW_OFF_TIME))
+            {
+                lastBlinkTime = currentTime;
+                ledState = !ledState;
+
+                ledAdapter->setAllGreenLedOff();
+
+                if (ledState)
+                {
+                    ledAdapter->setAllRedLedOn();
+                }
+                else
+                {
+                    ledAdapter->setAllRedLedOff();
+                }
+
+                log("CONFIGURED_DONE offline: Red LED blink state: %s", ledState ? "ON" : "OFF");
+            }
+            break;
+        }
+
         if (currentTime - lastBlinkTime > (ledState ? BLINK_SLOW_ON_TIME : BLINK_SLOW_OFF_TIME))
         {
             lastBlinkTime = currentTime;

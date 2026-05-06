@@ -226,8 +226,6 @@ OnChangeModuleModeUseCase moduleModeUseCase(
     mqttLogger,
     debugSystem);
 
-LedUseCases ledUseCases(&ledAdapter, &moduleConfig, &arduinoAdapter, &mqttLogger, &debugSystem, &deviceModel);
-
 ButtonUseCases buttonUseCases(&buttonAdapter, &mqttLogger, &debugSystem, 0, &settings, &moduleConfig, &clearModuleDataService, &arduinoAdapter);
 
 ModuleConfigurationWebServer moduleConfigurationWebServer(
@@ -257,6 +255,20 @@ WebServerLauncher webServerLauncher(
 
 SensorValueModel sensorValueModel;
 
+DiagnosticService diagnosticService(
+    &restApiService,
+    &moduleConfig,
+    mqttLogger,
+    debugSystem,
+    &jsonConverter,
+    &wifiAdapter,
+    &ntpTimeAdapter,
+    &arduinoAdapter,
+    &mqttManager,
+    &hybridApiService);
+
+LedUseCases ledUseCases(&ledAdapter, &moduleConfig, &arduinoAdapter, &mqttLogger, &debugSystem, &deviceModel, &diagnosticService);
+
 ModuleCommandExecutionUseCase moduleCommandExecutionUseCase(&mqttLogger, &debugSystem, &ntpTimeAdapter, &firmwareRemoteUpdate, &arduinoAdapter, &sensorRepository, &sensorTypeRepository, &sensorReader, &moduleConfig, &settings, &hybridApiService, &clearModuleDataService, &moduleStructure, &sensorValueModel, &wifiManager, &ledUseCases);
 
 CommandService commandService(
@@ -269,18 +281,6 @@ CommandService commandService(
     &debugSystem,
     &ntpTimeAdapter,
     &jsonConverter);
-
-DiagnosticService diagnosticService(
-    &restApiService,
-    &moduleConfig,
-    mqttLogger,
-    debugSystem,
-    &jsonConverter,
-    &wifiAdapter,
-    &ntpTimeAdapter,
-    &arduinoAdapter,
-    &mqttManager,
-    &hybridApiService);
 
 ProcessDeviceStateUseCaseFactory deviceStateUseCaseFactory(
     &mqttLogger,

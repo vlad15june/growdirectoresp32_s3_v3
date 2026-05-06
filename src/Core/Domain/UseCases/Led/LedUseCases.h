@@ -7,6 +7,7 @@
 #include "Core/Domain/Interfaces/Adapters/IArduinoAdapter.h"
 #include "Core/Domain/Interfaces/ILogger.h"
 #include "Core/Domain/Interfaces/IDebugSystem.h"
+#include "Core/Domain/Interfaces/INetworkStatusProvider.h"
 #include "Core/Domain/Enums/ModuleModeEnum.h"
 #include "Core/Domain/Data/Models/IDeviceModel.h"
 #include <stdarg.h>
@@ -20,6 +21,7 @@ private:
     ILogger* logger;
     IDebugSystem* debugSystem;
     IDeviceModel* deviceModel;
+    INetworkStatusProvider* networkStatusProvider;
 
     // LED timing constants (in milliseconds)
     static const unsigned long BLINK_FAST_ON_TIME = 500;     // 0.5 seconds on
@@ -39,7 +41,8 @@ public:
     // Constructor
     LedUseCases(ILedAdapter* adapter, IModuleConfig* moduleConfig, IArduinoAdapter* arduinoAdapter,
                 ILogger* loggerInstance = nullptr, IDebugSystem* debugSystemInstance = nullptr,
-                IDeviceModel* deviceModel = nullptr);
+                IDeviceModel* deviceModel = nullptr,
+                INetworkStatusProvider* networkStatusProvider = nullptr);
     
     // Destructor
     ~LedUseCases() override;

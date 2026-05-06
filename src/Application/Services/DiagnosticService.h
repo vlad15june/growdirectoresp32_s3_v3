@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Application/Interfaces/IDiagnosticService.h"
+#include "Core/Domain/Interfaces/INetworkStatusProvider.h"
 #include "Core/Domain/Interfaces/API/IRestAPIService.h"
 #include "Core/Domain/Interfaces/API/IHybridAPIService.h"
 #include "Core/Domain/Interfaces/IModuleConfig.h"
@@ -22,7 +23,7 @@ enum DiagnosticsNetworkState {
     DIAGNOSTICS_NETWORK_STATE_ERROR = 1
 };
 
-class DiagnosticService : public IDiagnosticService
+class DiagnosticService : public IDiagnosticService, public INetworkStatusProvider
 {
 private:
     IRestAPIService *_restApiService;
@@ -319,6 +320,11 @@ public:
     }
 
     void setMqttConnected(bool connected) { _mqttConnected = connected; }
+
+    bool isNetworkOffline() override
+    {
+        return _lastNetworkState == DIAGNOSTICS_NETWORK_STATE_ERROR;
+    }
 
     void recordFailure()
     {

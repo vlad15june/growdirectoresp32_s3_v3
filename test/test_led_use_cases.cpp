@@ -8,6 +8,7 @@
 #include "Mock/Infrastructure/Configuration/MockModuleConfig.h"
 #include "Mock/Infrastructure/Configuration/MockSettings.h"
 #include "Mock/Infrastructure/MockArduinoAdapter.h"
+#include "Mock/Core/Domain/MockNetworkStatusProvider.h"
 
 // Global test variables
 static MockLogger g_mockLogger;
@@ -190,6 +191,79 @@ static void test_blinking_mode_overrides_config_state(void)
         fprintf(debug_file, "Finished test_blinking_mode_overrides_config_state\n");
 }
 
+static void test_configured_done_offline_blinks_red(void)
+{
+    if (debug_file != nullptr)
+        fprintf(debug_file, "Starting test_configured_done_offline_blinks_red\n");
+    led_use_cases_setup();
+
+    MockNetworkStatusProvider netStatus;
+    netStatus.offline = true;
+
+    delete g_ledUseCases;
+    g_ledUseCases = new LedUseCases(
+        &g_mockLedAdapter,
+        &g_mockModuleConfig,
+        &g_mockArduinoAdapter,
+        &g_mockLogger,
+        &g_mockDebugSystem,
+        nullptr,
+        &netStatus);
+
+    g_mockSettings.setConfigured(ModuleModeEnum::CONFIGURED_DONE);
+
+    g_mockArduinoAdapter.setMillis(0);
+    g_ledUseCases->loop();
+
+    g_mockLedAdapter.reset();
+    g_mockArduinoAdapter.setMillis(5001);
+    g_ledUseCases->loop();
+
+    TEST_ASSERT_TRUE(g_mockLedAdapter.setAllRedLedOnCalled);
+    TEST_ASSERT_FALSE(g_mockLedAdapter.setAllGreenLedOnCalled);
+    TEST_ASSERT_EQUAL(0, g_mockLedAdapter.greenLedOnCount);
+
+    led_use_cases_teardown();
+    if (debug_file != nullptr)
+        fprintf(debug_file, "Finished test_configured_done_offline_blinks_red\n");
+}
+
+static void test_configured_done_online_blinks_green(void)
+{
+    if (debug_file != nullptr)
+        fprintf(debug_file, "Starting test_configured_done_online_blinks_green\n");
+    led_use_cases_setup();
+
+    MockNetworkStatusProvider netStatus;
+    netStatus.offline = false;
+
+    delete g_ledUseCases;
+    g_ledUseCases = new LedUseCases(
+        &g_mockLedAdapter,
+        &g_mockModuleConfig,
+        &g_mockArduinoAdapter,
+        &g_mockLogger,
+        &g_mockDebugSystem,
+        nullptr,
+        &netStatus);
+
+    g_mockSettings.setConfigured(ModuleModeEnum::CONFIGURED_DONE);
+
+    g_mockArduinoAdapter.setMillis(0);
+    g_ledUseCases->loop();
+
+    g_mockLedAdapter.reset();
+    g_mockArduinoAdapter.setMillis(5001);
+    g_ledUseCases->loop();
+
+    TEST_ASSERT_TRUE(g_mockLedAdapter.setAllGreenLedOnCalled);
+    TEST_ASSERT_FALSE(g_mockLedAdapter.setAllRedLedOnCalled);
+
+    led_use_cases_teardown();
+    if (debug_file != nullptr)
+        fprintf(debug_file, "Finished test_configured_done_online_blinks_green\n");
+}
+
 static void test_blinking_mode_off_restores_normal(void)
 {
     if (debug_file != nullptr)
@@ -228,6 +302,8 @@ extern "C" int run_led_use_cases_tests(void)
     RUN_TEST(test_blinking_mode_toggles_red_led);
     RUN_TEST(test_blinking_mode_overrides_config_state);
     RUN_TEST(test_blinking_mode_off_restores_normal);
+    RUN_TEST(test_configured_done_offline_blinks_red);
+    RUN_TEST(test_configured_done_online_blinks_green);
 
     if (debug_file != nullptr)
         fprintf(debug_file, "\n----- LedUseCases Tests Complete -----\n");
