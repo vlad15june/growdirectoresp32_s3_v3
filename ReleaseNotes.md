@@ -1,5 +1,12 @@
 # Release Notes
 
+## Version 2.1.48 (2026-05-06)
+
+### Fixed
+- **Sensor Module Status During Network Outage**: GDV1-3456 Fixed incorrect behaviour where sensor modules were shown as offline (flashing red LED) when the router lost power or the Wi-Fi connection dropped. Sensor modules now retain their last known status during a network outage and only change to an error state when a sensor-specific fault is detected.
+
+---
+
 ## Version 2.1.47 (2026-04-28)
 
 ### Changed
