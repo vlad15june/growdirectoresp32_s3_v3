@@ -33,6 +33,9 @@ private:
     IArduinoAdapter *arduinoAdapter;
     
     bool resultTestButton;
+    bool buttonTestActive;
+    unsigned long buttonTestStart;
+    unsigned long buttonTestTimeoutMs;
 
     void log(const char *format, ...)
     {
@@ -128,7 +131,10 @@ public:
         moduleConfig(moduleConfigInstance),
         wifiAdapter(wifiAdapterInstance),
         arduinoAdapter(arduinoAdapterInstance),
-        resultTestButton(false) {}
+        resultTestButton(false),
+        buttonTestActive(false),
+        buttonTestStart(0),
+        buttonTestTimeoutMs(0) {}
 
     void setupWebServer()
     {
@@ -583,15 +589,19 @@ public:
             server.send_P(200, "application/json", response);
         });
 
-        // Button test endpoints
+        // Button test endpoints (non-blocking)
         server.on("/set_test_button", HTTP_GET, [this]()
         {
             log("handle /set_test_button");
             uint8_t timeout = server.arg(PARAM_VAL).toInt();
             if (timeout == 0) timeout = 10;
-            
+
+            resultTestButton = false;
+            buttonTestActive = true;
+            buttonTestStart = arduinoAdapter ? arduinoAdapter->millis() : 0;
+            buttonTestTimeoutMs = static_cast<uint32_t>(timeout) * 1000U;
+
             server.send_P(200, "text/html", "Ok");
-            resultTestButton = testButton(timeout);
         });
 
         server.on("/get_test_button", HTTP_GET, [this]()
@@ -669,44 +679,33 @@ public:
     void loop() override
     {
         server.handleClient();
+        updateButtonTest();
     }
 
 private:
-    bool testButton(uint8_t timeoutSeconds)
+    void updateButtonTest()
     {
-        if (!moduleConfig || !arduinoAdapter) 
+        if (!buttonTestActive || !arduinoAdapter || !moduleConfig) return;
+
+        uint8_t pin = moduleConfig->getButtonPin();
+        if (pin == 0)
         {
-            return false;
+            buttonTestActive = false;
+            return;
         }
 
-        uint8_t buttonPin = moduleConfig->getButtonPin();
-        if (buttonPin == 0) 
+        const uint8_t BUTTON_PRESSED = 0;
+        if (arduinoAdapter->digitalRead(pin) == BUTTON_PRESSED)
         {
-            return false;
+            resultTestButton = true;
+            buttonTestActive = false;
+            return;
         }
 
-        unsigned long startTime = arduinoAdapter->millis();
-        bool buttonPressed = false;
-        const uint8_t BUTTON_PRESSED = 0; // Assuming button pressed = LOW
-
-        // If button is already pressed, return false
-        if (arduinoAdapter->digitalRead(buttonPin) == BUTTON_PRESSED) 
+        if ((arduinoAdapter->millis() - buttonTestStart) >= buttonTestTimeoutMs)
         {
-            return false;
+            buttonTestActive = false;
         }
-
-        // Wait for button press within timeout period
-        while ((arduinoAdapter->millis() - startTime) < timeoutSeconds * 1000) 
-        {
-            if (arduinoAdapter->digitalRead(buttonPin) == BUTTON_PRESSED) 
-            {
-                buttonPressed = true;
-                break;
-            }
-            arduinoAdapter->delay(10);
-        }
-
-        return buttonPressed;
     }
 };
 
