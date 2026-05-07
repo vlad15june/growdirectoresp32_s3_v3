@@ -154,13 +154,8 @@ void ButtonAdapter::updateButtonStates()
             state.lastDebounceState = reading;
         }
 
-        // If debounce time has passed, update the actual button state
         if ((currentTime - state.lastDebounceTime) > debounceTime)
         {
-            if (state.currentState != reading)
-            {
-                Serial.printf("[ButtonAdapter] Pin %d state: %d -> %d\n", pin, state.currentState, reading);
-            }
             state.currentState = reading;
         }
     }

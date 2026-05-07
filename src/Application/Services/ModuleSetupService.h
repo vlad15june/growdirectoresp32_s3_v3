@@ -378,23 +378,38 @@ inline void ModuleSetupService::handleModuleMode()
 
 inline void ModuleSetupService::ApTestModeModeConfigure()
 {
-    log("SETUP: Module is in AP_TEST_MODE - configuring for board testing");
+    unsigned long t0 = arduinoAdapter ? arduinoAdapter->millis() : 0;
+    log("[%lu ms] SETUP: ApTestModeModeConfigure begin - configuring for board testing", t0);
 
-    // Setup AP with test mode IP configuration
+    unsigned long apStart = arduinoAdapter ? arduinoAdapter->millis() : 0;
     setupAP(true);
-    setupTestModeWebServer();
+    log("[%lu ms] SETUP: setupAP(test) done (took %lu ms)",
+        arduinoAdapter ? arduinoAdapter->millis() : 0,
+        (arduinoAdapter ? arduinoAdapter->millis() : 0) - apStart);
 
-    // Setup test devices for board testing
+    unsigned long wsStart = arduinoAdapter ? arduinoAdapter->millis() : 0;
+    setupTestModeWebServer();
+    log("[%lu ms] SETUP: setupTestModeWebServer done (took %lu ms)",
+        arduinoAdapter ? arduinoAdapter->millis() : 0,
+        (arduinoAdapter ? arduinoAdapter->millis() : 0) - wsStart);
+
     if (boardTest)
     {
-        log("SETUP: Setting up devices for test mode");
+        unsigned long ts = arduinoAdapter ? arduinoAdapter->millis() : 0;
+        log("[%lu ms] SETUP: setupDevicesForTest begin", ts);
         boardTest->setupDevicesForTest(moduleConfig);
-        log("SETUP: Test devices setup completed");
+        log("[%lu ms] SETUP: setupDevicesForTest done (took %lu ms)",
+            arduinoAdapter ? arduinoAdapter->millis() : 0,
+            (arduinoAdapter ? arduinoAdapter->millis() : 0) - ts);
     }
     else
     {
         log("SETUP: BoardTest not available for test mode setup");
     }
+
+    log("[%lu ms] SETUP: ApTestModeModeConfigure done (took %lu ms)",
+        arduinoAdapter ? arduinoAdapter->millis() : 0,
+        (arduinoAdapter ? arduinoAdapter->millis() : 0) - t0);
 }
 
 inline void ModuleSetupService::UserCanConfigModeConfigure()
@@ -413,20 +428,46 @@ inline void ModuleSetupService::UserReConfigModeConfigure()
 
 inline void ModuleSetupService::ConfigureDoneModeConfigure()
 {
+    unsigned long t0 = arduinoAdapter ? arduinoAdapter->millis() : 0;
+    log("[%lu ms] SETUP: ConfigureDoneModeConfigure begin", t0);
+
+    unsigned long ts = arduinoAdapter ? arduinoAdapter->millis() : 0;
     setupWifiConnection();
+    log("[%lu ms] SETUP: setupWifiConnection done (took %lu ms)",
+        arduinoAdapter ? arduinoAdapter->millis() : 0,
+        (arduinoAdapter ? arduinoAdapter->millis() : 0) - ts);
 
-    // Check if module was deleted from server while offline
+    ts = arduinoAdapter ? arduinoAdapter->millis() : 0;
     checkModuleDeletionOnStartup();
+    log("[%lu ms] SETUP: checkModuleDeletionOnStartup done (took %lu ms)",
+        arduinoAdapter ? arduinoAdapter->millis() : 0,
+        (arduinoAdapter ? arduinoAdapter->millis() : 0) - ts);
 
+    ts = arduinoAdapter ? arduinoAdapter->millis() : 0;
     setupMqttConnection();
-    setupUdp();
+    log("[%lu ms] SETUP: setupMqttConnection done (took %lu ms)",
+        arduinoAdapter ? arduinoAdapter->millis() : 0,
+        (arduinoAdapter ? arduinoAdapter->millis() : 0) - ts);
 
+    ts = arduinoAdapter ? arduinoAdapter->millis() : 0;
+    setupUdp();
+    log("[%lu ms] SETUP: setupUdp done (took %lu ms)",
+        arduinoAdapter ? arduinoAdapter->millis() : 0,
+        (arduinoAdapter ? arduinoAdapter->millis() : 0) - ts);
+
+    ts = arduinoAdapter ? arduinoAdapter->millis() : 0;
     fillModuleStructure();
+    log("[%lu ms] SETUP: fillModuleStructure done (took %lu ms)",
+        arduinoAdapter ? arduinoAdapter->millis() : 0,
+        (arduinoAdapter ? arduinoAdapter->millis() : 0) - ts);
 
     if (deviceService)
     {
+        ts = arduinoAdapter ? arduinoAdapter->millis() : 0;
         deviceService->init();
-        log("SETUP: Device service initialized");
+        log("[%lu ms] SETUP: Device service initialized (took %lu ms)",
+            arduinoAdapter ? arduinoAdapter->millis() : 0,
+            (arduinoAdapter ? arduinoAdapter->millis() : 0) - ts);
     }
     else
     {
@@ -435,15 +476,20 @@ inline void ModuleSetupService::ConfigureDoneModeConfigure()
 
     if (ruleService)
     {
+        ts = arduinoAdapter ? arduinoAdapter->millis() : 0;
         ruleService->init();
-        log("SETUP: Rule service initialized");
+        log("[%lu ms] SETUP: Rule service initialized (took %lu ms)",
+            arduinoAdapter ? arduinoAdapter->millis() : 0,
+            (arduinoAdapter ? arduinoAdapter->millis() : 0) - ts);
     }
     else
     {
         log("SETUP: Rule service not available");
     }
 
-    log("SETUP: Module prepared for operation");
+    log("[%lu ms] SETUP: ConfigureDoneModeConfigure done - module prepared for operation (took %lu ms)",
+        arduinoAdapter ? arduinoAdapter->millis() : 0,
+        (arduinoAdapter ? arduinoAdapter->millis() : 0) - t0);
 }
 
 inline void ModuleSetupService::checkModuleDeletionOnStartup()
@@ -1332,46 +1378,77 @@ inline void ModuleSetupService::fillModuleStructure()
 
 inline void ModuleSetupService::setupModule()
 {
+    unsigned long t0 = arduinoAdapter ? arduinoAdapter->millis() : 0;
+    log("[%lu ms] SETUP: setupModule begin", t0);
+
     if (spiffsAdapter)
     {
+        unsigned long fsStart = arduinoAdapter ? arduinoAdapter->millis() : 0;
+        log("[%lu ms] SETUP: SPIFFS init begin", fsStart);
         spiffsAdapter->initSPIFFS();
+        unsigned long fsEnd = arduinoAdapter ? arduinoAdapter->millis() : 0;
+        log("[%lu ms] SETUP: SPIFFS init done (took %lu ms)", fsEnd, fsEnd - fsStart);
+        if (moduleConfig)
+        {
+            moduleConfig->setFileSystemStatus(spiffsAdapter->getFileSystemStatus());
+        }
     }
     else
     {
         log("SETUP: SPIFFS adapter not available");
     }
-    
+
     if (!initializeModuleConfiguration())
     {
         log("SETUP: Module setup failed - unable to initialize configuration");
         return;
     }
+    log("[%lu ms] SETUP: configuration initialized", arduinoAdapter ? arduinoAdapter->millis() : 0);
 
+    unsigned long ledsStart = arduinoAdapter ? arduinoAdapter->millis() : 0;
     if (!setupLeds())
     {
         log("SETUP: LED setup failed");
     }
+    log("[%lu ms] SETUP: setupLeds done (took %lu ms)",
+        arduinoAdapter ? arduinoAdapter->millis() : 0,
+        (arduinoAdapter ? arduinoAdapter->millis() : 0) - ledsStart);
 
+    unsigned long btnStart = arduinoAdapter ? arduinoAdapter->millis() : 0;
     if (!setupButtons())
     {
         log("SETUP: Button setup failed");
     }
+    log("[%lu ms] SETUP: setupButtons done (took %lu ms)",
+        arduinoAdapter ? arduinoAdapter->millis() : 0,
+        (arduinoAdapter ? arduinoAdapter->millis() : 0) - btnStart);
 
     if (ledUseCases)
     {
+        unsigned long ts = arduinoAdapter ? arduinoAdapter->millis() : 0;
         ledUseCases->ledOnLoad();
-        log("SETUP: LED on-load sequence executed");
+        log("[%lu ms] SETUP: LED on-load sequence executed (took %lu ms)",
+            arduinoAdapter ? arduinoAdapter->millis() : 0,
+            (arduinoAdapter ? arduinoAdapter->millis() : 0) - ts);
     }
 
+    unsigned long modeStart = arduinoAdapter ? arduinoAdapter->millis() : 0;
+    log("[%lu ms] SETUP: handleModuleMode begin", modeStart);
     handleModuleMode();
+    unsigned long modeEnd = arduinoAdapter ? arduinoAdapter->millis() : 0;
+    log("[%lu ms] SETUP: handleModuleMode done (took %lu ms)", modeEnd, modeEnd - modeStart);
 
     if (ledUseCases)
     {
+        unsigned long ts = arduinoAdapter ? arduinoAdapter->millis() : 0;
         ledUseCases->ledOffLoad();
-        log("SETUP: LED off-load sequence executed");
+        log("[%lu ms] SETUP: LED off-load sequence executed (took %lu ms)",
+            arduinoAdapter ? arduinoAdapter->millis() : 0,
+            (arduinoAdapter ? arduinoAdapter->millis() : 0) - ts);
     }
 
-    log("SETUP: Module setup completed");
+    unsigned long tEnd = arduinoAdapter ? arduinoAdapter->millis() : 0;
+    log("[%lu ms] SETUP: Module setup completed (total %lu ms)", tEnd, tEnd - t0);
     log("SETUP: done");
 }
 
