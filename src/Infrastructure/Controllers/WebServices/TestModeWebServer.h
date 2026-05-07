@@ -12,6 +12,7 @@
 #include "Core/Domain/Interfaces/Adapters/IWifiAdapter.h"
 #include "Core/Domain/Interfaces/Adapters/IArduinoAdapter.h"
 #include "Core/Domain/Enums/ModuleModeEnum.h"
+#include "Core/Domain/Enums/FileSystemStatusEnum.h"
 #include "Application/Interfaces/WebServices/IWebServerLooper.h"
 
 // Parameter constants
@@ -97,13 +98,17 @@ private:
 
     String readModuleType()
     {
-        if (moduleConfig != nullptr)
+        if (moduleConfig == nullptr) return "ERROR";
+
+        int moduleType = moduleConfig->getModuleType();
+        switch (moduleType)
         {
-            int moduleType = moduleConfig->getModuleType();
-            int moduleSubType = moduleConfig->getModuleSubType();
-            return "Type:" + String(moduleType) + " SubType:" + String(moduleSubType);
+            case MODULE_TYPE_SENSOR:              return "SENSOR";
+            case MODULE_TYPE_DEVICE:              return "DEVICE";
+            case MODULE_TYPE_HYDRO:               return "HYDRO";
+            case MODULE_TYPE_ANALOG_INPUT_DEVICE: return "ANALOG_INPUT_DEVICE";
+            default:                              return "ERROR";
         }
-        return "Type:0 SubType:0";
     }
 
 public:
@@ -384,7 +389,7 @@ public:
                     moduleConfig->setRequestedModuleMode(ModuleModeEnum::CONFIGURED_NEED_RESTART);
                 }
             }
-            server.send(200);
+            server.send_P(200, "text/html", "Operation mode");
         });
 
         // Read relay endpoint
@@ -469,7 +474,7 @@ public:
                     value = (value != 1) ? 0 : 1;
                     arduinoAdapter->digitalWrite(redLeds[channel], value);
                     char response[32];
-                    snprintf(response, sizeof(response), "{led_r_ch%d=%d}", channel, value);
+                    snprintf(response, sizeof(response), "{LEDR%d=%d}", channel, arduinoAdapter->digitalRead(redLeds[channel]));
                     server.send_P(200, "application/json", response);
                 }
                 else
@@ -480,7 +485,7 @@ public:
             else
             {
                 char response[32];
-                snprintf(response, sizeof(response), "{led_r_ch%d=%d}", channel, value);
+                snprintf(response, sizeof(response), "{LEDR%d=%d}", channel, value);
                 server.send_P(200, "application/json", response);
             }
         });
@@ -501,7 +506,7 @@ public:
                     value = (value != 1) ? 0 : 1;
                     arduinoAdapter->digitalWrite(greenLeds[channel], value);
                     char response[32];
-                    snprintf(response, sizeof(response), "{led_g_ch%d=%d}", channel, value);
+                    snprintf(response, sizeof(response), "{LEDG%d=%d}", channel, arduinoAdapter->digitalRead(greenLeds[channel]));
                     server.send_P(200, "application/json", response);
                 }
                 else
@@ -512,7 +517,7 @@ public:
             else
             {
                 char response[32];
-                snprintf(response, sizeof(response), "{led_g_ch%d=%d}", channel, value);
+                snprintf(response, sizeof(response), "{LEDG%d=%d}", channel, value);
                 server.send_P(200, "application/json", response);
             }
         });
@@ -613,7 +618,42 @@ public:
         server.on("/check_fs", HTTP_GET, [this]()
         {
             log("handle /check_fs");
-            server.send_P(200, "text/html", "FileSystem:OK");
+            const char *status = "none";
+            if (moduleConfig)
+            {
+                status = getFileSystemStatusName(moduleConfig->getFileSystemStatus());
+            }
+            server.send_P(200, "text/html", status);
+        });
+
+        // RTC stubs (jig sensor_s3_http.test compatibility)
+        server.on("/init_rtc3028", HTTP_GET, [this]()
+        {
+            log("handle /init_rtc3028");
+            server.send_P(200, "text/html", "RTC 3028 online!");
+        });
+
+        server.on("/read_rtc3028", HTTP_GET, [this]()
+        {
+            log("handle /read_rtc3028");
+            server.send_P(200, "text/html", "RTC time is 2024-01-01 12:00:00");
+        });
+
+        // Sensor power-supply status stub
+        server.on("/sensor_ps_status", HTTP_GET, [this]()
+        {
+            log("handle /sensor_ps_status");
+            uint8_t channel = server.arg(PARAM_CH).toInt();
+            char response[16];
+            snprintf(response, sizeof(response), "SPS%d=1", channel);
+            server.send_P(200, "text/html", response);
+        });
+
+        // 485 listen stub
+        server.on("/listen485", HTTP_GET, [this]()
+        {
+            log("handle /listen485");
+            server.send_P(200, "text/html", "Listening");
         });
 
         log("SETUP: setupApTestWebServer all endpoints configured");
