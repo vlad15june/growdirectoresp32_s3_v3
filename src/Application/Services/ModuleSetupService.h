@@ -579,13 +579,27 @@ inline void ModuleSetupService::setupAP(bool isTestMode)
 
     if (wifiAdapter->isAccessPointActive() == false)
     {
-        const char *wifiPrefix = determineWifiPrefix();
         const char *macAddress = wifiAdapter->getMACAddress();
-        log("SETUP: Using WiFi prefix: %s", wifiPrefix);
         log("SETUP: Device MAC address: %s", macAddress);
 
-        char *ssid = generateSSID(wifiPrefix, macAddress);
-        log("SETUP: WiFi Name: %s", ssid);
+        char *ssid;
+        if (isTestMode)
+        {
+            const char *jigPrefix = "grow_director_";
+            size_t macLen = strlen(macAddress);
+            size_t prefixLen = strlen(jigPrefix);
+            ssid = new char[prefixLen + macLen + 1];
+            strcpy(ssid, jigPrefix);
+            strcat(ssid, macAddress);
+            log("SETUP: Using JIG WiFi name: %s", ssid);
+        }
+        else
+        {
+            const char *wifiPrefix = determineWifiPrefix();
+            log("SETUP: Using WiFi prefix: %s", wifiPrefix);
+            ssid = generateSSID(wifiPrefix, macAddress);
+            log("SETUP: WiFi Name: %s", ssid);
+        }
 
         const char *password = "123456789";
 

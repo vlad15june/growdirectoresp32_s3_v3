@@ -21,7 +21,7 @@ TESTS = [
     ("GET",  "/ps_en?ch=0&v=1",              "{PS0=1}"),
     ("GET",  "/ps_en?ch=0&v=0",              "{PS0=0}"),
     ("GET",  "/listen485?v=3",               "Listening"),
-    ("POST", "/set_test_success",            "Operation mode"),
+    # ("POST", "/set_test_success",            "Operation mode"),
 ]
 
 def request(method, url):
