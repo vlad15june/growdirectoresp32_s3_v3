@@ -418,5 +418,6 @@ void initDependencies()
     topicHandlerFactory.setModuleConfig(&moduleConfig);
     topicHandlerFactory.setCommandService(&commandService);
     topicHandlerFactory.setJsonConverter(&jsonConverter);
+    boardTest.setModbusPorts(modbusPorts);
 }
 #endif // GLOBALS_H

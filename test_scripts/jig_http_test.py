@@ -20,7 +20,9 @@ TESTS = [
     ("GET",  "/sensor_ps_status?ch=0",       "SPS0=1"),
     ("GET",  "/ps_en?ch=0&v=1",              "{PS0=1}"),
     ("GET",  "/ps_en?ch=0&v=0",              "{PS0=0}"),
+    ("GET",  "/pump_ps_status?ch=0",         "PPS0=1"),
     ("GET",  "/listen485?v=3",               "Listening"),
+    ("GET",  "/send_485?ch=0&data=0123",     "0123 OK"),
     # ("POST", "/set_test_success",            "Operation mode"),
 ]
 

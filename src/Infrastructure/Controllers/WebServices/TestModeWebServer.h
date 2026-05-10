@@ -666,6 +666,26 @@ public:
             server.send_P(200, "text/html", "Listening");
         });
 
+        // 485 send stub: /send_485?ch=N&data=XYZ -> "XYZ OK"
+        server.on("/send_485", HTTP_GET, [this]()
+        {
+            log("handle /send_485");
+            String data = server.arg("data");
+            char response[64];
+            snprintf(response, sizeof(response), "%s OK", data.c_str());
+            server.send(200, "text/html", response);
+        });
+
+        // Pump power-good status: /pump_ps_status?ch=N -> "PPSN=1"
+        server.on("/pump_ps_status", HTTP_GET, [this]()
+        {
+            log("handle /pump_ps_status");
+            uint8_t channel = server.arg(PARAM_CH).toInt();
+            char response[16];
+            snprintf(response, sizeof(response), "PPS%d=1", channel);
+            server.send_P(200, "text/html", response);
+        });
+
         log("SETUP: setupApTestWebServer all endpoints configured");
     }
 

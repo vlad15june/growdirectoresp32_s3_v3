@@ -43,6 +43,7 @@ private:
     // RS485 communication
     ModbusRS485* currentModbus;
     HardwareSerial* testSerial;
+    std::vector<IModbusRS485*> modbusPorts;
 
     // Non-blocking button test state
     bool buttonTestActive;
@@ -93,6 +94,7 @@ private:
     void handleTestModbus(const std::string &cmd);
     void handleTestTempHum(const std::string &cmd);
     void handleListen485(const std::string &cmd);
+    void handleSend485(const std::string &cmd);
     void handleSensorPsStatus(const std::string &cmd);
     void handlePumpPsStatus(const std::string &cmd);
     void handleGetCpuModel();
@@ -125,6 +127,7 @@ public:
     void setArduinoAdapter(IArduinoAdapter *adapter);
     void setModuleConfig(IModuleConfig *config);
     void setWifiAdapter(IWifiAdapter *wifiAdapter);
+    void setModbusPorts(const std::vector<IModbusRS485*> &ports) { modbusPorts = ports; }
 };
 
 // Implementation
@@ -419,6 +422,10 @@ inline void BoardTest::processCommand(const std::string &cmd)
     else if (cmd.find("#listen485") == 0) // 36. #listen485 5%
     {
         handleListen485(cmd);
+    }
+    else if (cmd.find("#send_485") == 0) // 36.1 #send_485 0 0123%
+    {
+        handleSend485(cmd);
     }
     else if (cmd.find("#sensor_ps_status") == 0) // 37. #sensor_ps_status -ch 0%
     {
@@ -828,6 +835,11 @@ inline void BoardTest::setupDevicesForTest(IModuleConfig *config)
     if (buttonPin > 0)
     {
         arduinoAdapter->pinMode(buttonPin, arduinoAdapter->getPinModeInput());
+    }
+
+    for (auto* port : modbusPorts)
+    {
+        if (port) port->begin(9600);
     }
 }
 
@@ -1595,6 +1607,44 @@ inline void BoardTest::handleListen485(const std::string &cmd)
             arduinoAdapter->serialPrintln("TimeOUT! No data received!");
         }
     }
+}
+
+inline void BoardTest::handleSend485(const std::string &cmd)
+{
+    if (!arduinoAdapter) return;
+
+    size_t pos = cmd.find("#send_485");
+    if (pos == std::string::npos) return;
+    pos += strlen("#send_485");
+    while (pos < cmd.length() && cmd[pos] == ' ') pos++;
+
+    size_t chEnd = cmd.find(' ', pos);
+    if (chEnd == std::string::npos) {
+        arduinoAdapter->serialPrintln("send_485_error_missing_data");
+        return;
+    }
+
+    int channel = -1;
+    try { channel = std::stoi(cmd.substr(pos, chEnd - pos)); } catch (...) { channel = -1; }
+    if (channel < 0 || channel >= static_cast<int>(modbusPorts.size()) || modbusPorts[channel] == nullptr) {
+        arduinoAdapter->serialPrintln("send_485_error_invalid_channel");
+        return;
+    }
+
+    size_t dataStart = chEnd + 1;
+    size_t dataEnd = cmd.find('%', dataStart);
+    if (dataEnd == std::string::npos) dataEnd = cmd.length();
+    std::string data = cmd.substr(dataStart, dataEnd - dataStart);
+    if (data.empty()) {
+        arduinoAdapter->serialPrintln("send_485_error_empty_data");
+        return;
+    }
+
+    modbusPorts[channel]->sendData(reinterpret_cast<uint8_t*>(const_cast<char*>(data.data())), static_cast<uint8_t>(data.size()));
+
+    char response[64];
+    snprintf(response, sizeof(response), "%s OK", data.c_str());
+    arduinoAdapter->serialPrintln(response);
 }
 
 inline void BoardTest::handleSensorPsStatus(const std::string &cmd)
