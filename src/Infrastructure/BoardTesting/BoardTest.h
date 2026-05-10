@@ -423,7 +423,7 @@ inline void BoardTest::processCommand(const std::string &cmd)
     {
         handleListen485(cmd);
     }
-    else if (cmd.find("#send_485") == 0) // 36.1 #send_485 0 0123%
+    else if (cmd.find("#send_485") == 0) // 36.1 #send_485 [N] XYZ%  (N=0 if omitted)
     {
         handleSend485(cmd);
     }
@@ -1618,23 +1618,23 @@ inline void BoardTest::handleSend485(const std::string &cmd)
     pos += strlen("#send_485");
     while (pos < cmd.length() && cmd[pos] == ' ') pos++;
 
-    size_t chEnd = cmd.find(' ', pos);
-    if (chEnd == std::string::npos) {
-        arduinoAdapter->serialPrintln("send_485_error_missing_data");
-        return;
+    size_t end = cmd.find('%', pos);
+    if (end == std::string::npos) end = cmd.length();
+
+    int channel = 0;
+    size_t dataStart = pos;
+    size_t spacePos = cmd.find(' ', pos);
+    if (spacePos != std::string::npos && spacePos < end) {
+        try { channel = std::stoi(cmd.substr(pos, spacePos - pos)); } catch (...) { channel = -1; }
+        dataStart = spacePos + 1;
     }
 
-    int channel = -1;
-    try { channel = std::stoi(cmd.substr(pos, chEnd - pos)); } catch (...) { channel = -1; }
     if (channel < 0 || channel >= static_cast<int>(modbusPorts.size()) || modbusPorts[channel] == nullptr) {
         arduinoAdapter->serialPrintln("send_485_error_invalid_channel");
         return;
     }
 
-    size_t dataStart = chEnd + 1;
-    size_t dataEnd = cmd.find('%', dataStart);
-    if (dataEnd == std::string::npos) dataEnd = cmd.length();
-    std::string data = cmd.substr(dataStart, dataEnd - dataStart);
+    std::string data = cmd.substr(dataStart, end - dataStart);
     if (data.empty()) {
         arduinoAdapter->serialPrintln("send_485_error_empty_data");
         return;
