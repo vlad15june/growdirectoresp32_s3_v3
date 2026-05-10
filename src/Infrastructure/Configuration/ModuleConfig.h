@@ -47,11 +47,11 @@
 #define TST_SNS_3 28
 #define TST_SNS_4 29
 
-// Test-mode ADC input pins
-#define ADC_PIN_1 1
-#define ADC_PIN_2 2
-#define ADC_PIN_3 3
-#define ADC_PIN_4 4
+// Test-mode ADC input pins for SENSOR_POWER_1-4
+#define ADC_PIN_1 38
+#define ADC_PIN_2 36
+#define ADC_PIN_3 37
+#define ADC_PIN_4 35
 
 // DO/ORP and EC control pins
 #define DO_ORP_PIN  33
@@ -82,7 +82,7 @@ private:
     ModuleModeEnum requestedModuleMode;
     ModuleModeEnum currentModuleMode;
 #ifndef FIRMWARE_VERSION
-    #define FIRMWARE_VERSION "0.0.0-dev"
+    #define FIRMWARE_VERSION "0.1.2-jig"
 #endif
     static constexpr const char* firmwareVersion = FIRMWARE_VERSION;
         

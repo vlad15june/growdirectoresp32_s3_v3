@@ -728,6 +728,20 @@ public:
             server.send_P(200, "text/html", response);
         });
 
+        // Generic handle stub: /handle -> "ok"
+        server.on("/handle", HTTP_GET, [this]()
+        {
+            log("handle /handle");
+            server.send_P(200, "text/html", "ok");
+        });
+
+        // Root: 200 ok
+        server.on("/", HTTP_GET, [this]()
+        {
+            log("handle /");
+            server.send_P(200, "text/html", "ok");
+        });
+
         log("SETUP: setupApTestWebServer all endpoints configured");
     }
 

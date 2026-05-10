@@ -1131,13 +1131,18 @@ inline void BoardTest::handlePowerSupplyEnable(const std::string &cmd)
 {
     int channel = extractIntParameter(cmd, "-ch");
     int value = extractIntParameter(cmd, "-v");
-    if (arduinoAdapter && channel >= 0 && channel < 4)
-    {
-        value = (value != 1) ? 0 : 1;
-        char response[16];
-        snprintf(response, sizeof(response), "PS%d=%d", channel, value);
-        arduinoAdapter->serialPrintln(response);
-    }
+    if (!arduinoAdapter || !moduleConfig || channel < 0 || channel >= 4) return;
+
+    uint8_t* powerPins = moduleConfig->getSensorPowerPins();
+    if (!powerPins) return;
+
+    value = (value == 1) ? 1 : 0;
+    arduinoAdapter->pinMode(powerPins[channel], arduinoAdapter->getPinModeOutput());
+    arduinoAdapter->digitalWrite(powerPins[channel], value);
+
+    char response[16];
+    snprintf(response, sizeof(response), "PS%d=%d", channel, value);
+    arduinoAdapter->serialPrintln(response);
 }
 
 inline void BoardTest::handleReadWifiRSSI()
@@ -1587,38 +1592,47 @@ inline std::vector<uint8_t> BoardTest::parseHexData(const std::string &dataStr)
 
 inline void BoardTest::handleListen485(const std::string &cmd)
 {
-    if (!arduinoAdapter)
-        return;
+    if (!arduinoAdapter) return;
 
-    // Extract timeout from command (format: #listen485 5%)
     size_t pos = cmd.find("#listen485");
-    if (pos != std::string::npos)
-    {
-        pos += strlen("#listen485");
-        while (pos < cmd.length() && cmd[pos] == ' ') pos++; // Skip spaces
-        size_t endPos = cmd.find('%', pos);
-        if (endPos == std::string::npos) endPos = cmd.length();
-        
-        int timeout = 5; // Default timeout
-        if (pos < endPos)
-        {
-            std::string timeoutStr = cmd.substr(pos, endPos - pos);
-            try {
-                timeout = std::stoi(timeoutStr);
-            } catch (...) {
-                timeout = 5;
+    if (pos == std::string::npos) return;
+    pos += strlen("#listen485");
+    while (pos < cmd.length() && cmd[pos] == ' ') pos++;
+    size_t endPos = cmd.find('%', pos);
+    if (endPos == std::string::npos) endPos = cmd.length();
+
+    int timeout = 5;
+    if (pos < endPos) {
+        std::string timeoutStr = cmd.substr(pos, endPos - pos);
+        try { timeout = std::stoi(timeoutStr); } catch (...) { timeout = 5; }
+    }
+    if (timeout <= 0) timeout = 5;
+
+    std::string received;
+    unsigned long start = arduinoAdapter->millis();
+    unsigned long windowMs = static_cast<unsigned long>(timeout) * 1000UL;
+    while ((arduinoAdapter->millis() - start) < windowMs) {
+        for (auto* port : modbusPorts) {
+            if (!port) continue;
+            while (port->available() > 0) {
+                uint8_t buf[64];
+                int n = port->readAvailable(buf, sizeof(buf));
+                for (int i = 0; i < n; i++) {
+                    if (buf[i] >= 0x20 && buf[i] <= 0x7E) {
+                        received.push_back(static_cast<char>(buf[i]));
+                    }
+                }
             }
         }
-
-        char buffer[32];
-        snprintf(buffer, sizeof(buffer), "Listening %d secs", timeout);
-        arduinoAdapter->serialPrintln(buffer);
-        
-        if (!listen485(timeout))
-        {
-            arduinoAdapter->serialPrintln("TimeOUT! No data received!");
-        }
+        arduinoAdapter->delay(10);
     }
+
+    std::string response = "Listening";
+    if (!received.empty()) {
+        response += " ";
+        response += received;
+    }
+    arduinoAdapter->serialPrintln(response.c_str());
 }
 
 inline void BoardTest::handleSend485(const std::string &cmd)
