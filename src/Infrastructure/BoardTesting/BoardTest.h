@@ -1090,29 +1090,41 @@ inline void BoardTest::handleWriteI2C(const std::string &cmd)
 
 inline void BoardTest::handleReadPowerGood33()
 {
-    if (arduinoAdapter)
-    {
-        arduinoAdapter->serialPrintln("{3.3V:Ok}");
+    if (!arduinoAdapter || !moduleConfig) return;
+    if (moduleConfig->getModuleType() == MODULE_TYPE_HYDRO) {
+        uint8_t pin = moduleConfig->getPowerGood33Pin();
+        arduinoAdapter->pinMode(pin, arduinoAdapter->getPinModeInput());
+        arduinoAdapter->serialPrintln(arduinoAdapter->digitalRead(pin) == arduinoAdapter->getDigitalHigh()
+                                          ? "{3.3V:Ok}" : "{3.3V:Error}");
+        return;
     }
+    arduinoAdapter->serialPrintln("{Bad_Request}");
 }
 
 inline void BoardTest::handleReadPowerGood50()
 {
-    if (arduinoAdapter)
-    {
-        arduinoAdapter->serialPrintln("{5.0V:Ok}");
+    if (!arduinoAdapter || !moduleConfig) return;
+    if (moduleConfig->getModuleType() == MODULE_TYPE_HYDRO) {
+        uint8_t pin = moduleConfig->getPowerGood50Pin();
+        arduinoAdapter->pinMode(pin, arduinoAdapter->getPinModeInput());
+        arduinoAdapter->serialPrintln(arduinoAdapter->digitalRead(pin) == arduinoAdapter->getDigitalHigh()
+                                          ? "{5.0V:Ok}" : "{5.0V:Error}");
+        return;
     }
+    arduinoAdapter->serialPrintln("{Bad_Request}");
 }
 
 inline void BoardTest::handleReadPowerGood55()
 {
-    if (arduinoAdapter && moduleConfig)
-    {
+    if (!arduinoAdapter || !moduleConfig) return;
+    if (moduleConfig->getModuleType() == MODULE_TYPE_SENSOR) {
         uint8_t pin = moduleConfig->getPowerGood55Pin();
         arduinoAdapter->pinMode(pin, arduinoAdapter->getPinModeInput());
-        int val = arduinoAdapter->digitalRead(pin);
-        arduinoAdapter->serialPrintln(val == arduinoAdapter->getDigitalHigh() ? "{5.5V:Ok}" : "{5.5V:Fail}");
+        arduinoAdapter->serialPrintln(arduinoAdapter->digitalRead(pin) == arduinoAdapter->getDigitalHigh()
+                                          ? "{5.5V:Ok}" : "{5.5V:Error}");
+        return;
     }
+    arduinoAdapter->serialPrintln("{Bad_Request}");
 }
 
 inline void BoardTest::handlePowerSupplyEnable(const std::string &cmd)

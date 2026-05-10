@@ -64,20 +64,62 @@ private:
 
     uint16_t readPowerGood33(char* response)
     {
-        sprintf(response, "{pg_3_3=%d}", 1000);
-        return 200;
+        if (!moduleConfig || !arduinoAdapter) {
+            strcpy(response, "{Bad_Request}");
+            return 400;
+        }
+        if (moduleConfig->getModuleType() == MODULE_TYPE_HYDRO) {
+            uint8_t pin = moduleConfig->getPowerGood33Pin();
+            arduinoAdapter->pinMode(pin, arduinoAdapter->getPinModeInput());
+            if (arduinoAdapter->digitalRead(pin) == arduinoAdapter->getDigitalHigh()) {
+                strcpy(response, "{3.3V:Ok}");
+                return 200;
+            }
+            strcpy(response, "{3.3V:Error}");
+            return 400;
+        }
+        strcpy(response, "{Bad_Request}");
+        return 400;
     }
 
     uint16_t readPowerGood50(char* response)
     {
-        sprintf(response, "{pg_5_0=%d}", 1000);
-        return 200;
+        if (!moduleConfig || !arduinoAdapter) {
+            strcpy(response, "{Bad_Request}");
+            return 400;
+        }
+        if (moduleConfig->getModuleType() == MODULE_TYPE_HYDRO) {
+            uint8_t pin = moduleConfig->getPowerGood50Pin();
+            arduinoAdapter->pinMode(pin, arduinoAdapter->getPinModeInput());
+            if (arduinoAdapter->digitalRead(pin) == arduinoAdapter->getDigitalHigh()) {
+                strcpy(response, "{5.0V:Ok}");
+                return 200;
+            }
+            strcpy(response, "{5.0V:Error}");
+            return 400;
+        }
+        strcpy(response, "{Bad_Request}");
+        return 400;
     }
 
     uint16_t readPowerGood55(char* response)
     {
-        sprintf(response, "{pg_5_5=%d}", 1000);
-        return 200;
+        if (!moduleConfig || !arduinoAdapter) {
+            strcpy(response, "{Bad_Request}");
+            return 400;
+        }
+        if (moduleConfig->getModuleType() == MODULE_TYPE_SENSOR) {
+            uint8_t pin = moduleConfig->getPowerGood55Pin();
+            arduinoAdapter->pinMode(pin, arduinoAdapter->getPinModeInput());
+            if (arduinoAdapter->digitalRead(pin) == arduinoAdapter->getDigitalHigh()) {
+                strcpy(response, "{5.5V:Ok}");
+                return 200;
+            }
+            strcpy(response, "{5.5V:Error}");
+            return 400;
+        }
+        strcpy(response, "{Bad_Request}");
+        return 400;
     }
 
     String i2cScan()
