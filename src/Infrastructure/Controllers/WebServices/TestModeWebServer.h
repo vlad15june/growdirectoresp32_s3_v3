@@ -9,6 +9,7 @@
 #include "Core/Domain/Interfaces/IDebugSystem.h"
 #include "Core/Domain/Interfaces/ISettings.h"
 #include "Core/Domain/Interfaces/IModuleConfig.h"
+#include "Infrastructure/Configuration/ModuleConfig.h"
 #include "Core/Domain/Interfaces/Adapters/IWifiAdapter.h"
 #include "Core/Domain/Interfaces/Adapters/IArduinoAdapter.h"
 #include "Core/Domain/Enums/ModuleModeEnum.h"
@@ -692,14 +693,22 @@ public:
             server.send_P(200, "text/html", "RTC time is 2024-01-01 12:00:00");
         });
 
-        // Sensor power-supply status stub
+        // Sensor power-supply status: digitalRead from feedback pin
         server.on("/sensor_ps_status", HTTP_GET, [this]()
         {
             log("handle /sensor_ps_status");
-            uint8_t channel = server.arg(PARAM_CH).toInt();
+            static const uint8_t spsStatusPins[4] = {SPS_STATUS_1, SPS_STATUS_2, SPS_STATUS_3, SPS_STATUS_4};
+            int channel = server.arg(PARAM_CH).toInt();
             char response[16];
-            snprintf(response, sizeof(response), "SPS%d=1", channel);
-            server.send_P(200, "text/html", response);
+            if (!arduinoAdapter || channel < 0 || channel >= 4) {
+                snprintf(response, sizeof(response), "SPS_err");
+            } else {
+                uint8_t pin = spsStatusPins[channel];
+                arduinoAdapter->pinMode(pin, arduinoAdapter->getPinModeInput());
+                int val = arduinoAdapter->digitalRead(pin);
+                snprintf(response, sizeof(response), "SPS%d=%d", channel, val);
+            }
+            server.send(200, "text/html", response);
         });
 
         // 485 listen stub

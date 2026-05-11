@@ -4,6 +4,7 @@
 #include "Core/Domain/Interfaces/BoardTesting/IBoardTest.h"
 #include "Core/Domain/Interfaces/Adapters/IArduinoAdapter.h"
 #include "Core/Domain/Interfaces/IModuleConfig.h"
+#include "Infrastructure/Configuration/ModuleConfig.h"
 #include "Core/Domain/Interfaces/ILogger.h"
 #include "Core/Domain/Interfaces/IDebugSystem.h"
 #include "Core/Domain/Interfaces/Adapters/IWifiAdapter.h"
@@ -835,6 +836,13 @@ inline void BoardTest::setupDevicesForTest(IModuleConfig *config)
     if (buttonPin > 0)
     {
         arduinoAdapter->pinMode(buttonPin, arduinoAdapter->getPinModeInput());
+    }
+
+    // Sensor PS status feedback pins - INPUT
+    static const uint8_t spsStatusPins[4] = {SPS_STATUS_1, SPS_STATUS_2, SPS_STATUS_3, SPS_STATUS_4};
+    for (int i = 0; i < 4; i++)
+    {
+        arduinoAdapter->pinMode(spsStatusPins[i], arduinoAdapter->getPinModeInput());
     }
 
     for (auto* port : modbusPorts)
@@ -1675,13 +1683,15 @@ inline void BoardTest::handleSend485(const std::string &cmd)
 
 inline void BoardTest::handleSensorPsStatus(const std::string &cmd)
 {
+    static const uint8_t spsStatusPins[4] = {SPS_STATUS_1, SPS_STATUS_2, SPS_STATUS_3, SPS_STATUS_4};
     int channel = extractIntParameter(cmd, "-ch");
-    if (arduinoAdapter && channel >= 0 && channel < 4)
-    {
-        char response[16];
-        snprintf(response, sizeof(response), "SPS%d=1", channel);
-        arduinoAdapter->serialPrintln(response);
-    }
+    if (!arduinoAdapter || channel < 0 || channel >= 4) return;
+    uint8_t pin = spsStatusPins[channel];
+    arduinoAdapter->pinMode(pin, arduinoAdapter->getPinModeInput());
+    int val = arduinoAdapter->digitalRead(pin);
+    char response[16];
+    snprintf(response, sizeof(response), "SPS%d=%d", channel, val);
+    arduinoAdapter->serialPrintln(response);
 }
 
 inline void BoardTest::handlePumpPsStatus(const std::string &cmd)

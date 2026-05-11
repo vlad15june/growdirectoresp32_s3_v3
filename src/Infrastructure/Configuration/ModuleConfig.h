@@ -68,6 +68,12 @@
 #define PG_5_0V_PIN 15
 #define PG_5_5V_PIN 33
 
+// Sensor PS status (feedback) pins for #sensor_ps_status
+#define SPS_STATUS_1 38
+#define SPS_STATUS_2 36
+#define SPS_STATUS_3 37
+#define SPS_STATUS_4 35
+
 class ModuleConfig : public IModuleConfig
 {
 private:
