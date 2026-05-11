@@ -323,3 +323,60 @@ void WifiAdapter::log(const char* format, ...)
         logger->println(DebugFeatures::WIFI_DEBUG, buffer);
     }
 }
+
+ILogger* WifiAdapter::apEventLogger = nullptr;
+
+void WifiAdapter::apEventCallback(WiFiEvent_t event, WiFiEventInfo_t info)
+{
+    if (apEventLogger == nullptr) return;
+    char buffer[128];
+    switch (event)
+    {
+        case ARDUINO_EVENT_WIFI_AP_START:
+            apEventLogger->println(DebugFeatures::WIFI_DEBUG, "AP_EVENT: AP started");
+            break;
+        case ARDUINO_EVENT_WIFI_AP_STOP:
+            apEventLogger->println(DebugFeatures::WIFI_DEBUG, "AP_EVENT: AP stopped");
+            break;
+        case ARDUINO_EVENT_WIFI_AP_STACONNECTED:
+            snprintf(buffer, sizeof(buffer),
+                     "AP_EVENT: STA connected mac=%02X:%02X:%02X:%02X:%02X:%02X aid=%d",
+                     info.wifi_ap_staconnected.mac[0], info.wifi_ap_staconnected.mac[1],
+                     info.wifi_ap_staconnected.mac[2], info.wifi_ap_staconnected.mac[3],
+                     info.wifi_ap_staconnected.mac[4], info.wifi_ap_staconnected.mac[5],
+                     info.wifi_ap_staconnected.aid);
+            apEventLogger->println(DebugFeatures::WIFI_DEBUG, buffer);
+            break;
+        case ARDUINO_EVENT_WIFI_AP_STADISCONNECTED:
+            snprintf(buffer, sizeof(buffer),
+                     "AP_EVENT: STA disconnected mac=%02X:%02X:%02X:%02X:%02X:%02X aid=%d",
+                     info.wifi_ap_stadisconnected.mac[0], info.wifi_ap_stadisconnected.mac[1],
+                     info.wifi_ap_stadisconnected.mac[2], info.wifi_ap_stadisconnected.mac[3],
+                     info.wifi_ap_stadisconnected.mac[4], info.wifi_ap_stadisconnected.mac[5],
+                     info.wifi_ap_stadisconnected.aid);
+            apEventLogger->println(DebugFeatures::WIFI_DEBUG, buffer);
+            break;
+        case ARDUINO_EVENT_WIFI_AP_PROBEREQRECVED:
+            snprintf(buffer, sizeof(buffer), "AP_EVENT: probe request rssi=%d",
+                     info.wifi_ap_probereqrecved.rssi);
+            apEventLogger->println(DebugFeatures::WIFI_DEBUG, buffer);
+            break;
+        case ARDUINO_EVENT_WIFI_AP_STAIPASSIGNED:
+            apEventLogger->println(DebugFeatures::WIFI_DEBUG, "AP_EVENT: STA IP assigned");
+            break;
+        default:
+            break;
+    }
+}
+
+void WifiAdapter::enableApEventLogging(ILogger* loggerInstance)
+{
+    apEventLogger = loggerInstance;
+    WiFi.onEvent(WifiAdapter::apEventCallback);
+    log("AP event logging enabled");
+}
+
+int WifiAdapter::getConnectedClientCount()
+{
+    return static_cast<int>(WiFi.softAPgetStationNum());
+}

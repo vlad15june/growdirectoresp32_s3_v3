@@ -577,8 +577,15 @@ inline void ModuleSetupService::setupAP(bool isTestMode)
         return;
     }
 
+    if (isTestMode)
+    {
+        log("AP_TEST: setupAP entry, registering WiFi event logger");
+        wifiAdapter->enableApEventLogging(logger);
+    }
+
     if (wifiAdapter->isAccessPointActive() == false)
     {
+        if (isTestMode) log("AP_TEST: AP not active, proceeding with creation");
         const char *macAddress = wifiAdapter->getMACAddress();
         log("SETUP: Device MAC address: %s", macAddress);
 
@@ -620,12 +627,32 @@ inline void ModuleSetupService::setupAP(bool isTestMode)
             log("SETUP: Using default IP configuration");
         }
 
+        if (isTestMode)
+        {
+            log("AP_TEST: createAndConfigureAP ssid=%s pwd=%s ip=%s gw=%s mask=%s",
+                ssid, password, apLocalIp, apGatewayIp, apNetworkMask);
+        }
+
         if (createAndConfigureAP(ssid, password, apLocalIp, apGatewayIp, apNetworkMask))
         {
             log("SETUP: WiFi Password: %s", password);
+            if (isTestMode)
+            {
+                log("AP_TEST: AP up, clients=%d, localIP=%s",
+                    wifiAdapter->getConnectedClientCount(), wifiAdapter->getLocalIP());
+            }
+        }
+        else if (isTestMode)
+        {
+            log("AP_TEST: createAndConfigureAP FAILED");
         }
 
         delete[] ssid;
+    }
+    else if (isTestMode)
+    {
+        log("AP_TEST: AP already active, skipping creation, clients=%d",
+            wifiAdapter->getConnectedClientCount());
     }
 
     log("SETUP: Access Point setup completed");

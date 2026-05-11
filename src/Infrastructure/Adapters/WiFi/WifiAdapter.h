@@ -44,6 +44,10 @@ public:
     void setAccessPointMode() override;
     void setStationAndAccessPointMode() override;
 
+    // AP diagnostics (test mode verbose logging)
+    void enableApEventLogging(ILogger* logger) override;
+    int getConnectedClientCount() override;
+
 private:
     char ipBuffer[16];        // Buffer to store IP address string
     char macBuffer[18];       // Buffer to store MAC address string
@@ -52,8 +56,10 @@ private:
     WiFiMulti& wifiMulti;     // Reference to WiFiMulti instance
     ILogger* logger;
     IDebugSystem* debugSystem;
-    
+    static ILogger* apEventLogger;
+
     void log(const char* format, ...);
+    static void apEventCallback(WiFiEvent_t event, WiFiEventInfo_t info);
 };
 
 #endif // WIFI_ADAPTER_H
