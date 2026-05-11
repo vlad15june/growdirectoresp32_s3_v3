@@ -51,8 +51,14 @@ private:
     unsigned long buttonTestStart;
     uint32_t buttonTestTimeoutMs;
 
+    // Non-blocking 485 listen state
+    bool listen485Active;
+    unsigned long listen485Start;
+    uint32_t listen485TimeoutMs;
+
     void processCommand(const std::string &command);
     void updateButtonTest();
+    void updateListen485();
 
     // Command handlers
     void handleRestart();
@@ -155,7 +161,10 @@ inline BoardTest::BoardTest(
                                  testSerial(nullptr),
                                  buttonTestActive(false),
                                  buttonTestStart(0),
-                                 buttonTestTimeoutMs(0)
+                                 buttonTestTimeoutMs(0),
+                                 listen485Active(false),
+                                 listen485Start(0),
+                                 listen485TimeoutMs(0)
 {
     initializePinArrays();
 }
@@ -225,6 +234,7 @@ inline void BoardTest::processTestCommands()
         return;
 
     updateButtonTest();
+    updateListen485();
 
     while (arduinoAdapter->serialAvailable())
     {
@@ -1616,31 +1626,54 @@ inline void BoardTest::handleListen485(const std::string &cmd)
     }
     if (timeout <= 0) timeout = 5;
 
-    std::string received;
-    unsigned long start = arduinoAdapter->millis();
-    unsigned long windowMs = static_cast<unsigned long>(timeout) * 1000UL;
-    while ((arduinoAdapter->millis() - start) < windowMs) {
-        for (auto* port : modbusPorts) {
-            if (!port) continue;
-            while (port->available() > 0) {
-                uint8_t buf[64];
-                int n = port->readAvailable(buf, sizeof(buf));
-                for (int i = 0; i < n; i++) {
-                    if (buf[i] >= 0x20 && buf[i] <= 0x7E) {
-                        received.push_back(static_cast<char>(buf[i]));
-                    }
+    listen485Active = true;
+    listen485Start = arduinoAdapter->millis();
+    listen485TimeoutMs = static_cast<uint32_t>(timeout) * 1000UL;
+
+    arduinoAdapter->serialPrintln("Listening");
+}
+
+inline void BoardTest::updateListen485()
+{
+    if (!listen485Active || !arduinoAdapter) return;
+
+    for (size_t idx = 0; idx < modbusPorts.size(); idx++) {
+        IModbusRS485* port = modbusPorts[idx];
+        if (!port) continue;
+        while (port->available() > 0) {
+            uint8_t buf[64];
+            int n = port->readAvailable(buf, sizeof(buf));
+            if (n <= 0) break;
+
+            char rxLog[256];
+            int off = snprintf(rxLog, sizeof(rxLog), "L485 rx[port=%u]:", static_cast<unsigned>(idx));
+            for (int i = 0; i < n && off < (int)sizeof(rxLog) - 8; i++) {
+                off += snprintf(rxLog + off, sizeof(rxLog) - off, " 0x%02X", buf[i]);
+            }
+            snprintf(rxLog + off, sizeof(rxLog) - off, " (%d bytes)", n);
+            arduinoAdapter->serialPrintln(rxLog);
+
+            port->sendData(buf, static_cast<uint8_t>(n));
+            uint8_t okBytes[2] = {'O', 'K'};
+            port->sendData(okBytes, 2);
+
+            char txLog[128];
+            int toff = snprintf(txLog, sizeof(txLog), "L485 tx[port=%u]: ", static_cast<unsigned>(idx));
+            for (int i = 0; i < n && toff < (int)sizeof(txLog) - 4; i++) {
+                if (buf[i] >= 0x20 && buf[i] <= 0x7E) {
+                    txLog[toff++] = static_cast<char>(buf[i]);
+                } else {
+                    toff += snprintf(txLog + toff, sizeof(txLog) - toff, "?");
                 }
             }
+            snprintf(txLog + toff, sizeof(txLog) - toff, "OK");
+            arduinoAdapter->serialPrintln(txLog);
         }
-        arduinoAdapter->delay(10);
     }
 
-    std::string response = "Listening";
-    if (!received.empty()) {
-        response += " ";
-        response += received;
+    if ((arduinoAdapter->millis() - listen485Start) >= listen485TimeoutMs) {
+        listen485Active = false;
     }
-    arduinoAdapter->serialPrintln(response.c_str());
 }
 
 inline void BoardTest::handleSend485(const std::string &cmd)
