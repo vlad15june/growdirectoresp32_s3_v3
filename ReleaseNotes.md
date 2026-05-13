@@ -1,5 +1,12 @@
 # Release Notes
 
+## Version 2.1.49 (2026-05-13)
+
+### Fixed
+- **Sensor Scan After Startup Without Sensor Configuration**: GDV1-3431 Fixed a case where the device, when starting up without an available sensor configuration (placeholder mode), did not clear the "skip scan" flag. This could cause the device to permanently skip sensor scanning on all subsequent boots until a manual reset was performed. The device now correctly ensures a full sensor scan is performed on the next boot when entering this startup path.
+
+---
+
 ## Version 2.1.48 (2026-05-06)
 
 ### Fixed
