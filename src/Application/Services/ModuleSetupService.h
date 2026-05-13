@@ -1759,6 +1759,13 @@ inline void ModuleSetupService::createPlaceholderSensors(Node &node)
 {
     log("SETUP: Sensor repository not available, creating placeholder sensors");
 
+    ISettings *settings = moduleConfig ? moduleConfig->getSettings() : nullptr;
+    if (settings && settings->getNoScanSensors())
+    {
+        settings->setNoScanSensors(false);
+        log("SETUP: noScanSensors flag reset in placeholder path so next boot performs scan");
+    }
+
     // TODO: only for sensor for hydro without additional sensors
     // TODO: read connecter sensors
     // TODO: use setting to understand if sensor is connected, if yes use repository to get sensors with all properties
