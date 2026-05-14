@@ -734,6 +734,12 @@ inline bool ModuleSetupService::createAndConfigureAP(const char *ssid, const cha
 {
     wifiAdapter->createAccessPoint(ssid, password, 1, false, 4);
 
+    if (arduinoAdapter)
+    {
+        log("SETUP: Waiting 2s for AP to fully initialize...");
+        arduinoAdapter->delay(2000);
+    }
+
     const char *initialIP = wifiAdapter->getLocalIP();
     log("SETUP: Initial AP IP address: %s", initialIP);
 
