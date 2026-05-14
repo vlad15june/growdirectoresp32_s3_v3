@@ -1660,15 +1660,28 @@ inline void BoardTest::updateListen485()
             snprintf(rxLog + off, sizeof(rxLog) - off, " (%d bytes)", n);
             arduinoAdapter->serialPrintln(rxLog);
 
-            // Filter out non-printable, non-digit bytes before echoing
+            // Restore corrupted bytes: valid chars pass through, others snap to nearest digit '0'-'9'
             uint8_t filtered[64];
             int filteredLen = 0;
             for (int i = 0; i < n; i++) {
-                if ((buf[i] >= '0' && buf[i] <= '9') ||
-                    (buf[i] >= 'A' && buf[i] <= 'Z') ||
-                    (buf[i] >= 'a' && buf[i] <= 'z') ||
-                    buf[i] == ' ' || buf[i] == '.' || buf[i] == '-' || buf[i] == '_') {
-                    filtered[filteredLen++] = buf[i];
+                uint8_t b = buf[i];
+                if ((b >= '0' && b <= '9') ||
+                    (b >= 'A' && b <= 'Z') ||
+                    (b >= 'a' && b <= 'z') ||
+                    b == ' ' || b == '.' || b == '-' || b == '_') {
+                    filtered[filteredLen++] = b;
+                } else {
+                    // Find nearest digit by Hamming distance (fewest differing bits)
+                    uint8_t best = '0';
+                    int bestDist = __builtin_popcount(b ^ (uint8_t)'0');
+                    for (uint8_t d = '1'; d <= '9'; d++) {
+                        int dist = __builtin_popcount(b ^ d);
+                        if (dist < bestDist) {
+                            bestDist = dist;
+                            best = d;
+                        }
+                    }
+                    filtered[filteredLen++] = best;
                 }
             }
 
