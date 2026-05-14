@@ -855,6 +855,14 @@ inline void BoardTest::setupDevicesForTest(IModuleConfig *config)
         arduinoAdapter->pinMode(spsStatusPins[i], arduinoAdapter->getPinModeInput());
     }
 
+    // Sensor power supply pins - OUTPUT LOW (power off at startup)
+    static const uint8_t sensorPowerPins[4] = {SENSOR_POWER_1, SENSOR_POWER_2, SENSOR_POWER_3, SENSOR_POWER_4};
+    for (int i = 0; i < 4; i++)
+    {
+        arduinoAdapter->pinMode(sensorPowerPins[i], arduinoAdapter->getPinModeOutput());
+        arduinoAdapter->digitalWrite(sensorPowerPins[i], arduinoAdapter->getDigitalLow());
+    }
+
     for (auto* port : modbusPorts)
     {
         if (port) port->begin(9600);
