@@ -1654,8 +1654,8 @@ inline void BoardTest::updateListen485()
             arduinoAdapter->serialPrintln(rxLog);
 
             port->sendData(buf, static_cast<uint8_t>(n));
-            uint8_t okBytes[2] = {'O', 'K'};
-            port->sendData(okBytes, 2);
+            uint8_t okBytes[3] = {' ', 'O', 'K'};
+            port->sendData(okBytes, 3);
 
             char txLog[128];
             int toff = snprintf(txLog, sizeof(txLog), "L485 tx[port=%u]: ", static_cast<unsigned>(idx));
@@ -1666,7 +1666,7 @@ inline void BoardTest::updateListen485()
                     toff += snprintf(txLog + toff, sizeof(txLog) - toff, "?");
                 }
             }
-            snprintf(txLog + toff, sizeof(txLog) - toff, "OK");
+            snprintf(txLog + toff, sizeof(txLog) - toff, " OK");
             arduinoAdapter->serialPrintln(txLog);
         }
     }

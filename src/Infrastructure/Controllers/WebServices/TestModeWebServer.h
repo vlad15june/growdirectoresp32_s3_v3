@@ -767,14 +767,14 @@ public:
         server.handleClient();
         updateButtonTest();
 
-        unsigned long now = millis();
-        if (now - lastHeartbeat >= 5000UL)
-        {
-            lastHeartbeat = now;
-            int clients = static_cast<int>(WiFi.softAPgetStationNum());
-            log("AP_TEST heartbeat: clients=%d, ip=%s, uri_handlers_active",
-                clients, WiFi.softAPIP().toString().c_str());
-        }
+        // unsigned long now = millis();
+        // if (now - lastHeartbeat >= 5000UL)
+        // {
+        //     lastHeartbeat = now;
+        //     int clients = static_cast<int>(WiFi.softAPgetStationNum());
+        //     log("AP_TEST heartbeat: clients=%d, ip=%s, uri_handlers_active",
+        //         clients, WiFi.softAPIP().toString().c_str());
+        // }
     }
 
 private:
