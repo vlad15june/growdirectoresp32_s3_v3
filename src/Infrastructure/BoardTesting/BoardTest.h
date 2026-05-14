@@ -848,11 +848,11 @@ inline void BoardTest::setupDevicesForTest(IModuleConfig *config)
         arduinoAdapter->pinMode(buttonPin, arduinoAdapter->getPinModeInput());
     }
 
-    // Sensor PS status feedback pins - INPUT
+    // Sensor PS status feedback pins - INPUT_PULLUP
     static const uint8_t spsStatusPins[4] = {SPS_STATUS_1, SPS_STATUS_2, SPS_STATUS_3, SPS_STATUS_4};
     for (int i = 0; i < 4; i++)
     {
-        arduinoAdapter->pinMode(spsStatusPins[i], arduinoAdapter->getPinModeInput());
+        arduinoAdapter->pinMode(spsStatusPins[i], arduinoAdapter->getPinModeInputPullup());
     }
 
     for (auto* port : modbusPorts)
@@ -1750,7 +1750,7 @@ inline void BoardTest::handleSensorPsStatus(const std::string &cmd)
     int channel = extractIntParameter(cmd, "-ch");
     if (!arduinoAdapter || channel < 0 || channel >= 4) return;
     uint8_t pin = spsStatusPins[channel];
-    arduinoAdapter->pinMode(pin, arduinoAdapter->getPinModeInput());
+    arduinoAdapter->pinMode(pin, arduinoAdapter->getPinModeInputPullup());
     int val = arduinoAdapter->digitalRead(pin);
     char response[16];
     snprintf(response, sizeof(response), "SPS%d=%d", channel, val);
