@@ -88,7 +88,7 @@ private:
     ModuleModeEnum requestedModuleMode;
     ModuleModeEnum currentModuleMode;
 #ifndef FIRMWARE_VERSION
-    #define FIRMWARE_VERSION "0.1.6-jig"
+    #define FIRMWARE_VERSION "0.1.7-jig"
 #endif
     static constexpr const char* firmwareVersion = FIRMWARE_VERSION;
         

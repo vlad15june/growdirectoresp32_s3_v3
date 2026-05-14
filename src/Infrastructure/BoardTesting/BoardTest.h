@@ -1660,21 +1660,31 @@ inline void BoardTest::updateListen485()
             snprintf(rxLog + off, sizeof(rxLog) - off, " (%d bytes)", n);
             arduinoAdapter->serialPrintln(rxLog);
 
-            port->sendData(buf, static_cast<uint8_t>(n));
-            uint8_t okBytes[3] = {' ', 'O', 'K'};
-            port->sendData(okBytes, 3);
-
-            char txLog[128];
-            int toff = snprintf(txLog, sizeof(txLog), "L485 tx[port=%u]: ", static_cast<unsigned>(idx));
-            for (int i = 0; i < n && toff < (int)sizeof(txLog) - 4; i++) {
-                if (buf[i] >= 0x20 && buf[i] <= 0x7E) {
-                    txLog[toff++] = static_cast<char>(buf[i]);
-                } else {
-                    toff += snprintf(txLog + toff, sizeof(txLog) - toff, "?");
+            // Filter out non-printable, non-digit bytes before echoing
+            uint8_t filtered[64];
+            int filteredLen = 0;
+            for (int i = 0; i < n; i++) {
+                if ((buf[i] >= '0' && buf[i] <= '9') ||
+                    (buf[i] >= 'A' && buf[i] <= 'Z') ||
+                    (buf[i] >= 'a' && buf[i] <= 'z') ||
+                    buf[i] == ' ' || buf[i] == '.' || buf[i] == '-' || buf[i] == '_') {
+                    filtered[filteredLen++] = buf[i];
                 }
             }
-            snprintf(txLog + toff, sizeof(txLog) - toff, " OK");
-            arduinoAdapter->serialPrintln(txLog);
+
+            if (filteredLen > 0) {
+                port->sendData(filtered, static_cast<uint8_t>(filteredLen));
+                uint8_t okBytes[3] = {' ', 'O', 'K'};
+                port->sendData(okBytes, 3);
+
+                char txLog[128];
+                int toff = snprintf(txLog, sizeof(txLog), "L485 tx[port=%u]: ", static_cast<unsigned>(idx));
+                for (int i = 0; i < filteredLen && toff < (int)sizeof(txLog) - 4; i++) {
+                    txLog[toff++] = static_cast<char>(filtered[i]);
+                }
+                snprintf(txLog + toff, sizeof(txLog) - toff, " OK");
+                arduinoAdapter->serialPrintln(txLog);
+            }
         }
     }
 
