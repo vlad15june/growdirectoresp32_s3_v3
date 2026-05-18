@@ -55,6 +55,9 @@ private:
     bool listen485Active;
     unsigned long listen485Start;
     uint32_t listen485TimeoutMs;
+    std::vector<std::vector<uint8_t>> listen485RxBuf;
+    std::vector<unsigned long> listen485LastByteMs;
+    static constexpr uint32_t LISTEN485_INTERBYTE_MS = 500;
 
     void processCommand(const std::string &command);
     void updateButtonTest();
@@ -1636,6 +1639,8 @@ inline void BoardTest::handleListen485(const std::string &cmd)
     listen485Active = true;
     listen485Start = arduinoAdapter->millis();
     listen485TimeoutMs = static_cast<uint32_t>(timeout) * 1000UL;
+    listen485RxBuf.assign(modbusPorts.size(), std::vector<uint8_t>());
+    listen485LastByteMs.assign(modbusPorts.size(), 0UL);
 
     arduinoAdapter->serialPrintln("Listening");
 }
@@ -1644,65 +1649,91 @@ inline void BoardTest::updateListen485()
 {
     if (!listen485Active || !arduinoAdapter) return;
 
+    if (listen485RxBuf.size() != modbusPorts.size()) {
+        listen485RxBuf.assign(modbusPorts.size(), std::vector<uint8_t>());
+    }
+    if (listen485LastByteMs.size() != modbusPorts.size()) {
+        listen485LastByteMs.assign(modbusPorts.size(), 0UL);
+    }
+
+    unsigned long now = arduinoAdapter->millis();
+
     for (size_t idx = 0; idx < modbusPorts.size(); idx++) {
         IModbusRS485* port = modbusPorts[idx];
         if (!port) continue;
+
         while (port->available() > 0) {
             uint8_t buf[64];
             int n = port->readAvailable(buf, sizeof(buf));
             if (n <= 0) break;
+            listen485RxBuf[idx].insert(listen485RxBuf[idx].end(), buf, buf + n);
+            listen485LastByteMs[idx] = arduinoAdapter->millis();
+        }
 
-            char rxLog[256];
-            int off = snprintf(rxLog, sizeof(rxLog), "L485 rx[port=%u]:", static_cast<unsigned>(idx));
-            for (int i = 0; i < n && off < (int)sizeof(rxLog) - 8; i++) {
-                off += snprintf(rxLog + off, sizeof(rxLog) - off, " 0x%02X", buf[i]);
-            }
-            snprintf(rxLog + off, sizeof(rxLog) - off, " (%d bytes)", n);
-            arduinoAdapter->serialPrintln(rxLog);
+        if (listen485RxBuf[idx].empty()) continue;
+        if ((now - listen485LastByteMs[idx]) < LISTEN485_INTERBYTE_MS) continue;
 
-            // Restore corrupted bytes: valid chars pass through, others snap to nearest digit '0'-'9'
-            uint8_t filtered[64];
-            int filteredLen = 0;
-            for (int i = 0; i < n; i++) {
-                uint8_t b = buf[i];
-                if ((b >= '0' && b <= '9') ||
-                    (b >= 'A' && b <= 'Z') ||
-                    (b >= 'a' && b <= 'z') ||
-                    b == ' ' || b == '.' || b == '-' || b == '_') {
-                    filtered[filteredLen++] = b;
-                } else {
-                    // Find nearest digit by Hamming distance (fewest differing bits)
-                    uint8_t best = '0';
-                    int bestDist = __builtin_popcount(b ^ (uint8_t)'0');
-                    for (uint8_t d = '1'; d <= '9'; d++) {
-                        int dist = __builtin_popcount(b ^ d);
-                        if (dist < bestDist) {
-                            bestDist = dist;
-                            best = d;
-                        }
+        std::vector<uint8_t> &acc = listen485RxBuf[idx];
+        size_t n = acc.size();
+
+        char rxLog[512];
+        int off = snprintf(rxLog, sizeof(rxLog), "L485 rx[port=%u]:", static_cast<unsigned>(idx));
+        for (size_t i = 0; i < n && off < (int)sizeof(rxLog) - 16; i++) {
+            off += snprintf(rxLog + off, sizeof(rxLog) - off, " 0x%02X", acc[i]);
+        }
+        snprintf(rxLog + off, sizeof(rxLog) - off, " (%u bytes)", static_cast<unsigned>(n));
+        arduinoAdapter->serialPrintln(rxLog);
+
+        std::vector<uint8_t> filtered;
+        filtered.reserve(n);
+        for (size_t i = 0; i < n; i++) {
+            uint8_t b = acc[i];
+            if ((b >= '0' && b <= '9') ||
+                (b >= 'A' && b <= 'Z') ||
+                (b >= 'a' && b <= 'z') ||
+                b == ' ' || b == '.' || b == '-' || b == '_') {
+                filtered.push_back(b);
+            } else {
+                uint8_t best = '0';
+                int bestDist = __builtin_popcount(b ^ (uint8_t)'0');
+                for (uint8_t d = '1'; d <= '9'; d++) {
+                    int dist = __builtin_popcount(b ^ d);
+                    if (dist < bestDist) {
+                        bestDist = dist;
+                        best = d;
                     }
-                    filtered[filteredLen++] = best;
                 }
-            }
-
-            if (filteredLen > 0) {
-                port->sendData(filtered, static_cast<uint8_t>(filteredLen));
-                uint8_t okBytes[3] = {' ', 'O', 'K'};
-                port->sendData(okBytes, 3);
-
-                char txLog[128];
-                int toff = snprintf(txLog, sizeof(txLog), "L485 tx[port=%u]: ", static_cast<unsigned>(idx));
-                for (int i = 0; i < filteredLen && toff < (int)sizeof(txLog) - 4; i++) {
-                    txLog[toff++] = static_cast<char>(filtered[i]);
-                }
-                snprintf(txLog + toff, sizeof(txLog) - toff, " OK");
-                arduinoAdapter->serialPrintln(txLog);
+                filtered.push_back(best);
             }
         }
+
+        if (!filtered.empty()) {
+            size_t sendOff = 0;
+            while (sendOff < filtered.size()) {
+                size_t chunk = filtered.size() - sendOff;
+                if (chunk > 255) chunk = 255;
+                port->sendData(filtered.data() + sendOff, static_cast<uint8_t>(chunk));
+                sendOff += chunk;
+            }
+            uint8_t okBytes[3] = {' ', 'O', 'K'};
+            port->sendData(okBytes, 3);
+
+            char txLog[512];
+            int toff = snprintf(txLog, sizeof(txLog), "L485 tx[port=%u]: ", static_cast<unsigned>(idx));
+            for (size_t i = 0; i < filtered.size() && toff < (int)sizeof(txLog) - 4; i++) {
+                txLog[toff++] = static_cast<char>(filtered[i]);
+            }
+            snprintf(txLog + toff, sizeof(txLog) - toff, " OK");
+            arduinoAdapter->serialPrintln(txLog);
+        }
+
+        acc.clear();
     }
 
     if ((arduinoAdapter->millis() - listen485Start) >= listen485TimeoutMs) {
         listen485Active = false;
+        listen485RxBuf.clear();
+        listen485LastByteMs.clear();
     }
 }
 

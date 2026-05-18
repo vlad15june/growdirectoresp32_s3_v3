@@ -33,6 +33,8 @@ bool WifiAdapter::createAccessPoint(const char *ssid, const char *password, int 
         WiFi.mode(WIFI_AP);
     }
 
+    delay(250);
+
     apActive = WiFi.softAP(ssid, password, channel, hidden, maxConnections);
     
     if (apActive) {
