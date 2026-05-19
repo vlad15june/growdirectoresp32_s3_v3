@@ -241,14 +241,7 @@ const char *WifiAdapter::getMACAddress()
 {
     uint8_t mac[6];
 
-    if (WiFi.getMode() == WIFI_AP || WiFi.getMode() == WIFI_AP_STA)
-    {
-        WiFi.softAPmacAddress(mac);
-    }
-    else
-    {
-        WiFi.macAddress(mac);
-    }
+    WiFi.macAddress(mac);    
 
     snprintf(macBuffer, sizeof(macBuffer), "%02X:%02X:%02X:%02X:%02X:%02X",
              mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
