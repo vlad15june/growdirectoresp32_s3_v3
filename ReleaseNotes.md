@@ -1,5 +1,12 @@
 # Release Notes
 
+## Version 2.2.0 (2026-05-27)
+
+### Fixed
+- **Automatic Restart After Removal from Application**: GDV1-3489 Fixed an issue where the device did not restart automatically after being removed from the application. Previously, the device had to be manually restarted to complete the removal. The device now restarts on its own as soon as the removal operation finishes.
+
+---
+
 ## Version 2.1.49 (2026-05-13)
 
 ### Fixed
