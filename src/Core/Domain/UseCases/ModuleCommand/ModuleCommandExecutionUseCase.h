@@ -1176,6 +1176,12 @@ private:
         {
             log(DebugFeatures::MODULE_COMMAND_DEBUG,
                 "ModuleCommandUseCase: Factory reset completed successfully - all module data cleared");
+            if (moduleConfig)
+            {
+                moduleConfig->setRequestedModuleMode(ModuleModeEnum::CONFIGURED_NEED_RESTART);
+                log(DebugFeatures::MODULE_COMMAND_DEBUG,
+                    "ModuleCommandUseCase: Requested mode change to CONFIGURED_NEED_RESTART - device will restart");
+            }
             return {ModuleCommandStatus::DONE, ""};
         }
         else
