@@ -1,5 +1,12 @@
 # Release Notes
 
+## Version 2.2.1 (2026-05-27)
+
+### Changed
+- **Modbus Sensor Address Assignment Reliability**: GDV1-3522 The device now verifies that a sensor actually responds at its new address after each address assignment attempt, instead of trusting the write command result alone. If the sensor does not respond at the new address, the device checks whether it is still reachable at the old address and reports the result accordingly. During a sensor port scan, the device also proceeds with detection at the assigned scan address even when the assignment command does not return an acknowledgment, improving detection of sensors that silently accept the new address without confirming the command.
+
+---
+
 ## Version 2.2.0 (2026-05-27)
 
 ### Fixed
