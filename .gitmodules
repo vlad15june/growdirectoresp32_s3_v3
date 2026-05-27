@@ -1,0 +1,4 @@
+[submodule "specs"]
+	path = specs
+	url = git@bitbucket.org:dimacher/growdirector-specs.git
+	branch = main
