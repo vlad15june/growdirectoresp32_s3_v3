@@ -1506,29 +1506,21 @@ inline void ModuleSetupService::scanPinForSensorTypes(int pin, Node &node)
             tempSensor.baudRate = sensorType.baudRate;
             tempSensor.modbusRegisterConfigs = sensorType.modbusRegisterConfig;
 
-            // Step 1: Try to set scan address (0x22) via broadcast and detect at that address
             tempSensor.modbusDeviceAddress = sensorType.modbusDeviceAddress;
             log("SETUP: Attempting to set scan address 0x%02X via broadcast on port %d for sensor type %s",
                 MODBUS_SCAN_ADDRESS, pin, sensorType.name.c_str());
 
-            bool addressSet = sensorReader->writeSensorAddress(tempSensor, MODBUS_SCAN_ADDRESS);
-            if (addressSet)
-            {
-                log("SETUP: Scan address 0x%02X set successfully, trying to detect sensor", MODBUS_SCAN_ADDRESS);
-                tempSensor.modbusDeviceAddress = MODBUS_SCAN_ADDRESS;
-                if (detectSensor(node, tempSensor, sensorType, pin))
-                {
-                    isAdded = true;
-                    break;
-                }
-                log("SETUP: Sensor not detected at scan address 0x%02X", MODBUS_SCAN_ADDRESS);
-            }
-            else
-            {
-                log("SETUP: Failed to set scan address 0x%02X on port %d", MODBUS_SCAN_ADDRESS, pin);
-            }
+            sensorReader->writeSensorAddress(tempSensor, MODBUS_SCAN_ADDRESS);
 
-            // Step 2: Try default address from sensor type config
+            log("SETUP: Assuming scan address 0x%02X was set, trying to detect sensor", MODBUS_SCAN_ADDRESS);
+            tempSensor.modbusDeviceAddress = MODBUS_SCAN_ADDRESS;
+            if (detectSensor(node, tempSensor, sensorType, pin))
+            {
+                isAdded = true;
+                break;
+            }
+            log("SETUP: Sensor not detected at scan address 0x%02X", MODBUS_SCAN_ADDRESS);
+
             tempSensor.modbusDeviceAddress = sensorType.modbusDeviceAddress;
             log("SETUP: Trying default ModBus address 0x%02X for sensor type %s", sensorType.modbusDeviceAddress, sensorType.name.c_str());
 
@@ -1538,7 +1530,6 @@ inline void ModuleSetupService::scanPinForSensorTypes(int pin, Node &node)
                 break;
             }
 
-            // Step 3: Scan all addresses in the defined range
             log("SETUP: Sensor not found at default address, scanning range 0x%02X-0x%02X", MODBUS_ADDRESS_MIN, MODBUS_ADDRESS_MAX);
             for (int address = MODBUS_ADDRESS_MIN; address <= MODBUS_ADDRESS_MAX; address++)
             {
