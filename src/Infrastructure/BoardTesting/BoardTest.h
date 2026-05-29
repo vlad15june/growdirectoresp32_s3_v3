@@ -851,11 +851,14 @@ inline void BoardTest::setupDevicesForTest(IModuleConfig *config)
         arduinoAdapter->pinMode(buttonPin, arduinoAdapter->getPinModeInput());
     }
 
-    // Sensor PS status feedback pins - INPUT_PULLUP
-    static const uint8_t spsStatusPins[4] = {SPS_STATUS_1, SPS_STATUS_2, SPS_STATUS_3, SPS_STATUS_4};
-    for (int i = 0; i < 4; i++)
+    int moduleType = moduleConfig->getModuleType();
+    if (moduleType == MODULE_TYPE_SENSOR || moduleType == MODULE_TYPE_HYDRO)
     {
-        arduinoAdapter->pinMode(spsStatusPins[i], arduinoAdapter->getPinModeInputPullup());
+        static const uint8_t spsStatusPins[4] = {SPS_STATUS_1, SPS_STATUS_2, SPS_STATUS_3, SPS_STATUS_4};
+        for (int i = 0; i < 4; i++)
+        {
+            arduinoAdapter->pinMode(spsStatusPins[i], arduinoAdapter->getPinModeInputPullup());
+        }
     }
 
     for (auto* port : modbusPorts)
@@ -1330,6 +1333,7 @@ inline void BoardTest::handleLedControl(const std::string &cmd, bool isRed)
     {
         uint8_t pin = isRed ? redLeds[channel] : greenLeds[channel];
         value = (value != 1) ? 0 : 1;
+        arduinoAdapter->pinMode(pin, arduinoAdapter->getPinModeOutput());
         arduinoAdapter->digitalWrite(pin, value);
 
         char response[32];

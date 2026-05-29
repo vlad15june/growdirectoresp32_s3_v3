@@ -497,8 +497,8 @@ public:
 uint8_t ModuleConfig::LED_R_SKT[2] = {38, 37};
 uint8_t ModuleConfig::LED_G_SKT[2] = {40, 39};
 
-uint8_t ModuleConfig::LED_G_RELAY[4] = {15, 14, 13, 12};
-uint8_t ModuleConfig::LED_R_RELAY[4] = {35, 36, 37, 38};
+uint8_t ModuleConfig::LED_R_RELAY[4] = {15, 14, 13, 12};
+uint8_t ModuleConfig::LED_G_RELAY[4] = {35, 36, 37, 38};
 
 uint8_t ModuleConfig::LED_R_HYDRO[3] = {16, 8, 34};
 uint8_t ModuleConfig::LED_G_HYDRO[3] = {13, 14, 12};
