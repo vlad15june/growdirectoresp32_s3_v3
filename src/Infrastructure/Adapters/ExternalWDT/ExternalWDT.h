@@ -9,22 +9,8 @@
 #include <freertos/semphr.h>
 #include <atomic>
 
-/**
- * @brief External WDT Driver for BD87A28FVM-TR (ROHM, L-Active type)
- * 
- * Hardware Configuration:
- * - WDT IC: BD87A28FVM-TR
- * - Monitor time (twH): 10ms typical (7-20ms range)
- * - Reset time (twL): 3.3ms typical
- * - CLK pulse width: minimum 500ns, recommended 1-5µs
- * - Kick interval: must be < 10ms, recommended 5-7ms
- */
-
-// Hardware configuration
-#define EXT_WDT_CLK_PIN         GPIO_NUM_4      // CLK pin (WDT pin 3) - positive edge trigger
-#define EXT_WDT_INH_PIN         GPIO_NUM_5      // INH pin (WDT pin 6) - LOW = WDT enabled
-#define WDT_KICK_INTERVAL_MS    5               // Must be less than 10ms
-#define WDT_PULSE_WIDTH_US      2               // 1-5µs range
+#define EXT_WDT_WDI_PIN         GPIO_NUM_34
+#define WDT_KICK_INTERVAL_MS    100
 
 class ExternalWDT
 {
@@ -54,7 +40,7 @@ public:
     esp_err_t disable();
 
     /**
-     * @brief Send single kick pulse to CLK pin (HIGH→delay→LOW)
+     * @brief Toggle WDI pin level (single kick)
      * @return ESP_OK on success, error code otherwise
      */
     esp_err_t kick();
@@ -100,6 +86,7 @@ private:
     bool initialized_;
     bool enabled_;
     bool taskRunning_;
+    bool level_;
     std::atomic<uint64_t> kickCount_;
     TaskHandle_t taskHandle_;
     esp_timer_handle_t timer_;

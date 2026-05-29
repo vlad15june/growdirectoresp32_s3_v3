@@ -279,7 +279,6 @@ void setup()
   Serial.print("Free heap: ");
   Serial.println(ESP.getFreeHeap());
 
-  // Initialize and start External WDT (BD87A28FVM-TR)
   ExternalWDT& wdt = ExternalWDT::getInstance();
   if (wdt.init() == ESP_OK && wdt.enable() == ESP_OK && wdt.startTask() == ESP_OK)
   {
