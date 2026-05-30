@@ -24,6 +24,9 @@ public:
     
     int modbusDeviceAddress;
     int baudRate;
+    uint16_t modbusPingAddress = 0;
+    uint16_t registerToStoreModbusDeviceAddress = 0;
+    uint8_t writeRegistersCommand = 0;
     std::vector<ModbusRegisterConfig> modbusRegisterConfigs;
     
     std::string i2cAddress;

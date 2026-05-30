@@ -1505,21 +1505,26 @@ inline void ModuleSetupService::scanPinForSensorTypes(int pin, Node &node)
         {
             tempSensor.baudRate = sensorType.baudRate;
             tempSensor.modbusRegisterConfigs = sensorType.modbusRegisterConfig;
+            tempSensor.modbusPingAddress = sensorType.modbusPingAddress;
+            tempSensor.registerToStoreModbusDeviceAddress = sensorType.registerToStoreModbusDeviceAddress;
+            tempSensor.writeRegistersCommand = sensorType.writeRegistersCommand;
+
+            int scanTargetAddress = MODBUS_ADDRESS_MIN + pin;
 
             tempSensor.modbusDeviceAddress = sensorType.modbusDeviceAddress;
-            log("SETUP: Attempting to set scan address 0x%02X via broadcast on port %d for sensor type %s",
-                MODBUS_SCAN_ADDRESS, pin, sensorType.name.c_str());
+            log("SETUP: Attempting to set per-port address 0x%02X via broadcast on port %d for sensor type %s",
+                scanTargetAddress, pin, sensorType.name.c_str());
 
-            sensorReader->writeSensorAddress(tempSensor, MODBUS_SCAN_ADDRESS);
+            sensorReader->writeSensorAddress(tempSensor, scanTargetAddress);
 
-            log("SETUP: Assuming scan address 0x%02X was set, trying to detect sensor", MODBUS_SCAN_ADDRESS);
-            tempSensor.modbusDeviceAddress = MODBUS_SCAN_ADDRESS;
+            log("SETUP: Assuming per-port address 0x%02X was set, trying to detect sensor", scanTargetAddress);
+            tempSensor.modbusDeviceAddress = scanTargetAddress;
             if (detectSensor(node, tempSensor, sensorType, pin))
             {
                 isAdded = true;
                 break;
             }
-            log("SETUP: Sensor not detected at scan address 0x%02X", MODBUS_SCAN_ADDRESS);
+            log("SETUP: Sensor not detected at per-port address 0x%02X", scanTargetAddress);
 
             tempSensor.modbusDeviceAddress = sensorType.modbusDeviceAddress;
             log("SETUP: Trying default ModBus address 0x%02X for sensor type %s", sensorType.modbusDeviceAddress, sensorType.name.c_str());

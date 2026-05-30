@@ -1251,6 +1251,9 @@ public:
         
         sensor.modbusDeviceAddress = doc["modbusDeviceAddress"] | 1;
         sensor.baudRate = doc["baudRate"] | 9600;
+        sensor.modbusPingAddress = doc["modbusPingAddress"] | 0;
+        sensor.registerToStoreModbusDeviceAddress = doc["registerToStoreModbusDeviceAddress"] | 0;
+        sensor.writeRegistersCommand = doc["writeRegistersCommand"] | 0;
         sensor.i2cAddress = doc["i2cAddress"] | "";
         sensor.chipType = doc["chipType"] | "";
         
@@ -1320,6 +1323,9 @@ public:
         
         doc["modbusDeviceAddress"] = sensor.modbusDeviceAddress;
         doc["baudRate"] = sensor.baudRate;
+        doc["modbusPingAddress"] = sensor.modbusPingAddress;
+        doc["registerToStoreModbusDeviceAddress"] = sensor.registerToStoreModbusDeviceAddress;
+        doc["writeRegistersCommand"] = sensor.writeRegistersCommand;
         doc["i2cAddress"] = sensor.i2cAddress;
         doc["chipType"] = sensor.chipType;
         
@@ -1634,6 +1640,9 @@ public:
         sensorType.chipType = doc["chipType"] | "";
         sensorType.modbusDeviceAddress = doc["modbusDeviceAddress"] | 1;
         sensorType.baudRate = doc["baudRate"] | 9600;
+        sensorType.modbusPingAddress = doc["modbusPingAddress"] | 0;
+        sensorType.registerToStoreModbusDeviceAddress = doc["registerToStoreModbusDeviceAddress"] | 0;
+        sensorType.writeRegistersCommand = doc["writeRegistersCommand"] | 0;
         sensorType.priorityForScan = doc["priorityForScan"] | 0;
 
         // Parse legacy id for backward compatibility
@@ -1757,6 +1766,9 @@ public:
             
             doc["modbusDeviceAddress"] = sensorType.modbusDeviceAddress;
             doc["baudRate"] = sensorType.baudRate;
+            doc["modbusPingAddress"] = sensorType.modbusPingAddress;
+            doc["registerToStoreModbusDeviceAddress"] = sensorType.registerToStoreModbusDeviceAddress;
+            doc["writeRegistersCommand"] = sensorType.writeRegistersCommand;
             doc["priorityForScan"] = sensorType.priorityForScan;
 
             // Legacy id for backward compatibility (if needed)

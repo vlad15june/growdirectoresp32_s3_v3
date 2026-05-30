@@ -21,9 +21,13 @@ public:
      * @param currentAddress Current address of the sensor
      * @param newAddress New address to set
      * @param portIndex Port index for communication
+     * @param storeRegister Per-model register the device address is written to (primary path)
+     * @param writeCommand Per-model Modbus function code used for the primary write
+     * @param pingRegister Per-model register read to verify a device responds
      * @return true if address was written successfully, false otherwise
      */
-    virtual bool writeSensorAddress(int currentAddress, int newAddress, int portIndex) = 0;
+    virtual bool writeSensorAddress(int currentAddress, int newAddress, int portIndex,
+                                    uint16_t storeRegister, uint8_t writeCommand, uint16_t pingRegister) = 0;
 
     /**
      * @brief Power on specific port

@@ -174,7 +174,8 @@ public:
         return false;
     }
 
-    bool writeSensorAddress(int currentAddress, int newAddress, int portIndex) override
+    bool writeSensorAddress(int currentAddress, int newAddress, int portIndex,
+                            uint16_t storeRegister, uint8_t writeCommand, uint16_t pingRegister) override
     {
         if (portIndex < 0 || portIndex >= _modbusPorts.size())
         {
@@ -206,22 +207,92 @@ public:
 
         ModbusRegisterConfig probe;
         probe.functionCode = 0x03;
-        probe.startRegister = 0x0000;
+        probe.startRegister = pingRegister;
         probe.numRegisters = 1;
+
+        if (writeCommand == 16 || writeCommand == 6)
+        {
+            log("ModbusSensorReader: Primary write - FC%d to register 0x%04X on current address %d (new address %d) on port %d",
+                writeCommand, storeRegister, currentAddress, newAddress, portIndex);
+
+            if (writeCommand == 16)
+            {
+                modbus->writeRegister(currentAddress, storeRegister, (uint16_t)newAddress);
+            }
+            else
+            {
+                modbus->writeSingleRegister(currentAddress, storeRegister, (uint16_t)newAddress);
+            }
+
+            _arduino.delay(300);
+
+            log("ModbusSensorReader: Verifying primary write - probing new address %d (ping register 0x%04X) on port %d",
+                newAddress, pingRegister, portIndex);
+            if (pingAddress((uint8_t)newAddress, probe, portIndex))
+            {
+                log("ModbusSensorReader: Primary write CONFIRMED - device responds at new address %d on port %d", newAddress, portIndex);
+                return true;
+            }
+
+            log("ModbusSensorReader: Primary write at known address %d not confirmed, retrying FC%d to register 0x%04X via broadcast on port %d",
+                currentAddress, writeCommand, storeRegister, portIndex);
+
+            if (writeCommand == 16)
+            {
+                modbus->writeRegister(0x00, storeRegister, (uint16_t)newAddress);
+            }
+            else
+            {
+                modbus->writeSingleRegister(0x00, storeRegister, (uint16_t)newAddress);
+            }
+
+            _arduino.delay(300);
+
+            log("ModbusSensorReader: Verifying primary broadcast write - probing new address %d (ping register 0x%04X) on port %d",
+                newAddress, pingRegister, portIndex);
+            if (pingAddress((uint8_t)newAddress, probe, portIndex))
+            {
+                log("ModbusSensorReader: Primary broadcast write CONFIRMED - device responds at new address %d on port %d", newAddress, portIndex);
+                return true;
+            }
+
+            log("ModbusSensorReader: Primary write not confirmed at new address %d on port %d, falling back to legacy broadcast sequence",
+                newAddress, portIndex);
+        }
+        else
+        {
+            log("ModbusSensorReader: writeRegistersCommand %d is not a write code (6/16), skipping primary write and using legacy broadcast sequence",
+                writeCommand);
+        }
 
         for (int attempt = 1; attempt <= 3; attempt++)
         {
+            log("ModbusSensorReader: Broadcast FC06 write attempt %d/3 for new address %d on port %d",
+                attempt, newAddress, portIndex);
+            modbus->writeSingleRegister(0x00, 0x0000, (uint16_t)newAddress);
+
+            _arduino.delay(300);
+
+            log("ModbusSensorReader: Verifying address change after FC06 - probing new address %d on port %d (attempt %d/3)",
+                newAddress, portIndex, attempt);
+            if (pingAddress((uint8_t)newAddress, probe, portIndex))
+            {
+                log("ModbusSensorReader: Address change CONFIRMED via FC06 on attempt %d/3 - device responds at new address %d on port %d",
+                    attempt, newAddress, portIndex);
+                return true;
+            }
+
             log("ModbusSensorReader: Broadcast FC16 write attempt %d/3 for new address %d on port %d",
                 attempt, newAddress, portIndex);
             modbus->writeRegister(0x00, 0x0001, (uint16_t)newAddress);
 
             _arduino.delay(300);
 
-            log("ModbusSensorReader: Verifying address change - probing new address %d on port %d (attempt %d/3)",
+            log("ModbusSensorReader: Verifying address change after FC16 - probing new address %d on port %d (attempt %d/3)",
                 newAddress, portIndex, attempt);
             if (pingAddress((uint8_t)newAddress, probe, portIndex))
             {
-                log("ModbusSensorReader: Address change CONFIRMED on attempt %d/3 - device responds at new address %d on port %d",
+                log("ModbusSensorReader: Address change CONFIRMED via FC16 on attempt %d/3 - device responds at new address %d on port %d",
                     attempt, newAddress, portIndex);
                 return true;
             }
@@ -230,18 +301,6 @@ public:
             {
                 _arduino.delay(500);
             }
-        }
-
-        log("ModbusSensorReader: 3 FC16 broadcast attempts did not yield a response at new address %d on port %d, retrying with FC06 broadcast",
-            newAddress, portIndex);
-        modbus->writeSingleRegister(0x00, 0x0000, (uint16_t)newAddress);
-        _arduino.delay(300);
-
-        log("ModbusSensorReader: Verifying address change after FC06 - probing new address %d on port %d", newAddress, portIndex);
-        if (pingAddress((uint8_t)newAddress, probe, portIndex))
-        {
-            log("ModbusSensorReader: Address change CONFIRMED via FC06 - device responds at new address %d on port %d", newAddress, portIndex);
-            return true;
         }
 
         log("ModbusSensorReader: New address %d silent on port %d after all write attempts, probing old address %d",

@@ -20,12 +20,12 @@ The GrowDirector ESP32 firmware implements a comprehensive sensor management sys
 
 ### Key Features
 
-- **Multi-Protocol Support**: Analog, I2C, and ModBus/RS485 sensors
-- **Automatic Discovery**: Scan and detect sensors on available ports
-- **Real-time Monitoring**: Periodic sensor reading with configurable intervals
-- **Dual Communication**: Data transmission via REST API and/or MQTT
-- **Error Handling**: Offline detection, retry mechanisms, and error reporting
-- **Multi-Channel Support**: Single sensor with multiple measurement channels
+- **Multi-Protocol Support**: Analog and ModBus/RS485 reading (I2C reading is planned, not yet implemented)
+- **Automatic Discovery**: ModBus sensors are auto-scanned on ports (analog/I2C scanning currently disabled)
+- **Real-time Monitoring**: Periodic sensor reading every 15 seconds
+- **Dual Communication**: Data transmission via REST API and/or MQTT, plus local UDP multicast
+- **Error Handling**: Per-cycle error marking, retry logic, and recovery on the next poll
+- **Multi-Channel Support**: Single ModBus sensor with multiple measurement channels
 
 ---
 
@@ -116,24 +116,36 @@ public:
     std::string uid;              // Unique identifier (e.g., "84:F7:03:FE:88:2C.00")
     std::string sensorType;       // Sensor type name
     std::string model;            // Sensor model
-    std::string protocol;         // Communication protocol
+    std::string protocol;         // Communication protocol ("Analog", "I2C", "ModBus")
     int pin;                      // Hardware pin/port number
-    
-    // Protocol-specific configurations
+
+    bool isActive;                // Sensor is enabled and included in the poll cycle
+    bool isError;                 // Last read failed; sensor is reported as "disconnected"
+    SensorStatusEnum status;      // new / added / error / deleted / disconnected
+
+    float currentValue;           // Last successfully read value
+    uint32_t lastReadTime;        // millis() timestamp of the last read
+
+    // Analog calibration
     float multiplier;             // Analog calibration multiplier
     float offset;                 // Analog calibration offset
-    
-    int modbusDeviceAddress;      // ModBus slave address (0x01-0x78)
+
+    int modbusDeviceAddress;      // ModBus slave address
     int baudRate;                 // ModBus baud rate (usually 9600)
     std::vector<ModbusRegisterConfig> modbusRegisterConfigs;
-    
+
     std::string i2cAddress;       // I2C device address
+    std::string chipType;         // I2C chip type
     std::vector<I2CRegisterConfig> i2cRegisterConfigs;
-    
-    bool isOnline;                // Online/offline status
-    float value;                  // Current reading value
+
+    std::string sensorTypeUid;    // Reference to the sensor type definition
 };
 ```
+
+> Note: the sensor's connectivity is expressed through `isActive` / `isError` (and the
+> `SensorStatusEnum`), not through a separate `isOnline`/`value` pair. A sensor whose last
+> read failed keeps `isActive = true` and gets `isError = true`, and is reported to the
+> server with state `disconnected`.
 
 ### Sensor Type Configuration
 
@@ -249,7 +261,12 @@ The scan command allows scanning specific pins for sensors:
 
 ModBus sensors require address discovery since devices can be configured with different addresses.
 
-**Default Address Range**: `0x70 - 0x73` (expandable to `0x01 - 0x78`)
+**Address probing order** (firmware tries them in this sequence):
+1. **Scan address `0x22`** — the firmware first broadcasts a "set address" command to assign the
+   dedicated scan address `0x22`, then tries to detect the sensor there.
+2. **Sensor type default address** — the default address declared by the sensor type
+   (e.g. `0xFF` / `255` or `0x01`).
+3. **Scan range `0x70 - 0x73`** — iterated only if the sensor was not found at the previous addresses.
 
 #### ModBus Scan Algorithm
 
@@ -258,10 +275,13 @@ bool scanModbusSensor(const SensorEntity& sensor) {
     // 1. Configure port states - isolate target port
     powerOffAllPortsExcept(sensor.pin);
     powerOnPort(sensor.pin);
-    delay(500); // Allow sensor to stabilize
-    
+    // If any port's power state changed, warm up for 10 seconds so sensors stabilize
+    if (portPowerStateChanged) {
+        delay(10000);
+    }
+
     // 2. Ping device at specified address
-    if (!pingAddress(sensor.modbusDeviceAddress, sensor.pin)) {
+    if (!pingAddress(sensor.modbusDeviceAddress, sensor.modbusRegisterConfigs[0], sensor.pin)) {
         return false; // Device not responding
     }
     
@@ -338,6 +358,10 @@ ModuleCommandUseCase: Found ry_ws301 sensor on pin 2 at address 0x71
 
 ### I2C Sensor Scanning
 
+> **Not active in the current firmware.** I2C scanning is temporarily disabled — the scan entry
+> point returns `false` for the I2C protocol, so I2C sensors are not auto-detected. The algorithm
+> below describes the intended logic only.
+
 I2C sensors are typically identified by fixed addresses:
 
 ```cpp
@@ -359,6 +383,10 @@ bool scanI2CSensor(const SensorEntity& sensor) {
 ```
 
 ### Analog Sensor Scanning
+
+> **Not active in the current firmware.** Analog scanning is temporarily disabled — the scan entry
+> point returns `false` for the analog protocol, so analog sensors are not auto-detected. The
+> algorithm below describes the intended logic only.
 
 Analog sensors are verified by checking if readings are within valid ranges:
 
@@ -413,9 +441,9 @@ public:
                  ▼
 ┌─────────────────────────────────────────────┐
 │  readAllSensors()                           │
-│  - Get all sensors from repository          │
-│  - Filter online sensors                    │
-│  - Read by protocol type                    │
+│  - Get active sensors from repository       │
+│  - Read by protocol group (analog/i2c/modbus)│
+│  - Update value + status per sensor         │
 └────────────────┬────────────────────────────┘
                  ▼
         ┌────────┴────────┐
@@ -533,6 +561,12 @@ Response: 0x71 0x03 0x02 0x00 0xFD 0x38 0x45
 Value: 253 * 0.1 = 25.3°C
 ```
 
+#### I2C Sensor Reading
+
+> **Not implemented in the current firmware.** The I2C read path returns `false` ("not yet
+> implemented"), and the hardware classes for specific I2C chips (CO2, Lux, SHT4x, SHT85) exist
+> but are not wired into the read cycle. Only Analog and ModBus sensors produce values today.
+
 #### Multi-Channel Sensor Reading
 
 Some sensors provide multiple measurement channels:
@@ -596,43 +630,28 @@ SensorReadResult readSensorDetailed(const SensorEntity& sensor) {
 
 ### Offline Sensor Detection
 
-When a sensor fails to respond:
+When a sensor fails to respond, the firmware does **not** maintain a separate offline queue or a
+dedicated background rescan task. Detection and recovery happen inside the normal 15-second poll
+cycle:
 
-1. **First Failure**: Retry reading (up to 3 attempts)
-2. **Persistent Failure**: Mark sensor as offline in repository
-3. **Automatic Rescanning**: Background task rescans offline sensors every 20 minutes
-4. **Queue Management**: Maintains queue of offline sensors for systematic rescanning
+1. **Read fails**: for multi-channel ModBus reads, each channel is retried up to 3 times (with a
+   100 ms gap). A single-channel read is attempted once per cycle.
+2. **Mark as error**: on persistent failure the sensor's status is updated to `isError = true`.
+   The sensor stays `isActive` and remains in the poll cycle — it is **not** removed or disabled.
+3. **Reported state**: while `isError = true`, the sensor is sent to the server with state
+   `disconnected` and value `0`.
+4. **Automatic recovery**: on the next poll cycle (every 15 seconds) the firmware reads the sensor
+   again. As soon as a read succeeds, `isError` is cleared and the sensor is reported as `online`
+   again. No manual intervention and no separate rescan interval are involved.
 
 ```cpp
-// Automatic offline sensor rescanning (from ticket GDV1-3202)
-const unsigned long DETECTION_INTERVAL = 5 * 60 * 1000;     // 5 minutes
-const unsigned long RESCAN_INTERVAL = 20 * 60 * 1000;       // 20 minutes
-
-void detectAndQueueOfflineSensors() {
-    auto offlineSensors = sensorRepository->getOfflineSensors();
-    
-    for (const auto& sensor : offlineSensors) {
-        if (!isInRescanQueue(sensor.uid)) {
-            addToRescanQueue(sensor.uid);
-        }
-    }
-}
-
-void processRescanQueue() {
-    if (rescanQueue.empty()) return;
-    
-    string sensorUid = rescanQueue.front();
-    rescanQueue.pop();
-    
-    auto sensor = sensorRepository->get(sensorUid);
-    if (sensor.has_value() && scanSensor(sensor.value())) {
-        // Sensor back online
-        sensor.value().isOnline = true;
-        sensorRepository->save(sensor.value());
-    } else {
-        // Still offline, add back to queue
-        rescanQueue.push(sensorUid);
-    }
+// Inside the regular poll cycle (every 15 seconds), per active sensor:
+if (readSensor(sensor, value)) {
+    // Success -> clear error, report "online"
+    sensorRepository->updateSensorStatus(sensor.uid, /*isActive*/ true, /*isError*/ false);
+} else {
+    // Failure -> keep active, mark error, report "disconnected"
+    sensorRepository->updateSensorStatus(sensor.uid, sensor.isActive, /*isError*/ true);
 }
 ```
 
@@ -714,8 +733,8 @@ public:
 class SensorDto {
 public:
     string uid;     // Sensor UID (e.g., "84:F7:03:FE:88:2C.00.01")
-    float value;    // Current reading
-    string state;   // "online", "offline", "error"
+    float value;    // Current reading (0 when the sensor is in error)
+    string state;   // "online" or "disconnected"
 };
 ```
 
@@ -734,16 +753,17 @@ UpdateDto SensorService::createSensorUpdateDto() {
     updateDto.time = timeAdapter->getFormattedTime();  // ISO 8601
     updateDto.millis = arduinoAdapter->millis();
     
-    // Collect sensor data
-    auto sensorValues = sensorValueModel->getAllValues();
-    for (const auto& sensorValue : sensorValues) {
+    // Collect sensor data (only active sensors are reported)
+    auto sensors = sensorRepository->getActiveSensors();
+    for (const auto& sensor : sensors) {
         SensorDto sensorDto;
-        sensorDto.uid = sensorValue.uid;
-        sensorDto.value = sensorValue.value;
-        sensorDto.state = sensorValue.isOnline ? "online" : "offline";
-        
+        sensorDto.uid = sensor.uid;
+        sensorDto.value = sensor.isError ? 0.0f : sensorValueModel->getSensorValue(sensor.uid);
+        sensorDto.state = sensor.isError ? "disconnected" : "online";
+
         updateDto.sensors.push_back(sensorDto);
     }
+    // Multi-channel sensors emit one entry per channel (UID = sensorUid + ".NN").
     
     // Collect device states
     auto devices = deviceModel->getAllDevices();
@@ -798,15 +818,15 @@ bool RestAPIService::sendModuleUpdateData(const UpdateDto& updateData) {
     // Convert to JSON
     string jsonPayload = jsonConverter->updateToJson(updateData);
     
-    // Construct endpoint
-    string endpoint = "/api/v1/modules/" + updateData.growdirectorUid + "/update";
-    
+    // Construct endpoint (token and module UID are passed as query parameters)
+    string endpoint = "/api/v1/HardWare/update?token=" + getAuthToken() +
+                      "&grow_director_uid=" + updateData.growdirectorUid;
+
     // Send HTTP POST request
     HTTPClient http;
     http.begin(apiBaseUrl + endpoint);
     http.addHeader("Content-Type", "application/json");
-    http.addHeader("Authorization", "Bearer " + getAuthToken());
-    
+
     int httpCode = http.POST(jsonPayload);
     
     bool success = (httpCode == 200 || httpCode == 201);
@@ -818,9 +838,8 @@ bool RestAPIService::sendModuleUpdateData(const UpdateDto& updateData) {
 
 **Example REST Request**:
 ```
-POST https://api.growdirector.com/api/v1/modules/84:F7:03:FE:88:2C/update
+POST https://api.growdirector.com/api/v1/HardWare/update?token=eyJhbGciOiJIUzI1NiIs...&grow_director_uid=84:F7:03:FE:88:2C
 Content-Type: application/json
-Authorization: Bearer eyJhbGciOiJIUzI1NiIs...
 
 {
   "growdirectorUid": "84:F7:03:FE:88:2C",
@@ -837,8 +856,7 @@ bool MqttApiService::sendModuleUpdateData(const UpdateDto& updateData) {
     string jsonPayload = jsonConverter->updateToJson(updateData);
     
     // Construct topic
-    string topic = "gd/" + updateData.accountUid + "/" + 
-                   updateData.growdirectorUid + "/update";
+    string topic = "hardware/update/" + updateData.growdirectorUid;
     
     // Publish message
     bool success = mqttManager->publish(
@@ -855,7 +873,7 @@ bool MqttApiService::sendModuleUpdateData(const UpdateDto& updateData) {
 
 **Example MQTT Message**:
 ```
-Topic: gd/acc-12345/84:F7:03:FE:88:2C/update
+Topic: hardware/update/84:F7:03:FE:88:2C
 Payload: {
   "growdirectorUid": "84:F7:03:FE:88:2C",
   "sensors": [...],
@@ -900,19 +918,19 @@ In addition to server communication, sensor data can be broadcast on the local n
 
 ```cpp
 void SensorService::sendUpdateViaUdp(const UpdateDto& updateDto) {
-    if (!udpManager) return;
-    
+    if (!udpManager || !udpManager->isInitialized()) return;
+
     // Convert to JSON
     string jsonPayload = jsonConverter->updateToJson(updateDto);
-    
-    // Broadcast to local network
-    IPAddress broadcastIP(255, 255, 255, 255);
-    udpManager->sendBroadcast(
-        broadcastIP, 
-        8888,  // UDP port
-        jsonPayload.c_str(), 
-        jsonPayload.length()
-    );
+
+    // Send via UDP multicast first; fall back to broadcast on failure.
+    // Both the multicast group address and the port come from the UDP manager config.
+    const char* multicastIP = udpManager->getMulticastIP();
+    uint16_t port = udpManager->getLocalPort();
+
+    if (!udpManager->getSender()->sendMulticast(jsonPayload.c_str(), multicastIP, port)) {
+        udpManager->getSender()->sendBroadcast(jsonPayload.c_str(), port);
+    }
 }
 ```
 
@@ -1013,19 +1031,19 @@ This allows local applications to receive real-time sensor data without server r
                 ▼
 ┌─────────────────────────────────────────────┐
 │  Update SensorValue in Memory               │
-│  - timestamp = now()                        │
+│  - lastReadTime = now()                     │
 │  - value = reading                          │
-│  - isOnline = true                          │
+│  - isError = false (cleared on success)     │
 └────────────────┬────────────────────────────┘
                  │
                  ▼
 ┌─────────────────────────────────────────────┐
 │  Error Handling                             │
 │  If read fails:                             │
-│  - Retry 3 times                            │
-│  - Scan sensor (check online)               │
-│  - Mark offline if persistent               │
-│  - Add to rescan queue                      │
+│  - Multi-channel: retry up to 3x per channel│
+│  - Mark sensor isError = true               │
+│  - Keep sensor active (stays in poll cycle) │
+│  - Report state as "disconnected"           │
 └────────────────┬────────────────────────────┘
                  │
                  ▼
@@ -1063,10 +1081,10 @@ This allows local applications to receive real-time sensor data without server r
         ┌────────┴────────┬──────────────┐
         ▼                 ▼              ▼
 ┌──────────────┐   ┌──────────────┐   ┌──────────────┐
-│  REST API    │   │  MQTT API    │   │  UDP Bcast   │
-│  POST /api/  │   │  PUBLISH     │   │  Local net   │
-│  v1/modules/ │   │  gd/acc/uid/ │   │  Port 8888   │
-│  update      │   │  update      │   │              │
+│  REST API    │   │  MQTT API    │   │  UDP         │
+│  POST /api/  │   │  PUBLISH     │   │  Multicast   │
+│  v1/HardWare │   │  hardware/   │   │  (+broadcast │
+│  /update     │   │  update/{uid}│   │   fallback)  │
 └──────┬───────┘   └──────┬───────┘   └──────┬───────┘
        │                  │                  │
        └────────┬─────────┴──────────────────┘
@@ -1080,23 +1098,24 @@ This allows local applications to receive real-time sensor data without server r
 └─────────────────────────────────────────────┘
 
 ┌──────────────────────┐
-│  6. BACKGROUND TASKS │
+│  6. RECOVERY & SYNC  │
 └──────┬───────────────┘
        │
-       ▼ (Every 5 minutes)
+       ▼ (Every 15 seconds, inside the poll cycle)
 ┌─────────────────────────────────────────────┐
-│  Detect Offline Sensors                     │
-│  - Query repository for offline sensors     │
-│  - Add to rescan queue                      │
+│  Error Recovery (no separate queue)         │
+│  - Re-read every active sensor              │
+│  - On success: clear isError -> "online"    │
+│  - On failure: keep active, set isError     │
+│    -> reported as "disconnected"            │
 └────────────────┬────────────────────────────┘
                  │
-                 ▼ (Every 20 minutes)
+                 ▼ (Every 5 minutes)
 ┌─────────────────────────────────────────────┐
-│  Process Rescan Queue                       │
-│  - Take one sensor from queue               │
-│  - Attempt to scan                          │
-│  - Update status                            │
-│  - Re-queue if still offline                │
+│  Sensor Types Sync                          │
+│  - GET sensor_models from server            │
+│  - Merge by updatedAt                       │
+│  - Refresh registers of existing sensors    │
 └─────────────────────────────────────────────┘
 ```
 
@@ -1108,46 +1127,44 @@ This allows local applications to receive real-time sensor data without server r
 
 ```cpp
 bool SensorService::readAllSensors() {
-    log("SensorService: Reading all sensors");
-    
-    // Get all sensors from repository
-    auto sensors = sensorRepository->getAll();
-    
-    int successCount = 0;
-    int failureCount = 0;
-    
-    for (const auto& sensor : sensors) {
-        // Skip offline sensors
-        if (!sensor.isOnline) {
-            continue;
-        }
-        
-        // Read sensor based on protocol
-        SensorReadResult result = sensorReader->readSensorDetailed(sensor);
-        
-        if (result.isSuccess()) {
-            // Update value model
-            if (result.isMultiChannel()) {
-                for (const auto& [channelUid, value] : result.getChannelValues()) {
-                    sensorValueModel->updateValue(channelUid, value, result.getReadTime());
-                }
-            } else {
-                sensorValueModel->updateValue(sensor.uid, result.getValue(), result.getReadTime());
-            }
-            successCount++;
-        } else {
-            // Handle error
-            if (result.getStatus() == SensorReadStatus::SENSOR_OFFLINE) {
-                log("SensorService: Sensor %s is offline", sensor.uid.c_str());
-                sensor.isOnline = false;
-                sensorRepository->save(sensor);
-            }
-            failureCount++;
-        }
+    // Sensors are read in protocol groups. Each group iterates the active sensors of
+    // that protocol; per-sensor reading updates the value model and the sensor status.
+    bool success = true;
+
+    if (!readAnalogSensors()) success = false;
+    if (!readI2CSensors())    success = false;
+    if (!readModbusSensors()) success = false;
+
+    return success;
+}
+
+// One sensor of any protocol; called by each protocol group above.
+bool SensorService::readSensor(SensorEntity sensor) {
+    if (!sensor.isActive) {
+        return false;
     }
-    
-    log("SensorService: Read %d sensors successfully, %d failures", successCount, failureCount);
-    return failureCount == 0;
+
+    if (sensor.isMultiChannel()) {
+        std::map<std::string, float> channelValues;
+        if (sensorReader->readMultiChannelSensor(sensor, channelValues)) {
+            for (const auto& pair : channelValues) {
+                sensorValueModel->setChannelValue(sensor.uid, pair.first, pair.second);
+            }
+            sensorRepository->updateSensorStatus(sensor.uid, true, false);  // clear error
+            return true;
+        }
+        sensorRepository->updateSensorStatus(sensor.uid, sensor.isActive, true);  // mark error
+        return false;
+    }
+
+    float value;
+    if (sensorReader->readSensor(sensor, value)) {
+        sensorValueModel->setSensorValue(sensor.uid, value);
+        sensorRepository->updateSensorStatus(sensor.uid, true, false);  // clear error
+        return true;
+    }
+    sensorRepository->updateSensorStatus(sensor.uid, sensor.isActive, true);  // mark error
+    return false;
 }
 ```
 
@@ -1255,17 +1272,17 @@ UpdateDto SensorService::createSensorUpdateDto() {
     updateDto.time = timeAdapter->getFormattedTime();
     updateDto.millis = arduinoAdapter->millis();
     
-    // Collect sensor data
-    auto allValues = sensorValueModel->getAllValues();
-    for (const auto& sensorValue : allValues) {
+    // Collect sensor data (only active sensors are reported)
+    auto sensors = sensorRepository->getActiveSensors();
+    for (const auto& sensor : sensors) {
         SensorDto sensorDto;
-        sensorDto.uid = sensorValue.sensorUid;
-        sensorDto.value = sensorValue.value;
-        sensorDto.state = sensorValue.isOnline ? "online" : "offline";
-        
+        sensorDto.uid = sensor.uid;
+        sensorDto.value = sensor.isError ? 0.0f : sensorValueModel->getSensorValue(sensor.uid);
+        sensorDto.state = sensor.isError ? "disconnected" : "online";
+
         updateDto.sensors.push_back(sensorDto);
     }
-    
+
     return updateDto;
 }
 ```
@@ -1305,9 +1322,9 @@ SensorReader: Device does not respond at address 112, skipping scan
 
 **Symptoms**:
 ```
-SensorService: Sensor 84:F7:03:FE:88:2C.00 is offline
-// Later...
-SensorService: Read sensor 84:F7:03:FE:88:2C.00 successfully
+SensorService: Failed to read sensor 84:F7:03:FE:88:2C.00, marking as error
+// Later (next 15s cycle)...
+SensorService: Read sensor 84:F7:03:FE:88:2C.00, value: 25.30
 ```
 
 **Possible Causes**:
@@ -1463,12 +1480,12 @@ This sends a raw ModBus command for testing communication.
 
 The GrowDirector ESP32 sensor system provides:
 
-1. **Flexible Protocol Support**: Works with Analog, I2C, and ModBus sensors
-2. **Automatic Discovery**: Scans and identifies sensors automatically
-3. **Robust Reading**: Multi-attempt retry logic and error handling
-4. **Dual Communication**: REST API and MQTT support with fallback
+1. **Protocol Support**: Analog and ModBus reading today; I2C reading is planned (not yet implemented)
+2. **Automatic Discovery**: ModBus sensors are auto-scanned; analog/I2C scanning is currently disabled
+3. **Robust Reading**: Multi-attempt retry logic (multi-channel ModBus) and error handling
+4. **Dual Communication**: REST API and MQTT support with fallback, plus local UDP multicast
 5. **Real-time Updates**: 15-second intervals for reading and transmission
-6. **Offline Recovery**: Automatic rescanning of offline sensors
+6. **Error Recovery**: Failed sensors stay active and recover automatically on the next poll cycle
 7. **Clean Architecture**: Testable, maintainable, and extensible design
 
 The system ensures reliable sensor monitoring with comprehensive error handling and multiple communication pathways to the server.

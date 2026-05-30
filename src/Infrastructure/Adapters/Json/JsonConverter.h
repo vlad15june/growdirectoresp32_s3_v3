@@ -1300,6 +1300,9 @@ public:
         
         sensor.modbusDeviceAddress = extractIntValue(jsonStr, "modbusDeviceAddress");
         sensor.baudRate = extractIntValue(jsonStr, "baudRate");
+        sensor.modbusPingAddress = static_cast<uint16_t>(extractIntValue(jsonStr, "modbusPingAddress"));
+        sensor.registerToStoreModbusDeviceAddress = static_cast<uint16_t>(extractIntValue(jsonStr, "registerToStoreModbusDeviceAddress"));
+        sensor.writeRegistersCommand = static_cast<uint8_t>(extractIntValue(jsonStr, "writeRegistersCommand"));
         sensor.i2cAddress = extractValue(jsonStr, "i2cAddress");
         sensor.chipType = extractValue(jsonStr, "chipType");
         
@@ -1366,6 +1369,9 @@ public:
         oss << ",\"pin\":" << sensor.pin;
         oss << ",\"modbusDeviceAddress\":" << sensor.modbusDeviceAddress;
         oss << ",\"baudRate\":" << sensor.baudRate;
+        oss << ",\"modbusPingAddress\":" << sensor.modbusPingAddress;
+        oss << ",\"registerToStoreModbusDeviceAddress\":" << sensor.registerToStoreModbusDeviceAddress;
+        oss << ",\"writeRegistersCommand\":" << static_cast<int>(sensor.writeRegistersCommand);
         oss << ",\"i2cAddress\":\"" << sensor.i2cAddress << "\"";
         oss << ",\"chipType\":\"" << sensor.chipType << "\"";
         oss << ",\"currentValue\":" << sensor.currentValue;
@@ -1808,6 +1814,9 @@ private:
         sensorType.chipType = extractValue(jsonStr, "chipType");
         sensorType.modbusDeviceAddress = extractIntValue(jsonStr, "modbusDeviceAddress");
         sensorType.baudRate = extractIntValue(jsonStr, "baudRate");
+        sensorType.modbusPingAddress = static_cast<uint16_t>(extractIntValue(jsonStr, "modbusPingAddress"));
+        sensorType.registerToStoreModbusDeviceAddress = static_cast<uint16_t>(extractIntValue(jsonStr, "registerToStoreModbusDeviceAddress"));
+        sensorType.writeRegistersCommand = static_cast<uint8_t>(extractIntValue(jsonStr, "writeRegistersCommand"));
         sensorType.priorityForScan = extractIntValue(jsonStr, "priorityForScan");
 
         // Legacy id for backward compatibility
@@ -1861,6 +1870,9 @@ private:
         oss << ",\"chipType\":\"" << sensorType.chipType << "\"";
         oss << ",\"modbusDeviceAddress\":" << sensorType.modbusDeviceAddress;
         oss << ",\"baudRate\":" << sensorType.baudRate;
+        oss << ",\"modbusPingAddress\":" << sensorType.modbusPingAddress;
+        oss << ",\"registerToStoreModbusDeviceAddress\":" << sensorType.registerToStoreModbusDeviceAddress;
+        oss << ",\"writeRegistersCommand\":" << static_cast<int>(sensorType.writeRegistersCommand);
         oss << ",\"priorityForScan\":" << sensorType.priorityForScan;
         
         // Add sensorTypes array - simplified (for complex serialization use ArduinoJsonConverter)

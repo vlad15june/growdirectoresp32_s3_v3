@@ -188,7 +188,10 @@ public:
             }
 
             int portIndex = sensor.pin;
-            return _modbusReader->writeSensorAddress(sensor.modbusDeviceAddress, newAddress, portIndex);
+            return _modbusReader->writeSensorAddress(sensor.modbusDeviceAddress, newAddress, portIndex,
+                                                     sensor.registerToStoreModbusDeviceAddress,
+                                                     sensor.writeRegistersCommand,
+                                                     sensor.modbusPingAddress);
         }
         else
         {
@@ -427,9 +430,15 @@ private:
             _arduino->delay(10000);
         }
 
-        if (_modbusReader->pingAddress(sensor.modbusDeviceAddress, sensor.modbusRegisterConfigs[0], portIndex) == false)
+        ModbusRegisterConfig pingProbe;
+        pingProbe.functionCode = 0x03;
+        pingProbe.startRegister = sensor.modbusPingAddress;
+        pingProbe.numRegisters = 1;
+
+        if (_modbusReader->pingAddress(sensor.modbusDeviceAddress, pingProbe, portIndex) == false)
         {
-            log("SensorReader: Device does not respond at address %d, skipping scan", sensor.modbusDeviceAddress);
+            log("SensorReader: Device does not respond at address %d (ping register 0x%04X), skipping scan",
+                sensor.modbusDeviceAddress, sensor.modbusPingAddress);
             return false;
         }
         log("SensorReader: Device responds at address %d, proceeding with scan", sensor.modbusDeviceAddress);

@@ -77,6 +77,9 @@ public:
     
     int modbusDeviceAddress;
     int baudRate;
+    uint16_t modbusPingAddress;
+    uint16_t registerToStoreModbusDeviceAddress;
+    uint8_t writeRegistersCommand;
     std::vector<ModbusRegisterConfig> modbusRegisterConfig;
     
     std::vector<AnalogPinConfig> analogPinConfig;
@@ -93,6 +96,9 @@ public:
         isSupported(true),
         modbusDeviceAddress(1),
         baudRate(9600),
+        modbusPingAddress(0),
+        registerToStoreModbusDeviceAddress(0),
+        writeRegistersCommand(0),
         priorityForScan(0),
         id(0) {}
 

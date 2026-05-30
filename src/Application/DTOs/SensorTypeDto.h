@@ -2,6 +2,7 @@
 
 #include <string>
 #include <vector>
+#include <cstdint>
 
 /**
  * @brief DTO for individual sensor type within a sensor device
@@ -61,6 +62,9 @@ public:
     std::string i2cRegisterConfig;
     int modbusDeviceAddress;
     int baudRate;
+    uint16_t modbusPingAddress;
+    uint16_t registerToStoreModbusDeviceAddress;
+    uint8_t writeRegistersCommand;
     std::string modbusRegisterConfig;
     std::string analogPinConfig;
 
@@ -74,6 +78,9 @@ public:
         isSupported(true),
         modbusDeviceAddress(1),
         baudRate(9600),
+        modbusPingAddress(0),
+        registerToStoreModbusDeviceAddress(0),
+        writeRegistersCommand(0),
         priorityForScan(0),
         id(0) {}
 };
