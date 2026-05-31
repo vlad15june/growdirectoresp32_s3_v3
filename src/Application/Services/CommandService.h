@@ -5,6 +5,7 @@
 #include "Application/DTOs/DeviceCommandDto.h"
 #include "Application/DTOs/DeviceCommandUpdateDto.h"
 #include "Application/DTOs/CommandResultDto.h"
+#include "Application/DTOs/RawIoResultDto.h"
 #include "Core/Domain/Interfaces/UseCases/IDeviceCommandExecutionUseCase.h"
 #include "Core/Domain/Interfaces/UseCases/IModuleCommandExecutionUseCase.h"
 #include "Core/Domain/Interfaces/UseCases/ISensorCommandUseCase.h"
@@ -352,6 +353,11 @@ private:
             return processComplexModuleCommand(command);
         }
 
+        if (isRawModuleCommand(command.command))
+        {
+            return processRawModuleCommand(command);
+        }
+
         if (moduleCommandUseCase)
         {
             return moduleCommandUseCase->execute(command.command, command.options, command.commandUid, command.createdAt);
@@ -361,6 +367,46 @@ private:
             logError("CommandService: ModuleCommandExecutionUseCase not available");
             return false;
         }
+    }
+
+    bool isRawModuleCommand(const std::string& commandName) const
+    {
+        ModuleCommandEnum command = getModuleCommandEnum(commandName);
+        return command == ModuleCommandEnum::RAW_MODBUS_WRITE ||
+               command == ModuleCommandEnum::RAW_MODBUS_READ ||
+               command == ModuleCommandEnum::RAW_SERIAL_WRITE;
+    }
+
+    bool processRawModuleCommand(const CommandDto &command)
+    {
+        if (!moduleCommandUseCase)
+        {
+            logError("CommandService: ModuleCommandExecutionUseCase not available for raw command");
+            return false;
+        }
+
+        RawBusCommandResult result = moduleCommandUseCase->executeRaw(command.command, command.options);
+
+        bool isDone = (result.status == ModuleCommandStatus::DONE);
+        std::string status = isDone ? "accepted" : "error";
+
+        CommandResultDto ack(status, command.command, result.errorMessage);
+        if (hybridApiService)
+        {
+            hybridApiService->sendCommandResult(ack, ApiPriority::MQTT_PREFERRED);
+        }
+
+        if (result.hasData && hybridApiService)
+        {
+            RawIoResultDto dataResult(command.command, result.channel, result.dataHex, !isDone, result.errorMessage);
+            hybridApiService->sendRawIoResult(dataResult);
+        }
+
+        log(DebugFeatures::MODULE_COMMAND_DEBUG,
+            "CommandService: Raw command processed - command: %s, status: %s, hasData: %s",
+            command.command.c_str(), status.c_str(), result.hasData ? "true" : "false");
+
+        return isDone;
     }
 
     bool isComplexModuleCommand(const std::string& commandName) const

@@ -12,6 +12,7 @@
 #include "Application/DTOs/UpdateDto.h"
 #include "Application/DTOs/CommandDto.h"
 #include "Application/DTOs/CommandResultDto.h"
+#include "Application/DTOs/RawIoResultDto.h"
 #include "Application/DTOs/DeviceCommandUpdateDto.h"
 #include "Application/DTOs/DeviceCommandDto.h"
 #include "Application/DTOs/ModuleCommandDto.h"
@@ -46,6 +47,7 @@ public:
     virtual bool ruleStateUpdateFromJson(const std::string& jsonStr, RuleStateUpdateDto& ruleStateUpdate) = 0;
     virtual std::string commandResultToJson(const CommandResultDto &commandResultDto) = 0;
     virtual bool commandResultFromJson(const std::string &jsonStr, CommandResultDto &commandResultDto) = 0;
+    virtual std::string rawIoResultToJson(const RawIoResultDto &rawIoResult) = 0;
     virtual bool sensorFromJson(const std::string &jsonStr, SensorEntity &sensor) = 0;
     virtual std::string sensorToJson(const SensorEntity &sensor) = 0;
     virtual bool sensorsFromJson(const std::string &jsonStr, std::vector<SensorEntity> &sensors) = 0;

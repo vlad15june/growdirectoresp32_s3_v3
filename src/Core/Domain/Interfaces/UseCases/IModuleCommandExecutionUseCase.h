@@ -4,6 +4,7 @@
 #include <vector>
 #include "Application/DTOs/ModuleCommandDto.h"
 #include "Application/DTOs/ModuleCommandUpdateDto.h"
+#include "Core/Domain/Enums/ModuleCommandStatus.h"
 
 /**
  * @brief Result of module command execution
@@ -19,6 +20,23 @@ struct ModuleCommandExecutionResult {
         
     ModuleCommandExecutionResult(const std::string& uid, const std::string& status, const std::string& errorMessage, const ModuleCommandResult& result)
         : uid(uid), status(status), errorMessage(errorMessage), result(result) {}
+};
+
+/**
+ * @brief Result of a raw bus command execution
+ */
+struct RawBusCommandResult {
+    ModuleCommandStatus status;
+    std::string errorMessage;
+    std::string dataHex;
+    bool hasData;
+    int channel;
+
+    RawBusCommandResult()
+        : status(ModuleCommandStatus::ERROR), hasData(false), channel(0) {}
+
+    RawBusCommandResult(ModuleCommandStatus status, const std::string& errorMessage, const std::string& dataHex, bool hasData, int channel)
+        : status(status), errorMessage(errorMessage), dataHex(dataHex), hasData(hasData), channel(channel) {}
 };
 
 /**
@@ -45,4 +63,12 @@ public:
      * @return Vector of execution results
      */
     virtual std::vector<ModuleCommandExecutionResult> executeCommands(const std::vector<ModuleCommandDto>& moduleCommands) = 0;
+
+    /**
+     * @brief Execute a raw bus command (ModbusWrite/ModbusRead/SerialWrite) inline
+     * @param command Command name
+     * @param options JSON string containing command parameters
+     * @return RawBusCommandResult with status and optional returned data
+     */
+    virtual RawBusCommandResult executeRaw(const std::string &command, const std::string &options) = 0;
 };

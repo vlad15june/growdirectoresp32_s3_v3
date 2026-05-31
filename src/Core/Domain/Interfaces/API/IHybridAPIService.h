@@ -6,6 +6,7 @@
 #include "Core/Domain/Data/Entities/Sensor/SensorType.h"
 #include "Application/DTOs/DiagnosticDto.h"
 #include "Application/DTOs/CommandResultDto.h"
+#include "Application/DTOs/RawIoResultDto.h"
 #include "Application/DTOs/DeviceCommandUpdateDto.h"
 #include "Application/DTOs/DeviceCommandDto.h"
 #include "Application/DTOs/ModuleCommandDto.h"
@@ -129,7 +130,14 @@ public:
      * @return true if the operation was successful, false otherwise
      */
     virtual bool sendCommandResult(const CommandResultDto& commandResult, ApiPriority priority = ApiPriority::UNDEFINED) = 0;
-    
+
+    /**
+     * Send raw bus IO result (read bytes) to the server via MQTT
+     * @param result The raw IO result containing channel and hex data
+     * @return true if the operation was successful, false otherwise
+     */
+    virtual bool sendRawIoResult(const RawIoResultDto& result) = 0;
+
     /**
      * Get statistics about API usage and performance
      */

@@ -85,6 +85,7 @@
 #include "Infrastructure/Adapters/Sensors/HardwareSensors/AnalogSensors/AnalogSensorReader.h"
 #include "Infrastructure/Adapters/Sensors/HardwareSensors/ModbusSensors/ModbusSensorReader.h"
 #include "Infrastructure/Adapters/Rs485/ModbusRS485.h"
+#include "Infrastructure/Adapters/Rs485/RawBusAccessAdapter.h"
 #include "Infrastructure/BoardTesting/BoardTest.h"
 #include "Infrastructure/Controllers/HTTP/FirmwareRemoteUpdate.h"
 #include "Infrastructure/Controllers/WebServices/TestModeWebServer.h"
@@ -192,6 +193,7 @@ std::vector<IModbusRS485*> modbusPorts = {&modbusRS485_pin1, &modbusRS485_pin2, 
 
 AnalogSensorReader analogSensorReader(arduinoAdapter);
 ModbusSensorReader modbusSensorReader(modbusPorts, arduinoAdapter, &mqttLogger, &debugSystem);
+RawBusAccessAdapter rawBusAccessAdapter(modbusPorts, arduinoAdapter);
 
 SensorReader sensorReader(&analogSensorReader, &modbusSensorReader, &arduinoAdapter, &mqttLogger, &debugSystem);
 
@@ -269,7 +271,7 @@ DiagnosticService diagnosticService(
 
 LedUseCases ledUseCases(&ledAdapter, &moduleConfig, &arduinoAdapter, &mqttLogger, &debugSystem, &deviceModel, &diagnosticService);
 
-ModuleCommandExecutionUseCase moduleCommandExecutionUseCase(&mqttLogger, &debugSystem, &ntpTimeAdapter, &firmwareRemoteUpdate, &arduinoAdapter, &sensorRepository, &sensorTypeRepository, &sensorReader, &moduleConfig, &settings, &hybridApiService, &clearModuleDataService, &moduleStructure, &sensorValueModel, &wifiManager, &ledUseCases);
+ModuleCommandExecutionUseCase moduleCommandExecutionUseCase(&mqttLogger, &debugSystem, &ntpTimeAdapter, &firmwareRemoteUpdate, &arduinoAdapter, &sensorRepository, &sensorTypeRepository, &sensorReader, &moduleConfig, &settings, &hybridApiService, &clearModuleDataService, &moduleStructure, &sensorValueModel, &wifiManager, &ledUseCases, &rawBusAccessAdapter);
 
 CommandService commandService(
     &deviceCommandExecutionUseCase,

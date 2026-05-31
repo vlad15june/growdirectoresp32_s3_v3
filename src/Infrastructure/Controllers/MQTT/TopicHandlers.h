@@ -103,6 +103,7 @@ class CommandTopicHandler : public BaseTopicHandler
 private:
     ICommandService* commandService;
     IJsonConverter* jsonConverter;
+    std::string _moduleUid;
 
 public:
     CommandTopicHandler(
@@ -114,7 +115,8 @@ public:
                                                           logger,
                                                           debugSystem),
                                         commandService(commandService),
-                                        jsonConverter(jsonConverter)
+                                        jsonConverter(jsonConverter),
+                                        _moduleUid(moduleUid)
     {
     }
 
@@ -135,7 +137,13 @@ public:
         
         if (jsonConverter && jsonConverter->commandFromJson(jsonString, commandDto)) {
             log("CommandTopicHandler: Successfully parsed command - type: %s", commandDto.type.c_str());
-            
+
+            if (!commandDto.growDirectorUid.empty() && commandDto.growDirectorUid != _moduleUid) {
+                log("CommandTopicHandler: growDirectorUid mismatch, ignoring command");
+                delete[] payloadStr;
+                return;
+            }
+
             // Process the command using the command service
             if (commandService) {
                 bool success = commandService->process(commandDto);

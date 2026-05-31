@@ -863,6 +863,18 @@ public:
                 optionsObj["noScanSensors"] = doc["noScanSensors"];
             }
 
+            if (commandDto.command == "ModbusWrite" || commandDto.command == "ModbusRead" || commandDto.command == "SerialWrite")
+            {
+                const char* rawKeys[] = {"channel", "address", "function", "register", "count", "data", "bytes", "expectResponse", "baudRate"};
+                for (const char* rawKey : rawKeys)
+                {
+                    if (doc.containsKey(rawKey) && !optionsObj.containsKey(rawKey))
+                    {
+                        optionsObj[rawKey] = doc[rawKey];
+                    }
+                }
+            }
+
             if (optionsObj.size() > 0)
             {
                 std::string optionsJson;
@@ -974,6 +986,26 @@ public:
         if (!commandResultDto.message.empty())
         {
             doc["message"] = commandResultDto.message;
+        }
+
+        std::string output;
+        serializeJson(doc, output);
+        return output;
+    }
+
+    std::string rawIoResultToJson(const RawIoResultDto &rawIoResult) override
+    {
+        DynamicJsonDocument doc(1024);
+
+        doc["command"] = rawIoResult.command;
+        doc["channel"] = rawIoResult.channel;
+        if (rawIoResult.isError)
+        {
+            doc["error"] = rawIoResult.errorMessage;
+        }
+        else
+        {
+            doc["data"] = rawIoResult.dataHex;
         }
 
         std::string output;

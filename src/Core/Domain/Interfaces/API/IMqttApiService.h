@@ -4,6 +4,7 @@
 #include "Application/DTOs/DiagnosticDto.h"
 #include "Application/DTOs/UpdateDto.h"
 #include "Application/DTOs/CommandResultDto.h"
+#include "Application/DTOs/RawIoResultDto.h"
 #include "Application/DTOs/DeviceCommandUpdateDto.h"
 
 class IMqttApiService {
@@ -36,6 +37,13 @@ public:
      * @return true if the operation was successful, false otherwise
      */
     virtual bool sendCommandResult(const CommandResultDto& commandResult) = 0;
+
+    /**
+     * @brief Send raw bus IO result (read bytes) via MQTT
+     * @param result The raw IO result containing channel and hex data
+     * @return true if the operation was successful, false otherwise
+     */
+    virtual bool sendRawIoResult(const RawIoResultDto& result) = 0;
 
     /**
      * @brief Send rule state command via MQTT

@@ -85,7 +85,17 @@ public:
         lastCommandResult = commandResult;
         return sendCommandResultReturnValue;
     }
-    
+
+    bool sendRawIoResultCalled = false;
+    RawIoResultDto lastRawIoResult;
+    bool sendRawIoResultReturnValue = true;
+
+    bool sendRawIoResult(const RawIoResultDto& result) override {
+        sendRawIoResultCalled = true;
+        lastRawIoResult = result;
+        return sendRawIoResultReturnValue;
+    }
+
     bool sendRuleStateCommand(const char* msg) override {
         sendRuleStateCommandCalled = true;
         lastRuleStateCommand = msg;

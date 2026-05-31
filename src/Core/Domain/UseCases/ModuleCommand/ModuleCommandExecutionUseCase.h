@@ -14,6 +14,8 @@
 #include "Core/Domain/Interfaces/ISettings.h"
 #include "Core/Domain/Interfaces/IWifiManager.h"
 #include "Core/Domain/Interfaces/UseCases/ILedUseCases.h"
+#include "Core/Domain/Interfaces/Adapters/Sensors/IRawBusAccess.h"
+#include "Core/Utils/HexCodec.h"
 #include "Core/Domain/Data/Entities/Sensor/Sensor.h"
 #include "Core/Domain/Data/Models/ModuleStructure.h"
 #include "Core/Domain/Data/Models/ISensorValueModel.h"
@@ -49,11 +51,13 @@ private:
     ISensorValueModel *sensorValueModel;
     IWifiManager *wifiManager;
     ILedUseCases *ledUseCases;
+    IRawBusAccess *rawBus;
     static const unsigned long commandMaxAgeSeconds = 300;
+    static const unsigned long rawReadTimeoutMs = 1000;
 
 public:
-    ModuleCommandExecutionUseCase(ILogger *logger = nullptr, IDebugSystem *debugSystem = nullptr, INTPTimeAdapter *timeAdapter = nullptr, IFirmwareRemoteUpdate *firmwareUpdater = nullptr, IArduinoAdapter *arduinoAdapter = nullptr, ISensorRepository *sensorRepository = nullptr, ISensorTypeRepository *sensorTypeRepository = nullptr, ISensorReader *sensorReader = nullptr, IModuleConfig *moduleConfig = nullptr, ISettings *settings = nullptr, IHybridAPIService *hybridApiService = nullptr, IClearModuleDataService *clearModuleDataService = nullptr, ModuleStructure *moduleStructure = nullptr, ISensorValueModel *sensorValueModel = nullptr, IWifiManager *wifiManager = nullptr, ILedUseCases *ledUseCases = nullptr)
-        : logger(logger), debugSystem(debugSystem), timeAdapter(timeAdapter), firmwareUpdater(firmwareUpdater), arduinoAdapter(arduinoAdapter), sensorRepository(sensorRepository), sensorTypeRepository(sensorTypeRepository), sensorReader(sensorReader), moduleConfig(moduleConfig), settings(settings), hybridApiService(hybridApiService), clearModuleDataService(clearModuleDataService), moduleStructure(moduleStructure), sensorValueModel(sensorValueModel), wifiManager(wifiManager), ledUseCases(ledUseCases) {}
+    ModuleCommandExecutionUseCase(ILogger *logger = nullptr, IDebugSystem *debugSystem = nullptr, INTPTimeAdapter *timeAdapter = nullptr, IFirmwareRemoteUpdate *firmwareUpdater = nullptr, IArduinoAdapter *arduinoAdapter = nullptr, ISensorRepository *sensorRepository = nullptr, ISensorTypeRepository *sensorTypeRepository = nullptr, ISensorReader *sensorReader = nullptr, IModuleConfig *moduleConfig = nullptr, ISettings *settings = nullptr, IHybridAPIService *hybridApiService = nullptr, IClearModuleDataService *clearModuleDataService = nullptr, ModuleStructure *moduleStructure = nullptr, ISensorValueModel *sensorValueModel = nullptr, IWifiManager *wifiManager = nullptr, ILedUseCases *ledUseCases = nullptr, IRawBusAccess *rawBus = nullptr)
+        : logger(logger), debugSystem(debugSystem), timeAdapter(timeAdapter), firmwareUpdater(firmwareUpdater), arduinoAdapter(arduinoAdapter), sensorRepository(sensorRepository), sensorTypeRepository(sensorTypeRepository), sensorReader(sensorReader), moduleConfig(moduleConfig), settings(settings), hybridApiService(hybridApiService), clearModuleDataService(clearModuleDataService), moduleStructure(moduleStructure), sensorValueModel(sensorValueModel), wifiManager(wifiManager), ledUseCases(ledUseCases), rawBus(rawBus) {}
     
     virtual ~ModuleCommandExecutionUseCase() = default;
 
@@ -225,6 +229,22 @@ public:
         }
 
         return results;
+    }
+
+    RawBusCommandResult executeRaw(const std::string &command, const std::string &options) override
+    {
+        ModuleCommandEnum commandEnum = getModuleCommandEnum(command);
+
+        switch (commandEnum) {
+            case ModuleCommandEnum::RAW_MODBUS_WRITE:
+                return handleModbusWrite(options);
+            case ModuleCommandEnum::RAW_MODBUS_READ:
+                return handleModbusRead(options);
+            case ModuleCommandEnum::RAW_SERIAL_WRITE:
+                return handleSerialWrite(options);
+            default:
+                return RawBusCommandResult(ModuleCommandStatus::ERROR, "Unknown raw command", "", false, 0);
+        }
     }
 
 private:
@@ -1292,6 +1312,158 @@ private:
             }
         }
         return 0;
+    }
+
+    RawBusCommandResult handleModbusWrite(const std::string &options)
+    {
+        if (!rawBus || !moduleConfig)
+        {
+            return RawBusCommandResult(ModuleCommandStatus::ERROR, "Raw bus not available", "", false, 0);
+        }
+
+        int channel = extractJsonIntValue(options, "channel");
+        if (channel < 0 || channel >= moduleConfig->getSensorPinCount())
+        {
+            return RawBusCommandResult(ModuleCommandStatus::ERROR, "Invalid channel", "", false, channel);
+        }
+
+        int address = extractJsonIntValue(options, "address");
+        int function = extractJsonIntValue(options, "function");
+        int reg = extractJsonIntValue(options, "register");
+
+        std::vector<uint8_t> data;
+        if (!Utils::HexCodec::hexToBytes(extractJsonValue(options, "data"), data))
+        {
+            return RawBusCommandResult(ModuleCommandStatus::ERROR, "Invalid hex data", "", false, channel);
+        }
+        if (data.size() > 252)
+        {
+            return RawBusCommandResult(ModuleCommandStatus::ERROR, "Data too large", "", false, channel);
+        }
+
+        std::vector<uint8_t> pdu;
+        pdu.push_back((uint8_t)address);
+        pdu.push_back((uint8_t)function);
+        pdu.push_back((uint8_t)((reg >> 8) & 0xFF));
+        pdu.push_back((uint8_t)(reg & 0xFF));
+        for (size_t i = 0; i < data.size(); i++)
+        {
+            pdu.push_back(data[i]);
+        }
+
+        std::vector<uint8_t> out;
+        bool ok = rawBus->modbusRequest(channel, pdu.data(), pdu.size(), false, rawReadTimeoutMs, out);
+        if (!ok)
+        {
+            return RawBusCommandResult(ModuleCommandStatus::ERROR, "Modbus write failed", "", false, channel);
+        }
+        return RawBusCommandResult(ModuleCommandStatus::DONE, "", "", false, channel);
+    }
+
+    RawBusCommandResult handleModbusRead(const std::string &options)
+    {
+        if (!rawBus || !moduleConfig)
+        {
+            return RawBusCommandResult(ModuleCommandStatus::ERROR, "Raw bus not available", "", true, 0);
+        }
+
+        int channel = extractJsonIntValue(options, "channel");
+        if (channel < 0 || channel >= moduleConfig->getSensorPinCount())
+        {
+            return RawBusCommandResult(ModuleCommandStatus::ERROR, "Invalid channel", "", true, channel);
+        }
+
+        int address = extractJsonIntValue(options, "address");
+        int function = extractJsonIntValue(options, "function");
+        int reg = extractJsonIntValue(options, "register");
+        int count = extractJsonIntValue(options, "count");
+        if (count < 1 || count > 125)
+        {
+            return RawBusCommandResult(ModuleCommandStatus::ERROR, "Invalid count", "", true, channel);
+        }
+
+        std::vector<uint8_t> pdu;
+        pdu.push_back((uint8_t)address);
+        pdu.push_back((uint8_t)function);
+        pdu.push_back((uint8_t)((reg >> 8) & 0xFF));
+        pdu.push_back((uint8_t)(reg & 0xFF));
+        pdu.push_back((uint8_t)((count >> 8) & 0xFF));
+        pdu.push_back((uint8_t)(count & 0xFF));
+
+        std::vector<uint8_t> out;
+        bool ok = rawBus->modbusRequest(channel, pdu.data(), pdu.size(), true, rawReadTimeoutMs, out);
+        if (!ok || out.empty())
+        {
+            return RawBusCommandResult(ModuleCommandStatus::ERROR, "Read timeout", "", true, channel);
+        }
+
+        std::string hex = Utils::HexCodec::bytesToHex(out.data(), out.size());
+        return RawBusCommandResult(ModuleCommandStatus::DONE, "", hex, true, channel);
+    }
+
+    RawBusCommandResult handleSerialWrite(const std::string &options)
+    {
+        if (!rawBus || !moduleConfig)
+        {
+            return RawBusCommandResult(ModuleCommandStatus::ERROR, "Raw bus not available", "", false, 0);
+        }
+
+        int channel = extractJsonIntValue(options, "channel");
+        if (channel < 0 || channel >= moduleConfig->getSensorPinCount())
+        {
+            return RawBusCommandResult(ModuleCommandStatus::ERROR, "Invalid channel", "", false, channel);
+        }
+
+        std::vector<uint8_t> bytes;
+        if (!Utils::HexCodec::hexToBytes(extractJsonValue(options, "bytes"), bytes) || bytes.empty())
+        {
+            return RawBusCommandResult(ModuleCommandStatus::ERROR, "Invalid hex bytes", "", false, channel);
+        }
+        if (bytes.size() > 256)
+        {
+            return RawBusCommandResult(ModuleCommandStatus::ERROR, "Bytes too large", "", false, channel);
+        }
+
+        bool expectResponse = extractJsonBool(options, "expectResponse");
+
+        std::vector<uint8_t> out;
+        bool ok = rawBus->serialWrite(channel, bytes.data(), bytes.size(), expectResponse, rawReadTimeoutMs, out);
+
+        if (!expectResponse)
+        {
+            if (!ok)
+            {
+                return RawBusCommandResult(ModuleCommandStatus::ERROR, "Serial write failed", "", false, channel);
+            }
+            return RawBusCommandResult(ModuleCommandStatus::DONE, "", "", false, channel);
+        }
+
+        if (!ok || out.empty())
+        {
+            return RawBusCommandResult(ModuleCommandStatus::ERROR, "Read timeout", "", true, channel);
+        }
+
+        std::string hex = Utils::HexCodec::bytesToHex(out.data(), out.size());
+        return RawBusCommandResult(ModuleCommandStatus::DONE, "", hex, true, channel);
+    }
+
+    bool extractJsonBool(const std::string &json, const std::string &key)
+    {
+        std::string searchKey = "\"" + key + "\"";
+        size_t keyPos = json.find(searchKey);
+        if (keyPos == std::string::npos) return false;
+        size_t colonPos = json.find(":", keyPos);
+        if (colonPos == std::string::npos) return false;
+        size_t valueStart = colonPos + 1;
+        while (valueStart < json.size() && std::isspace((unsigned char)json[valueStart])) valueStart++;
+        if (json.compare(valueStart, 4, "true") == 0) return true;
+        if (valueStart < json.size() && json[valueStart] == '1') return true;
+        if (valueStart < json.size() && json[valueStart] == '"')
+        {
+            std::string quoted = extractJsonValue(json, key);
+            return quoted == "true" || quoted == "1";
+        }
+        return false;
     }
 
     void log(const char *feature, const char *format, ...)

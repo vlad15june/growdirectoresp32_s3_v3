@@ -800,8 +800,28 @@ public:
             log("HYBRID API: MQTT API not available for command result");
         }
 
-        log("HYBRID API: Command result sent - success: %s, command: %s, status: %s", 
+        log("HYBRID API: Command result sent - success: %s, command: %s, status: %s",
             success ? "true" : "false", commandResult.command.c_str(), commandResult.status.c_str());
+        return success;
+    }
+
+    bool sendRawIoResult(const RawIoResultDto& result) override
+    {
+        bool success = false;
+
+        if (_mqttApiService != nullptr)
+        {
+            success = _mqttApiService->sendRawIoResult(result);
+            if (!success)
+                trackApiSendFailure(false);
+        }
+        else
+        {
+            log("HYBRID API: MQTT API not available for raw IO result");
+        }
+
+        log("HYBRID API: Raw IO result sent - success: %s, command: %s, channel: %d",
+            success ? "true" : "false", result.command.c_str(), result.channel);
         return success;
     }
 

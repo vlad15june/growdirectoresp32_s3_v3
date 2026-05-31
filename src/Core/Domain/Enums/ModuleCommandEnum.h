@@ -14,7 +14,10 @@ enum class ModuleCommandEnum {
     SET_SENSOR_MODEL,
     DELETE_SENSORS,
     SCAN_SENSORS,
-    DELETE_MODULE
+    DELETE_MODULE,
+    RAW_MODBUS_WRITE,
+    RAW_MODBUS_READ,
+    RAW_SERIAL_WRITE
 };
 
 // Utility function to get ModuleCommandEnum from string
@@ -39,6 +42,12 @@ inline ModuleCommandEnum getModuleCommandEnum(const std::string& commandStr) {
         return ModuleCommandEnum::SCAN_SENSORS;
     } else if (commandStr == "DeleteModule") {
         return ModuleCommandEnum::DELETE_MODULE;
+    } else if (commandStr == "ModbusWrite") {
+        return ModuleCommandEnum::RAW_MODBUS_WRITE;
+    } else if (commandStr == "ModbusRead") {
+        return ModuleCommandEnum::RAW_MODBUS_READ;
+    } else if (commandStr == "SerialWrite") {
+        return ModuleCommandEnum::RAW_SERIAL_WRITE;
     }
     return ModuleCommandEnum::UNKNOWN;
 }
@@ -66,6 +75,12 @@ inline const char* getModuleCommandName(ModuleCommandEnum command) {
             return "ScanSensors";
         case ModuleCommandEnum::DELETE_MODULE:
             return "DeleteModule";
+        case ModuleCommandEnum::RAW_MODBUS_WRITE:
+            return "ModbusWrite";
+        case ModuleCommandEnum::RAW_MODBUS_READ:
+            return "ModbusRead";
+        case ModuleCommandEnum::RAW_SERIAL_WRITE:
+            return "SerialWrite";
         case ModuleCommandEnum::UNKNOWN:
         default:
             return "Unknown";

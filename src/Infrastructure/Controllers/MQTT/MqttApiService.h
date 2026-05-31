@@ -10,6 +10,7 @@
 #include "Application/DTOs/DiagnosticDto.h"
 #include "Application/DTOs/UpdateDto.h"
 #include "Application/DTOs/DeviceCommandUpdateDto.h"
+#include "Application/DTOs/RawIoResultDto.h"
 
 class MqttApiService : public IMqttApiService {
 private:
@@ -25,6 +26,7 @@ private:
     static constexpr const char* UPDATE_TOPIC = "hardware/update/%s";
     static constexpr const char* DEVICE_COMMAND_TOPIC = "hardware/devices_command/%s";
     static constexpr const char* COMMAND_RESULT_TOPIC = "hardware/command_result/%s";
+    static constexpr const char* RAW_IO_RESULT_TOPIC = "hardware/raw_io_result/%s";
     static constexpr const char* RULE_STATE_TOPIC = "hardware/rules/state/%s";
     
     char _topicBuffer[128];
@@ -206,10 +208,37 @@ public:
             log("MQTT: Failed to publish command result");
             return false;
         }
-        
+
         return true;
     }
-    
+
+    bool sendRawIoResult(const RawIoResultDto& result) override {
+        if (_mqttManager == nullptr || !_mqttManager->isConnected()) {
+            log("MQTT: sendRawIoResult - MQTT Manager not available or not connected");
+            return false;
+        }
+
+        if (_jsonConverter == nullptr) {
+            log("MQTT: sendRawIoResult - JSON converter not available");
+            return false;
+        }
+
+        const char* topic = formatTopic(RAW_IO_RESULT_TOPIC);
+        if (topic == nullptr) {
+            return false;
+        }
+
+        std::string rawIoResultJson = _jsonConverter->rawIoResultToJson(result);
+        log("MQTT: Publishing raw IO result to topic: %s", topic);
+
+        if (!_mqttManager->publish(topic, rawIoResultJson.c_str())) {
+            log("MQTT: Failed to publish raw IO result");
+            return false;
+        }
+
+        return true;
+    }
+
     bool sendRuleStateCommand(const char* msg) override {
         if (_mqttManager == nullptr || !_mqttManager->isConnected()) {
             log("MQTT: sendRuleStateCommand - MQTT Manager not available or not connected");

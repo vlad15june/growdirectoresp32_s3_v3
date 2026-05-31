@@ -217,6 +217,16 @@ public:
         lastCommandResultPriority = priority;
         return sendCommandResultReturnValue;
     }
+
+    bool sendRawIoResultCalled = false;
+    RawIoResultDto lastRawIoResult;
+    bool sendRawIoResultReturnValue = true;
+
+    bool sendRawIoResult(const RawIoResultDto& result) override {
+        sendRawIoResultCalled = true;
+        lastRawIoResult = result;
+        return sendRawIoResultReturnValue;
+    }
     
     std::vector<DeviceCommandDto> getDeviceCommand() override {
         getDeviceCommandCalled = true;

@@ -951,6 +951,11 @@ public:
             {
                 commandDto.options = "{\"noScanSensors\":\"" + topNoScan + "\"}";
             }
+
+            if (commandDto.command == "ModbusWrite" || commandDto.command == "ModbusRead" || commandDto.command == "SerialWrite")
+            {
+                commandDto.options = buildRawCommandOptions(jsonStr);
+            }
         }
 
         // SensorTypeCommandNotification fields
@@ -1040,12 +1045,30 @@ public:
         oss << "{";
         oss << "\"status\":\"" << commandResultDto.status << "\"";
         oss << ",\"command\":\"" << commandResultDto.command << "\"";
-        
+
         if (!commandResultDto.message.empty())
         {
             oss << ",\"message\":\"" << commandResultDto.message << "\"";
         }
-        
+
+        oss << "}";
+        return oss.str();
+    }
+
+    std::string rawIoResultToJson(const RawIoResultDto &rawIoResult) override
+    {
+        std::ostringstream oss;
+        oss << "{";
+        oss << "\"command\":\"" << rawIoResult.command << "\"";
+        oss << ",\"channel\":" << rawIoResult.channel;
+        if (rawIoResult.isError)
+        {
+            oss << ",\"error\":\"" << rawIoResult.errorMessage << "\"";
+        }
+        else
+        {
+            oss << ",\"data\":\"" << rawIoResult.dataHex << "\"";
+        }
         oss << "}";
         return oss.str();
     }
@@ -1761,6 +1784,55 @@ public:
     }
 
 private:
+    std::string buildRawCommandOptions(const std::string &jsonStr)
+    {
+        std::string opts = "{";
+        bool first = true;
+
+        const char* intKeys[] = {"channel", "address", "function", "register", "count", "baudRate"};
+        for (const char* key : intKeys)
+        {
+            std::string token = "\"" + std::string(key) + "\"";
+            if (jsonStr.find(token) != std::string::npos)
+            {
+                if (!first) opts += ",";
+                opts += token + ":" + std::to_string(extractIntValue(jsonStr, key));
+                first = false;
+            }
+        }
+
+        const char* strKeys[] = {"data", "bytes"};
+        for (const char* key : strKeys)
+        {
+            std::string token = "\"" + std::string(key) + "\"";
+            if (jsonStr.find(token) != std::string::npos)
+            {
+                if (!first) opts += ",";
+                opts += token + ":\"" + extractValue(jsonStr, key) + "\"";
+                first = false;
+            }
+        }
+
+        size_t erPos = jsonStr.find("\"expectResponse\"");
+        if (erPos != std::string::npos)
+        {
+            size_t colon = jsonStr.find(":", erPos);
+            bool er = false;
+            if (colon != std::string::npos)
+            {
+                std::string tail = jsonStr.substr(colon + 1, 8);
+                er = tail.find("true") != std::string::npos;
+            }
+            if (!first) opts += ",";
+            opts += "\"expectResponse\":";
+            opts += (er ? "true" : "false");
+            first = false;
+        }
+
+        opts += "}";
+        return opts;
+    }
+
     /**
      * @brief Extract JSON object as string
      * @param json Source JSON string
