@@ -1,5 +1,12 @@
 # Release Notes
 
+## Version 2.2.3 (2026-05-31)
+
+### Changed
+- **Firmware Build Stability**: Improved build and startup consistency so sensor handling and data exchange components are initialized reliably across environments.
+
+---
+
 ## Version 2.2.2 (2026-05-31)
 
 ### Added
