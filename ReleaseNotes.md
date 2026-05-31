@@ -1,5 +1,16 @@
 # Release Notes
 
+## Version 2.2.2 (2026-05-31)
+
+### Added
+- **Remote Raw Bus Diagnostics**: The device now supports remote execution of low-level bus requests and returns the raw response payload back to the platform. This allows diagnostics and integration checks to be performed without physical access to the installation.
+
+### Changed
+- **Modbus Sensor Model Flexibility**: GDV1-3376 Sensor models can now define additional communication parameters used during address setup and availability checks, improving compatibility with devices that require model-specific communication behavior.
+- **Sensor Scan Address Isolation by Port**: During Modbus scan, each port is now processed with its own temporary scan address instead of a single shared one, reducing cross-port interference during detection.
+
+---
+
 ## Version 2.2.1 (2026-05-27)
 
 ### Changed
