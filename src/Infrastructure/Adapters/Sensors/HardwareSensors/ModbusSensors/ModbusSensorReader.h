@@ -3,6 +3,9 @@
 
 #include <vector>
 #include <string>
+#include <cstring>
+#include <cstdarg>
+#include <cstdio>
 #include "../../../../../Core/Domain/Data/Entities/Sensor/ModbusRegisterConfig.h"
 #include "../../../../../Core/Domain/Interfaces/Adapters/Sensors/IModbusSensorReader.h"
 #include "../../../Rs485/IModbusRS485.h"

@@ -11,6 +11,8 @@
 #include "../../../Core/Domain/Enums/SensorTypeEnum.h"
 #include <map>
 #include <string>
+#include <cstdarg>
+#include <cstdio>
 
 class SensorReader : public ISensorReader
 {

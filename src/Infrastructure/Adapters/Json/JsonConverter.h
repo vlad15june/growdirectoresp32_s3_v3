@@ -14,6 +14,7 @@
 #include <string>
 #include <sstream>
 #include <algorithm>
+#include <cstdio>
 
 static std::string extractValue(const std::string &src, const std::string &key)
 {

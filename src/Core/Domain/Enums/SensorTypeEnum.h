@@ -1,6 +1,8 @@
 #ifndef SENSOR_TYPE_ENUM_H
 #define SENSOR_TYPE_ENUM_H
 
+#include <cstring>
+
 enum SensorTypeEnum {
     ANALOG_DO_CONNECTED = 1,
     ANALOG_ORP_CONNECTED = 2,
