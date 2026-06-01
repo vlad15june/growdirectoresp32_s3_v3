@@ -1,5 +1,18 @@
 # Release Notes
 
+## Version 2.2.4 (2026-06-01)
+
+### Added
+- **Extended Memory Visibility**: The device now reports additional memory capacity and availability indicators in diagnostics and module information, making remote health checks more complete.
+
+### Changed
+- **High-Load Stability Profile**: GDV1-3449 The firmware now uses expanded external memory support on supported boards, improving resilience during intensive operations and reducing the risk of instability under load.
+
+### Fixed
+- **MQTT Disconnect Counter Drift**: GDV1-3534 Fixed a critical issue where modules that started while MQTT was already unavailable could accumulate incorrect long-disconnect statistics, causing false failure escalation in monitoring.
+
+---
+
 ## Version 2.2.3 (2026-05-31)
 
 ### Changed
