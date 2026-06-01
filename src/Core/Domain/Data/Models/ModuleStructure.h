@@ -48,6 +48,7 @@ public:
     std::string subtype;
     std::string bootType;
     std::string fileSystem;
+    std::string psram;
     std::string uid;
     std::string firmware;
     std::string ssid;

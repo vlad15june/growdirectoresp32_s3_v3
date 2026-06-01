@@ -106,6 +106,7 @@ public:
                 node.subtype = nodeObj["subtype"] | "";
                 node.bootType = nodeObj["bootType"] | "";
                 node.fileSystem = nodeObj["fileSystem"] | "";
+                node.psram = nodeObj["psram"] | "";
                 node.uid = nodeObj["uid"] | "";
                 node.firmware = nodeObj["firmware"] | "";
                 node.ssid = nodeObj["ssid"] | "";
@@ -176,6 +177,7 @@ public:
             nodeObj["subtype"] = node.subtype;
             nodeObj["bootType"] = node.bootType;
             nodeObj["fileSystem"] = node.fileSystem;
+            nodeObj["psram"] = node.psram;
             nodeObj["uid"] = node.uid;
             nodeObj["firmware"] = node.firmware;
             nodeObj["ssid"] = node.ssid;
@@ -251,6 +253,8 @@ public:
         doc["minFreeHeap"] = diagnosticData.minFreeHeap;
         doc["heapSize"] = diagnosticData.heapSize;
         doc["maxAllocHeap"] = diagnosticData.maxAllocHeap;
+        doc["psramSize"] = diagnosticData.psramSize;
+        doc["psramFree"] = diagnosticData.psramFree;
         doc["failsInHour"] = diagnosticData.failsInHour;
 
         std::string output;

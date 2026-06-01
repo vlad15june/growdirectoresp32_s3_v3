@@ -248,6 +248,7 @@ public:
             node.subtype = extractValue(nodeStr, "subtype");
             node.bootType = extractValue(nodeStr, "bootType");
             node.fileSystem = extractValue(nodeStr, "fileSystem");
+            node.psram = extractValue(nodeStr, "psram");
             node.uid = extractValue(nodeStr, "uid");
             node.firmware = extractValue(nodeStr, "firmware");
             node.ssid = extractValue(nodeStr, "ssid");
@@ -324,6 +325,8 @@ public:
                 oss << ",\"bootType\":\"" << node.bootType << "\"";
             if (!node.fileSystem.empty())
                 oss << ",\"fileSystem\":\"" << node.fileSystem << "\"";
+            if (!node.psram.empty())
+                oss << ",\"psram\":\"" << node.psram << "\"";
             oss << ",\"uid\":\"" << node.uid << "\"";
             if (!node.firmware.empty())
                 oss << ",\"firmware\":\"" << node.firmware << "\"";
@@ -414,6 +417,8 @@ public:
         oss << ",\"minFreeHeap\":" << diagnosticData.minFreeHeap;
         oss << ",\"heapSize\":" << diagnosticData.heapSize;
         oss << ",\"maxAllocHeap\":" << diagnosticData.maxAllocHeap;
+        oss << ",\"psramSize\":" << diagnosticData.psramSize;
+        oss << ",\"psramFree\":" << diagnosticData.psramFree;
         oss << ",\"failsInHour\":" << diagnosticData.failsInHour;
         oss << "}";
 

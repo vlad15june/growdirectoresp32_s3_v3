@@ -19,6 +19,7 @@
 #include "Core/Domain/Data/Models/ModuleStructure.h"
 #include "Core/Domain/Enums/BootTypeEnum.h"
 #include "Core/Domain/Enums/FileSystemStatusEnum.h"
+#include "Core/Domain/Enums/PsramStatusEnum.h"
 #include "Application/Services/Devices/IDeviceService.h"
 #include "Application/Services/Rules/IRuleService.h"
 #include "Core/Domain/Interfaces/Repositories/ISensorRepository.h"
@@ -840,6 +841,13 @@ inline void ModuleSetupService::createBaseNodeStructure(Node &node)
 
     node.fileSystem = spiffsAdapter ? getFileSystemStatusName(spiffsAdapter->getFileSystemStatus()) : "none";
     log("SETUP: File system status: %s", node.fileSystem.c_str());
+
+    uint32_t psramSize = arduinoAdapter ? arduinoAdapter->getPsramSize() : 0;
+    uint32_t psramFree = arduinoAdapter ? arduinoAdapter->getFreePsram() : 0;
+    uint32_t internalHeapFree = arduinoAdapter ? arduinoAdapter->getFreeHeap() : 0;
+    node.psram = getPsramStatusName(psramSize > 0 ? PSRAM_STATUS_DONE : PSRAM_STATUS_NONE);
+    log("SETUP: PSRAM status: %s", node.psram.c_str());
+    log("SETUP: PSRAM size: %u, free: %u, internal heap free: %u", psramSize, psramFree, internalHeapFree);
 }
 
 inline void ModuleSetupService::addMultiChannelModbusSensor(Node &node, const SensorEntity &sensorEntity)

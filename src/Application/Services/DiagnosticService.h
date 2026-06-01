@@ -428,6 +428,8 @@ public:
             diagnosticData.minFreeHeap = _arduinoAdapter->getMinFreeHeap();
             diagnosticData.heapSize = _arduinoAdapter->getHeapSize();
             diagnosticData.maxAllocHeap = _arduinoAdapter->getMaxAllocHeap();
+            diagnosticData.psramSize = _arduinoAdapter->getPsramSize();
+            diagnosticData.psramFree = _arduinoAdapter->getFreePsram();
         }
         else
         {
@@ -436,6 +438,8 @@ public:
             diagnosticData.minFreeHeap = 0;
             diagnosticData.heapSize = 0;
             diagnosticData.maxAllocHeap = 0;
+            diagnosticData.psramSize = 0;
+            diagnosticData.psramFree = 0;
         }
 
         diagnosticData.networkFails = _networkFails;

@@ -24,6 +24,8 @@ public:
     uint32_t minFreeHeap;           // Minimum free heap memory
     uint32_t heapSize;              // Total heap size
     uint32_t maxAllocHeap;          // Maximum allocatable heap block
+    uint32_t psramSize;             // Total PSRAM size
+    uint32_t psramFree;             // Current free PSRAM
     unsigned long failsInHour;      // Number of failures in the last hour
     
     DiagnosticDto() : 
@@ -35,7 +37,9 @@ public:
         apiSendFailRatio(0), 
         freeHeap(0), 
         minFreeHeap(0), 
-        heapSize(0), 
+        heapSize(0),
         maxAllocHeap(0),
+        psramSize(0),
+        psramFree(0),
         failsInHour(0) {}
 };

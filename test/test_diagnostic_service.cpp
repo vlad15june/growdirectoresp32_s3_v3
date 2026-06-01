@@ -67,6 +67,8 @@ void diagnostic_service_setup(void) {
     g_mockArduinoAdapter.setMinFreeHeap(80000);
     g_mockArduinoAdapter.setHeapSize(200000);
     g_mockArduinoAdapter.setMaxAllocHeap(150000);
+    g_mockArduinoAdapter.setPsramSize(8388608);
+    g_mockArduinoAdapter.setFreePsram(8000000);
     
     // Configure MQTT manager
     g_mockMqttManager.isConnectedReturnValue = true;
@@ -120,8 +122,22 @@ void test_perform_collects_correct_diagnostic_data(void) {
     TEST_ASSERT_EQUAL_UINT32(80000, diagnosticData.minFreeHeap);
     TEST_ASSERT_EQUAL_UINT32(200000, diagnosticData.heapSize);
     TEST_ASSERT_EQUAL_UINT32(150000, diagnosticData.maxAllocHeap);
+    TEST_ASSERT_EQUAL_UINT32(8388608, diagnosticData.psramSize);
+    TEST_ASSERT_EQUAL_UINT32(8000000, diagnosticData.psramFree);
     TEST_ASSERT_EQUAL_UINT32(0, diagnosticData.failsInHour);
-    
+
+    diagnostic_service_teardown();
+}
+
+void test_perform_serializes_psram_to_json(void) {
+    diagnostic_service_setup();
+
+    DiagnosticDto diagnosticData = g_diagnosticService->perform();
+    std::string json = g_jsonConverter.diagnosticToJson(diagnosticData);
+
+    TEST_ASSERT_TRUE(json.find("\"psramSize\":8388608") != std::string::npos);
+    TEST_ASSERT_TRUE(json.find("\"psramFree\":8000000") != std::string::npos);
+
     diagnostic_service_teardown();
 }
 
@@ -241,6 +257,7 @@ extern "C" int run_diagnostic_service_tests(void) {
     UNITY_BEGIN();
     
     RUN_TEST(test_perform_collects_correct_diagnostic_data);
+    RUN_TEST(test_perform_serializes_psram_to_json);
     RUN_TEST(test_perform_handles_offline_state);
     RUN_TEST(test_perform_and_send_uses_hybrid_api);
     RUN_TEST(test_perform_and_send_falls_back_to_rest_api);

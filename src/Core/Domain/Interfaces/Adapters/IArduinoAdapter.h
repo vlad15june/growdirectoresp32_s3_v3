@@ -44,6 +44,8 @@ public:
     virtual uint32_t getMinFreeHeap() = 0;
     virtual uint32_t getHeapSize() = 0;
     virtual uint32_t getMaxAllocHeap() = 0;
+    virtual uint32_t getPsramSize() = 0;
+    virtual uint32_t getFreePsram() = 0;
 };
 
 #endif // I_ARDUINO_ADAPTER_H

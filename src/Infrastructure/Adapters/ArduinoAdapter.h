@@ -109,6 +109,14 @@ public:
     uint32_t getMaxAllocHeap() override {
         return ESP.getMaxAllocHeap();
     }
+
+    uint32_t getPsramSize() override {
+        return ESP.getPsramSize();
+    }
+
+    uint32_t getFreePsram() override {
+        return ESP.getFreePsram();
+    }
 };
 
 #endif // ARDUINO_ADAPTER_H

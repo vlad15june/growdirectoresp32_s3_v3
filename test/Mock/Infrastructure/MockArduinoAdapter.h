@@ -25,7 +25,9 @@ public:
     bool getMinFreeHeapCalled = false;
     bool getHeapSizeCalled = false;
     bool getMaxAllocHeapCalled = false;
-    
+    bool getPsramSizeCalled = false;
+    bool getFreePsramCalled = false;
+
     int delayCount = 0;
     int delayMicrosecondsCount = 0;
     unsigned long lastDelayMs = 0;
@@ -37,7 +39,9 @@ public:
     uint32_t minFreeHeapValue = 0;
     uint32_t heapSizeValue = 0;
     uint32_t maxAllocHeapValue = 0;
-    
+    uint32_t psramSizeValue = 0;
+    uint32_t psramFreeValue = 0;
+
     // Store pin mode settings
     std::map<uint8_t, uint8_t> pinModes;
     // Store digital output states
@@ -166,7 +170,17 @@ public:
         getMaxAllocHeapCalled = true;
         return maxAllocHeapValue;
     }
-    
+
+    uint32_t getPsramSize() override {
+        getPsramSizeCalled = true;
+        return psramSizeValue;
+    }
+
+    uint32_t getFreePsram() override {
+        getFreePsramCalled = true;
+        return psramFreeValue;
+    }
+
     // Additional methods for testing
     
     // Set a digital input value to be returned by digitalRead
@@ -195,7 +209,15 @@ public:
     void setMaxAllocHeap(uint32_t value) {
         maxAllocHeapValue = value;
     }
-    
+
+    void setPsramSize(uint32_t value) {
+        psramSizeValue = value;
+    }
+
+    void setFreePsram(uint32_t value) {
+        psramFreeValue = value;
+    }
+
     // Get the current pin mode
     uint8_t getPinMode(uint8_t pin) const {
         auto it = pinModes.find(pin);
@@ -227,7 +249,9 @@ public:
         getMinFreeHeapCalled = false;
         getHeapSizeCalled = false;
         getMaxAllocHeapCalled = false;
-        
+        getPsramSizeCalled = false;
+        getFreePsramCalled = false;
+
         delayCount = 0;
         delayMicrosecondsCount = 0;
         lastDelayMs = 0;
@@ -239,7 +263,9 @@ public:
         minFreeHeapValue = 0;
         heapSizeValue = 0;
         maxAllocHeapValue = 0;
-        
+        psramSizeValue = 0;
+        psramFreeValue = 0;
+
         pinModes.clear();
         digitalOutputs.clear();
         digitalInputs.clear();

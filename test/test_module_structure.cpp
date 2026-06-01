@@ -17,6 +17,7 @@ static const char* test_json = R"({
             "subtype":"sensor",
             "bootType":"power-on",
             "fileSystem":"done",
+            "psram":"done",
             "uid":"84:F7:03:FE:88:30",
             "firmware":"1.9.30",
             "ssid":"Keenetic-3179",
@@ -52,6 +53,7 @@ void test_module_structure_parse_and_serialize(void) {
     TEST_ASSERT_EQUAL_STRING("sensor", node.subtype.c_str());
     TEST_ASSERT_EQUAL_STRING("power-on", node.bootType.c_str());
     TEST_ASSERT_EQUAL_STRING("done", node.fileSystem.c_str());
+    TEST_ASSERT_EQUAL_STRING("done", node.psram.c_str());
     TEST_ASSERT_EQUAL_STRING("84:F7:03:FE:88:30", node.uid.c_str());
     TEST_ASSERT_EQUAL_STRING("1.9.30", node.firmware.c_str());
     TEST_ASSERT_EQUAL_STRING("Keenetic-3179", node.ssid.c_str());
@@ -78,6 +80,7 @@ void test_module_structure_parse_and_serialize(void) {
     TEST_ASSERT_EQUAL(ms.nodes.size(), ms2.nodes.size());
     TEST_ASSERT_EQUAL_FLOAT(ms.latitude, ms2.latitude);
     TEST_ASSERT_EQUAL_FLOAT(ms.longitude, ms2.longitude);
+    TEST_ASSERT_EQUAL_STRING("done", ms2.nodes[0].psram.c_str());
 }
 
 void test_module_structure_lookup(void) {
