@@ -219,6 +219,9 @@ public:
         clearNetworksCalled = true;
         savedNetworks.clear();
     }
+
+    void enableApEventLogging(ILogger* /*logger*/) override {}
+    int getConnectedClientCount() override { return 0; }
 };
 
 #endif // MOCK_WIFI_ADAPTER_H

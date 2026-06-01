@@ -248,6 +248,9 @@ void LedUseCases::loop()
         }
         break;
 
+    case ModuleModeEnum::AP_TEST_MODE:
+        break;
+
     default:
         // For any other state, turn off all LEDs
         ledAdapter->setAllRedLedOff();

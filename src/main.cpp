@@ -275,19 +275,18 @@ void setup()
   initDependencies();
 
   Serial.begin(115200);
-  Serial.println("System initialized.");
+  Serial.printf("[%lu ms] System initialized.\n", millis());
   Serial.print("Free heap: ");
   Serial.println(ESP.getFreeHeap());
 
-  // Initialize and start External WDT (BD87A28FVM-TR)
   ExternalWDT& wdt = ExternalWDT::getInstance();
   if (wdt.init() == ESP_OK && wdt.enable() == ESP_OK && wdt.startTask() == ESP_OK)
   {
-    Serial.println("External WDT started");
+    Serial.printf("[%lu ms] External WDT started.\n", millis());
   }
   else
   {
-    Serial.println("External WDT failed to start");
+    Serial.printf("[%lu ms] External WDT failed to start.\n", millis());
   }
 
   // settings.begin();
@@ -299,6 +298,7 @@ void setup()
   // settings.begin();
   // settings.setSsid("VPN_net");
 
+  settings.begin();
   spiffsAdapter.initSPIFFS();
   // spiffsAdapter.RemoveFile("/data/sensorTypes.json");
   // spiffsAdapter.RemoveFile("/data/sensors.json");

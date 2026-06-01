@@ -6,6 +6,7 @@
 #include "Core/Domain/Interfaces/IDebugSystem.h"
 #include "Core/Domain/Interfaces/ISettings.h"
 #include "Core/Domain/Interfaces/Adapters/IWifiAdapter.h" // Add include for IWifiAdapter
+#include "Core/Domain/Enums/FileSystemStatusEnum.h"
 #include "Infrastructure/Adapters/Time/INTPTimeAdapter.h"
 #include <cstdarg>
 #include <cstdio>
@@ -39,6 +40,39 @@
 #define PUMP_STATUS_2 21
 #define PUMP_STATUS_3 22
 #define PUMP_STATUS_4 23
+
+// Test-mode sensor reference voltage pins (pin_TST_SNS)
+#define TST_SNS_1 26
+#define TST_SNS_2 27
+#define TST_SNS_3 28
+#define TST_SNS_4 29
+
+// Test-mode ADC input pins for SENSOR_POWER_1-4
+#define ADC_PIN_1 38
+#define ADC_PIN_2 36
+#define ADC_PIN_3 37
+#define ADC_PIN_4 35
+
+// DO/ORP and EC control pins
+#define DO_ORP_PIN  33
+#define EC_SDN_PIN  34
+
+// Dimmer control pins (2 channels)
+#define DIM_OFF_1 35
+#define DIM_OFF_2 36
+#define V_DIM_1   37
+#define V_DIM_2   38
+
+// Power-good monitoring pins
+#define PG_3_3V_PIN 17
+#define PG_5_0V_PIN 15
+#define PG_5_5V_PIN 33
+
+// Sensor PS status (feedback) pins for #sensor_ps_status
+#define SPS_STATUS_1 38
+#define SPS_STATUS_2 36
+#define SPS_STATUS_3 37
+#define SPS_STATUS_4 35
 
 class ModuleConfig : public IModuleConfig
 {
@@ -84,6 +118,14 @@ private:
     // Pump pin definitions
     static uint8_t PUMP_PINS[4];
     static uint8_t PUMP_STATUS_PINS[4];
+
+    // Test-mode pin definitions
+    static uint8_t TEST_SENSOR_PINS[4];   // pin_TST_SNS
+    static uint8_t ADC_PINS[4];           // adcPin
+    static uint8_t DIMMER_OFF_PINS[2];    // DIM_OFF
+    static uint8_t DIMMER_VOLTAGE_PINS[2];// V_DIM
+
+    FileSystemStatusEnum fileSystemStatus;
 
     void log(const char *format, ...)
     {
@@ -181,7 +223,8 @@ public:
           wifiAdapter(wifiAdapterInstance),
           requestedModuleMode(ModuleModeEnum::USER_CAN_CONFIGURE),
           currentModuleMode(ModuleModeEnum::USER_CAN_CONFIGURE),
-          redLeds(nullptr), greenLeds(nullptr) {}
+          redLeds(nullptr), greenLeds(nullptr),
+          fileSystemStatus(FILE_SYSTEM_STATUS_NONE) {}
           
     ~ModuleConfig() {
         if (redLeds != nullptr) {
@@ -404,14 +447,58 @@ public:
     uint8_t* getPumpStatusPins() const override {
         return PUMP_STATUS_PINS;
     }
+
+    uint8_t* getTestSensorPins() const override {
+        return TEST_SENSOR_PINS;
+    }
+
+    uint8_t* getAdcPins() const override {
+        return ADC_PINS;
+    }
+
+    uint8_t getDoOrpPin() const override {
+        return DO_ORP_PIN;
+    }
+
+    uint8_t getEcSdnPin() const override {
+        return EC_SDN_PIN;
+    }
+
+    uint8_t* getDimmerOffPins() const override {
+        return DIMMER_OFF_PINS;
+    }
+
+    uint8_t* getDimmerVoltagePins() const override {
+        return DIMMER_VOLTAGE_PINS;
+    }
+
+    uint8_t getPowerGood33Pin() const override {
+        return PG_3_3V_PIN;
+    }
+
+    uint8_t getPowerGood50Pin() const override {
+        return PG_5_0V_PIN;
+    }
+
+    uint8_t getPowerGood55Pin() const override {
+        return PG_5_5V_PIN;
+    }
+
+    FileSystemStatusEnum getFileSystemStatus() const override {
+        return fileSystemStatus;
+    }
+
+    void setFileSystemStatus(FileSystemStatusEnum status) override {
+        fileSystemStatus = status;
+    }
 };
 
 // Define static members
 uint8_t ModuleConfig::LED_R_SKT[2] = {38, 37};
 uint8_t ModuleConfig::LED_G_SKT[2] = {40, 39};
 
-uint8_t ModuleConfig::LED_G_RELAY[4] = {15, 14, 13, 12};
-uint8_t ModuleConfig::LED_R_RELAY[4] = {35, 36, 37, 38};
+uint8_t ModuleConfig::LED_R_RELAY[4] = {15, 14, 13, 12};
+uint8_t ModuleConfig::LED_G_RELAY[4] = {35, 36, 37, 38};
 
 uint8_t ModuleConfig::LED_R_HYDRO[3] = {16, 8, 34};
 uint8_t ModuleConfig::LED_G_HYDRO[3] = {13, 14, 12};
@@ -429,5 +516,13 @@ uint8_t ModuleConfig::SENSOR_POWER_PINS[4] = {SENSOR_POWER_1, SENSOR_POWER_2, SE
 uint8_t ModuleConfig::PUMP_PINS[4] = {PUMP_1, PUMP_2, PUMP_3, PUMP_4};
 
 uint8_t ModuleConfig::PUMP_STATUS_PINS[4] = {PUMP_STATUS_1, PUMP_STATUS_2, PUMP_STATUS_3, PUMP_STATUS_4};
+
+uint8_t ModuleConfig::TEST_SENSOR_PINS[4] = {TST_SNS_1, TST_SNS_2, TST_SNS_3, TST_SNS_4};
+
+uint8_t ModuleConfig::ADC_PINS[4] = {ADC_PIN_1, ADC_PIN_2, ADC_PIN_3, ADC_PIN_4};
+
+uint8_t ModuleConfig::DIMMER_OFF_PINS[2] = {DIM_OFF_1, DIM_OFF_2};
+
+uint8_t ModuleConfig::DIMMER_VOLTAGE_PINS[2] = {V_DIM_1, V_DIM_2};
 
 #endif // MODULE_CONFIG_H

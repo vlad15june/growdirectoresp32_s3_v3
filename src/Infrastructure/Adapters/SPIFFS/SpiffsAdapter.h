@@ -6,6 +6,7 @@
 #include <Arduino.h>
 #include <FS.h>
 #include <SPIFFS.h>
+#include <esp_partition.h>
 #include <stdarg.h>
 #include <string>
 
@@ -39,12 +40,53 @@ public:
     }
 
     void initSPIFFS() override {
-        if (!SPIFFS.begin(true)) {
-            log("SPIFFS Mount Failed");
-            fileSystemStatus = FILE_SYSTEM_STATUS_FAIL;
-        } else {
-            log("SPIFFS Mounted successfully");
+        unsigned long t0 = millis();
+        Serial.print("SPIFFS: begin(false)...");
+        Serial.flush();
+        bool mounted = SPIFFS.begin(false);
+        Serial.printf(" %s in %lu ms\n", mounted ? "ok" : "fail", millis() - t0);
+        Serial.flush();
+
+        if (mounted) {
+            Serial.println("SPIFFS Mounted successfully");
             fileSystemStatus = FILE_SYSTEM_STATUS_DONE;
+            return;
+        }
+
+        const esp_partition_t* part = esp_partition_find_first(
+            ESP_PARTITION_TYPE_DATA, ESP_PARTITION_SUBTYPE_DATA_SPIFFS, NULL);
+        if (part == NULL) {
+            Serial.println("SPIFFS: partition not found");
+            fileSystemStatus = FILE_SYSTEM_STATUS_FAIL;
+            return;
+        }
+
+        t0 = millis();
+        Serial.printf("SPIFFS: erasing partition (%u bytes)...", part->size);
+        Serial.flush();
+        esp_err_t err = esp_partition_erase_range(part, 0, part->size);
+        Serial.printf(" %s in %lu ms\n", err == ESP_OK ? "ok" : "fail", millis() - t0);
+        Serial.flush();
+
+        if (err != ESP_OK) {
+            Serial.println("SPIFFS: partition erase failed");
+            fileSystemStatus = FILE_SYSTEM_STATUS_FAIL;
+            return;
+        }
+
+        t0 = millis();
+        Serial.print("SPIFFS: begin(true) after erase...");
+        Serial.flush();
+        mounted = SPIFFS.begin(true);
+        Serial.printf(" %s in %lu ms\n", mounted ? "ok" : "fail", millis() - t0);
+        Serial.flush();
+
+        if (mounted) {
+            Serial.println("SPIFFS Mounted successfully");
+            fileSystemStatus = FILE_SYSTEM_STATUS_DONE;
+        } else {
+            Serial.println("SPIFFS Mount Failed");
+            fileSystemStatus = FILE_SYSTEM_STATUS_FAIL;
         }
     }
 

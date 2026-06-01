@@ -320,7 +320,6 @@ inline void ModuleSetupService::handleModuleMode()
     }
 
     uint8_t isConfigured = settings->getIfConfigured();
-    log("SETUP: Current configuration status: %d", isConfigured);
 
     if (isConfigured != ModuleModeEnum::CONFIGURED_NEED_RESTART &&
         isConfigured != ModuleModeEnum::AP_TEST_MODE &&
@@ -328,11 +327,11 @@ inline void ModuleSetupService::handleModuleMode()
         isConfigured != ModuleModeEnum::USER_CAN_RE_CONFIGURE &&
         isConfigured != ModuleModeEnum::CONFIGURED_DONE)
     {
-        // settings->setConfigured(ModuleModeEnum::AP_TEST_MODE);
-        settings->setConfigured(ModuleModeEnum::USER_CAN_CONFIGURE);
-
-        log("SETUP: Updated configuration status to USER_CAN_CONFIGURE, needs restart");
+        settings->setConfigured(ModuleModeEnum::AP_TEST_MODE);
+        isConfigured = ModuleModeEnum::AP_TEST_MODE;
     }
+
+    log("SETUP: isConfigured = %d", isConfigured);
 
     buttonUseCases->checkButtonPressedWhenOn();
 
@@ -380,23 +379,38 @@ inline void ModuleSetupService::handleModuleMode()
 
 inline void ModuleSetupService::ApTestModeModeConfigure()
 {
-    log("SETUP: Module is in AP_TEST_MODE - configuring for board testing");
+    unsigned long t0 = arduinoAdapter ? arduinoAdapter->millis() : 0;
+    log("[%lu ms] SETUP: ApTestModeModeConfigure begin - configuring for board testing", t0);
 
-    // Setup AP with test mode IP configuration
+    unsigned long apStart = arduinoAdapter ? arduinoAdapter->millis() : 0;
     setupAP(true);
-    setupTestModeWebServer();
+    log("[%lu ms] SETUP: setupAP(test) done (took %lu ms)",
+        arduinoAdapter ? arduinoAdapter->millis() : 0,
+        (arduinoAdapter ? arduinoAdapter->millis() : 0) - apStart);
 
-    // Setup test devices for board testing
+    unsigned long wsStart = arduinoAdapter ? arduinoAdapter->millis() : 0;
+    setupTestModeWebServer();
+    log("[%lu ms] SETUP: setupTestModeWebServer done (took %lu ms)",
+        arduinoAdapter ? arduinoAdapter->millis() : 0,
+        (arduinoAdapter ? arduinoAdapter->millis() : 0) - wsStart);
+
     if (boardTest)
     {
-        log("SETUP: Setting up devices for test mode");
+        unsigned long ts = arduinoAdapter ? arduinoAdapter->millis() : 0;
+        log("[%lu ms] SETUP: setupDevicesForTest begin", ts);
         boardTest->setupDevicesForTest(moduleConfig);
-        log("SETUP: Test devices setup completed");
+        log("[%lu ms] SETUP: setupDevicesForTest done (took %lu ms)",
+            arduinoAdapter ? arduinoAdapter->millis() : 0,
+            (arduinoAdapter ? arduinoAdapter->millis() : 0) - ts);
     }
     else
     {
         log("SETUP: BoardTest not available for test mode setup");
     }
+
+    log("[%lu ms] SETUP: ApTestModeModeConfigure done (took %lu ms)",
+        arduinoAdapter ? arduinoAdapter->millis() : 0,
+        (arduinoAdapter ? arduinoAdapter->millis() : 0) - t0);
 }
 
 inline void ModuleSetupService::UserCanConfigModeConfigure()
@@ -415,20 +429,46 @@ inline void ModuleSetupService::UserReConfigModeConfigure()
 
 inline void ModuleSetupService::ConfigureDoneModeConfigure()
 {
+    unsigned long t0 = arduinoAdapter ? arduinoAdapter->millis() : 0;
+    log("[%lu ms] SETUP: ConfigureDoneModeConfigure begin", t0);
+
+    unsigned long ts = arduinoAdapter ? arduinoAdapter->millis() : 0;
     setupWifiConnection();
+    log("[%lu ms] SETUP: setupWifiConnection done (took %lu ms)",
+        arduinoAdapter ? arduinoAdapter->millis() : 0,
+        (arduinoAdapter ? arduinoAdapter->millis() : 0) - ts);
 
-    // Check if module was deleted from server while offline
+    ts = arduinoAdapter ? arduinoAdapter->millis() : 0;
     checkModuleDeletionOnStartup();
+    log("[%lu ms] SETUP: checkModuleDeletionOnStartup done (took %lu ms)",
+        arduinoAdapter ? arduinoAdapter->millis() : 0,
+        (arduinoAdapter ? arduinoAdapter->millis() : 0) - ts);
 
+    ts = arduinoAdapter ? arduinoAdapter->millis() : 0;
     setupMqttConnection();
-    setupUdp();
+    log("[%lu ms] SETUP: setupMqttConnection done (took %lu ms)",
+        arduinoAdapter ? arduinoAdapter->millis() : 0,
+        (arduinoAdapter ? arduinoAdapter->millis() : 0) - ts);
 
+    ts = arduinoAdapter ? arduinoAdapter->millis() : 0;
+    setupUdp();
+    log("[%lu ms] SETUP: setupUdp done (took %lu ms)",
+        arduinoAdapter ? arduinoAdapter->millis() : 0,
+        (arduinoAdapter ? arduinoAdapter->millis() : 0) - ts);
+
+    ts = arduinoAdapter ? arduinoAdapter->millis() : 0;
     fillModuleStructure();
+    log("[%lu ms] SETUP: fillModuleStructure done (took %lu ms)",
+        arduinoAdapter ? arduinoAdapter->millis() : 0,
+        (arduinoAdapter ? arduinoAdapter->millis() : 0) - ts);
 
     if (deviceService)
     {
+        ts = arduinoAdapter ? arduinoAdapter->millis() : 0;
         deviceService->init();
-        log("SETUP: Device service initialized");
+        log("[%lu ms] SETUP: Device service initialized (took %lu ms)",
+            arduinoAdapter ? arduinoAdapter->millis() : 0,
+            (arduinoAdapter ? arduinoAdapter->millis() : 0) - ts);
     }
     else
     {
@@ -437,15 +477,20 @@ inline void ModuleSetupService::ConfigureDoneModeConfigure()
 
     if (ruleService)
     {
+        ts = arduinoAdapter ? arduinoAdapter->millis() : 0;
         ruleService->init();
-        log("SETUP: Rule service initialized");
+        log("[%lu ms] SETUP: Rule service initialized (took %lu ms)",
+            arduinoAdapter ? arduinoAdapter->millis() : 0,
+            (arduinoAdapter ? arduinoAdapter->millis() : 0) - ts);
     }
     else
     {
         log("SETUP: Rule service not available");
     }
 
-    log("SETUP: Module prepared for operation");
+    log("[%lu ms] SETUP: ConfigureDoneModeConfigure done - module prepared for operation (took %lu ms)",
+        arduinoAdapter ? arduinoAdapter->millis() : 0,
+        (arduinoAdapter ? arduinoAdapter->millis() : 0) - t0);
 }
 
 inline void ModuleSetupService::checkModuleDeletionOnStartup()
@@ -533,15 +578,36 @@ inline void ModuleSetupService::setupAP(bool isTestMode)
         return;
     }
 
+    if (isTestMode)
+    {
+        log("AP_TEST: setupAP entry, registering WiFi event logger");
+        wifiAdapter->enableApEventLogging(logger);
+    }
+
     if (wifiAdapter->isAccessPointActive() == false)
     {
-        const char *wifiPrefix = determineWifiPrefix();
+        if (isTestMode) log("AP_TEST: AP not active, proceeding with creation");
         const char *macAddress = wifiAdapter->getMACAddress();
-        log("SETUP: Using WiFi prefix: %s", wifiPrefix);
         log("SETUP: Device MAC address: %s", macAddress);
 
-        char *ssid = generateSSID(wifiPrefix, macAddress);
-        log("SETUP: WiFi Name: %s", ssid);
+        char *ssid;
+        if (isTestMode)
+        {
+            const char *jigPrefix = "grow_director_";
+            size_t macLen = strlen(macAddress);
+            size_t prefixLen = strlen(jigPrefix);
+            ssid = new char[prefixLen + macLen + 1];
+            strcpy(ssid, jigPrefix);
+            strcat(ssid, macAddress);
+            log("SETUP: Using JIG WiFi name: %s", ssid);
+        }
+        else
+        {
+            const char *wifiPrefix = determineWifiPrefix();
+            log("SETUP: Using WiFi prefix: %s", wifiPrefix);
+            ssid = generateSSID(wifiPrefix, macAddress);
+            log("SETUP: WiFi Name: %s", ssid);
+        }
 
         const char *password = "123456789";
 
@@ -562,12 +628,32 @@ inline void ModuleSetupService::setupAP(bool isTestMode)
             log("SETUP: Using default IP configuration");
         }
 
+        if (isTestMode)
+        {
+            log("AP_TEST: createAndConfigureAP ssid=%s pwd=%s ip=%s gw=%s mask=%s",
+                ssid, password, apLocalIp, apGatewayIp, apNetworkMask);
+        }
+
         if (createAndConfigureAP(ssid, password, apLocalIp, apGatewayIp, apNetworkMask))
         {
             log("SETUP: WiFi Password: %s", password);
+            if (isTestMode)
+            {
+                log("AP_TEST: AP up, clients=%d, localIP=%s",
+                    wifiAdapter->getConnectedClientCount(), wifiAdapter->getLocalIP());
+            }
+        }
+        else if (isTestMode)
+        {
+            log("AP_TEST: createAndConfigureAP FAILED");
         }
 
         delete[] ssid;
+    }
+    else if (isTestMode)
+    {
+        log("AP_TEST: AP already active, skipping creation, clients=%d",
+            wifiAdapter->getConnectedClientCount());
     }
 
     log("SETUP: Access Point setup completed");
@@ -619,7 +705,7 @@ inline char *ModuleSetupService::generateSSID(const char *wifiPrefix, const char
     char randomPart[10];
     int randomNum = (int)(random(1000) % 1000);
     log("SETUP: Generating random part for SSID: %d", randomNum);
-    snprintf(randomPart, sizeof(randomPart), "_%d", randomNum);
+    snprintf(randomPart, sizeof(randomPart), "_%03d", randomNum);
 
     size_t prefixLen = strlen(wifiPrefix);
     size_t macLen = strlen(macAddress);
@@ -648,6 +734,12 @@ inline char *ModuleSetupService::generateSSID(const char *wifiPrefix, const char
 inline bool ModuleSetupService::createAndConfigureAP(const char *ssid, const char *password, const char *localIP, const char *gatewayIP, const char *netmask)
 {
     wifiAdapter->createAccessPoint(ssid, password, 1, false, 4);
+
+    if (arduinoAdapter)
+    {
+        log("SETUP: Waiting 2s for AP to fully initialize...");
+        arduinoAdapter->delay(2000);
+    }
 
     const char *initialIP = wifiAdapter->getLocalIP();
     log("SETUP: Initial AP IP address: %s", initialIP);
@@ -1350,10 +1442,20 @@ inline void ModuleSetupService::fillModuleStructure()
 
 inline void ModuleSetupService::setupModule()
 {
+    unsigned long t0 = arduinoAdapter ? arduinoAdapter->millis() : 0;
+    log("[%lu ms] SETUP: setupModule begin", t0);
+
     if (spiffsAdapter)
     {
+        unsigned long fsStart = arduinoAdapter ? arduinoAdapter->millis() : 0;
+        log("[%lu ms] SETUP: SPIFFS init begin", fsStart);
         spiffsAdapter->initSPIFFS();
-        log("SETUP: SPIFFS initialized");
+        unsigned long fsEnd = arduinoAdapter ? arduinoAdapter->millis() : 0;
+        log("[%lu ms] SETUP: SPIFFS init done (took %lu ms)", fsEnd, fsEnd - fsStart);
+        if (moduleConfig)
+        {
+            moduleConfig->setFileSystemStatus(spiffsAdapter->getFileSystemStatus());
+        }
     }
     else
     {
@@ -1365,32 +1467,53 @@ inline void ModuleSetupService::setupModule()
         log("SETUP: Module setup failed - unable to initialize configuration");
         return;
     }
+    log("[%lu ms] SETUP: configuration initialized", arduinoAdapter ? arduinoAdapter->millis() : 0);
 
+    unsigned long ledsStart = arduinoAdapter ? arduinoAdapter->millis() : 0;
     if (!setupLeds())
     {
         log("SETUP: LED setup failed");
     }
+    log("[%lu ms] SETUP: setupLeds done (took %lu ms)",
+        arduinoAdapter ? arduinoAdapter->millis() : 0,
+        (arduinoAdapter ? arduinoAdapter->millis() : 0) - ledsStart);
 
+    unsigned long btnStart = arduinoAdapter ? arduinoAdapter->millis() : 0;
     if (!setupButtons())
     {
         log("SETUP: Button setup failed");
     }
+    log("[%lu ms] SETUP: setupButtons done (took %lu ms)",
+        arduinoAdapter ? arduinoAdapter->millis() : 0,
+        (arduinoAdapter ? arduinoAdapter->millis() : 0) - btnStart);
 
     if (ledUseCases)
     {
+        unsigned long ts = arduinoAdapter ? arduinoAdapter->millis() : 0;
         ledUseCases->ledOnLoad();
-        log("SETUP: LED on-load sequence executed");
+        log("[%lu ms] SETUP: LED on-load sequence executed (took %lu ms)",
+            arduinoAdapter ? arduinoAdapter->millis() : 0,
+            (arduinoAdapter ? arduinoAdapter->millis() : 0) - ts);
     }
 
+    unsigned long modeStart = arduinoAdapter ? arduinoAdapter->millis() : 0;
+    log("[%lu ms] SETUP: handleModuleMode begin", modeStart);
     handleModuleMode();
+    unsigned long modeEnd = arduinoAdapter ? arduinoAdapter->millis() : 0;
+    log("[%lu ms] SETUP: handleModuleMode done (took %lu ms)", modeEnd, modeEnd - modeStart);
 
     if (ledUseCases)
     {
+        unsigned long ts = arduinoAdapter ? arduinoAdapter->millis() : 0;
         ledUseCases->ledOffLoad();
-        log("SETUP: LED off-load sequence executed");
+        log("[%lu ms] SETUP: LED off-load sequence executed (took %lu ms)",
+            arduinoAdapter ? arduinoAdapter->millis() : 0,
+            (arduinoAdapter ? arduinoAdapter->millis() : 0) - ts);
     }
 
-    log("SETUP: Module setup completed");
+    unsigned long tEnd = arduinoAdapter ? arduinoAdapter->millis() : 0;
+    log("[%lu ms] SETUP: Module setup completed (total %lu ms)", tEnd, tEnd - t0);
+    log("SETUP: done");
 }
 
 inline std::unique_ptr<ILoopService> ModuleSetupService::getLoopService()

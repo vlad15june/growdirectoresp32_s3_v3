@@ -16,8 +16,7 @@ public:
             webServer->loop();
         }
         
-        if (boardTest && boardTest->hasTestCommandsAvailable()) {
-            log("Processing test commands");
+        if (boardTest) {
             boardTest->processTestCommands();
         }
         

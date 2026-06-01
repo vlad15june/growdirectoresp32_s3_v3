@@ -20,6 +20,7 @@
 #include "Application/Services/Devices/IDeviceService.h"
 #include "Application/Services/Sensors/ISensorService.h"
 #include "Application/Services/Rules/IRuleService.h"
+#include "Core/Domain/Interfaces/BoardTesting/IBoardTest.h"
 
 class LoopServiceFactory : public ILoopServiceFactory {
 private:
@@ -39,6 +40,7 @@ private:
     ISensorService* sensorService;
     IRuleService* ruleService;
     IClearModuleDataService* clearModuleDataService;
+    IBoardTest* boardTest;
 
 public:
     LoopServiceFactory(
@@ -57,7 +59,8 @@ public:
         ISensorService* sensorService = nullptr,
         IRuleService* ruleService = nullptr,
         IWebServerLooper* webTestModeServer = nullptr,
-        IClearModuleDataService* clearModuleDataService = nullptr
+        IClearModuleDataService* clearModuleDataService = nullptr,
+        IBoardTest* boardTest = nullptr
     ) : ledUseCases(ledUseCases),
         buttonUseCases(buttonUseCases),
         moduleModeUseCase(moduleModeUseCase),
@@ -73,7 +76,8 @@ public:
         sensorService(sensorService),
         ruleService(ruleService),
         webTestModeServer(webTestModeServer),
-        clearModuleDataService(clearModuleDataService) {}
+        clearModuleDataService(clearModuleDataService),
+        boardTest(boardTest) {}
     
     ~LoopServiceFactory() override = default;
 
@@ -92,6 +96,7 @@ public:
             case ModuleModeEnum::AP_TEST_MODE:
                 service = std::unique_ptr<LoopServiceBase>(new LoopServiceTestMode());
                 service->setWebServer(webTestModeServer);
+                service->setBoardTest(boardTest);
                 break;
             case ModuleModeEnum::CONFIGURED_DONE: {
                 // Create a LoopServiceConfigureDone explicitly, then inject specialized dependencies

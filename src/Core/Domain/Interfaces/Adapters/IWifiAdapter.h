@@ -1,6 +1,8 @@
 #ifndef I_WIFI_ADAPTER_H
 #define I_WIFI_ADAPTER_H
 
+class ILogger;
+
 class IWifiAdapter {
 public:
     virtual ~IWifiAdapter() = default;
@@ -36,6 +38,10 @@ public:
     virtual void setStationMode() = 0;
     virtual void setAccessPointMode() = 0;
     virtual void setStationAndAccessPointMode() = 0;
+
+    // AP diagnostics (used by test mode for verbose logging)
+    virtual void enableApEventLogging(ILogger* logger) = 0;
+    virtual int getConnectedClientCount() = 0;
 };
 
 #endif // I_WIFI_ADAPTER_H

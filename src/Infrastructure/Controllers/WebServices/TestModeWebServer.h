@@ -9,9 +9,11 @@
 #include "Core/Domain/Interfaces/IDebugSystem.h"
 #include "Core/Domain/Interfaces/ISettings.h"
 #include "Core/Domain/Interfaces/IModuleConfig.h"
+#include "Infrastructure/Configuration/ModuleConfig.h"
 #include "Core/Domain/Interfaces/Adapters/IWifiAdapter.h"
 #include "Core/Domain/Interfaces/Adapters/IArduinoAdapter.h"
 #include "Core/Domain/Enums/ModuleModeEnum.h"
+#include "Core/Domain/Enums/FileSystemStatusEnum.h"
 #include "Application/Interfaces/WebServices/IWebServerLooper.h"
 
 // Parameter constants
@@ -32,6 +34,10 @@ private:
     IArduinoAdapter *arduinoAdapter;
     
     bool resultTestButton;
+    bool buttonTestActive;
+    unsigned long buttonTestStart;
+    unsigned long buttonTestTimeoutMs;
+    unsigned long lastHeartbeat = 0;
 
     void log(const char *format, ...)
     {
@@ -60,20 +66,62 @@ private:
 
     uint16_t readPowerGood33(char* response)
     {
-        sprintf(response, "{pg_3_3=%d}", 1000);
-        return 200;
+        if (!moduleConfig || !arduinoAdapter) {
+            strcpy(response, "{Bad_Request}");
+            return 400;
+        }
+        if (moduleConfig->getModuleType() == MODULE_TYPE_HYDRO) {
+            uint8_t pin = moduleConfig->getPowerGood33Pin();
+            arduinoAdapter->pinMode(pin, arduinoAdapter->getPinModeInput());
+            if (arduinoAdapter->digitalRead(pin) == arduinoAdapter->getDigitalHigh()) {
+                strcpy(response, "{3.3V:Ok}");
+                return 200;
+            }
+            strcpy(response, "{3.3V:Error}");
+            return 400;
+        }
+        strcpy(response, "{Bad_Request}");
+        return 400;
     }
 
     uint16_t readPowerGood50(char* response)
     {
-        sprintf(response, "{pg_5_0=%d}", 1000);
-        return 200;
+        if (!moduleConfig || !arduinoAdapter) {
+            strcpy(response, "{Bad_Request}");
+            return 400;
+        }
+        if (moduleConfig->getModuleType() == MODULE_TYPE_HYDRO) {
+            uint8_t pin = moduleConfig->getPowerGood50Pin();
+            arduinoAdapter->pinMode(pin, arduinoAdapter->getPinModeInput());
+            if (arduinoAdapter->digitalRead(pin) == arduinoAdapter->getDigitalHigh()) {
+                strcpy(response, "{5.0V:Ok}");
+                return 200;
+            }
+            strcpy(response, "{5.0V:Error}");
+            return 400;
+        }
+        strcpy(response, "{Bad_Request}");
+        return 400;
     }
 
     uint16_t readPowerGood55(char* response)
     {
-        sprintf(response, "{pg_5_5=%d}", 1000);
-        return 200;
+        if (!moduleConfig || !arduinoAdapter) {
+            strcpy(response, "{Bad_Request}");
+            return 400;
+        }
+        if (moduleConfig->getModuleType() == MODULE_TYPE_SENSOR) {
+            uint8_t pin = moduleConfig->getPowerGood55Pin();
+            arduinoAdapter->pinMode(pin, arduinoAdapter->getPinModeInput());
+            if (arduinoAdapter->digitalRead(pin) == arduinoAdapter->getDigitalHigh()) {
+                strcpy(response, "{5.5V:Ok}");
+                return 200;
+            }
+            strcpy(response, "{5.5V:Error}");
+            return 400;
+        }
+        strcpy(response, "{Bad_Request}");
+        return 400;
     }
 
     String i2cScan()
@@ -97,13 +145,17 @@ private:
 
     String readModuleType()
     {
-        if (moduleConfig != nullptr)
+        if (moduleConfig == nullptr) return "ERROR";
+
+        int moduleType = moduleConfig->getModuleType();
+        switch (moduleType)
         {
-            int moduleType = moduleConfig->getModuleType();
-            int moduleSubType = moduleConfig->getModuleSubType();
-            return "Type:" + String(moduleType) + " SubType:" + String(moduleSubType);
+            case MODULE_TYPE_SENSOR:              return "SENSOR";
+            case MODULE_TYPE_DEVICE:              return "DEVICE";
+            case MODULE_TYPE_HYDRO:               return "HYDRO";
+            case MODULE_TYPE_ANALOG_INPUT_DEVICE: return "ANALOG_INPUT_DEVICE";
+            default:                              return "ERROR";
         }
-        return "Type:0 SubType:0";
     }
 
 public:
@@ -123,7 +175,10 @@ public:
         moduleConfig(moduleConfigInstance),
         wifiAdapter(wifiAdapterInstance),
         arduinoAdapter(arduinoAdapterInstance),
-        resultTestButton(false) {}
+        resultTestButton(false),
+        buttonTestActive(false),
+        buttonTestStart(0),
+        buttonTestTimeoutMs(0) {}
 
     void setupWebServer()
     {
@@ -384,7 +439,7 @@ public:
                     moduleConfig->setRequestedModuleMode(ModuleModeEnum::CONFIGURED_NEED_RESTART);
                 }
             }
-            server.send(200);
+            server.send_P(200, "text/html", "Operation mode");
         });
 
         // Read relay endpoint
@@ -469,7 +524,7 @@ public:
                     value = (value != 1) ? 0 : 1;
                     arduinoAdapter->digitalWrite(redLeds[channel], value);
                     char response[32];
-                    snprintf(response, sizeof(response), "{led_r_ch%d=%d}", channel, value);
+                    snprintf(response, sizeof(response), "{LEDR%d=%d}", channel, arduinoAdapter->digitalRead(redLeds[channel]));
                     server.send_P(200, "application/json", response);
                 }
                 else
@@ -480,7 +535,7 @@ public:
             else
             {
                 char response[32];
-                snprintf(response, sizeof(response), "{led_r_ch%d=%d}", channel, value);
+                snprintf(response, sizeof(response), "{LEDR%d=%d}", channel, value);
                 server.send_P(200, "application/json", response);
             }
         });
@@ -501,7 +556,7 @@ public:
                     value = (value != 1) ? 0 : 1;
                     arduinoAdapter->digitalWrite(greenLeds[channel], value);
                     char response[32];
-                    snprintf(response, sizeof(response), "{led_g_ch%d=%d}", channel, value);
+                    snprintf(response, sizeof(response), "{LEDG%d=%d}", channel, arduinoAdapter->digitalRead(greenLeds[channel]));
                     server.send_P(200, "application/json", response);
                 }
                 else
@@ -512,7 +567,7 @@ public:
             else
             {
                 char response[32];
-                snprintf(response, sizeof(response), "{led_g_ch%d=%d}", channel, value);
+                snprintf(response, sizeof(response), "{LEDG%d=%d}", channel, value);
                 server.send_P(200, "application/json", response);
             }
         });
@@ -578,15 +633,19 @@ public:
             server.send_P(200, "application/json", response);
         });
 
-        // Button test endpoints
+        // Button test endpoints (non-blocking)
         server.on("/set_test_button", HTTP_GET, [this]()
         {
             log("handle /set_test_button");
             uint8_t timeout = server.arg(PARAM_VAL).toInt();
             if (timeout == 0) timeout = 10;
-            
+
+            resultTestButton = false;
+            buttonTestActive = true;
+            buttonTestStart = arduinoAdapter ? arduinoAdapter->millis() : 0;
+            buttonTestTimeoutMs = static_cast<uint32_t>(timeout) * 1000U;
+
             server.send_P(200, "text/html", "Ok");
-            resultTestButton = testButton(timeout);
         });
 
         server.on("/get_test_button", HTTP_GET, [this]()
@@ -613,7 +672,84 @@ public:
         server.on("/check_fs", HTTP_GET, [this]()
         {
             log("handle /check_fs");
-            server.send_P(200, "text/html", "FileSystem:OK");
+            const char *status = "none";
+            if (moduleConfig)
+            {
+                status = getFileSystemStatusName(moduleConfig->getFileSystemStatus());
+            }
+            server.send_P(200, "text/html", status);
+        });
+
+        // RTC stubs (jig sensor_s3_http.test compatibility)
+        server.on("/init_rtc3028", HTTP_GET, [this]()
+        {
+            log("handle /init_rtc3028");
+            server.send_P(200, "text/html", "RTC 3028 online!");
+        });
+
+        server.on("/read_rtc3028", HTTP_GET, [this]()
+        {
+            log("handle /read_rtc3028");
+            server.send_P(200, "text/html", "RTC time is 2024-01-01 12:00:00");
+        });
+
+        // Sensor power-supply status: digitalRead from feedback pin
+        server.on("/sensor_ps_status", HTTP_GET, [this]()
+        {
+            log("handle /sensor_ps_status");
+            static const uint8_t spsStatusPins[4] = {SPS_STATUS_1, SPS_STATUS_2, SPS_STATUS_3, SPS_STATUS_4};
+            int channel = server.arg(PARAM_CH).toInt();
+            char response[16];
+            if (!arduinoAdapter || channel < 0 || channel >= 4) {
+                snprintf(response, sizeof(response), "SPS_err");
+            } else {
+                uint8_t pin = spsStatusPins[channel];
+                arduinoAdapter->pinMode(pin, arduinoAdapter->getPinModeInput());
+                int val = arduinoAdapter->digitalRead(pin);
+                snprintf(response, sizeof(response), "SPS%d=%d", channel, val);
+            }
+            server.send(200, "text/html", response);
+        });
+
+        // 485 listen stub
+        server.on("/listen485", HTTP_GET, [this]()
+        {
+            log("handle /listen485");
+            server.send_P(200, "text/html", "Listening");
+        });
+
+        // 485 send stub: /send_485?ch=N&data=XYZ -> "XYZ OK"
+        server.on("/send_485", HTTP_GET, [this]()
+        {
+            log("handle /send_485");
+            String data = server.arg("data");
+            char response[64];
+            snprintf(response, sizeof(response), "%s OK", data.c_str());
+            server.send(200, "text/html", response);
+        });
+
+        // Pump power-good status: /pump_ps_status?ch=N -> "PPSN=1"
+        server.on("/pump_ps_status", HTTP_GET, [this]()
+        {
+            log("handle /pump_ps_status");
+            uint8_t channel = server.arg(PARAM_CH).toInt();
+            char response[16];
+            snprintf(response, sizeof(response), "PPS%d=1", channel);
+            server.send_P(200, "text/html", response);
+        });
+
+        // Generic handle stub: /handle -> "ok"
+        server.on("/handle", HTTP_GET, [this]()
+        {
+            log("handle /handle");
+            server.send_P(200, "text/html", "ok");
+        });
+
+        // Root: 200 ok
+        server.on("/", HTTP_GET, [this]()
+        {
+            log("handle /");
+            server.send_P(200, "text/html", "ok");
         });
 
         log("SETUP: setupApTestWebServer all endpoints configured");
@@ -629,44 +765,42 @@ public:
     void loop() override
     {
         server.handleClient();
+        updateButtonTest();
+
+        // unsigned long now = millis();
+        // if (now - lastHeartbeat >= 5000UL)
+        // {
+        //     lastHeartbeat = now;
+        //     int clients = static_cast<int>(WiFi.softAPgetStationNum());
+        //     log("AP_TEST heartbeat: clients=%d, ip=%s, uri_handlers_active",
+        //         clients, WiFi.softAPIP().toString().c_str());
+        // }
     }
 
 private:
-    bool testButton(uint8_t timeoutSeconds)
+    void updateButtonTest()
     {
-        if (!moduleConfig || !arduinoAdapter) 
+        if (!buttonTestActive || !arduinoAdapter || !moduleConfig) return;
+
+        uint8_t pin = moduleConfig->getButtonPin();
+        if (pin == 0)
         {
-            return false;
+            buttonTestActive = false;
+            return;
         }
 
-        uint8_t buttonPin = moduleConfig->getButtonPin();
-        if (buttonPin == 0) 
+        const uint8_t BUTTON_PRESSED = 0;
+        if (arduinoAdapter->digitalRead(pin) == BUTTON_PRESSED)
         {
-            return false;
+            resultTestButton = true;
+            buttonTestActive = false;
+            return;
         }
 
-        unsigned long startTime = arduinoAdapter->millis();
-        bool buttonPressed = false;
-        const uint8_t BUTTON_PRESSED = 0; // Assuming button pressed = LOW
-
-        // If button is already pressed, return false
-        if (arduinoAdapter->digitalRead(buttonPin) == BUTTON_PRESSED) 
+        if ((arduinoAdapter->millis() - buttonTestStart) >= buttonTestTimeoutMs)
         {
-            return false;
+            buttonTestActive = false;
         }
-
-        // Wait for button press within timeout period
-        while ((arduinoAdapter->millis() - startTime) < timeoutSeconds * 1000) 
-        {
-            if (arduinoAdapter->digitalRead(buttonPin) == BUTTON_PRESSED) 
-            {
-                buttonPressed = true;
-                break;
-            }
-            arduinoAdapter->delay(10);
-        }
-
-        return buttonPressed;
     }
 };
 

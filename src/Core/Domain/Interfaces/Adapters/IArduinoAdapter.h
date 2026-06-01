@@ -28,6 +28,13 @@ public:
     // Analog I/O
     virtual int analogRead(uint8_t pin) = 0;
     virtual void analogWrite(uint8_t pin, int val) = 0;
+
+    // LEDC PWM (ESP32 hardware PWM for dimmer control)
+    virtual void ledcSetupChannel(uint8_t channel, double freq, uint8_t resolution) = 0;
+    virtual void ledcAttach(uint8_t pin, uint8_t channel) = 0;
+    virtual void ledcDetach(uint8_t pin) = 0;
+    virtual void ledcWriteChannel(uint8_t channel, uint32_t duty) = 0;
+    virtual uint32_t ledcReadChannel(uint8_t channel) = 0;
     
     // Serial communication
     virtual void serialBegin(unsigned long baud) = 0;
