@@ -6,9 +6,26 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ESP32-S3 firmware for GrowDirector — an IoT agricultural automation device. Written in C++17 using the Arduino framework on PlatformIO.
 
+## Everyday Tasks (code search, small fix, debug)
+
+For plain code search, reading, a local bugfix, or debugging — orient through the specs docs first, then go to code by address. Do not grep blindly, and do not run the full Specs Guardrail.
+
+1. Resolve the specs root via `.specs-repo.local`, otherwise `.specs-repo` (resolver rules below). If it does not resolve, fall back to the local `doc/`.
+2. Identify which **feature** the request touches.
+3. From the specs root, read narrowly for that feature:
+   - `docs/components/firmware/` — overall layout (`projectArchitecture.md`, `projectStructureDirectoryDescription.md`) plus the files describing specific features (e.g. sensors)
+   - `docs/features/<feature>/` — the firmware part, to understand **what** to look at and **how**
+4. Load docs **progressively**, as you go deeper into the question — not everything up front.
+5. Go into `docs/contracts/` only when the task touches interaction with other features or components.
+6. Use the docs to find the layer and the real file, then open code by address.
+
+The full Specs Guardrail (reading the canonical contracts/flows in full) is only for changes to contracts, architecture, or cross-component behavior — not for plain search or a local fix.
+
 ## Specs Guardrail
 
 Canonical engineering documentation for GrowDirector does not live in this repository.
+
+This guardrail applies only when changing architecture, contracts, or cross-component behavior. Implementation-local tasks (plain search, a local bugfix, debugging, refactors with unchanged behavior) do not trigger it — see Everyday Tasks above.
 
 Before changing architecture, contracts, or cross-component behavior:
 1. Read the configured specs repository path from `.specs-repo.local` when present, otherwise from `.specs-repo`
@@ -37,8 +54,14 @@ Docs update rule:
 
 ## Commands
 
-**Requires `just` installed** (`brew install just` on macOS):
+**PlatformIO** (primary; VERSION injected manually):
+```bash
+pio run -e esp32-s3-devkitm-1     # Build firmware
+pio test -e native -vvv           # Run all native unit tests (verbose)
+pio device monitor -b 115200      # Serial monitor
+```
 
+**`just`** (optional shortcut, only if installed — `brew install just` on macOS):
 ```bash
 just build      # Build firmware for esp32-s3-devkitm-1
 just test       # Run all native unit tests (verbose)
@@ -46,13 +69,7 @@ just clean      # Clean build artifacts
 just monitor    # Serial monitor at 115200 baud
 ```
 
-**Direct PlatformIO** (VERSION injected manually):
-```bash
-pio run -e esp32-s3-devkitm-1
-pio test -e native -vvv
-```
-
-**Run a single test file**: There is no per-file test runner. All tests share a single entry point `test/test_main.cpp`. To run tests for one module, comment out other `run_*_tests()` calls in `test/test_main.cpp`, run `just test`, then revert.
+**Run a single test file**: There is no per-file test runner. All tests share a single entry point `test/test_main.cpp`. To run tests for one module, comment out other `run_*_tests()` calls in `test/test_main.cpp`, run the tests, then revert.
 
 ## Architecture
 
@@ -98,3 +115,17 @@ Mock implementations live in `test/Mock/` — there are mocks for all major inte
 - Interfaces defined in `Core/Domain/Interfaces/` — implementations in `Infrastructure/`
 - JSON serialization lives in `Infrastructure/Adapters/Converters/`
 - Firmware version is read from the `VERSION` file at build time
+
+## Debugging
+
+- Live device output: `pio device monitor -b 115200` (or `just monitor`).
+- Field logs come from ELK — pull them with `test_scripts/elk_download_logs_cli.py`.
+- To analyze a bug from module logs, use the `log-analysis` skill: it downloads the logs, ties each hypothesis to a `code line ↔ log line` pair, and writes a report under `doc/log-analysis/`.
+
+## Skills
+
+- `log-analysis` — investigate a bug from a module's ELK logs over a time window.
+- `task-doc` — BA-level task statement from a template.
+- `task-arch` — task architecture doc from a BA statement.
+- `feature-arch` — firmware architecture doc for a feature.
+- `imp-doc` — step-by-step implementation doc for a junior from a ready arch doc.

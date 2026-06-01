@@ -116,14 +116,14 @@ private:
         if (!currentlyConnected)
         {
             // MQTT is disconnected
-            if (_mqttWasConnected)
+            if (_mqttWasConnected || _mqttLastDisconnectedTime == 0)
             {
-                // Just disconnected, start tracking
+                // Just disconnected, or booted while already disconnected - start tracking
                 _mqttLastDisconnectedTime = currentTime;
                 _mqttWasConnected = false;
                 log("DIAG: MQTT disconnected, starting timer");
             }
-            else if (_mqttLastDisconnectedTime > 0)
+            else
             {
                 // Already disconnected, check if threshold exceeded
                 unsigned long disconnectDuration = currentTime - _mqttLastDisconnectedTime;
