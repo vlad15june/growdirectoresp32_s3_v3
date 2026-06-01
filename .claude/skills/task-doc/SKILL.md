@@ -25,9 +25,17 @@ description: Создаёт BA-постановку задачи (task-doc) дл
 
 > К какой фиче/области относится задача? Назови имя (например `workflow`, `sensor`, `rules`) или укажи, что это новая область.
 
-Резолвить путь `specs/docs/features/<feature>/`:
-- Папка существует → файл пойдёт в `specs/docs/features/<feature>/tasks/` (создать `tasks/`, если её нет).
-- Новая область → спросить имя фичи в kebab-case, создать `specs/docs/features/<feature>/tasks/`.
+Резолвить путь `specs/docs/features/<feature>/`. Каждая задача живёт в **своей подпапке** внутри `tasks/`, чтобы весь её цикл (BA-постановка → task-arch → imp-doc) лежал вместе:
+```
+specs/docs/features/<feature>/tasks/<task-slug>/
+    <task-slug>.md                                   ← этот task-doc
+    jira-tickets/<component>/<task-slug>.md           ← сюда позже ляжет task-arch
+    jira-tickets/<component>/imp/GDV1-<task-slug>.md  ← и imp-doc
+```
+- Папка фичи существует → создать `specs/docs/features/<feature>/tasks/<task-slug>/` и положить файл туда.
+- Новая область → спросить имя фичи в kebab-case, создать `specs/docs/features/<feature>/tasks/<task-slug>/`.
+- `<task-slug>` — короткий kebab-case-слаг задачи (например `configurable-modbus-address-registers`); он же станет именем файла и слагом для арх/имп вниз по цепочке.
+- **Не** класть task-doc плоско в `tasks/<task-slug>.md` (старый паттерн) — тогда задаче некуда вложить `jira-tickets/` и imp-doc оторвётся от постановки.
 
 ### Шаг 3. Прочитать основные доки
 
@@ -72,8 +80,9 @@ description: Создаёт BA-постановку задачи (task-doc) дл
 
 ## Правила именования и расположения
 
-- Расположение: `specs/docs/features/<feature>/tasks/`. Если папки нет — создать.
-- Имя файла: `<kebab-title>.md` (например `add-mcp-config-persistence.md`).
+- Расположение: `specs/docs/features/<feature>/tasks/<task-slug>/` — **отдельная подпапка на каждую задачу**. Если папки (`tasks/` или `tasks/<task-slug>/`) нет — создать.
+- Имя файла: `<task-slug>.md` (тот же kebab-слаг, что и у папки задачи; например `tasks/add-mcp-config-persistence/add-mcp-config-persistence.md`). Папка и файл носят одинаковый слаг, и этот же слаг переиспользуют `task-arch` (`jira-tickets/<component>/<task-slug>.md`) и `imp-doc` (`jira-tickets/<component>/imp/GDV1-<task-slug>.md`) внутри той же папки задачи.
+- Если папка `tasks/<task-slug>/` уже существует — уточнить у пользователя, дополняем существующую задачу или это другая (другой слаг). Не перезаписывать молча.
 
 ## Жёсткие правила содержания (из шаблона, критичны)
 

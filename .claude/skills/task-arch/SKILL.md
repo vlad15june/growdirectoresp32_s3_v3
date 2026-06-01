@@ -17,7 +17,7 @@ task-arch относится к task-doc так же, как phase-doc к featur
 
 **Обязательно через AskUserQuestion**, если из запроса неоднозначно, для какого task-doc делаем арх:
 
-> Для какой задачи делаем арх? Укажи путь к task-doc (например `specs/docs/features/sensor/tasks/configurable-modbus-address-registers.md`) или назови фичу и задачу.
+> Для какой задачи делаем арх? Укажи путь к task-doc (например `specs/docs/features/sensor/tasks/configurable-modbus-address-registers/configurable-modbus-address-registers.md`) или назови фичу и задачу.
 
 Резолвить путь, проверить, что файл существует и оформлен по `task-template.md` (есть `Affects:`, `Invariants`, `Acceptance`). Если файла нет или это не task-doc — остановиться и предложить сначала сделать постановку через `task-doc`.
 
@@ -69,8 +69,9 @@ task-arch относится к task-doc так же, как phase-doc к featur
 
 ## Правила именования и расположения
 
-- Расположение: `specs/docs/features/<feature>/jira-tickets/<component>/`. Если папки нет — создать.
-- Имя файла: тот же kebab-slug, что у task-doc, например `configurable-modbus-address-registers.md`. Так арх-док задачи лежит рядом с другими реализационными доками компонента и легко сопоставляется с постановкой в `tasks/`.
+- Расположение: **внутри папки задачи**, рядом с её BA-постановкой — `specs/docs/features/<feature>/tasks/<task-slug>/jira-tickets/<component>/`. Если папок (`jira-tickets/` или `jira-tickets/<component>/`) нет — создать. Слаг `<task-slug>` берётся из папки task-doc (`tasks/<task-slug>/<task-slug>.md`), которую и резолвишь как вход. Так весь цикл задачи (BA → task-arch → imp) лежит в одной папке `tasks/<task-slug>/`.
+  - Исключение — задача является **частью фичи с feature-level арх-доком** (фичевый цикл, фазы): тогда место — `specs/docs/features/<feature>/jira-tickets/<component>/` в корне фичи, рядом с `architecture.md` и phase-доками (этим владеет `feature-arch`). Различай: отдельная задача → папка задачи; фаза/часть целой фичи → корень фичи.
+- Имя файла: тот же kebab-slug, что у task-doc, например `configurable-modbus-address-registers.md`. Тот же слаг переиспользует `imp-doc` в подпапке `imp/` рядом.
 - Если в той же папке уже есть файл с этим именем — уточнить у пользователя, дополняем существующий или это другой компонент.
 
 ## Жёсткие правила содержания
