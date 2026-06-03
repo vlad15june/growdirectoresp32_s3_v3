@@ -93,17 +93,17 @@ static void test_led_getters(void) {
     uint8_t* greenLeds = g_moduleConfig->getGreenLeds();
     
     // Expected values from ModuleConfig.h static arrays
-    // uint8_t ModuleConfig::LED_R_RELAY[4] = {35, 36, 37, 38};
-    // uint8_t ModuleConfig::LED_G_RELAY[4] = {15, 14, 13, 12};
-    TEST_ASSERT_EQUAL(35, redLeds[0]);
-    TEST_ASSERT_EQUAL(36, redLeds[1]);
-    TEST_ASSERT_EQUAL(37, redLeds[2]);
-    TEST_ASSERT_EQUAL(38, redLeds[3]);
-    
-    TEST_ASSERT_EQUAL(15, greenLeds[0]);
-    TEST_ASSERT_EQUAL(14, greenLeds[1]);
-    TEST_ASSERT_EQUAL(13, greenLeds[2]);
-    TEST_ASSERT_EQUAL(12, greenLeds[3]);
+    // uint8_t ModuleConfig::LED_R_RELAY[4] = {15, 14, 13, 12};
+    // uint8_t ModuleConfig::LED_G_RELAY[4] = {35, 36, 37, 38};
+    TEST_ASSERT_EQUAL(15, redLeds[0]);
+    TEST_ASSERT_EQUAL(14, redLeds[1]);
+    TEST_ASSERT_EQUAL(13, redLeds[2]);
+    TEST_ASSERT_EQUAL(12, redLeds[3]);
+
+    TEST_ASSERT_EQUAL(35, greenLeds[0]);
+    TEST_ASSERT_EQUAL(36, greenLeds[1]);
+    TEST_ASSERT_EQUAL(37, greenLeds[2]);
+    TEST_ASSERT_EQUAL(38, greenLeds[3]);
     
     module_config_teardown();
 }
@@ -129,8 +129,8 @@ static void test_all_module_types(void) {
     // code 5: MODULE_TYPE_ANALOG_INPUT_DEVICE, MODULE_SUBTYPE_DIMMER
     
     // Expected LED values from static definitions in ModuleConfig.h
-    uint8_t expectedRelayRed[4] = {35, 36, 37, 38};
-    uint8_t expectedRelayGreen[4] = {15, 14, 13, 12};
+    uint8_t expectedRelayRed[4] = {15, 14, 13, 12};
+    uint8_t expectedRelayGreen[4] = {35, 36, 37, 38};
     uint8_t expectedSktRed[2] = {38, 37};
     uint8_t expectedSktGreen[2] = {40, 39};
     uint8_t expectedHydroRed[3] = {16, 8, 34};
