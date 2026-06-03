@@ -82,6 +82,7 @@
 #include "Application/Services/ClearModuleDataService.h"
 
 #include "Infrastructure/Adapters/Sensors/SensorReader.h"
+#include "Infrastructure/Adapters/Sensors/RemoteSensors/RemoteSensorClient.h"
 #include "Infrastructure/Adapters/Sensors/HardwareSensors/AnalogSensors/AnalogSensorReader.h"
 #include "Infrastructure/Adapters/Sensors/HardwareSensors/ModbusSensors/ModbusSensorReader.h"
 #include "Infrastructure/Adapters/Rs485/ModbusRS485.h"
@@ -307,6 +308,7 @@ EvaluateRulesUseCase evaluateRulesUseCase(
     &ruleRepository,
     &arduinoAdapter,
     &ntpTimeAdapter,
+    &sensorValueModel,
     &mqttLogger,
     &debugSystem);
 
@@ -368,6 +370,18 @@ SensorService sensorService(
     &jsonConverter,
     &mqttManager);
 
+RemoteSensorReceiver remoteSensorReceiver(
+    &udpManager,
+    &mqttManager,
+    &messageProcessor,
+    &sensorValueModel,
+    &ruleRepository,
+    &sensorRepository,
+    &jsonConverter,
+    &arduinoAdapter,
+    &mqttLogger,
+    &debugSystem);
+
 LoopServiceFactory loopServiceFactory(
     &ledUseCases,
     &buttonUseCases,
@@ -413,7 +427,8 @@ ModuleSetupService moduleSetupService(
     &hybridApiService,
     &clearModuleDataService,
     &arduinoAdapter,
-    &syncSensorTypesUseCase);
+    &syncSensorTypesUseCase,
+    &remoteSensorReceiver);
 
 void initDependencies()
 {
@@ -421,5 +436,7 @@ void initDependencies()
     topicHandlerFactory.setCommandService(&commandService);
     topicHandlerFactory.setJsonConverter(&jsonConverter);
     boardTest.setModbusPorts(modbusPorts);
+    syncRulesUseCase.setRemoteSensorReceiver(&remoteSensorReceiver);
+    commandService.setRemoteSensorReceiver(&remoteSensorReceiver);
 }
 #endif // GLOBALS_H

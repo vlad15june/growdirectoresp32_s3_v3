@@ -3,7 +3,14 @@
 
 #include "Core/Domain/Interfaces/ILogger.h"
 #include <string>
+#include <vector>
 #include <fstream>  // Added for file operations
+
+struct MockJsonLogRecord {
+    std::string feature;
+    std::string action;
+    std::string details;
+};
 
 class MockLogger : public ILogger {
 public:
@@ -12,6 +19,21 @@ public:
     std::ofstream logFile;
     std::string logFilePath = "mock_logger.log";
     std::string moduleUid;
+    std::vector<MockJsonLogRecord> jsonLogs;
+
+    int countJsonAction(const std::string& action) const {
+        int n = 0;
+        for (const auto& record : jsonLogs) {
+            if (record.action == action) {
+                n++;
+            }
+        }
+        return n;
+    }
+
+    bool hasJsonAction(const std::string& action) const {
+        return countJsonAction(action) > 0;
+    }
     
     MockLogger() {
         logFile.open(logFilePath, std::ios::out | std::ios::app);
@@ -211,6 +233,7 @@ public:
     
     void logJson(const char* feature, const char* action, const char* details) override {
         printCalled = true;
+        jsonLogs.push_back({feature ? feature : "", action ? action : "", details ? details : ""});
         if (logFile.is_open()) {
             logFile << "JSON: { \"feature\": \"" << (feature ? feature : "NULL") 
                    << "\", \"action\": \"" << (action ? action : "NULL") 

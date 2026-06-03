@@ -2235,4 +2235,36 @@ public:
         serializeJson(doc, output);
         return output;
     }
+
+    bool sensorValuesFromUpdateJson(const std::string &json, std::vector<std::pair<std::string, float>> &out) override
+    {
+        DynamicJsonDocument doc(8192);
+        DeserializationError error = deserializeJson(doc, json);
+        if (error)
+            return false;
+
+        if (!doc.containsKey("sensors") || !doc["sensors"].is<JsonArray>())
+            return false;
+
+        JsonArray sensors = doc["sensors"].as<JsonArray>();
+        if (sensors.size() == 0)
+            return false;
+
+        for (JsonObject sensor : sensors)
+        {
+            if (!sensor.containsKey("uid") || !sensor.containsKey("value"))
+                continue;
+
+            const char *uid = sensor["uid"];
+            if (!uid || uid[0] == '\0')
+                continue;
+
+            if (!sensor["value"].is<float>() && !sensor["value"].is<int>())
+                continue;
+
+            out.push_back(std::make_pair(std::string(uid), sensor["value"].as<float>()));
+        }
+
+        return true;
+    }
 };

@@ -8,6 +8,7 @@
 #include "Core/Domain/Interfaces/IDebugSystem.h"
 #include "Core/Domain/Interfaces/Adapters/IArduinoAdapter.h"
 #include "Core/Domain/Interfaces/Adapters/Json/IJsonConverter.h"
+#include "Core/Domain/Interfaces/Adapters/Sensors/IRemoteSensorReceiver.h"
 #include "Infrastructure/Adapters/Time/INTPTimeAdapter.h"
 #include "Application/Services/Rules/RuleValidator.h"
 #include "Application/DTOs/RuleStateUpdateDto.h"
@@ -24,8 +25,9 @@ private:
     IArduinoAdapter* _arduinoAdapter;
     INTPTimeAdapter* _ntpTimeAdapter;
     IJsonConverter* _jsonConverter;
+    IRemoteSensorReceiver* _remoteSensorReceiver = nullptr;
     RuleValidator _ruleValidator;
-    
+
     // Sync timing
     const int SYNC_INTERVAL_MS = 30000; // 30 seconds
     unsigned long _lastSyncTime;
@@ -77,7 +79,11 @@ public:
     }
     
     ~SyncRulesUseCase() override = default;
-    
+
+    void setRemoteSensorReceiver(IRemoteSensorReceiver* remoteSensorReceiver) {
+        _remoteSensorReceiver = remoteSensorReceiver;
+    }
+
     bool init() override {
         log("SYNC_RULES: Initializing rule sync use case");
         
@@ -193,6 +199,9 @@ private:
             int syncedCount = _ruleRepository->synchronizeRules(validRules);
             syncSuccess = (syncedCount > 0);
             log("SYNC_RULES: Synchronized %d/%d rules successfully", syncedCount, static_cast<int>(validRules.size()));
+            if (_remoteSensorReceiver) {
+                _remoteSensorReceiver->onRuleSetChanged();
+            }
         }
         
         // Generate and send rule state update for ALL rules (valid and invalid)

@@ -3,6 +3,7 @@
 
 #include "Core/Domain/Interfaces/UseCases/Rules/IEvaluateRulesUseCase.h"
 #include "Core/Domain/Data/Models/IDeviceModel.h"
+#include "Core/Domain/Data/Models/ISensorValueModel.h"
 #include "Core/Domain/Interfaces/Repositories/IRuleRepository.h"
 #include "Core/Domain/Interfaces/ILogger.h"
 #include "Core/Domain/Interfaces/IDebugSystem.h"
@@ -19,6 +20,7 @@ class EvaluateRulesUseCase : public IEvaluateRulesUseCase {
 private:
     IDeviceModel* _deviceModel;
     IRuleRepository* _ruleRepository;
+    ISensorValueModel* _sensorValueModel;
     ILogger* _logger;
     IDebugSystem* _debugSystem;
     IArduinoAdapter* _arduinoAdapter;
@@ -78,10 +80,12 @@ public:
         IRuleRepository* ruleRepository,
         IArduinoAdapter* arduinoAdapter,
         INTPTimeAdapter* ntpTimeAdapter,
+        ISensorValueModel* sensorValueModel,
         ILogger* logger = nullptr,
         IDebugSystem* debugSystem = nullptr
     ) : _deviceModel(deviceModel),
         _ruleRepository(ruleRepository),
+        _sensorValueModel(sensorValueModel),
         _logger(logger),
         _debugSystem(debugSystem),
         _arduinoAdapter(arduinoAdapter),
@@ -104,11 +108,11 @@ public:
             return false;
         }
         
-        // if (!_sensorModel) {
-        //     log("EVALUATE_RULES: Sensor model not available");
-        //     return false;
-        // }
-        
+        if (!_sensorValueModel) {
+            log("EVALUATE_RULES: Sensor value model not available");
+            return false;
+        }
+
         if (!_ruleRepository) {
             log("EVALUATE_RULES: Rule repository not available");
             return false;
@@ -559,14 +563,15 @@ private:
     }
     
     double getSensorValue(const std::string& sensorUid) {
-        log("EVALUATE_RULES: Getting sensor value for %s", sensorUid.c_str());
-        
-        // TODO: This would need to be implemented to get actual sensor values
-        // For now, return a default value
-        // This would typically interact with a sensor service or sensor model
-        
-        log("EVALUATE_RULES: Sensor value retrieval not yet implemented, returning default value");
-        return 0.0;
+        double value = _sensorValueModel ? _sensorValueModel->getSensorValue(sensorUid) : 0.0;
+
+        if (_logger && _debugSystem && _debugSystem->isFeatureEnabled(DebugFeatures::RULE_SENSOR_VALUE_DEBUG)) {
+            char details[160];
+            snprintf(details, sizeof(details), "{\"sensorUid\":\"%s\",\"value\":%.2f}", sensorUid.c_str(), value);
+            _logger->logJson(DebugFeatures::RULE_SENSOR_VALUE_DEBUG, "read", details);
+        }
+
+        return value;
     }
 };
 

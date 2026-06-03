@@ -66,6 +66,7 @@ public:
     virtual std::string i2cRegisterConfigsToJson(const std::vector<I2CRegisterConfig> &configs) = 0;
     virtual bool wifiNetworksFromJson(const std::string &jsonStr, std::vector<WifiNetworkEntry> &networks) = 0;
     virtual std::string wifiNetworksToJson(const std::vector<WifiNetworkEntry> &networks) = 0;
+    virtual bool sensorValuesFromUpdateJson(const std::string &json, std::vector<std::pair<std::string, float>> &out) = 0;
     virtual ~IJsonConverter() = default;
 };
 

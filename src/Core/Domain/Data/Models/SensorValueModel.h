@@ -149,6 +149,14 @@ public:
         }
         sensorValue.currentValue = value;
     }
+
+    void setLastReadTime(const std::string& sensorUid, uint32_t time) override {
+        auto& sensorValue = sensorValues[sensorUid];
+        if (sensorValue.sensorUid.empty()) {
+            sensorValue.sensorUid = sensorUid;
+        }
+        sensorValue.lastReadTime = time;
+    }
     
     /**
      * @brief Set sensor as multi-channel

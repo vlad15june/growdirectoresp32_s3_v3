@@ -33,6 +33,7 @@
 #include "Core/Domain/Interfaces/IClearModuleDataService.h"
 #include "Core/Domain/Interfaces/Adapters/IArduinoAdapter.h"
 #include "Core/Domain/Interfaces/UseCases/SensorTypes/ISyncSensorTypesUseCase.h"
+#include "Core/Domain/Interfaces/Adapters/Sensors/IRemoteSensorReceiver.h"
 #include <memory>
 #include <cstdarg>
 #include <cstdio>
@@ -77,6 +78,7 @@ private:
     IClearModuleDataService *clearModuleDataService;
     IArduinoAdapter *arduinoAdapter;
     ISyncSensorTypesUseCase *syncSensorTypesUseCase;
+    IRemoteSensorReceiver *remoteSensorReceiver;
 
     void log(const char *format, ...);
 
@@ -168,7 +170,8 @@ public:
         IHybridAPIService *hybridApiService = nullptr,
         IClearModuleDataService *clearModuleDataService = nullptr,
         IArduinoAdapter *arduinoAdapter = nullptr,
-        ISyncSensorTypesUseCase *syncSensorTypesUseCase = nullptr);
+        ISyncSensorTypesUseCase *syncSensorTypesUseCase = nullptr,
+        IRemoteSensorReceiver *remoteSensorReceiver = nullptr);
 
     void setupModule() override;
     std::unique_ptr<ILoopService> getLoopService() override;
@@ -202,7 +205,8 @@ inline ModuleSetupService::ModuleSetupService(
     IHybridAPIService *hybridApiService,
     IClearModuleDataService *clearModuleDataService,
     IArduinoAdapter *arduinoAdapter,
-    ISyncSensorTypesUseCase *syncSensorTypesUseCase) : logger(logger),
+    ISyncSensorTypesUseCase *syncSensorTypesUseCase,
+    IRemoteSensorReceiver *remoteSensorReceiver) : logger(logger),
                                                        debugSystem(debugSystem),
                                                        moduleConfig(moduleConfig),
                                                        ledAdapter(ledAdapter),
@@ -227,7 +231,8 @@ inline ModuleSetupService::ModuleSetupService(
                                                        hybridApiService(hybridApiService),
                                                        clearModuleDataService(clearModuleDataService),
                                                        arduinoAdapter(arduinoAdapter),
-                                                       syncSensorTypesUseCase(syncSensorTypesUseCase)
+                                                       syncSensorTypesUseCase(syncSensorTypesUseCase),
+                                                       remoteSensorReceiver(remoteSensorReceiver)
 {
 }
 
@@ -486,6 +491,12 @@ inline void ModuleSetupService::ConfigureDoneModeConfigure()
     else
     {
         log("SETUP: Rule service not available");
+    }
+
+    if (remoteSensorReceiver)
+    {
+        remoteSensorReceiver->init();
+        log("SETUP: Remote sensor receiver initialized");
     }
 
     log("[%lu ms] SETUP: ConfigureDoneModeConfigure done - module prepared for operation (took %lu ms)",

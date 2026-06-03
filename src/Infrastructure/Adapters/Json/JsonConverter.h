@@ -15,6 +15,7 @@
 #include <sstream>
 #include <algorithm>
 #include <cstdio>
+#include <utility>
 
 static std::string extractValue(const std::string &src, const std::string &key)
 {
@@ -2034,6 +2035,32 @@ private:
         }
         oss << "]";
         return oss.str();
+    }
+
+    bool sensorValuesFromUpdateJson(const std::string &json, std::vector<std::pair<std::string, float>> &out) override
+    {
+        std::string sensorsArr = extractArray(json, "sensors");
+        if (sensorsArr.empty())
+            return false;
+
+        auto sensorObjs = splitObjects(sensorsArr);
+        if (sensorObjs.empty())
+            return false;
+
+        for (const auto &sensorStr : sensorObjs)
+        {
+            std::string uid = extractValue(sensorStr, "uid");
+            if (uid.empty())
+                continue;
+
+            if (sensorStr.find("\"value\"") == std::string::npos)
+                continue;
+
+            float value = static_cast<float>(extractDoubleValue(sensorStr, "value"));
+            out.push_back(std::make_pair(uid, value));
+        }
+
+        return true;
     }
 };
 

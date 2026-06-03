@@ -15,6 +15,7 @@
 #include "Core/Domain/Interfaces/IDebugSystem.h"
 #include "Core/Domain/Enums/ModuleCommandEnum.h"
 #include "Core/Domain/Enums/ModuleCommandStatus.h"
+#include "Core/Domain/Interfaces/Adapters/Sensors/IRemoteSensorReceiver.h"
 #include "Infrastructure/Adapters/Time/INTPTimeAdapter.h"
 
 class CommandService : public ICommandService
@@ -29,6 +30,7 @@ private:
     IDebugSystem *debugSystem;
     INTPTimeAdapter *timeAdapter;
     IJsonConverter *jsonConverter;
+    IRemoteSensorReceiver *_remoteSensorReceiver = nullptr;
     static const unsigned long commandMaxAgeSeconds = 300;
 
 public:
@@ -51,6 +53,11 @@ public:
           debugSystem(debugSystem),
           timeAdapter(timeAdapter),
           jsonConverter(jsonConverter) {}
+
+    void setRemoteSensorReceiver(IRemoteSensorReceiver *remoteSensorReceiver)
+    {
+        _remoteSensorReceiver = remoteSensorReceiver;
+    }
 
     bool process(const CommandDto &command) override
     {
@@ -333,6 +340,11 @@ private:
             "CommandService: Processing rule command - ruleUid: %s", command.ruleUid.c_str());
 
         logInfo("CommandService: Rule command processing not yet implemented");
+
+        if (_remoteSensorReceiver)
+        {
+            _remoteSensorReceiver->onRuleSetChanged();
+        }
 
         return true;
     }
