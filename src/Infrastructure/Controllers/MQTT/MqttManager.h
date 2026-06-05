@@ -6,6 +6,7 @@
 #include <set>
 #include <vector>
 #include <queue>
+#include <mutex>
 #include "Core/Domain/Interfaces/ILogger.h"
 #include "Core/Domain/Interfaces/IDebugSystem.h"
 #include "Core/Domain/Interfaces/Mqtt/IMessageProcessor.h"
@@ -33,6 +34,8 @@ private:
     uint16_t _reconnectInterval;
     int _mqttFails; // Track MQTT connection failures
     std::set<String> _subscribedTopics; // Track subscribed topics (auto-deduplication)
+
+    std::recursive_mutex mqttMutex;
 
     struct MqttMessage {
         String topic;
@@ -178,6 +181,7 @@ public:
 
     bool connect() override
     {
+        std::lock_guard<std::recursive_mutex> lock(mqttMutex);
         if (_mqttClient.connected())
         {
             log("MQTT already connected, skipping connect");
@@ -302,6 +306,7 @@ public:
 
     void disconnect() override
     {
+        std::lock_guard<std::recursive_mutex> lock(mqttMutex);
         if (_mqttClient.connected())
         {
             _mqttClient.disconnect();
@@ -311,11 +316,13 @@ public:
 
     bool isConnected() override
     {
+        std::lock_guard<std::recursive_mutex> lock(mqttMutex);
         return _mqttClient.connected();
     }
 
     bool subscribe(const char *topic) override
     {
+        std::lock_guard<std::recursive_mutex> lock(mqttMutex);
         if (!_mqttClient.connected())
         {
             if (!connect())
@@ -343,6 +350,7 @@ public:
 
     bool unsubscribe(const char *topic) override
     {
+        std::lock_guard<std::recursive_mutex> lock(mqttMutex);
         if (!_mqttClient.connected())
         {
             return false;
@@ -361,6 +369,7 @@ public:
 
     bool publish(const char *topic, const char *payload) override
     {
+        std::lock_guard<std::recursive_mutex> lock(mqttMutex);
         if (!_mqttClient.connected())
         {
             if (!connect())
@@ -387,42 +396,49 @@ public:
         const uint32_t printInterval = 30000; // Print every 30 seconds
         const uint32_t healthCheckInterval = 5000; // Check health every 5 seconds
         
-        bool isConnected = _mqttClient.connected();
-        
-        // Detect connection state changes
-        if (isConnected && !wasConnected)
+        bool isConnected;
         {
-            log("MQTT: ✓ Connection established");
-            
-            // Resubscribe to all topics after reconnection
-            if (_subscribedTopics.size() > 0)
+            std::lock_guard<std::recursive_mutex> lock(mqttMutex);
+            isConnected = _mqttClient.connected();
+
+            // Detect connection state changes
+            if (isConnected && !wasConnected)
             {
-                log("MQTT: Resubscribing to %d topics...", _subscribedTopics.size());
-                for (const auto& topic : _subscribedTopics)
+                log("MQTT: ✓ Connection established");
+
+                // Resubscribe to all topics after reconnection
+                if (_subscribedTopics.size() > 0)
                 {
-                    bool success = _mqttClient.subscribe(topic.c_str());
-                    if (success)
+                    log("MQTT: Resubscribing to %d topics...", _subscribedTopics.size());
+                    for (const auto& topic : _subscribedTopics)
                     {
-                        log("MQTT: ✓ Resubscribed to: %s", topic.c_str());
-                    }
-                    else
-                    {
-                        log("MQTT: ✗ Failed to resubscribe to: %s", topic.c_str());
+                        bool success = _mqttClient.subscribe(topic.c_str());
+                        if (success)
+                        {
+                            log("MQTT: ✓ Resubscribed to: %s", topic.c_str());
+                        }
+                        else
+                        {
+                            log("MQTT: ✗ Failed to resubscribe to: %s", topic.c_str());
+                        }
                     }
                 }
             }
+            else if (!isConnected && wasConnected)
+            {
+                log("MQTT: ✗ Connection lost - will attempt reconnect");
+            }
+
+            wasConnected = isConnected;
+
+            if (isConnected)
+            {
+                _mqttClient.loop();
+            }
         }
-        else if (!isConnected && wasConnected)
-        {
-            log("MQTT: ✗ Connection lost - will attempt reconnect");
-        }
-        
-        wasConnected = isConnected;
-        
+
         if (isConnected)
         {
-            _mqttClient.loop();
-            
             // Process pending messages
             while (!_messageQueue.empty()) {
                 MqttMessage& msg = _messageQueue.front();
@@ -439,12 +455,19 @@ public:
                 lastHealthCheck = millis();
                 
                 // Check MQTT state - if not CONNECTED (0), force disconnect
-                int state = _mqttClient.state();
+                int state;
+                {
+                    std::lock_guard<std::recursive_mutex> lock(mqttMutex);
+                    state = _mqttClient.state();
+                }
                 if (state != 0)
                 {
                     log("MQTT: Health check failed - state: %d (expected 0)", state);
                     log("MQTT: Forcing disconnect to trigger clean reconnect");
-                    _mqttClient.disconnect();
+                    {
+                        std::lock_guard<std::recursive_mutex> lock(mqttMutex);
+                        _mqttClient.disconnect();
+                    }
                     wasConnected = false;
                     return; // Will reconnect on next loop()
                 }

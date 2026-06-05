@@ -565,9 +565,10 @@ private:
     void logSensorValue(const char* format, ...) {
         if (_logger && _debugSystem && _debugSystem->isFeatureEnabled(DebugFeatures::RULE_SENSOR_VALUE_DEBUG)) {
             char buffer[256];
+            int prefixLen = snprintf(buffer, sizeof(buffer), "%s: ", DebugFeatures::RULE_SENSOR_VALUE_DEBUG);
             va_list args;
             va_start(args, format);
-            vsnprintf(buffer, sizeof(buffer), format, args);
+            vsnprintf(buffer + prefixLen, sizeof(buffer) - prefixLen, format, args);
             va_end(args);
 
             IDebugFeature* feature = _debugSystem->getFeature(DebugFeatures::RULE_SENSOR_VALUE_DEBUG);

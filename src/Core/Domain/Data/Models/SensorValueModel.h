@@ -3,6 +3,7 @@
 #include <map>
 #include <vector>
 #include <string>
+#include <mutex>
 #include "ISensorValueModel.h"
 #include "Core/Domain/Data/Entities/Sensor/SensorValue.h"
 
@@ -12,6 +13,7 @@
 class SensorValueModel : public ISensorValueModel {
 private:
     std::map<std::string, SensorValue> sensorValues;
+    mutable std::mutex valuesMutex;
 
 public:
     /**
@@ -29,6 +31,7 @@ public:
      * @return True if initialization was successful, false otherwise
      */
     bool init() override {
+        std::lock_guard<std::mutex> lock(valuesMutex);
         sensorValues.clear();
         return true;
     }
@@ -40,6 +43,7 @@ public:
      * @return Channel value, 0.0f if not found
      */
     float getChannelValue(const std::string& sensorUid, const std::string& channelName) const override {
+        std::lock_guard<std::mutex> lock(valuesMutex);
         auto sensorIt = sensorValues.find(sensorUid);
         if (sensorIt != sensorValues.end()) {
             return sensorIt->second.getChannelValue(channelName);
@@ -54,6 +58,7 @@ public:
      * @param value Channel value
      */
     void setChannelValue(const std::string& sensorUid, const std::string& channelName, float value) override {
+        std::lock_guard<std::mutex> lock(valuesMutex);
         auto& sensorValue = sensorValues[sensorUid];
         if (sensorValue.sensorUid.empty()) {
             sensorValue.sensorUid = sensorUid;
@@ -67,6 +72,7 @@ public:
      * @return Vector of channel name-value pairs
      */
     std::vector<std::pair<std::string, float>> getChannelValues(const std::string& sensorUid) const override {
+        std::lock_guard<std::mutex> lock(valuesMutex);
         auto sensorIt = sensorValues.find(sensorUid);
         if (sensorIt != sensorValues.end()) {
             return sensorIt->second.getChannelValues();
@@ -80,6 +86,7 @@ public:
      * @return True if sensor has channel values, false otherwise
      */
     bool hasChannelValues(const std::string& sensorUid) const override {
+        std::lock_guard<std::mutex> lock(valuesMutex);
         auto sensorIt = sensorValues.find(sensorUid);
         return sensorIt != sensorValues.end() && sensorIt->second.hasChannelValues();
     }
@@ -89,6 +96,7 @@ public:
      * @param sensorUid Sensor UID
      */
     void clearChannelValues(const std::string& sensorUid) override {
+        std::lock_guard<std::mutex> lock(valuesMutex);
         auto sensorIt = sensorValues.find(sensorUid);
         if (sensorIt != sensorValues.end()) {
             sensorIt->second.clearChannelValues();
@@ -99,6 +107,7 @@ public:
      * @brief Clear all channel values for all sensors
      */
     void clearAllChannelValues() override {
+        std::lock_guard<std::mutex> lock(valuesMutex);
         sensorValues.clear();
     }
     
@@ -107,6 +116,7 @@ public:
      * @param sensorUid Sensor UID
      */
     void removeSensor(const std::string& sensorUid) override {
+        std::lock_guard<std::mutex> lock(valuesMutex);
         sensorValues.erase(sensorUid);
     }
     
@@ -115,6 +125,7 @@ public:
      * @return Vector of sensor UIDs
      */
     std::vector<std::string> getSensorsWithChannelValues() const override {
+        std::lock_guard<std::mutex> lock(valuesMutex);
         std::vector<std::string> sensorUids;
         for (const auto& pair : sensorValues) {
             if (pair.second.hasChannelValues()) {
@@ -130,6 +141,7 @@ public:
      * @return Sensor value, 0.0f if not found
      */
     float getSensorValue(const std::string& sensorUid) const override {
+        std::lock_guard<std::mutex> lock(valuesMutex);
         auto sensorIt = sensorValues.find(sensorUid);
         if (sensorIt != sensorValues.end()) {
             return sensorIt->second.currentValue;
@@ -143,6 +155,7 @@ public:
      * @param value Sensor value
      */
     void setSensorValue(const std::string& sensorUid, float value) override {
+        std::lock_guard<std::mutex> lock(valuesMutex);
         auto& sensorValue = sensorValues[sensorUid];
         if (sensorValue.sensorUid.empty()) {
             sensorValue.sensorUid = sensorUid;
@@ -151,6 +164,7 @@ public:
     }
 
     void setLastReadTime(const std::string& sensorUid, uint32_t time) override {
+        std::lock_guard<std::mutex> lock(valuesMutex);
         auto& sensorValue = sensorValues[sensorUid];
         if (sensorValue.sensorUid.empty()) {
             sensorValue.sensorUid = sensorUid;
@@ -164,6 +178,7 @@ public:
      * @param isMultiChannel True if multi-channel, false otherwise
      */
     void setSensorMultiChannel(const std::string& sensorUid, bool isMultiChannel) override {
+        std::lock_guard<std::mutex> lock(valuesMutex);
         auto& sensorValue = sensorValues[sensorUid];
         if (sensorValue.sensorUid.empty()) {
             sensorValue.sensorUid = sensorUid;
@@ -177,6 +192,7 @@ public:
      * @return True if multi-channel, false otherwise
      */
     bool isSensorMultiChannel(const std::string& sensorUid) const override {
+        std::lock_guard<std::mutex> lock(valuesMutex);
         auto sensorIt = sensorValues.find(sensorUid);
         return sensorIt != sensorValues.end() && sensorIt->second.isMultiChannel;
     }

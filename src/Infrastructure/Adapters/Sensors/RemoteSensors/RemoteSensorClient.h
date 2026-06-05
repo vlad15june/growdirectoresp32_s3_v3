@@ -62,9 +62,10 @@ private:
     void log(const char* format, ...) {
         if (_logger && _debugSystem && _debugSystem->isFeatureEnabled(DebugFeatures::REMOTE_SENSOR_RECEIVE_DEBUG)) {
             char buffer[512];
+            int prefixLen = snprintf(buffer, sizeof(buffer), "%s: ", DebugFeatures::REMOTE_SENSOR_RECEIVE_DEBUG);
             va_list args;
             va_start(args, format);
-            vsnprintf(buffer, sizeof(buffer), format, args);
+            vsnprintf(buffer + prefixLen, sizeof(buffer) - prefixLen, format, args);
             va_end(args);
 
             IDebugFeature* feature = _debugSystem->getFeature(DebugFeatures::REMOTE_SENSOR_RECEIVE_DEBUG);
@@ -79,9 +80,10 @@ private:
     void logSerial(const char* format, ...) {
         if (_logger && _debugSystem && _debugSystem->isFeatureEnabled(DebugFeatures::REMOTE_SENSOR_RECEIVE_DEBUG)) {
             char buffer[512];
+            int prefixLen = snprintf(buffer, sizeof(buffer), "%s: ", DebugFeatures::REMOTE_SENSOR_RECEIVE_DEBUG);
             va_list args;
             va_start(args, format);
-            vsnprintf(buffer, sizeof(buffer), format, args);
+            vsnprintf(buffer + prefixLen, sizeof(buffer) - prefixLen, format, args);
             va_end(args);
 
             _logger->println(DebugFeatures::REMOTE_SENSOR_RECEIVE_DEBUG, buffer, MqttLoggerMode::SerialOnly);
