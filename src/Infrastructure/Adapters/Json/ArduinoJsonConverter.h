@@ -309,8 +309,8 @@ public:
         std::string stateStr = doc["state"] | "";
         if (stateStr == "Synchronized")
             rule.state = RuleState::SYNCHRONIZED;
-        else if (stateStr == "Pending")
-            rule.state = RuleState::PENDING;
+        else if (stateStr == "Synchronizing")
+            rule.state = RuleState::SYNCHRONIZING;
         else
             rule.state = RuleState::UNSYNCHRONIZED;
 
@@ -512,8 +512,8 @@ public:
         // State
         if (rule.state == RuleState::SYNCHRONIZED)
             doc["state"] = "Synchronized";
-        else if (rule.state == RuleState::PENDING)
-            doc["state"] = "Pending";
+        else if (rule.state == RuleState::SYNCHRONIZING)
+            doc["state"] = "Synchronizing";
         else
             doc["state"] = "Unsynchronized";
 
@@ -1216,6 +1216,7 @@ public:
         {
             JsonObject ruleObj = rulesArr.createNestedObject();
             ruleObj["uid"] = ruleState.uid;
+            ruleObj["version"] = ruleState.version;
             ruleObj["state"] = ruleState.state;
             ruleObj["mode"] = ruleState.mode;
             
@@ -1228,6 +1229,26 @@ public:
             {
                 ruleObj["errorType"] = ruleState.errorType;
             }
+        }
+
+        std::string output;
+        serializeJson(doc, output);
+        return output;
+    }
+
+    std::string ruleStateUpdateSingleToJson(const RuleStateDto& ruleState, const std::string& timestamp) override
+    {
+        DynamicJsonDocument doc(1024);
+
+        doc["timestamp"] = timestamp;
+        doc["uid"] = ruleState.uid;
+        doc["state"] = ruleState.state;
+        doc["mode"] = ruleState.mode;
+        doc["modeReason"] = ruleState.modeReason;
+
+        if (!ruleState.errorType.empty())
+        {
+            doc["errorType"] = ruleState.errorType;
         }
 
         std::string output;
@@ -1254,6 +1275,7 @@ public:
             {
                 RuleStateDto ruleState;
                 ruleState.uid = ruleObj["uid"] | "";
+                ruleState.version = ruleObj["version"] | 0;
                 ruleState.state = ruleObj["state"] | "Synchronized";
                 ruleState.mode = ruleObj["mode"] | "Off";
                 ruleState.modeReason = ruleObj["modeReason"] | "";

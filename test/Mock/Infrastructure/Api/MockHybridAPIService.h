@@ -5,6 +5,7 @@
 #include "Application/DTOs/ModuleCommandDto.h"
 #include "Application/DTOs/ModuleCommandUpdateDto.h"
 #include <vector>
+#include <string>
 
 class MockHybridAPIService : public IHybridAPIService {
 public:
@@ -53,9 +54,12 @@ public:
     const ModuleStructure* lastModuleStructure = nullptr;
     ApiPriority lastModuleStructurePriority = ApiPriority::UNDEFINED;
     const char* lastRuleStateCommand = nullptr;
+    std::string lastRuleStateCommandStr;
     ApiPriority lastRuleStateCommandPriority = ApiPriority::UNDEFINED;
     const char* lastRuleUid = nullptr;
     const char* lastByUidRuleStateCommand = nullptr;
+    std::string lastByUidRuleStateCommandStr;
+    std::string lastByUidRuleStateUid;
     DeviceCommandUpdateDto lastDeviceCommandUpdate;
     const char* lastAnalogInputDeviceCommandResult = nullptr;
     const char* lastModuleCommandResult = nullptr;
@@ -161,12 +165,15 @@ public:
     bool sendRuleStateCommand(const char* msg, ApiPriority priority = ApiPriority::UNDEFINED) override {
         sendRuleStateCommandCalled = true;
         lastRuleStateCommand = msg;
+        lastRuleStateCommandStr = msg ? msg : "";
         lastRuleStateCommandPriority = priority;
         return sendRuleStateCommandReturnValue;
     }
     
     bool sendByUidRuleStateCommand(const char* uid, const char* msg) override {
         sendByUidRuleStateCommandCalled = true;
+        lastByUidRuleStateUid = uid ? uid : "";
+        lastByUidRuleStateCommandStr = msg ? msg : "";
         lastRuleUid = uid;
         lastByUidRuleStateCommand = msg;
         return sendByUidRuleStateCommandReturnValue;

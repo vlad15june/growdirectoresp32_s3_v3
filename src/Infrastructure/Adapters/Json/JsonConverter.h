@@ -456,8 +456,8 @@ public:
         std::string stateStr = extractValue(jsonStr, "state");
         if (stateStr == "Synchronized")
             rule.state = RuleState::SYNCHRONIZED;
-        else if (stateStr == "Pending")
-            rule.state = RuleState::PENDING;
+        else if (stateStr == "Synchronizing")
+            rule.state = RuleState::SYNCHRONIZING;
         else
             rule.state = RuleState::UNSYNCHRONIZED;
 
@@ -607,8 +607,8 @@ public:
         oss << ",\"state\":\"";
         if (rule.state == RuleState::SYNCHRONIZED)
             oss << "Synchronized";
-        else if (rule.state == RuleState::PENDING)
-            oss << "Pending";
+        else if (rule.state == RuleState::SYNCHRONIZING)
+            oss << "Synchronizing";
         else
             oss << "Unsynchronized";
         oss << "\"";
@@ -1255,6 +1255,7 @@ public:
             const auto& ruleState = ruleStateUpdate.rules[i];
             oss << "{";
             oss << "\"uid\":\"" << ruleState.uid << "\"";
+            oss << ",\"version\":" << ruleState.version;
             oss << ",\"state\":\"" << ruleState.state << "\"";
             oss << ",\"mode\":\"" << ruleState.mode << "\"";
             
@@ -1277,6 +1278,26 @@ public:
         return oss.str();
     }
 
+    std::string ruleStateUpdateSingleToJson(const RuleStateDto& ruleState, const std::string& timestamp) override
+    {
+        std::ostringstream oss;
+        oss << "{";
+        oss << "\"timestamp\":\"" << timestamp << "\"";
+        oss << ",\"uid\":\"" << ruleState.uid << "\"";
+        oss << ",\"state\":\"" << ruleState.state << "\"";
+        oss << ",\"mode\":\"" << ruleState.mode << "\"";
+        oss << ",\"modeReason\":\"" << ruleState.modeReason << "\"";
+
+        if (!ruleState.errorType.empty())
+        {
+            oss << ",\"errorType\":\"" << ruleState.errorType << "\"";
+        }
+
+        oss << "}";
+
+        return oss.str();
+    }
+
     bool ruleStateUpdateFromJson(const std::string& jsonStr, RuleStateUpdateDto& ruleStateUpdate) override
     {
         ruleStateUpdate.timestamp = extractValue(jsonStr, "timestamp");
@@ -1295,6 +1316,7 @@ public:
         {
             RuleStateDto ruleState;
             ruleState.uid = extractValue(ruleStr, "uid");
+            ruleState.version = extractIntValue(ruleStr, "version");
             ruleState.state = extractValue(ruleStr, "state");
             if (ruleState.state.empty())
                 ruleState.state = "Synchronized";

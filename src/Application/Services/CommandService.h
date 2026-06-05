@@ -16,6 +16,8 @@
 #include "Core/Domain/Enums/ModuleCommandEnum.h"
 #include "Core/Domain/Enums/ModuleCommandStatus.h"
 #include "Core/Domain/Interfaces/Adapters/Sensors/IRemoteSensorReceiver.h"
+#include "Core/Domain/Interfaces/Repositories/IRuleRepository.h"
+#include "Application/Services/Rules/RuleValidator.h"
 #include "Infrastructure/Adapters/Time/INTPTimeAdapter.h"
 
 class CommandService : public ICommandService
@@ -31,6 +33,8 @@ private:
     INTPTimeAdapter *timeAdapter;
     IJsonConverter *jsonConverter;
     IRemoteSensorReceiver *_remoteSensorReceiver = nullptr;
+    IRuleRepository *ruleRepository;
+    RuleValidator _ruleValidator;
     static const unsigned long commandMaxAgeSeconds = 300;
 
 public:
@@ -43,7 +47,8 @@ public:
         ILogger *logger,
         IDebugSystem *debugSystem,
         INTPTimeAdapter *timeAdapter = nullptr,
-        IJsonConverter *jsonConverter = nullptr)
+        IJsonConverter *jsonConverter = nullptr,
+        IRuleRepository *ruleRepository = nullptr)
         : deviceCommandUseCase(deviceCommandUseCase),
           moduleCommandUseCase(moduleCommandUseCase),
           sensorCommandUseCase(sensorCommandUseCase),
@@ -52,7 +57,9 @@ public:
           logger(logger),
           debugSystem(debugSystem),
           timeAdapter(timeAdapter),
-          jsonConverter(jsonConverter) {}
+          jsonConverter(jsonConverter),
+          ruleRepository(ruleRepository),
+          _ruleValidator(logger, debugSystem) {}
 
     void setRemoteSensorReceiver(IRemoteSensorReceiver *remoteSensorReceiver)
     {
@@ -334,17 +341,91 @@ private:
         return allCommandsSuccessful;
     }
 
+    const char *ruleModeName(RuleMode mode) const
+    {
+        return mode == RuleMode::ON ? "On" : (mode == RuleMode::OFF ? "Off" : "WaitingForUserConfirm");
+    }
+
     bool processRuleCommand(const CommandDto &command)
     {
         log(DebugFeatures::RULE_DEBUG,
-            "CommandService: Processing rule command - ruleUid: %s", command.ruleUid.c_str());
+            "CommandService: RULE_PUSH recv ruleUid=%s len=%d",
+            command.ruleUid.c_str(), (int)command.rulesPayload.size());
 
-        logInfo("CommandService: Rule command processing not yet implemented");
+        if (!jsonConverter || !ruleRepository)
+        {
+            log(DebugFeatures::RULE_DEBUG,
+                "CommandService: RULE_PUSH drop reason=deps ruleUid=%s", command.ruleUid.c_str());
+            return true;
+        }
+
+        std::vector<Rule> rules;
+        if (!jsonConverter->rulesFromJson(command.rulesPayload, rules) || rules.empty())
+        {
+            log(DebugFeatures::RULE_DEBUG,
+                "CommandService: RULE_PUSH drop reason=%s ruleUid=%s",
+                rules.empty() ? "empty" : "parse", command.ruleUid.c_str());
+            return true;
+        }
+
+        std::string timestamp = timeAdapter ? timeAdapter->getFormattedTime() : "";
+        int applied = 0;
+        int errors = 0;
+
+        for (const auto &rule : rules)
+        {
+            RuleValidationResult vr = _ruleValidator.validateRule(rule);
+
+            RuleStateDto ackItem;
+            bool emitAck = true;
+
+            if (vr.isValid)
+            {
+                int synced = ruleRepository->synchronizeRules({rule});
+                if (synced > 0)
+                {
+                    ackItem = RuleStateDto(rule.uid, "Synchronized", ruleModeName(rule.mode),
+                                           rule.modeReason, "", rule.version);
+                    applied++;
+                    log(DebugFeatures::RULE_DEBUG,
+                        "CommandService: RULE_PUSH applied ruleUid=%s version=%d state=Synchronized",
+                        rule.uid.c_str(), rule.version);
+                }
+                else
+                {
+                    emitAck = false;
+                    errors++;
+                    log(DebugFeatures::RULE_DEBUG,
+                        "CommandService: RULE_PUSH store_fail ruleUid=%s version=%d",
+                        rule.uid.c_str(), rule.version);
+                }
+            }
+            else
+            {
+                ackItem = RuleStateDto(rule.uid, "Error", ruleModeName(rule.mode),
+                                       vr.errorMessage, "wrong_format", rule.version);
+                errors++;
+                log(DebugFeatures::RULE_DEBUG,
+                    "CommandService: RULE_PUSH error ruleUid=%s version=%d errorType=wrong_format",
+                    rule.uid.c_str(), rule.version);
+            }
+
+            if (emitAck && hybridApiService)
+            {
+                std::string json = jsonConverter->ruleStateUpdateSingleToJson(ackItem, timestamp);
+                log(DebugFeatures::RULE_DEBUG,
+                    "CommandService: RULE_PUSH ack uid=%s body=%s", ackItem.uid.c_str(), json.c_str());
+                hybridApiService->sendByUidRuleStateCommand(ackItem.uid.c_str(), json.c_str());
+            }
+        }
 
         if (_remoteSensorReceiver)
         {
             _remoteSensorReceiver->onRuleSetChanged();
         }
+
+        log(DebugFeatures::RULE_DEBUG,
+            "CommandService: RULE_PUSH done applied=%d errors=%d", applied, errors);
 
         return true;
     }

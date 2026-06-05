@@ -259,15 +259,21 @@ static void test_notification_hook(void) {
     MockRemoteSensorReceiver receiver;
     MockLogger logger;
     MockDebugSystem debug;
+    JsonConverter converter;
+    MockRuleRepository ruleRepo;
+    ruleRepo.synchronizeReturnValue = 1;
     CommandService commandService(nullptr, nullptr, nullptr, nullptr, nullptr,
-                                  &logger, &debug, nullptr, nullptr);
+                                  &logger, &debug, nullptr, &converter, &ruleRepo);
     commandService.setRemoteSensorReceiver(&receiver);
 
     CommandDto command;
     command.type = "RuleCommandNotification";
     command.ruleUid = "rule-1";
+    command.rulesPayload =
+        R"([{"uid":"rule-1","version":1,"deviceUid":"dev-1","ruleType":"sensor","sensorUid":"sensor-1","valueLow":10,"valueHigh":20,"direction":"down","mode":"Off","state":"Synchronized","daysOfWeek":[],"daysOfMonth":[],"conditions":[]}])";
     commandService.process(command);
 
+    // Phase 2: the reconcile hook fires once after a push is applied.
     TEST_ASSERT_EQUAL_INT(1, receiver.onRuleSetChangedCallCount);
 }
 

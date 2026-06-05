@@ -241,12 +241,18 @@ public:
                     
                     updatedRule.state = RuleState::SYNCHRONIZED;
                     updatedRules.push_back(updatedRule);
-                    existingRuleMap.erase(it); // Remove from map to mark as processed
+                    existingRuleMap.erase(it);
+                    syncCount++;
+                } else if (incomingRule.mode != existingRule->mode) {
+                    Rule updatedRule = incomingRule;
+                    updatedRule.state = RuleState::SYNCHRONIZED;
+                    updatedRules.push_back(updatedRule);
+                    existingRuleMap.erase(it);
                     syncCount++;
                 } else {
-                    // Keep existing rule in the final set
                     updatedRules.push_back(*existingRule);
-                    existingRuleMap.erase(it); // Remove from map to mark as processed
+                    existingRuleMap.erase(it);
+                    syncCount++;
                 }
             } else {
                 // New rule

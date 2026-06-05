@@ -45,6 +45,7 @@ public:
     virtual bool ruleStateFromJson(const std::string& jsonStr, RuleStateDto& ruleState) = 0;
     virtual std::string ruleStateUpdateToJson(const RuleStateUpdateDto& ruleStateUpdate) = 0;
     virtual bool ruleStateUpdateFromJson(const std::string& jsonStr, RuleStateUpdateDto& ruleStateUpdate) = 0;
+    virtual std::string ruleStateUpdateSingleToJson(const RuleStateDto& ruleState, const std::string& timestamp) = 0;
     virtual std::string commandResultToJson(const CommandResultDto &commandResultDto) = 0;
     virtual bool commandResultFromJson(const std::string &jsonStr, CommandResultDto &commandResultDto) = 0;
     virtual std::string rawIoResultToJson(const RawIoResultDto &rawIoResult) = 0;

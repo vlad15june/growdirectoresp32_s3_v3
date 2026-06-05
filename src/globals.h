@@ -280,7 +280,8 @@ CommandService commandService(
     &mqttLogger,
     &debugSystem,
     &ntpTimeAdapter,
-    &jsonConverter);
+    &jsonConverter,
+    &ruleRepository);
 
 ProcessDeviceStateUseCaseFactory deviceStateUseCaseFactory(
     &mqttLogger,

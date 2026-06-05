@@ -29,7 +29,7 @@ private:
     RuleValidator _ruleValidator;
 
     // Sync timing
-    const int SYNC_INTERVAL_MS = 30000; // 30 seconds
+    const int SYNC_INTERVAL_MS = 300000; // 5 minutes
     unsigned long _lastSyncTime;
     bool _lastSyncStatus = false;
     time_t _lastSuccessfulSyncTimestamp = 0;
@@ -42,7 +42,12 @@ private:
             va_start(args, format);
             vsnprintf(buffer, sizeof(buffer), format, args);
             va_end(args);
-            _logger->println(DebugFeatures::RULE_SYNC_DEBUG, buffer);
+            IDebugFeature* feature = _debugSystem->getFeature(DebugFeatures::RULE_SYNC_DEBUG);
+            if (feature) {
+                _logger->println(DebugFeatures::RULE_SYNC_DEBUG, buffer, feature->getLogChannel());
+            } else {
+                _logger->println(DebugFeatures::RULE_SYNC_DEBUG, buffer);
+            }
         }
     }
     
@@ -241,11 +246,14 @@ private:
             const auto& result = validationResults[i];
             
             std::string ruleState = result.isValid ? "Synchronized" : "Error";
-            std::string ruleMode = rule.mode == RuleMode::ON ? "On" : 
+            std::string ruleMode = rule.mode == RuleMode::ON ? "On" :
                                   rule.mode == RuleMode::OFF ? "Off" : "WaitingForUserConfirm";
-            
-            stateUpdate.addRuleState(rule.uid, ruleState, ruleMode, rule.modeReason, 
-                                   result.isValid ? "" : result.errorType);
+
+            stateUpdate.addRuleState(rule.uid, ruleState, ruleMode, rule.modeReason,
+                                   result.isValid ? "" : result.errorType, rule.version);
+
+            log("SYNC_RULES: RULE_ACK item uid=%s version=%d state=%s",
+                rule.uid.c_str(), rule.version, ruleState.c_str());
         }
         
         return stateUpdate;

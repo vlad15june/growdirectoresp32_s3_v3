@@ -7,6 +7,10 @@ class MockRuleRepository : public IRuleRepository {
 public:
     std::vector<Rule> rules;
 
+    int synchronizeReturnValue = 0;
+    int synchronizeCallCount = 0;
+    std::vector<Rule> lastSynchronizeRules;
+
     Utils::Optional<Rule> get(const char* uid) override {
         for (const auto& rule : rules) {
             if (rule.uid == uid) {
@@ -33,7 +37,11 @@ public:
     std::vector<Rule> getRulesNeedingSynchronization() override { return {}; }
     bool updateRuleState(const char*, RuleState) override { return true; }
     bool updateRuleMode(const char*, RuleMode, const char*) override { return true; }
-    int synchronizeRules(const std::vector<Rule>&) override { return 0; }
+    int synchronizeRules(const std::vector<Rule>& r) override {
+        synchronizeCallCount++;
+        lastSynchronizeRules = r;
+        return synchronizeReturnValue;
+    }
 };
 
 #endif // MOCK_RULE_REPOSITORY_H

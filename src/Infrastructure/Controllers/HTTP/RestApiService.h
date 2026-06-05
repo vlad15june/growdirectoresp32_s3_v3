@@ -270,12 +270,12 @@ public:
             return false;
         }
 
-        log("NET: --sendByUidRuleStateCommand--");
-
         const char *moduleUid = _moduleConfig->getModuleUid();
         snprintf(_urlBuffer, sizeof(_urlBuffer),
                  "%s/api/v1/HardWare/rules/%s/state?token=%s&grow_director_uid=%s",
                  _serverUrl, uid, _token, moduleUid);
+
+        log("NET: /api/v1/HardWare/rules/%s/state -> %s", uid, msg);
 
         _httpClient->setTimeout(30000);
         _httpClient->begin(_urlBuffer);

@@ -6,16 +6,17 @@
 class RuleStateDto {
 public:
     std::string uid;
+    int version = 0;
     std::string state = "Synchronized";
     std::string mode = "Off";
     std::string modeReason;
     std::string errorType;
-    
+
     RuleStateDto() = default;
-    RuleStateDto(const std::string& ruleUid, const std::string& ruleState = "Synchronized", 
-                 const std::string& ruleMode = "Off", const std::string& reason = "", 
-                 const std::string& error = "")
-        : uid(ruleUid), state(ruleState), mode(ruleMode), modeReason(reason), errorType(error) {}
+    RuleStateDto(const std::string& ruleUid, const std::string& ruleState = "Synchronized",
+                 const std::string& ruleMode = "Off", const std::string& reason = "",
+                 const std::string& error = "", int ruleVersion = 0)
+        : uid(ruleUid), version(ruleVersion), state(ruleState), mode(ruleMode), modeReason(reason), errorType(error) {}
 };
 
 /**
@@ -41,10 +42,10 @@ public:
     /**
      * @brief Add a rule state with parameters
      */
-    void addRuleState(const std::string& uid, const std::string& state = "Synchronized", 
+    void addRuleState(const std::string& uid, const std::string& state = "Synchronized",
                       const std::string& mode = "Off", const std::string& modeReason = "",
-                      const std::string& errorType = "") {
-        rules.emplace_back(uid, state, mode, modeReason, errorType);
+                      const std::string& errorType = "", int version = 0) {
+        rules.emplace_back(uid, state, mode, modeReason, errorType, version);
     }
     
     /**
