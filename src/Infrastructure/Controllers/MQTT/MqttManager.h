@@ -2,11 +2,13 @@
 #define MQTT_MANAGER_H
 
 #include <Arduino.h>
-#include <PubSubClient.h>
+#include <AsyncMqttClient.h>
+#include <IPAddress.h>
 #include <set>
 #include <vector>
-#include <queue>
 #include <mutex>
+#include "freertos/FreeRTOS.h"
+#include "freertos/queue.h"
 #include "Core/Domain/Interfaces/ILogger.h"
 #include "Core/Domain/Interfaces/IDebugSystem.h"
 #include "Core/Domain/Interfaces/Mqtt/IMessageProcessor.h"
@@ -14,44 +16,48 @@
 #include "Core/Domain/Interfaces/Adapters/IWifiAdapter.h"
 #include "TopicHandlerFactory.h"
 
-/**
- * MQTT Manager implementation
- */
 class MqttManager : public IMqttManager
 {
 private:
-    PubSubClient &_mqttClient;
+    AsyncMqttClient &_mqttClient;
     ILogger *_logger;
     IDebugSystem *_debugSystem;
     IMessageProcessor *_messageProcessor;
     TopicHandlerFactory *_topicHandlerFactory;
     IWifiAdapter *_wifiAdapter;
+    IPAddress _broker;
+    uint16_t _port;
     const char *_clientId;
     const char *_username;
     const char *_password;
     bool _cleanSession;
     uint32_t _lastReconnectAttempt;
-    uint16_t _reconnectInterval;
-    int _mqttFails; // Track MQTT connection failures
-    std::set<String> _subscribedTopics; // Track subscribed topics (auto-deduplication)
+    uint32_t _reconnectInterval;
+    uint32_t _reconnectAt;
+    int _mqttFails;
+    volatile bool _connected;
+    bool _configured;
+    std::set<String> _subscribedTopics;
 
-    std::recursive_mutex mqttMutex;
+    std::recursive_mutex *_clientMutex;
 
     struct MqttMessage {
         String topic;
         std::vector<uint8_t> payload;
     };
-    std::queue<MqttMessage> _messageQueue;
+    QueueHandle_t _messageQueue;
 
-    // Static instance pointer for callback access
-    static MqttManager *_instance;
+    struct OptLock {
+        std::recursive_mutex *m;
+        explicit OptLock(std::recursive_mutex *mm) : m(mm) { if (m) m->lock(); }
+        ~OptLock() { if (m) m->unlock(); }
+    };
 
-    // Logging method
     void log(const char *format, ...)
     {
         if (_logger != nullptr && _debugSystem != nullptr && _debugSystem->isFeatureEnabled(DebugFeatures::MQTT_DEBUG))
         {
-            char buffer[128];
+            char buffer[160];
             va_list args;
             va_start(args, format);
             vsnprintf(buffer, sizeof(buffer), format, args);
@@ -61,81 +67,121 @@ private:
         }
     }
 
-    bool reconnect()
+    void configureClient()
     {
-        if (millis() - _lastReconnectAttempt < _reconnectInterval)
+        if (_configured)
         {
-            return false;
+            return;
         }
 
-        log("MQTT: Attempting reconnect (interval: %dms, failures: %d)", _reconnectInterval, _mqttFails);
-        
-        bool connected = connect();
-        if (!connected)
+        _mqttClient.setServer(_broker, _port);
+        if (_username != nullptr && _password != nullptr)
         {
-            _mqttFails++; // Increment failures counter on reconnect failure
-            log("MQTT: Reconnect failed, total failures: %d", _mqttFails);
-            
-            // Increase reconnect interval on repeated failures (exponential backoff)
-            if (_mqttFails > 5 && _reconnectInterval < 30000)
+            _mqttClient.setCredentials(_username, _password);
+        }
+        if (_clientId != nullptr)
+        {
+            _mqttClient.setClientId(_clientId);
+        }
+        _mqttClient.setKeepAlive(30);
+        _mqttClient.setCleanSession(_cleanSession);
+
+        _mqttClient.onConnect([this](bool sessionPresent) { onMqttConnect(sessionPresent); });
+        _mqttClient.onDisconnect([this](AsyncMqttClientDisconnectReason reason) { onMqttDisconnect(reason); });
+        _mqttClient.onMessage([this](char *topic, char *payload, AsyncMqttClientMessageProperties properties,
+                                     size_t len, size_t index, size_t total) {
+            onMqttMessage(topic, payload, len, index, total);
+        });
+
+        _configured = true;
+    }
+
+    void onMqttConnect(bool sessionPresent)
+    {
+        _connected = true;
+        _mqttFails = 0;
+        _reconnectInterval = 5000;
+        log("MQTT: connected (sessionPresent=%d)", sessionPresent ? 1 : 0);
+
+        OptLock lock(_clientMutex);
+        for (const auto &topic : _subscribedTopics)
+        {
+            _mqttClient.subscribe(topic.c_str(), 0);
+        }
+    }
+
+    void onMqttDisconnect(AsyncMqttClientDisconnectReason reason)
+    {
+        _connected = false;
+        _mqttFails++;
+        if (_reconnectInterval < 30000)
+        {
+            _reconnectInterval = _reconnectInterval * 2;
+            if (_reconnectInterval > 30000)
             {
-                _reconnectInterval = min(_reconnectInterval * 2, 30000);
-                log("MQTT: Increased reconnect interval to %dms", _reconnectInterval);
+                _reconnectInterval = 30000;
             }
         }
-        else
+        _reconnectAt = millis() + _reconnectInterval;
+        log("MQTT: disconnected (reason=%d), next try in %ums", static_cast<int>(reason), _reconnectInterval);
+    }
+
+    void onMqttMessage(char *topic, char *payload, size_t len, size_t index, size_t total)
+    {
+        if (index != 0 || len != total)
         {
-            // Reset reconnect interval on successful connection
-            if (_reconnectInterval != 5000)
-            {
-                _reconnectInterval = 5000;
-                log("MQTT: Reset reconnect interval to 5000ms");
-            }
+            return;
         }
 
-        return connected;
+        MqttMessage *msg = new MqttMessage();
+        msg->topic = String(topic);
+        msg->payload.assign(reinterpret_cast<uint8_t *>(payload), reinterpret_cast<uint8_t *>(payload) + len);
+
+        if (xQueueSend(_messageQueue, &msg, 0) != pdTRUE)
+        {
+            delete msg;
+        }
     }
 
 public:
     MqttManager(
-        PubSubClient &mqttClient,
+        AsyncMqttClient &mqttClient,
         ILogger *logger,
         IDebugSystem *debugSystem,
         const char *clientId,
+        IPAddress broker,
+        uint16_t port,
         const char *username = nullptr,
         const char *password = nullptr,
         bool cleanSession = true,
         IMessageProcessor *messageProcessor = nullptr,
         TopicHandlerFactory *topicHandlerFactory = nullptr,
-        IWifiAdapter *wifiAdapter = nullptr) : _mqttClient(mqttClient),
-                                                              _logger(logger),
-                                                              _debugSystem(debugSystem),
-                                                              _messageProcessor(messageProcessor),
-                                                              _topicHandlerFactory(topicHandlerFactory),
-                                                              _wifiAdapter(wifiAdapter),
-                                                              _clientId(clientId),
-                                                              _username(username),
-                                                              _password(password),
-                                                              _cleanSession(cleanSession),
-                                                              _lastReconnectAttempt(0),
-                                                              _reconnectInterval(5000),
-                                                              _mqttFails(0)
+        IWifiAdapter *wifiAdapter = nullptr,
+        std::recursive_mutex *clientMutex = nullptr) : _mqttClient(mqttClient),
+                                                       _logger(logger),
+                                                       _debugSystem(debugSystem),
+                                                       _messageProcessor(messageProcessor),
+                                                       _topicHandlerFactory(topicHandlerFactory),
+                                                       _wifiAdapter(wifiAdapter),
+                                                       _broker(broker),
+                                                       _port(port),
+                                                       _clientId(clientId),
+                                                       _username(username),
+                                                       _password(password),
+                                                       _cleanSession(cleanSession),
+                                                       _lastReconnectAttempt(0),
+                                                       _reconnectInterval(5000),
+                                                       _reconnectAt(0),
+                                                       _mqttFails(0),
+                                                       _connected(false),
+                                                       _configured(false),
+                                                       _subscribedTopics(),
+                                                       _clientMutex(clientMutex)
     {
-
-        _instance = this;
-
-        _mqttClient.setCallback(mqttCallback);
-
-        _mqttClient.setBufferSize(4096);
+        _messageQueue = xQueueCreate(16, sizeof(MqttMessage *));
     }
 
-    ~MqttManager() override
-    {
-        if (_instance == this)
-        {
-            _instance = nullptr;
-        }
-    }
+    ~MqttManager() override = default;
 
     void setupMqttTopicHandlers() override
     {
@@ -145,11 +191,7 @@ public:
             auto handlers = _topicHandlerFactory->createHandlers();
             for (auto *handler : handlers)
             {
-                // Add the handler to the message processor
                 _messageProcessor->addTopicHandler(handler);
-
-                // TODO: Check if need subscribe to the topic for this handler. Add flag to the handler
-                // Subscribe to the handler's topic pattern
                 const char *topicPattern = handler->getTopicPattern();
                 if (subscribe(topicPattern))
                 {
@@ -164,338 +206,122 @@ public:
         }
     }
 
-    // Static callback that will be passed to PubSubClient
-    static void mqttCallback(char *topic, byte *payload, unsigned int length)
-    {
-        Serial.printf("MQTT Callback triggered for topic: %s", topic);
-        // Now we can access the instance through the static pointer
-        if (_instance)
-        {
-            // Store message for later processing to avoid stack overflow in callback
-            MqttMessage msg;
-            msg.topic = String(topic);
-            msg.payload.assign(payload, payload + length);
-            _instance->_messageQueue.push(msg);
-        }
-    }
-
     bool connect() override
     {
-        std::lock_guard<std::recursive_mutex> lock(mqttMutex);
-        if (_mqttClient.connected())
+        configureClient();
+
+        if (_wifiAdapter != nullptr && !_wifiAdapter->isConnected())
         {
-            log("MQTT already connected, skipping connect");
-            return true;
+            log("MQTT: WiFi not connected, connect deferred");
+            return false;
         }
 
+        OptLock lock(_clientMutex);
+        _mqttClient.connect();
         _lastReconnectAttempt = millis();
-
-        log("=== MQTT Connection Attempt ===");
-        
-        if (_wifiAdapter != nullptr)
-        {
-            bool wifiConnected = _wifiAdapter->isConnected();
-            int wifiStatus = _wifiAdapter->getStatus();
-            int rssi = wifiConnected ? _wifiAdapter->getRSSI() : 0;
-            const char* ip = wifiConnected ? _wifiAdapter->getLocalIP() : "N/A";
-            
-            log("MQTT: WiFi connected: %s", wifiConnected ? "YES" : "NO");
-            log("MQTT: WiFi status code: %d", wifiStatus);
-            log("MQTT: WiFi RSSI: %d dBm", rssi);
-            log("MQTT: WiFi IP: %s", ip);
-            
-            if (!wifiConnected)
-            {
-                log("MQTT: ✗ Cannot connect - WiFi is not connected!");
-                log("==============================");
-                return false;
-            }
-            
-            if (rssi < -80)
-            {
-                log("MQTT: ⚠ WARNING - Weak WiFi signal (%d dBm), connection may be unstable", rssi);
-            }
-        }
-        else
-        {
-            log("MQTT: WARNING - WiFi adapter not available, cannot check WiFi status");
-        }
-        
-        log("MQTT: Client ID: %s", _clientId);
-        log("MQTT: Username: %s", _username ? _username : "none");
-        log("MQTT: Clean session: %s", _cleanSession ? "true" : "false");
-        log("MQTT: Current state: %d", _mqttClient.state());
-        log("MQTT: Buffer size: %d", _mqttClient.getBufferSize());
-
-        bool connected = false;
-        if (_username != nullptr && _password != nullptr)
-        {
-            log("MQTT: Connecting with credentials...");
-            connected = _mqttClient.connect(_clientId, _username, _password, nullptr, 0, _cleanSession, nullptr);
-        }
-        else
-        {
-            log("MQTT: Connecting without credentials...");
-            connected = _mqttClient.connect(_clientId);
-        }
-
-        if (connected)
-        {
-            log("MQTT: ✓ Connection successful!");
-            log("MQTT: State after connect: %d", _mqttClient.state());
-
-            // Resubscribe to topics if needed
-            // Implementation depends on how you want to handle topic subscriptions
-        }
-        else
-        {
-            _mqttFails++; // Increment failures counter on connection failure
-            int state = _mqttClient.state();
-            
-            log("MQTT: ✗ Connection failed!");
-            log("MQTT: Error code (rc): %d", state);
-            log("MQTT: Total failures: %d", _mqttFails);
-            
-            // Decode MQTT error codes
-            switch (state)
-            {
-                case -4:
-                    log("MQTT: Error detail: MQTT_CONNECTION_TIMEOUT");
-                    log("MQTT: Possible causes:");
-                    log("  - Broker unreachable (check IP/firewall)");
-                    log("  - WiFi connection unstable");
-                    log("  - Network latency too high");
-                    break;
-                case -3:
-                    log("MQTT: Error detail: MQTT_CONNECTION_LOST");
-                    break;
-                case -2:
-                    log("MQTT: Error detail: MQTT_CONNECT_FAILED");
-                    log("MQTT: Possible causes:");
-                    log("  - WiFi client not connected");
-                    log("  - Socket creation failed");
-                    break;
-                case -1:
-                    log("MQTT: Error detail: MQTT_DISCONNECTED");
-                    break;
-                case 1:
-                    log("MQTT: Error detail: MQTT_CONNECT_BAD_PROTOCOL");
-                    break;
-                case 2:
-                    log("MQTT: Error detail: MQTT_CONNECT_BAD_CLIENT_ID");
-                    break;
-                case 3:
-                    log("MQTT: Error detail: MQTT_CONNECT_UNAVAILABLE");
-                    break;
-                case 4:
-                    log("MQTT: Error detail: MQTT_CONNECT_BAD_CREDENTIALS");
-                    break;
-                case 5:
-                    log("MQTT: Error detail: MQTT_CONNECT_UNAUTHORIZED");
-                    break;
-                default:
-                    log("MQTT: Error detail: Unknown error code");
-                    break;
-            }
-            
-            log("==============================");
-        }
-
-        return connected;
+        log("MQTT: connect requested");
+        return true;
     }
 
     void disconnect() override
     {
-        std::lock_guard<std::recursive_mutex> lock(mqttMutex);
-        if (_mqttClient.connected())
-        {
-            _mqttClient.disconnect();
-            log("MQTT disconnected");
-        }
+        OptLock lock(_clientMutex);
+        _mqttClient.disconnect();
+        log("MQTT: disconnect requested");
     }
 
     bool isConnected() override
     {
-        std::lock_guard<std::recursive_mutex> lock(mqttMutex);
-        return _mqttClient.connected();
+        return _connected;
     }
 
     bool subscribe(const char *topic) override
     {
-        std::lock_guard<std::recursive_mutex> lock(mqttMutex);
-        if (!_mqttClient.connected())
-        {
-            if (!connect())
-            {
-                return false;
-            }
-        }
-
-        // _mqttClient.subscribe("GrowDirectorMqttTopic/48:27:E2:E2:01:78");
-
-        bool success = _mqttClient.subscribe(topic);
-        if (success)
-        {
-            // Add topic to the set (automatically handles duplicates)
-            _subscribedTopics.insert(String(topic));
-            log("Subscribed to topic: %s", topic);
-        }
-        else
-        {
-            log("Failed to subscribe to topic: %s", topic);
-        }
-
-        return success;
-    }
-
-    bool unsubscribe(const char *topic) override
-    {
-        std::lock_guard<std::recursive_mutex> lock(mqttMutex);
-        if (!_mqttClient.connected())
+        if (topic == nullptr)
         {
             return false;
         }
 
-        bool success = _mqttClient.unsubscribe(topic);
-        if (success)
+        _subscribedTopics.insert(String(topic));
+
+        if (!_connected)
         {
-            // Remove topic from the set
-            _subscribedTopics.erase(String(topic));
-            log("Unsubscribed from topic: %s", topic);
+            log("MQTT: subscribe buffered (not connected): %s", topic);
+            return true;
         }
 
-        return success;
+        OptLock lock(_clientMutex);
+        uint16_t packetId = _mqttClient.subscribe(topic, 0);
+        if (packetId != 0)
+        {
+            log("Subscribed to topic: %s", topic);
+            return true;
+        }
+        log("Failed to subscribe to topic: %s", topic);
+        return false;
+    }
+
+    bool unsubscribe(const char *topic) override
+    {
+        if (topic == nullptr)
+        {
+            return false;
+        }
+
+        _subscribedTopics.erase(String(topic));
+
+        if (!_connected)
+        {
+            return true;
+        }
+
+        OptLock lock(_clientMutex);
+        uint16_t packetId = _mqttClient.unsubscribe(topic);
+        if (packetId != 0)
+        {
+            log("Unsubscribed from topic: %s", topic);
+            return true;
+        }
+        return false;
     }
 
     bool publish(const char *topic, const char *payload) override
     {
-        std::lock_guard<std::recursive_mutex> lock(mqttMutex);
-        if (!_mqttClient.connected())
+        if (!_connected)
         {
-            if (!connect())
-            {
-                return false;
-            }
+            return false;
         }
 
-        bool success = _mqttClient.publish(topic, payload);
-
-        if (!success)
+        OptLock lock(_clientMutex);
+        uint16_t packetId = _mqttClient.publish(topic, 0, false, payload);
+        if (packetId == 0)
         {
             log("Failed to publish to topic: %s", topic);
+            return false;
         }
-
-        return success;
+        return true;
     }
 
     void loop() override
     {
-        static uint32_t lastPrintTime = 0;
-        static uint32_t lastHealthCheck = 0;
-        static bool wasConnected = false;
-        const uint32_t printInterval = 30000; // Print every 30 seconds
-        const uint32_t healthCheckInterval = 5000; // Check health every 5 seconds
-        
-        bool isConnected;
+        MqttMessage *msg = nullptr;
+        while (_messageQueue != nullptr && xQueueReceive(_messageQueue, &msg, 0) == pdTRUE)
         {
-            std::lock_guard<std::recursive_mutex> lock(mqttMutex);
-            isConnected = _mqttClient.connected();
-
-            // Detect connection state changes
-            if (isConnected && !wasConnected)
+            if (msg != nullptr)
             {
-                log("MQTT: ✓ Connection established");
-
-                // Resubscribe to all topics after reconnection
-                if (_subscribedTopics.size() > 0)
+                if (_messageProcessor != nullptr)
                 {
-                    log("MQTT: Resubscribing to %d topics...", _subscribedTopics.size());
-                    for (const auto& topic : _subscribedTopics)
-                    {
-                        bool success = _mqttClient.subscribe(topic.c_str());
-                        if (success)
-                        {
-                            log("MQTT: ✓ Resubscribed to: %s", topic.c_str());
-                        }
-                        else
-                        {
-                            log("MQTT: ✗ Failed to resubscribe to: %s", topic.c_str());
-                        }
-                    }
+                    _messageProcessor->processMessage(msg->topic.c_str(), msg->payload.data(), msg->payload.size());
                 }
-            }
-            else if (!isConnected && wasConnected)
-            {
-                log("MQTT: ✗ Connection lost - will attempt reconnect");
-            }
-
-            wasConnected = isConnected;
-
-            if (isConnected)
-            {
-                _mqttClient.loop();
+                delete msg;
             }
         }
 
-        if (isConnected)
+        if (!_connected && millis() >= _reconnectAt &&
+            (_wifiAdapter == nullptr || _wifiAdapter->isConnected()))
         {
-            // Process pending messages
-            while (!_messageQueue.empty()) {
-                MqttMessage& msg = _messageQueue.front();
-                
-                if (_messageProcessor) {
-                    _messageProcessor->processMessage(msg.topic.c_str(), msg.payload.data(), msg.payload.size());
-                }
-                _messageQueue.pop();
-            }
-
-            // Active health check - verify connection is really alive
-            if (millis() - lastHealthCheck >= healthCheckInterval)
-            {
-                lastHealthCheck = millis();
-                
-                // Check MQTT state - if not CONNECTED (0), force disconnect
-                int state;
-                {
-                    std::lock_guard<std::recursive_mutex> lock(mqttMutex);
-                    state = _mqttClient.state();
-                }
-                if (state != 0)
-                {
-                    log("MQTT: Health check failed - state: %d (expected 0)", state);
-                    log("MQTT: Forcing disconnect to trigger clean reconnect");
-                    {
-                        std::lock_guard<std::recursive_mutex> lock(mqttMutex);
-                        _mqttClient.disconnect();
-                    }
-                    wasConnected = false;
-                    return; // Will reconnect on next loop()
-                }
-            }
-            
-            // Periodically print subscribed topics
-            if (millis() - lastPrintTime >= printInterval)
-            {
-                lastPrintTime = millis();
-                
-                if (_subscribedTopics.size() > 0)
-                {
-                    log("=== Subscribed Topics (%d) ===", _subscribedTopics.size());
-                    for (const auto& topic : _subscribedTopics)
-                    {
-                        log("  - %s", topic.c_str());
-                    }
-                    log("=========================");
-                }
-                else
-                {
-                    log("No MQTT topics subscribed");
-                }
-            }
-        }
-        else
-        {
-            reconnect();            
+            connect();
+            _reconnectAt = millis() + _reconnectInterval;
         }
     }
 
@@ -504,34 +330,29 @@ public:
         _messageProcessor = processor;
         log("Message processor set");
 
-        // Setup topic handlers if factory is available
         if (_topicHandlerFactory != nullptr)
         {
             setupMqttTopicHandlers();
         }
     }
 
-    // Add a method to set the topic handler factory
     void setTopicHandlerFactory(TopicHandlerFactory *factory)
     {
         _topicHandlerFactory = factory;
         log("Topic handler factory set");
 
-        // Setup topic handlers if message processor is available
         if (_messageProcessor != nullptr)
         {
             setupMqttTopicHandlers();
         }
     }
 
-    // Add a method to set the WiFi adapter
     void setWifiAdapter(IWifiAdapter *wifiAdapter)
     {
         _wifiAdapter = wifiAdapter;
         log("WiFi adapter set for MQTT manager");
     }
 
-    // Implementation of MQTT failures counter methods
     int getMqttFails() const override
     {
         return _mqttFails;
@@ -543,20 +364,20 @@ public:
         log("MQTT failures counter reset");
     }
 
-    // Client ID getter and setter methods
-    const char* getClientId() const
+    const char *getClientId() const override
     {
         return _clientId;
     }
 
-    void setClientId(const char* clientId)
+    void setClientId(const char *clientId) override
     {
         _clientId = clientId;
+        if (_configured && _clientId != nullptr)
+        {
+            _mqttClient.setClientId(_clientId);
+        }
         log("MQTT client ID set to: %s", clientId);
     }
 };
-
-// Initialize the static instance pointer
-MqttManager *MqttManager::_instance = nullptr;
 
 #endif // MQTT_MANAGER_H

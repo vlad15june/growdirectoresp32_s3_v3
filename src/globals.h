@@ -6,9 +6,10 @@
 #include <Arduino.h>
 #include <WiFiClient.h>
 #include <WiFi.h>
-#include <PubSubClient.h>
+#include <AsyncMqttClient.h>
 #include <WebServer.h>
 #include <WiFiMulti.h>
+#include <mutex>
 
 #include "Core/Domain/Interfaces/ILogger.h"
 #include "Core/Domain/Interfaces/IModuleConfig.h"
@@ -106,18 +107,11 @@ IPAddress myIP;
 WebServer webServer(80);
 WiFiMulti wifiMulti;
 
-void mqttCallback(char *topic, byte *payload, unsigned int length)
-{
-    // This will be replaced by the MqttManager callback
-    Serial.print("Message received on topic: ");
-    Serial.println(topic);
-}
+AsyncMqttClient mqttClient;
 
-// Initialize WiFi and MQTT clients
-WiFiClient wifiClient;
-PubSubClient mqttClient(mqttBroker, 1883, mqttCallback, wifiClient);
+std::recursive_mutex mqttClientMutex;
 
-MqttLogger mqttLogger(mqttClient, mqttDefaultTopic, MqttLoggerMode::SerialOnly);
+MqttLogger mqttLogger(mqttClient, mqttDefaultTopic, MqttLoggerMode::SerialOnly, &mqttClientMutex);
 
 DebugSystem debugSystem;
 
@@ -142,12 +136,15 @@ MqttManager mqttManager(
     &mqttLogger,
     &debugSystem,
     mqttClientIdPrefix,
+    mqttBroker,
+    mqttPort,
     mqttUser,
     mqttPassword,
     true,
     &messageProcessor,
     &topicHandlerFactory,
-    &wifiAdapter);  // Pass WiFi adapter
+    &wifiAdapter,
+    &mqttClientMutex);
 
 // Using default NTP server with UTC offset of 0 and daylight offset of 0
 NTPTimeAdapter ntpTimeAdapter(&mqttLogger, &debugSystem, &settings);

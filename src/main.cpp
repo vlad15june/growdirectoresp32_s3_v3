@@ -4,7 +4,6 @@
 #include <WebServer.h>
 #include <Wire.h>
 #include <Update.h>
-#include <PubSubClient.h>
 #include <T67XX.h>
 #include "globals.h"
 #include "Infrastructure/Adapters/ExternalWDT/ExternalWDT.h"
@@ -12,27 +11,8 @@
 // Global loop service instance
 std::unique_ptr<ILoopService> loopService;
 
-// MQTT background task handle
-TaskHandle_t mqttTaskHandle = nullptr;
 // Button update task handle
 TaskHandle_t buttonTaskHandle = nullptr;
-
-void mqttTask(void *param)
-{
-  PubSubClient *mqttClient = (PubSubClient *)param;
-  
-  while (1)
-  {
-    if (WiFi.isConnected())
-    {
-      if (mqttClient->connected())
-      {
-        mqttClient->loop();
-      }
-    }
-    delay(50);
-  }
-}
 
 void buttonUpdateTask(void *param)
 {
@@ -319,17 +299,6 @@ void setup()
   // createTestSensorTypes();
 
   moduleSetupService.setupModule();
-  
-  // Start MQTT background task on Core 1
-  xTaskCreatePinnedToCore(
-    mqttTask,
-    "MQTT",
-    4096,
-    &mqttClient,
-    2,
-    &mqttTaskHandle,
-    1
-  );
 
   //TODO: setup background task for led on core 0
 

@@ -3,14 +3,16 @@
 #define MQTT_LOGGER_H
 
 #include "Core/Domain/Interfaces/ILogger.h"
-#include <PubSubClient.h>
+#include <AsyncMqttClient.h>
 #include <vector>
+#include <mutex>
 #include <stdarg.h>
 
 // Concrete implementation of MQTT Logger
 class MqttLogger : public ILogger {
 private:
-    PubSubClient& _mqttClient;
+    AsyncMqttClient& _mqttClient;
+    std::recursive_mutex* _clientMutex;
     String _defaultTopic;
     MqttLoggerMode _mode;
     String _deviceId;
@@ -62,11 +64,21 @@ private:
         return baseTopic;
     }
 
+    void publishMqtt(const char* topic, const char* message) {
+        if (_clientMutex) {
+            std::lock_guard<std::recursive_mutex> lock(*_clientMutex);
+            _mqttClient.publish(topic, 0, false, message);
+        } else {
+            _mqttClient.publish(topic, 0, false, message);
+        }
+    }
+
 public:
     // Constructor
-    MqttLogger(PubSubClient& mqttClient, const char* defaultTopic, MqttLoggerMode mode = MqttLoggerMode::MqttAndSerial) 
-        : _mqttClient(mqttClient), 
-          _defaultTopic(defaultTopic), 
+    MqttLogger(AsyncMqttClient& mqttClient, const char* defaultTopic, MqttLoggerMode mode = MqttLoggerMode::MqttAndSerial, std::recursive_mutex* clientMutex = nullptr)
+        : _mqttClient(mqttClient),
+          _clientMutex(clientMutex),
+          _defaultTopic(defaultTopic),
           _mode(mode),
           _deviceId(""),
           _userEmail(""),
@@ -105,7 +117,7 @@ public:
     void print(const char* message) override {
         if (shouldLogToMqtt()) {
             String topic = getTopicWithModuleUid(_defaultTopic);
-            _mqttClient.publish(topic.c_str(), message);
+            publishMqtt(topic.c_str(), message);
         }
         
         if (shouldLogToSerial()) {
@@ -116,7 +128,7 @@ public:
     void println(const char* message) override {
         if (shouldLogToMqtt()) {
             String topic = getTopicWithModuleUid(_defaultTopic);
-            _mqttClient.publish(topic.c_str(), message);
+            publishMqtt(topic.c_str(), message);
         }
         
         if (shouldLogToSerial()) {
@@ -132,7 +144,7 @@ public:
         
         if (shouldLogToMqtt()) {
             String topic = getTopicWithModuleUid(_defaultTopic);
-            _mqttClient.publish(topic.c_str(), _buffer);
+            publishMqtt(topic.c_str(), _buffer);
         }
         
         if (shouldLogToSerial()) {
@@ -144,7 +156,7 @@ public:
     void print(const char* message, MqttLoggerMode channelOverride) override {
         if (shouldLogToMqtt(channelOverride)) {
             String topic = getTopicWithModuleUid(_defaultTopic);
-            _mqttClient.publish(topic.c_str(), message);
+            publishMqtt(topic.c_str(), message);
         }
         
         if (shouldLogToSerial(channelOverride)) {
@@ -155,7 +167,7 @@ public:
     void println(const char* message, MqttLoggerMode channelOverride) override {
         if (shouldLogToMqtt(channelOverride)) {
             String topic = getTopicWithModuleUid(_defaultTopic);
-            _mqttClient.publish(topic.c_str(), message);
+            publishMqtt(topic.c_str(), message);
         }
         
         if (shouldLogToSerial(channelOverride)) {
@@ -171,7 +183,7 @@ public:
         
         if (shouldLogToMqtt(channelOverride)) {
             String topic = getTopicWithModuleUid(_defaultTopic);
-            _mqttClient.publish(topic.c_str(), _buffer);
+            publishMqtt(topic.c_str(), _buffer);
         }
         
         if (shouldLogToSerial(channelOverride)) {
@@ -185,7 +197,7 @@ public:
         String fullTopic = getTopicWithModuleUid(baseTopic);
         
         if (shouldLogToMqtt()) {
-            _mqttClient.publish(fullTopic.c_str(), message);
+            publishMqtt(fullTopic.c_str(), message);
         }
         
         if (shouldLogToSerial()) {
@@ -198,7 +210,7 @@ public:
         String fullTopic = getTopicWithModuleUid(baseTopic);
         
         if (shouldLogToMqtt()) {
-            _mqttClient.publish(fullTopic.c_str(), message);
+            publishMqtt(fullTopic.c_str(), message);
         }
         
         if (shouldLogToSerial()) {
@@ -216,7 +228,7 @@ public:
         String fullTopic = getTopicWithModuleUid(baseTopic);
         
         if (shouldLogToMqtt()) {
-            _mqttClient.publish(fullTopic.c_str(), _buffer);
+            publishMqtt(fullTopic.c_str(), _buffer);
         }
         
         if (shouldLogToSerial()) {
@@ -230,7 +242,7 @@ public:
         String fullTopic = getTopicWithModuleUid(baseTopic);
         
         if (shouldLogToMqtt(channelOverride)) {
-            _mqttClient.publish(fullTopic.c_str(), message);
+            publishMqtt(fullTopic.c_str(), message);
         }
         
         if (shouldLogToSerial(channelOverride)) {
@@ -243,7 +255,7 @@ public:
         String fullTopic = getTopicWithModuleUid(baseTopic);
         
         if (shouldLogToMqtt(channelOverride)) {
-            _mqttClient.publish(fullTopic.c_str(), message);
+            publishMqtt(fullTopic.c_str(), message);
         }
         
         if (shouldLogToSerial(channelOverride)) {
@@ -261,7 +273,7 @@ public:
         String fullTopic = getTopicWithModuleUid(baseTopic);
         
         if (shouldLogToMqtt(channelOverride)) {
-            _mqttClient.publish(fullTopic.c_str(), _buffer);
+            publishMqtt(fullTopic.c_str(), _buffer);
         }
         
         if (shouldLogToSerial(channelOverride)) {
@@ -278,7 +290,7 @@ public:
         bool logToSerial = (mode == MqttLoggerMode::SerialOnly || mode == MqttLoggerMode::MqttAndSerial);
         
         if (logToMqtt) {
-            _mqttClient.publish(fullTopic.c_str(), message);
+            publishMqtt(fullTopic.c_str(), message);
         }
         
         if (logToSerial) {
@@ -294,7 +306,7 @@ public:
         bool logToSerial = (mode == MqttLoggerMode::SerialOnly || mode == MqttLoggerMode::MqttAndSerial);
         
         if (logToMqtt) {
-            _mqttClient.publish(fullTopic.c_str(), message);
+            publishMqtt(fullTopic.c_str(), message);
         }
         
         if (logToSerial) {
@@ -315,7 +327,7 @@ public:
         bool logToSerial = (mode == MqttLoggerMode::SerialOnly || mode == MqttLoggerMode::MqttAndSerial);
         
         if (logToMqtt) {
-            _mqttClient.publish(fullTopic.c_str(), _buffer);
+            publishMqtt(fullTopic.c_str(), _buffer);
         }
         
         if (logToSerial) {
@@ -329,7 +341,7 @@ public:
         
         if (shouldLogToMqtt()) {
             String topic = getTopicWithModuleUid(_defaultTopic);
-            _mqttClient.publish(topic.c_str(), _buffer);
+            publishMqtt(topic.c_str(), _buffer);
         }
         
         if (shouldLogToSerial()) {
@@ -344,7 +356,7 @@ public:
         String fullTopic = getTopicWithModuleUid(baseTopic);
         
         if (shouldLogToMqtt()) {
-            _mqttClient.publish(fullTopic.c_str(), _buffer);
+            publishMqtt(fullTopic.c_str(), _buffer);
         }
         
         if (shouldLogToSerial()) {
@@ -360,7 +372,7 @@ public:
         
         if (shouldLogToMqtt()) {
             String topic = getTopicWithModuleUid(_defaultTopic);
-            _mqttClient.publish(topic.c_str(), _buffer);
+            publishMqtt(topic.c_str(), _buffer);
         }
         
         if (shouldLogToSerial()) {
@@ -377,7 +389,7 @@ public:
         String fullTopic = getTopicWithModuleUid(baseTopic);
         
         if (shouldLogToMqtt()) {
-            _mqttClient.publish(fullTopic.c_str(), _buffer);
+            publishMqtt(fullTopic.c_str(), _buffer);
         }
         
         if (shouldLogToSerial()) {
@@ -393,7 +405,7 @@ public:
         
         if (shouldLogToMqtt()) {
             String topic = getTopicWithModuleUid(_defaultTopic);
-            _mqttClient.publish(topic.c_str(), _buffer);
+            publishMqtt(topic.c_str(), _buffer);
         }
         
         if (shouldLogToSerial()) {
