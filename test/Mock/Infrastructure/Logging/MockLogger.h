@@ -6,12 +6,6 @@
 #include <vector>
 #include <fstream>  // Added for file operations
 
-struct MockJsonLogRecord {
-    std::string feature;
-    std::string action;
-    std::string details;
-};
-
 class MockLogger : public ILogger {
 public:
     bool printCalled = false;
@@ -19,20 +13,19 @@ public:
     std::ofstream logFile;
     std::string logFilePath = "mock_logger.log";
     std::string moduleUid;
-    std::vector<MockJsonLogRecord> jsonLogs;
+    std::vector<std::string> messages;
 
-    int countJsonAction(const std::string& action) const {
-        int n = 0;
-        for (const auto& record : jsonLogs) {
-            if (record.action == action) {
-                n++;
-            }
-        }
-        return n;
+    void capture(const char* message) {
+        messages.push_back(message ? message : "");
     }
 
-    bool hasJsonAction(const std::string& action) const {
-        return countJsonAction(action) > 0;
+    bool hasMessageContaining(const std::string& needle) const {
+        for (const auto& message : messages) {
+            if (message.find(needle) != std::string::npos) {
+                return true;
+            }
+        }
+        return false;
     }
     
     MockLogger() {
@@ -137,8 +130,9 @@ public:
     void println(const char* topic, const char* message) override {
         printCalled = true;
         lastMessage = message ? message : "";
+        capture(message);
         if (logFile.is_open()) {
-            logFile << "[" << (topic ? topic : "NULL") << "] " 
+            logFile << "[" << (topic ? topic : "NULL") << "] "
                    << (message ? message : "") << std::endl;
             logFile.flush();
         }
@@ -166,6 +160,7 @@ public:
     void println(const char* topic, const char* message, MqttLoggerMode channelOverride) override {
         printCalled = true;
         lastMessage = message ? message : "";
+        capture(message);
         if (logFile.is_open()) {
             logFile << "[" << (topic ? topic : "NULL") << "][Mode:" << static_cast<int>(channelOverride) << "] "
                    << (message ? message : "") << std::endl;
@@ -233,7 +228,6 @@ public:
     
     void logJson(const char* feature, const char* action, const char* details) override {
         printCalled = true;
-        jsonLogs.push_back({feature ? feature : "", action ? action : "", details ? details : ""});
         if (logFile.is_open()) {
             logFile << "JSON: { \"feature\": \"" << (feature ? feature : "NULL") 
                    << "\", \"action\": \"" << (action ? action : "NULL") 

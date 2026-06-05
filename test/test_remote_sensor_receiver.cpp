@@ -277,13 +277,13 @@ static void test_logging_records(void) {
     f.ruleRepository.rules.push_back(makeRemoteSensorRule("r1", "84:F7:03:FE:88:2C.00.01"));
     f.receiver.init();
 
-    TEST_ASSERT_TRUE(f.logger.hasJsonAction("init"));
-    TEST_ASSERT_TRUE(f.logger.hasJsonAction("reconcile"));
-    TEST_ASSERT_TRUE(f.logger.hasJsonAction("subscribe"));
+    TEST_ASSERT_TRUE(f.logger.hasMessageContaining("init udp="));
+    TEST_ASSERT_TRUE(f.logger.hasMessageContaining("reconcile rules="));
+    TEST_ASSERT_TRUE(f.logger.hasMessageContaining("subscribe topic="));
 
     f.udpManager.controller.emitPacket(kSingleSensorPayload);
-    TEST_ASSERT_TRUE(f.logger.hasJsonAction("udp_packet"));
-    TEST_ASSERT_TRUE(f.logger.hasJsonAction("write"));
+    TEST_ASSERT_TRUE(f.logger.hasMessageContaining("udp_packet len="));
+    TEST_ASSERT_TRUE(f.logger.hasMessageContaining("write sensorUid="));
 }
 
 extern "C" void run_remote_sensor_tests(void) {

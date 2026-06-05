@@ -562,15 +562,26 @@ private:
         return true;
     }
     
+    void logSensorValue(const char* format, ...) {
+        if (_logger && _debugSystem && _debugSystem->isFeatureEnabled(DebugFeatures::RULE_SENSOR_VALUE_DEBUG)) {
+            char buffer[256];
+            va_list args;
+            va_start(args, format);
+            vsnprintf(buffer, sizeof(buffer), format, args);
+            va_end(args);
+
+            IDebugFeature* feature = _debugSystem->getFeature(DebugFeatures::RULE_SENSOR_VALUE_DEBUG);
+            if (feature) {
+                _logger->println(DebugFeatures::RULE_SENSOR_VALUE_DEBUG, buffer, feature->getLogChannel());
+            } else {
+                _logger->println(DebugFeatures::RULE_SENSOR_VALUE_DEBUG, buffer);
+            }
+        }
+    }
+
     double getSensorValue(const std::string& sensorUid) {
         double value = _sensorValueModel ? _sensorValueModel->getSensorValue(sensorUid) : 0.0;
-
-        if (_logger && _debugSystem && _debugSystem->isFeatureEnabled(DebugFeatures::RULE_SENSOR_VALUE_DEBUG)) {
-            char details[160];
-            snprintf(details, sizeof(details), "{\"sensorUid\":\"%s\",\"value\":%.2f}", sensorUid.c_str(), value);
-            _logger->logJson(DebugFeatures::RULE_SENSOR_VALUE_DEBUG, "read", details);
-        }
-
+        logSensorValue("read sensorUid=%s value=%.2f", sensorUid.c_str(), value);
         return value;
     }
 };

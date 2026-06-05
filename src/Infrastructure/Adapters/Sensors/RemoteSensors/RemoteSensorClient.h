@@ -19,6 +19,7 @@
 #include <string>
 #include <vector>
 #include <utility>
+#include <cstdarg>
 
 class RemoteSensorReceiver : public IRemoteSensorReceiver {
 private:
@@ -58,9 +59,32 @@ private:
     std::set<std::string> _activeSubscriptions;
     bool _initialized;
 
-    void logEvent(const char* action, const char* details) {
+    void log(const char* format, ...) {
         if (_logger && _debugSystem && _debugSystem->isFeatureEnabled(DebugFeatures::REMOTE_SENSOR_RECEIVE_DEBUG)) {
-            _logger->logJson(DebugFeatures::REMOTE_SENSOR_RECEIVE_DEBUG, action, details);
+            char buffer[512];
+            va_list args;
+            va_start(args, format);
+            vsnprintf(buffer, sizeof(buffer), format, args);
+            va_end(args);
+
+            IDebugFeature* feature = _debugSystem->getFeature(DebugFeatures::REMOTE_SENSOR_RECEIVE_DEBUG);
+            if (feature) {
+                _logger->println(DebugFeatures::REMOTE_SENSOR_RECEIVE_DEBUG, buffer, feature->getLogChannel());
+            } else {
+                _logger->println(DebugFeatures::REMOTE_SENSOR_RECEIVE_DEBUG, buffer);
+            }
+        }
+    }
+
+    void logSerial(const char* format, ...) {
+        if (_logger && _debugSystem && _debugSystem->isFeatureEnabled(DebugFeatures::REMOTE_SENSOR_RECEIVE_DEBUG)) {
+            char buffer[512];
+            va_list args;
+            va_start(args, format);
+            vsnprintf(buffer, sizeof(buffer), format, args);
+            va_end(args);
+
+            _logger->println(DebugFeatures::REMOTE_SENSOR_RECEIVE_DEBUG, buffer, MqttLoggerMode::SerialOnly);
         }
     }
 
@@ -101,9 +125,7 @@ private:
         std::vector<std::pair<std::string, float>> pairs;
         if (!_jsonConverter || !_jsonConverter->sensorValuesFromUpdateJson(payload, pairs)) {
             const char* reason = looksLikeJsonObject(payload) ? "no_sensors_array" : "parse_error";
-            char details[80];
-            snprintf(details, sizeof(details), "{\"reason\":\"%s\",\"len\":%d}", reason, static_cast<int>(payload.size()));
-            logEvent("drop", details);
+            logSerial("drop reason=%s len=%d", reason, static_cast<int>(payload.size()));
             return;
         }
 
@@ -113,18 +135,13 @@ private:
                 _sensorValueModel->setSensorValue(pair.first, pair.second);
                 _sensorValueModel->setLastReadTime(pair.first, now);
             }
-            char details[192];
-            snprintf(details, sizeof(details), "{\"sensorUid\":\"%s\",\"value\":%.2f,\"lastReadTime\":%u}",
-                     pair.first.c_str(), pair.second, now);
-            logEvent("write", details);
+            logSerial("write sensorUid=%s value=%.2f lastReadTime=%u", pair.first.c_str(), pair.second, now);
         }
     }
 
     void onUdpPacket(const UdpPacketData& packet) {
-        char details[128];
-        snprintf(details, sizeof(details), "{\"len\":%d,\"from\":\"%s\"}",
-                 static_cast<int>(packet.length), packet.remoteIP ? packet.remoteIP : "");
-        logEvent("udp_packet", details);
+        logSerial("udp_packet len=%d from=%s",
+            static_cast<int>(packet.length), packet.remoteIP ? packet.remoteIP : "");
 
         std::string payload(packet.data, packet.length);
         writeSensorsFromPayload(payload);
@@ -132,10 +149,8 @@ private:
 
     void onMqttMessage(const char* topic, const char* payload) {
         std::string payloadStr(payload ? payload : "");
-        char details[160];
-        snprintf(details, sizeof(details), "{\"len\":%d,\"topic\":\"%s\"}",
-                 static_cast<int>(payloadStr.size()), topic ? topic : "");
-        logEvent("mqtt_message", details);
+        logSerial("mqtt_message len=%d topic=%s",
+            static_cast<int>(payloadStr.size()), topic ? topic : "");
 
         writeSensorsFromPayload(payloadStr);
     }
@@ -189,10 +204,7 @@ public:
             handlerReady = true;
         }
 
-        char details[64];
-        snprintf(details, sizeof(details), "{\"udp\":%s,\"handler\":%s}",
-                 udpReady ? "true" : "false", handlerReady ? "true" : "false");
-        logEvent("init", details);
+        log("init udp=%d handler=%d", udpReady ? 1 : 0, handlerReady ? 1 : 0);
 
         _initialized = true;
         onRuleSetChanged();
@@ -202,9 +214,7 @@ public:
     void onRuleSetChanged() override {
         uint32_t now = _arduinoAdapter ? _arduinoAdapter->millis() : 0;
         if (now < SUBSCRIPTION_BOOT_DELAY_MS) {
-            char details[64];
-            snprintf(details, sizeof(details), "{\"reason\":\"boot_delay\",\"millis\":%u}", now);
-            logEvent("reconcile_skip", details);
+            log("reconcile_skip boot_delay millis=%u", now);
             return;
         }
 
@@ -261,59 +271,44 @@ public:
             bool ok = _mqttManager && _mqttManager->unsubscribe(topic.c_str());
             if (ok) {
                 _activeSubscriptions.erase(topic);
-                char details[160];
-                snprintf(details, sizeof(details), "{\"topic\":\"%s\",\"ok\":true,\"active\":%d}",
-                         topic.c_str(), static_cast<int>(_activeSubscriptions.size()));
-                logEvent("unsubscribe", details);
+                log("unsubscribe topic=%s ok=1 active=%d", topic.c_str(), static_cast<int>(_activeSubscriptions.size()));
             } else {
-                char details[128];
-                snprintf(details, sizeof(details), "{\"topic\":\"%s\",\"ok\":false}", topic.c_str());
-                logEvent("unsubscribe_fail", details);
+                log("unsubscribe_fail topic=%s ok=0", topic.c_str());
             }
         }
 
         for (const auto& topic : toSubscribe) {
             if (_activeSubscriptions.size() >= MAX_SUBSCRIPTIONS) {
-                char details[128];
-                snprintf(details, sizeof(details), "{\"topic\":\"%s\",\"cap\":%d}",
-                         topic.c_str(), static_cast<int>(MAX_SUBSCRIPTIONS));
-                logEvent("subscribe_capped", details);
+                log("subscribe_capped topic=%s cap=%d", topic.c_str(), static_cast<int>(MAX_SUBSCRIPTIONS));
                 continue;
             }
             bool ok = _mqttManager && _mqttManager->subscribe(topic.c_str());
             if (ok) {
                 _activeSubscriptions.insert(topic);
-                char details[160];
-                snprintf(details, sizeof(details), "{\"topic\":\"%s\",\"ok\":true,\"active\":%d}",
-                         topic.c_str(), static_cast<int>(_activeSubscriptions.size()));
-                logEvent("subscribe", details);
+                log("subscribe topic=%s ok=1 active=%d", topic.c_str(), static_cast<int>(_activeSubscriptions.size()));
             } else {
-                char details[128];
-                snprintf(details, sizeof(details), "{\"topic\":\"%s\",\"ok\":false}", topic.c_str());
-                logEvent("subscribe_fail", details);
+                log("subscribe_fail topic=%s ok=0", topic.c_str());
             }
         }
 
-        std::string summary = "{\"rules\":" + std::to_string(rules.size()) +
-                              ",\"remote\":" + jsonArrayOf(remoteUids) +
-                              ",\"toSub\":" + std::to_string(toSubscribe.size()) +
-                              ",\"toUnsub\":" + std::to_string(toUnsubscribe.size()) +
-                              ",\"active\":" + std::to_string(_activeSubscriptions.size()) + "}";
-        logEvent("reconcile", summary.c_str());
+        std::string remoteList = commaList(remoteUids);
+        log("reconcile rules=%d remote=[%s] toSub=%d toUnsub=%d active=%d",
+            static_cast<int>(rules.size()), remoteList.c_str(),
+            static_cast<int>(toSubscribe.size()), static_cast<int>(toUnsubscribe.size()),
+            static_cast<int>(_activeSubscriptions.size()));
     }
 
 private:
-    static std::string jsonArrayOf(const std::set<std::string>& items) {
-        std::string result = "[";
+    static std::string commaList(const std::set<std::string>& items) {
+        std::string result;
         bool first = true;
         for (const auto& item : items) {
             if (!first) {
                 result += ",";
             }
-            result += "\"" + item + "\"";
+            result += item;
             first = false;
         }
-        result += "]";
         return result;
     }
 };
