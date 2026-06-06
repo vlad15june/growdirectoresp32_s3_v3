@@ -46,6 +46,7 @@ public:
     std::string ruleSensorStopAt;
     float ruleSensorValueStop = 0.0f;
     std::string ruleStopReason;
+    std::string switchedAt;
     
     // Advanced rule control
     bool isRuleTurnOnDevice = false;

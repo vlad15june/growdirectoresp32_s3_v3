@@ -58,6 +58,7 @@ private:
     std::map<std::string, RuleEvaluationResult> _lastEvaluationResults;
     std::map<std::string, unsigned long> _ruleLastEvaluated;
     std::map<std::string, unsigned long> _delayTimers;
+    std::map<std::string, RuleEvaluationResult> _deviceRuleContext;
     std::map<std::string, int> _deletePurgeRetries;
 
     static const int DELETING_PURGE_MAX_RETRIES = 3;
@@ -141,17 +142,46 @@ private:
             return false;
         }
         
-        // Execute device action based on evaluation result
+        _deviceRuleContext[deviceUid] = evaluationResult;
+        const RuleEvaluationResult& ctx = _deviceRuleContext[deviceUid];
+
         device->state = evaluationResult.state;
         device->durationOn = evaluationResult.durationOn;
         device->timeOn = evaluationResult.timeOn;
         device->timeOff = evaluationResult.timeOff;
         device->needToSwitchBack = evaluationResult.needToSwitchBack;
         device->mixTime = evaluationResult.mixTime;
-        
-        log("EVALUATE_RULES: Executing device action - device %s, state %s", 
-            deviceUid.c_str(), getDeviceStateName(evaluationResult.state));
-        
+
+        device->workByRule = true;
+        device->isAuto = evaluationResult.isRuleTurnOnDevice;
+        device->ruleUid = ctx.ruleUid.c_str();
+        device->ruleType = evaluationResult.ruleType;
+        device->ruleVersion = evaluationResult.ruleVersion;
+        device->sensorUid = ctx.sensorUid.c_str();
+        device->sensorValue = evaluationResult.sensorValue;
+        device->sensorValueTime = evaluationResult.sensorValueTime;
+        device->sensorValueLow = evaluationResult.sensorValueLow;
+        device->sensorValueHigh = evaluationResult.sensorValueHigh;
+        device->ruleSensorStartAt = ctx.ruleSensorStartAt.c_str();
+        device->ruleSensorValueStart = evaluationResult.ruleSensorValueStart;
+        device->ruleSensorStopAt = ctx.ruleSensorStopAt.c_str();
+        device->ruleSensorValueStop = evaluationResult.ruleSensorValueStop;
+        device->ruleStopReason = ctx.ruleStopReason.c_str();
+        device->ruleScheduleStartAt = ctx.ruleScheduleStartAt.c_str();
+        device->ruleScheduleDuration = evaluationResult.ruleScheduleDuration;
+        device->switchedAt = ctx.switchedAt.c_str();
+
+        if (device->deviceType != DeviceTypeEnum::DEVICE_TYPE_ANALOG) {
+            DeviceDigitalOut* digitalDevice = static_cast<DeviceDigitalOut*>(device);
+            digitalDevice->isRuleTurnOnDevice = evaluationResult.isRuleTurnOnDevice;
+            digitalDevice->timeToSetPoint = evaluationResult.timeToSetPoint;
+            digitalDevice->cyclesToSetPoint = evaluationResult.cyclesToSetPoint;
+            digitalDevice->currentCycle = evaluationResult.currentCycle;
+        }
+
+        log("EVALUATE_RULES: Executing device action - device %s, state %s, ruleUid %s",
+            deviceUid.c_str(), getDeviceStateName(evaluationResult.state), ctx.ruleUid.c_str());
+
         return true;
     }
 
@@ -333,7 +363,7 @@ public:
                 SensorVerdict verdict = evaluateSensorRule(rule);
                 switch (verdict) {
                     case SensorVerdict::TURN_ON:
-                        result.state = DEVICE_STATE_ON;
+                        result.state = DEVICE_STATE_REQUEST_ON;
                         result.isRuleTurnOnDevice = true;
                         result.ruleSensorStartAt = sensorEventTimestamp();
                         result.ruleSensorValueStart = result.sensorValue;
@@ -352,7 +382,7 @@ public:
                             rule.uid.c_str(), result.sensorValue, rule.valueLow);
                         break;
                     case SensorVerdict::HOLD:
-                        result.state = previouslyOn ? DEVICE_STATE_ON : DEVICE_STATE_OFF;
+                        result.state = previouslyOn ? DEVICE_STATE_REQUEST_ON : DEVICE_STATE_OFF;
                         result.isRuleTurnOnDevice = previouslyOn;
                         conditionMet = previouslyOn;
                         log("EVALUATE_RULES: SENSOR_EVAL hold uid=%s value=%.2f prevOn=%d",
@@ -405,7 +435,8 @@ public:
         if (currentState.state == evaluationResult.state) {
             return true; // No change needed
         }
-        
+
+        evaluationResult.switchedAt = sensorEventTimestamp();
         bool success = executeDeviceAction(rule.deviceUid, evaluationResult);
         if (success) {
             _ruleActiveStates[rule.uid] = evaluationResult;
