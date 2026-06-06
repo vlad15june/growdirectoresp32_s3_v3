@@ -61,6 +61,7 @@ namespace DebugFeatures {
     constexpr const char* REPOSITORY_DEBUG = "REPOSITORY";
     constexpr const char* HISTORY_DEBUG = "HISTORY";
     constexpr const char* CONTROL_DEBUG = "CONTROL";
+    constexpr const char* RELAY_DRIVE_DEBUG = "RELAY_DRIVE";
     constexpr const char* DATA_DEBUG = "DATA";
     constexpr const char* SETTINGS_DEBUG = "SETTINGS";
     constexpr const char* BUTTON_DEBUG = "BUTTON";

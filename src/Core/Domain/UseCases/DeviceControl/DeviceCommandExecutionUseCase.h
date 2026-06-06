@@ -6,8 +6,10 @@
 #include "Core/Domain/Interfaces/Adapters/IArduinoAdapter.h"
 #include "Core/Domain/Interfaces/ILogger.h"
 #include "Core/Domain/Interfaces/IDebugSystem.h"
+#include "Core/Domain/Interfaces/IModuleConfig.h"
 #include "Core/Domain/Data/Models/ModuleStructure.h"
 #include <string>
+#include <vector>
 #include <cstdarg>
 
 /**
@@ -21,6 +23,7 @@ private:
     ILogger *logger;
     IDebugSystem *debugSystem;
     ModuleStructure *moduleStructure;
+    IModuleConfig *moduleConfig;
 
 public:
     /**
@@ -30,18 +33,21 @@ public:
      * @param moduleStructure Module structure for pin mapping
      * @param logger Logger instance
      * @param debugSystem Debug system instance
+     * @param moduleConfig Module configuration for relay/pump pin mapping
      */
     DeviceCommandExecutionUseCase(
         IDeviceModel *deviceModel,
         IArduinoAdapter *arduinoAdapter,
         ModuleStructure *moduleStructure,
         ILogger *logger,
-        IDebugSystem *debugSystem)
+        IDebugSystem *debugSystem,
+        IModuleConfig *moduleConfig)
         : deviceModel(deviceModel),
           arduinoAdapter(arduinoAdapter),
           moduleStructure(moduleStructure),
           logger(logger),
-          debugSystem(debugSystem) {}
+          debugSystem(debugSystem),
+          moduleConfig(moduleConfig) {}
 
     /**
      * @brief Execute a device command
@@ -63,18 +69,17 @@ public:
             return false;
         }
 
-        // Find the hardware pin for this device
-        int pin = findDevicePin(deviceUid);
-        if (pin < 0)
+        // Resolve the channel index for this device
+        int index = findDeviceIndex(deviceUid);
+        if (index < 0)
         {
-            log("DeviceCommandExecutionUseCase: Pin not found for device: %s", deviceUid.c_str());
+            log("DeviceCommandExecutionUseCase: Channel not found for device: %s", deviceUid.c_str());
             return false;
         }
 
         bool turnOn = (requestedState == "on" || requestedState == "On" || requestedState == "ON");
 
-        // TODO: instead of executeHardwareCommand will use ReleAdapter or PumpAdapter
-        if (executeHardwareCommand(device, pin, turnOn))
+        if (executeHardwareCommand(device, index, turnOn))
         {
             // Update device state
             device->state = turnOn ? DEVICE_STATE_ON : DEVICE_STATE_OFF;
@@ -145,6 +150,39 @@ private:
         return -1; // Pin not found
     }
 
+    int findDeviceIndex(const std::string &deviceUid)
+    {
+        std::vector<Device *> devices = deviceModel->getAllDevices();
+        for (size_t i = 0; i < devices.size(); i++)
+        {
+            if (devices[i] && devices[i]->deviceUid && deviceUid == devices[i]->deviceUid)
+            {
+                return static_cast<int>(i);
+            }
+        }
+        return -1;
+    }
+
+    int resolveRelayPin(int index)
+    {
+        if (!moduleConfig || index < 0 || index >= moduleConfig->getDeviceCount())
+        {
+            return -1;
+        }
+        uint8_t *pins = moduleConfig->getRelayPins();
+        return pins ? pins[index] : -1;
+    }
+
+    int resolvePumpPin(int index)
+    {
+        if (!moduleConfig || index < 0 || index >= moduleConfig->getDeviceCount())
+        {
+            return -1;
+        }
+        uint8_t *pins = moduleConfig->getPumpPins();
+        return pins ? pins[index] : -1;
+    }
+
     /**
      * @brief Execute hardware command based on device type
      * @param device Device to control
@@ -152,26 +190,37 @@ private:
      * @param turnOn Whether to turn device on or off
      * @return true if command was executed successfully
      */
-    bool executeHardwareCommand(Device *device, int pin, bool turnOn)
+    bool executeHardwareCommand(Device *device, int index, bool turnOn)
     {
         try
         {
             if (device->deviceType == DEVICE_TYPE_DIGITAL)
             {
-                // Digital device (relay)
+                int pin = resolveRelayPin(index);
+                if (pin < 0)
+                {
+                    log("DeviceCommandExecutionUseCase: Relay pin not found for channel: %d", index);
+                    return false;
+                }
+
                 uint8_t value = turnOn ? arduinoAdapter->getDigitalHigh() : arduinoAdapter->getDigitalLow();
                 arduinoAdapter->digitalWrite(pin, value);
 
-                log("DeviceCommandExecutionUseCase: Digital write - pin: %d, value: %d", pin, value);
+                logDrive(device, index, pin, turnOn);
             }
             else if (device->deviceType == DEVICE_TYPE_ANALOG)
             {
-                // Analog device (PWM)
-                DeviceAnalogOut *analogDevice = static_cast<DeviceAnalogOut *>(device);
-                
-                int analogValue = turnOn ? 255 : 0; // Full on or off for simple command
+                int pin = findDevicePin(device->deviceUid);
+                if (pin < 0)
+                {
+                    log("DeviceCommandExecutionUseCase: Analog pin not found for device: %s", device->deviceUid);
+                    return false;
+                }
 
-                // You might want to use specific analog values based on device configuration
+                DeviceAnalogOut *analogDevice = static_cast<DeviceAnalogOut *>(device);
+
+                int analogValue = turnOn ? 255 : 0;
+
                 if (turnOn && analogDevice->analogPinValueWhenTarget > 0)
                 {
                     analogValue = static_cast<int>(analogDevice->analogPinValueWhenTarget);
@@ -183,12 +232,10 @@ private:
             }
             else if (device->deviceType == DEVICE_TYPE_PUMP)
             {
-                // Pump device - ensure only one pump can be on at a time
                 if (turnOn)
                 {
                     log("DeviceCommandExecutionUseCase: Turning on pump, checking for other active pumps");
-                    
-                    // Turn off all other pumps first
+
                     if (!turnOffAllOtherPumps(device->deviceUid))
                     {
                         log("DeviceCommandExecutionUseCase: Failed to turn off other pumps");
@@ -196,18 +243,17 @@ private:
                     }
                 }
 
-                DeviceAnalogOut *pumpDevice = static_cast<DeviceAnalogOut *>(device);
-                int analogValue = turnOn ? 255 : 0; // Full on or off for simple command
-
-                // You might want to use specific analog values based on device configuration
-                if (turnOn && pumpDevice->analogPinValueWhenTarget > 0)
+                int pin = resolvePumpPin(index);
+                if (pin < 0)
                 {
-                    analogValue = static_cast<int>(pumpDevice->analogPinValueWhenTarget);
+                    log("DeviceCommandExecutionUseCase: Pump pin not found for channel: %d", index);
+                    return false;
                 }
 
-                arduinoAdapter->analogWrite(pin, analogValue);
+                uint8_t value = turnOn ? arduinoAdapter->getDigitalHigh() : arduinoAdapter->getDigitalLow();
+                arduinoAdapter->digitalWrite(pin, value);
 
-                log("DeviceCommandExecutionUseCase: Pump write - pin: %d, value: %d", pin, analogValue);
+                logDrive(device, index, pin, turnOn);
             }
             else
             {
@@ -222,6 +268,12 @@ private:
             log("DeviceCommandExecutionUseCase: Exception occurred while executing hardware command");
             return false;
         }
+    }
+
+    void logDrive(Device *device, int index, int pin, bool turnOn)
+    {
+        log("DEVICE_COMMAND: drive uid=%s ch=%d pin=%d on=%d",
+            (device && device->deviceUid) ? device->deviceUid : "", index, pin, turnOn ? 1 : 0);
     }
 
     /**
@@ -254,19 +306,17 @@ private:
                 device->state == DEVICE_STATE_ON)
             {
                 log("DeviceCommandExecutionUseCase: Turning off pump: %s", device->deviceUid);
-                
-                // Find the pin for this pump
-                int pin = findDevicePin(device->deviceUid);
+
+                int index = findDeviceIndex(device->deviceUid);
+                int pin = resolvePumpPin(index);
                 if (pin >= 0)
                 {
-                    // Turn off the pump
-                    arduinoAdapter->analogWrite(pin, 0);
-                    
-                    // Update device state
+                    arduinoAdapter->digitalWrite(pin, arduinoAdapter->getDigitalLow());
+
                     device->state = DEVICE_STATE_OFF;
                     device->timeOff = arduinoAdapter->millis();
-                    
-                    log("DeviceCommandExecutionUseCase: Pump turned off: %s", device->deviceUid);
+
+                    logDrive(device, index, pin, false);
                 }
                 else
                 {

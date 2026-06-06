@@ -36,10 +36,10 @@ public:
     IProcessDeviceStateUseCase* create(int moduleType) override {
         switch (moduleType) {
             case MODULE_TYPE_ANALOG_INPUT_DEVICE:
-            case MODULE_TYPE_HYDRO:
                 return new ProcessAnalogDeviceStateUseCase(
                     logger, debugSystem, moduleConfig, arduinoAdapter, deviceModel);
             case MODULE_TYPE_DEVICE:
+            case MODULE_TYPE_HYDRO:
             case MODULE_TYPE_SENSOR:
             default:
                 return new ProcessDeviceStateUseCase(

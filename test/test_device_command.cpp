@@ -71,7 +71,7 @@ static void test_execute_sets_switchback_duration(void) {
     MockLogger logger;
     MockDebugSystem debug;
 
-    DeviceCommandExecutionUseCase uc(&deviceModel, &arduino, &ms, &logger, &debug);
+    DeviceCommandExecutionUseCase uc(&deviceModel, &arduino, &ms, &logger, &debug, &moduleConfig);
 
     bool ok = uc.execute("9C:13:9E:99:47:38.00", "on", 4410, true, 60, "2026-06-06T14:31:26.000Z");
 
@@ -105,7 +105,7 @@ static void test_execute_no_switchback_keeps_zero_duration(void) {
     MockLogger logger;
     MockDebugSystem debug;
 
-    DeviceCommandExecutionUseCase uc(&deviceModel, &arduino, &ms, &logger, &debug);
+    DeviceCommandExecutionUseCase uc(&deviceModel, &arduino, &ms, &logger, &debug, &moduleConfig);
 
     bool ok = uc.execute("9C:13:9E:99:47:38.01", "on", 5000, false, 0);
 

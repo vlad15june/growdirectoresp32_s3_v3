@@ -5,6 +5,7 @@
 #include "Core/Domain/Interfaces/IModuleConfig.h"
 #include "Core/Domain/Interfaces/Adapters/IArduinoAdapter.h"
 #include "Core/Domain/Data/Models/IDeviceModel.h"
+#include <cstdio>
 
 ProcessDeviceStateUseCase::ProcessDeviceStateUseCase(
     ILogger *logger,
@@ -18,6 +19,9 @@ ProcessDeviceStateUseCase::ProcessDeviceStateUseCase(
       arduinoAdapter(arduinoAdapter),
       deviceModel(deviceModel)
 {
+    int count = moduleConfig ? moduleConfig->getDeviceCount() : 0;
+    uint8_t inactive = arduinoAdapter ? arduinoAdapter->getDigitalLow() : 0;
+    lastRelayLevel.assign(count, static_cast<int8_t>(inactive));
 }
 
 void ProcessDeviceStateUseCase::loop()
@@ -109,6 +113,11 @@ void ProcessDeviceStateUseCase::processRequestOn(Device *device, int index, int 
                 logger->printf("CONTROL: Channel %d, turn ON from queue\n", index);
             }
 
+            char buffer[96];
+            snprintf(buffer, sizeof(buffer), "RELAY_DRIVE: hydro_admit ch=%d countOff=%d deviceCount=%d",
+                     index, countOffDevices, deviceCount);
+            logRelay(buffer);
+
             device->state = DEVICE_STATE_ON;
             device->timeOn = arduinoAdapter->millis();
             switchRelayOn(device, index);
@@ -146,6 +155,11 @@ void ProcessDeviceStateUseCase::processRequestStepOn(Device *device, int index, 
             {
                 logger->printf("CONTROL: Channel %d, turn ON from queue\n", index);
             }
+
+            char buffer[96];
+            snprintf(buffer, sizeof(buffer), "RELAY_DRIVE: hydro_admit ch=%d countOff=%d deviceCount=%d",
+                     index, countOffDevices, deviceCount);
+            logRelay(buffer);
 
             device->state = DEVICE_STATE_STEP_ON;
             device->timeOn = arduinoAdapter->millis();
@@ -301,14 +315,52 @@ void ProcessDeviceStateUseCase::processOff(Device *device, int index)
 
 void ProcessDeviceStateUseCase::switchRelayOn(Device *device, int index)
 {
-    // TODO: Implement the actual relay switching logic
-    // This would interact with the hardware adapter to control the physical output
+    setRelayLevel(device, index, arduinoAdapter->getDigitalHigh(), "on");
 }
 
 void ProcessDeviceStateUseCase::switchRelayOff(Device *device, int index)
 {
-    // TODO: Implement the actual relay switching logic
-    // This would interact with the hardware adapter to control the physical output
+    setRelayLevel(device, index, arduinoAdapter->getDigitalLow(), "off");
+}
+
+void ProcessDeviceStateUseCase::setRelayLevel(Device *device, int index, uint8_t level, const char *action)
+{
+    if (!isChannelInRange(index))
+    {
+        return;
+    }
+
+    if (index >= static_cast<int>(lastRelayLevel.size()))
+    {
+        lastRelayLevel.resize(index + 1, static_cast<int8_t>(arduinoAdapter->getDigitalLow()));
+    }
+
+    if (lastRelayLevel[index] == static_cast<int8_t>(level))
+    {
+        return;
+    }
+
+    uint8_t pin = resolvePin(index);
+    arduinoAdapter->digitalWrite(pin, level);
+    lastRelayLevel[index] = static_cast<int8_t>(level);
+
+    char buffer[128];
+    snprintf(buffer, sizeof(buffer), "RELAY_DRIVE: %s ch=%d pin=%d level=%d ruleUid=%s",
+             action, index, pin, level, (device && device->ruleUid) ? device->ruleUid : "");
+    logRelay(buffer);
+}
+
+uint8_t ProcessDeviceStateUseCase::resolvePin(int index)
+{
+    uint8_t *pins = (moduleConfig->getModuleType() == MODULE_TYPE_HYDRO)
+                        ? moduleConfig->getPumpPins()
+                        : moduleConfig->getRelayPins();
+    return pins[index];
+}
+
+bool ProcessDeviceStateUseCase::isChannelInRange(int index)
+{
+    return index >= 0 && index < moduleConfig->getDeviceCount();
 }
 
 int ProcessDeviceStateUseCase::countDevicesInOffState()
@@ -316,8 +368,32 @@ int ProcessDeviceStateUseCase::countDevicesInOffState()
     int count = 0;
     auto devices = deviceModel->getAllDevices();
 
-    // TODO: Implement the actual device state counting logic
-    // This would count how many devices are in the OFF state
+    for (size_t i = 0; i < devices.size(); i++)
+    {
+        DeviceStateEnum state = devices[i]->state;
+        if (state != DEVICE_STATE_ON && state != DEVICE_STATE_STEP_ON)
+        {
+            count++;
+        }
+    }
 
     return count;
+}
+
+void ProcessDeviceStateUseCase::logRelay(const char *message)
+{
+    if (!logger || !debugSystem || !debugSystem->isFeatureEnabled(DebugFeatures::RELAY_DRIVE_DEBUG))
+    {
+        return;
+    }
+
+    IDebugFeature *feature = debugSystem->getFeature(DebugFeatures::RELAY_DRIVE_DEBUG);
+    if (feature)
+    {
+        logger->println(DebugFeatures::RELAY_DRIVE_DEBUG, message, feature->getLogChannel());
+    }
+    else
+    {
+        logger->println(DebugFeatures::RELAY_DRIVE_DEBUG, message);
+    }
 }

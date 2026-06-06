@@ -87,6 +87,7 @@ private:
     bool initializeModuleConfiguration();
     bool setupLeds();
     bool setupButtons();
+    bool setupRelayOutputs();
     void handleModuleMode();
     void ApTestModeModeConfigure();
     void UserCanConfigModeConfigure();
@@ -313,6 +314,48 @@ inline bool ModuleSetupService::setupButtons()
     buttonAdapter->setupModuleButtons(buttonPins, 1);
 
     log("SETUP: Button initialized on pin: %d", buttonPin);
+
+    return true;
+}
+
+inline bool ModuleSetupService::setupRelayOutputs()
+{
+    if (!moduleConfig || !arduinoAdapter)
+        return false;
+
+    int moduleType = moduleConfig->getModuleType();
+    uint8_t *pins = nullptr;
+    if (moduleType == MODULE_TYPE_DEVICE)
+        pins = moduleConfig->getRelayPins();
+    else if (moduleType == MODULE_TYPE_HYDRO)
+        pins = moduleConfig->getPumpPins();
+    else
+        return true;
+
+    int deviceCount = moduleConfig->getDeviceCount();
+
+    if (!pins)
+        return false;
+
+    uint8_t inactive = arduinoAdapter->getDigitalLow();
+
+    MqttLoggerMode channel = MqttLoggerMode::MqttAndSerial;
+    IDebugFeature *feature = debugSystem ? debugSystem->getFeature(DebugFeatures::RELAY_DRIVE_DEBUG) : nullptr;
+    if (feature)
+        channel = feature->getLogChannel();
+
+    for (int i = 0; i < deviceCount; i++)
+    {
+        arduinoAdapter->pinMode(pins[i], arduinoAdapter->getPinModeOutput());
+        arduinoAdapter->digitalWrite(pins[i], inactive);
+
+        if (logger && debugSystem && debugSystem->isFeatureEnabled(DebugFeatures::RELAY_DRIVE_DEBUG))
+        {
+            char buffer[96];
+            snprintf(buffer, sizeof(buffer), "RELAY_DRIVE: init ch=%d pin=%d level=%d", i, pins[i], inactive);
+            logger->println(DebugFeatures::RELAY_DRIVE_DEBUG, buffer, channel);
+        }
+    }
 
     return true;
 }
@@ -1508,6 +1551,15 @@ inline void ModuleSetupService::setupModule()
     log("[%lu ms] SETUP: setupButtons done (took %lu ms)",
         arduinoAdapter ? arduinoAdapter->millis() : 0,
         (arduinoAdapter ? arduinoAdapter->millis() : 0) - btnStart);
+
+    unsigned long relayStart = arduinoAdapter ? arduinoAdapter->millis() : 0;
+    if (!setupRelayOutputs())
+    {
+        log("SETUP: Relay output setup failed");
+    }
+    log("[%lu ms] SETUP: setupRelayOutputs done (took %lu ms)",
+        arduinoAdapter ? arduinoAdapter->millis() : 0,
+        (arduinoAdapter ? arduinoAdapter->millis() : 0) - relayStart);
 
     if (ledUseCases)
     {

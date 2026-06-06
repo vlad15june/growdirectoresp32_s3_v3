@@ -161,7 +161,8 @@ DeviceCommandExecutionUseCase deviceCommandExecutionUseCase(
     &arduinoAdapter,
     &moduleStructure,
     &mqttLogger,
-    &debugSystem);
+    &debugSystem,
+    &moduleConfig);
 
 FirmwareRemoteUpdate firmwareRemoteUpdate(&mqttLogger, &debugSystem, &settings);
 

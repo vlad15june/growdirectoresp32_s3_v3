@@ -46,6 +46,8 @@ public:
     std::map<uint8_t, uint8_t> pinModes;
     // Store digital output states
     std::map<uint8_t, uint8_t> digitalOutputs;
+    // Count digitalWrite calls per pin
+    std::map<uint8_t, int> digitalWriteCounts;
     // Store digital input values to be returned by digitalRead
     std::map<uint8_t, int> digitalInputs;
     // Store analog input values to be returned by analogRead
@@ -96,6 +98,7 @@ public:
     void digitalWrite(uint8_t pin, uint8_t val) override {
         digitalWriteCalled = true;
         digitalOutputs[pin] = val;
+        digitalWriteCounts[pin]++;
     }
     
     int digitalRead(uint8_t pin) override {
@@ -275,6 +278,7 @@ public:
 
         pinModes.clear();
         digitalOutputs.clear();
+        digitalWriteCounts.clear();
         digitalInputs.clear();
         analogInputs.clear();
     }

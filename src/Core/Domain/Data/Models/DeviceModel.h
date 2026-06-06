@@ -58,7 +58,7 @@ public:
         else if (moduleType == MODULE_TYPE_HYDRO) {
             auto pumps = moduleStructure->getAllPumps();
             for (auto pump : pumps) {
-                DeviceAnalogOut* device = new DeviceAnalogOut();
+                DeviceDigitalOut* device = new DeviceDigitalOut();
                 device->deviceUid = pump->uid.c_str();
                 device->state = DEVICE_STATE_OFF;
                 device->isError = false;
