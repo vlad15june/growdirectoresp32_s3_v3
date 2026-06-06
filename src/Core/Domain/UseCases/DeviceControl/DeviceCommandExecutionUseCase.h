@@ -50,7 +50,7 @@ public:
      * @param commandId Command identifier
      * @return true if command was executed successfully, false otherwise
      */
-    bool execute(const std::string &deviceUid, const std::string &requestedState, int commandId, bool needToSwitchBack = false, int secondsToSwitchBack = 0) override
+    bool execute(const std::string &deviceUid, const std::string &requestedState, int commandId, bool needToSwitchBack = false, int secondsToSwitchBack = 0, const std::string &switchedAt = "") override
     {
         log("DeviceCommandExecutionUseCase: Executing command - deviceUid: %s, state: %s, commandId: %d, needToSwitchBack: %s, secondsToSwitchBack: %d",
             deviceUid.c_str(), requestedState.c_str(), commandId, needToSwitchBack ? "true" : "false", secondsToSwitchBack);
@@ -83,6 +83,12 @@ public:
             device->workManual = true;
             device->commandId = commandId;
             device->needToSwitchBack = needToSwitchBack;
+
+            if (!switchedAt.empty())
+            {
+                device->switchedAtStorage = switchedAt;
+                device->switchedAt = device->switchedAtStorage.c_str();
+            }
 
             // Set switch timestamp and switch-back duration
             unsigned long currentTime = arduinoAdapter->millis();

@@ -29,7 +29,7 @@ public:
         loopCalled = true;
         loopCallCount++;
     }
-    
+
     // Helper methods for testing
     void setInitSuccess(bool success) {
         initSuccess = success;
@@ -50,7 +50,7 @@ public:
     int getLoopCallCount() const {
         return loopCallCount;
     }
-    
+
     void reset() {
         initCalled = false;
         initSuccess = true;

@@ -3,6 +3,7 @@
 
 #include "Infrastructure/Adapters/Json/JsonConverter.h"
 #include "Application/DTOs/DeviceCommandUpdateDto.h"
+#include "Application/DTOs/UpdateDto.h"
 #include "Core/Domain/UseCases/DeviceControl/DeviceCommandExecutionUseCase.h"
 #include "Application/Services/Devices/DeviceService.cpp"
 #include "Core/Domain/Data/Models/DeviceModel.h"
@@ -72,7 +73,7 @@ static void test_execute_sets_switchback_duration(void) {
 
     DeviceCommandExecutionUseCase uc(&deviceModel, &arduino, &ms, &logger, &debug);
 
-    bool ok = uc.execute("9C:13:9E:99:47:38.00", "on", 4410, true, 60);
+    bool ok = uc.execute("9C:13:9E:99:47:38.00", "on", 4410, true, 60, "2026-06-06T14:31:26.000Z");
 
     TEST_ASSERT_TRUE(ok);
     TEST_ASSERT_EQUAL_UINT32(60000, device->durationOn);
@@ -82,6 +83,8 @@ static void test_execute_sets_switchback_duration(void) {
     TEST_ASSERT_EQUAL(DEVICE_STATE_ON, device->state);
     TEST_ASSERT_EQUAL_INT(4410, device->commandId);
     TEST_ASSERT_EQUAL_UINT32(1000, device->timeOn);
+    TEST_ASSERT_NOT_NULL(device->switchedAt);
+    TEST_ASSERT_EQUAL_STRING("2026-06-06T14:31:26.000Z", device->switchedAt);
 }
 
 static void test_execute_no_switchback_keeps_zero_duration(void) {
@@ -120,7 +123,7 @@ static void test_device_update_carries_switchback_time(void) {
     device->deviceUid = "9C:13:9E:99:47:38.00";
     device->deviceType = DEVICE_TYPE_DIGITAL;
     device->state = DEVICE_STATE_ON;
-    device->switchedAt = "";
+    device->switchedAt = "2026-06-06T14:31:26.000Z";
     device->isAuto = false;
     device->isManual = true;
     device->workByRule = false;
@@ -149,6 +152,77 @@ static void test_device_update_carries_switchback_time(void) {
     const DeviceDto& d = hybrid.lastUpdateData.devices[0];
     TEST_ASSERT_EQUAL_UINT32(50, d.secondsToSwitchBack);
     TEST_ASSERT_EQUAL_UINT32(60, d.secondsEnabledFor);
+    TEST_ASSERT_EQUAL_STRING("2026-06-06T14:31:26.000Z", d.switchedAt.c_str());
+    TEST_ASSERT_EQUAL_INT(4410, d.commandId);
+}
+
+static void test_device_update_sent_immediately_on_state_change(void) {
+    ModuleStructure ms;
+    MockModuleConfig moduleConfig;
+    DeviceModel deviceModel(&moduleConfig, &ms);
+
+    DeviceDigitalOut* device = new DeviceDigitalOut();
+    device->deviceUid = "9C:13:9E:99:47:38.00";
+    device->deviceType = DEVICE_TYPE_DIGITAL;
+    device->state = DEVICE_STATE_OFF;
+    device->switchedAt = "";
+    device->isAuto = false;
+    device->isManual = false;
+    device->workByRule = false;
+    device->workManual = false;
+    device->commandId = 0;
+    deviceModel.addDevice(device);
+
+    MockNTPTimeAdapter timeAdapter;
+    MockArduinoAdapter arduino;
+    arduino.currentMillis = 1000;
+    MockHybridAPIService hybrid;
+    MockLogger logger;
+    MockDebugSystem debug;
+
+    DeviceService svc(&moduleConfig, &ms, &deviceModel, &timeAdapter, &arduino,
+                      nullptr, &hybrid, &logger, &debug);
+
+    svc.loop();
+    TEST_ASSERT_TRUE(hybrid.sendModuleUpdateDataCalled);
+
+    hybrid.sendModuleUpdateDataCalled = false;
+    arduino.currentMillis = 6000;
+    svc.loop();
+    TEST_ASSERT_FALSE(hybrid.sendModuleUpdateDataCalled);
+
+    device->state = DEVICE_STATE_ON;
+    device->isManual = true;
+    device->workManual = true;
+    device->commandId = 4421;
+    device->switchedAt = "2026-06-06T14:31:26.000Z";
+    arduino.currentMillis = 7000;
+    svc.loop();
+    TEST_ASSERT_TRUE(hybrid.sendModuleUpdateDataCalled);
+}
+
+static void test_manual_device_update_json_has_switchedat_and_numeric_commandid(void) {
+    JsonConverter conv;
+
+    UpdateDto update;
+    update.growdirectorUid = "9C:13:9E:99:47:38";
+    DeviceDto d;
+    d.uid = "9C:13:9E:99:47:38.00";
+    d.state = "on";
+    d.state_hw = "on";
+    d.isManual = true;
+    d.isAuto = false;
+    d.switchedAt = "2026-06-06T14:31:26.000Z";
+    d.commandId = 4421;
+    d.secondsToSwitchBack = 50;
+    d.secondsEnabledFor = 60;
+    update.devices.push_back(d);
+
+    std::string json = conv.updateToJson(update);
+
+    TEST_ASSERT_EQUAL_STRING("1", npos_safe(json, "\"switchedAt\":\"2026-06-06T14:31:26.000Z\""));
+    TEST_ASSERT_EQUAL_STRING("1", npos_safe(json, "\"commandId\":4421"));
+    TEST_ASSERT_EQUAL_STRING("0", npos_safe(json, "\"commandId\":\"4421\""));
 }
 
 extern "C" void run_device_command_tests(void) {
@@ -157,4 +231,6 @@ extern "C" void run_device_command_tests(void) {
     RUN_TEST(test_execute_sets_switchback_duration);
     RUN_TEST(test_execute_no_switchback_keeps_zero_duration);
     RUN_TEST(test_device_update_carries_switchback_time);
+    RUN_TEST(test_device_update_sent_immediately_on_state_change);
+    RUN_TEST(test_manual_device_update_json_has_switchedat_and_numeric_commandid);
 }

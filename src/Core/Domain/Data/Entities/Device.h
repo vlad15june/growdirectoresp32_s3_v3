@@ -17,7 +17,8 @@ public:
     uint32_t durationOff;
     const char* createdDate;
     const char* switchedAt;
-    
+    std::string switchedAtStorage;
+
     bool isAuto;
     bool isManual;
     

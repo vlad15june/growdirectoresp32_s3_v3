@@ -313,7 +313,8 @@ private:
                     deviceCommand.requestedState,
                     deviceCommand.id,
                     deviceCommand.needToSwitchBack,
-                    deviceCommand.secondsToSwitchBack
+                    deviceCommand.secondsToSwitchBack,
+                    timeAdapter ? timeAdapter->getFormattedTime() : ""
                 );
 
                 log(DebugFeatures::DEVICE_COMMAND_DEBUG,

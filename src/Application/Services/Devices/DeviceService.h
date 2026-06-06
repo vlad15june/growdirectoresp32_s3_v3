@@ -31,9 +31,12 @@ private:
     
     const unsigned long DEVICE_UPDATE_INTERVAL = 30000;
     unsigned long lastDeviceUpdateTime = 0;
-    
+    std::string lastDeviceStateSignature;
+
     UpdateDto createDeviceUpdateDto();
-    
+    void sendDeviceUpdate();
+    std::string buildDeviceStateSignature();
+
     void log(const char* format, ...)
     {
         if (logger != nullptr && debugSystem != nullptr && debugSystem->isFeatureEnabled(DebugFeatures::CONTROL_DEBUG))

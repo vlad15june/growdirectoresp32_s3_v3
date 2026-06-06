@@ -872,7 +872,7 @@ public:
 
             if (device.isManual)
             {
-                oss << ",\"commandId\":\"" << device.commandId << "\"";
+                oss << ",\"commandId\":" << device.commandId;
                 oss << ",\"secondsToSwitchBack\":" << device.secondsToSwitchBack;
                 oss << ",\"secondsEnabledFor\":" << device.secondsEnabledFor;
             }

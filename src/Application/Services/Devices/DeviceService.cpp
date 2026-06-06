@@ -61,15 +61,63 @@ void DeviceService::loop() {
         processDeviceStateUseCase->loop();
     }
 
-    unsigned long currentTime = arduinoAdapter->millis();
-    if (hybridApiService && (currentTime - lastDeviceUpdateTime >= DEVICE_UPDATE_INTERVAL)) {
-        log("DeviceService: Sending device update to server");
-        UpdateDto updateDto = createDeviceUpdateDto();
-        
-        hybridApiService->sendModuleUpdateData(updateDto);
-                
-        lastDeviceUpdateTime = currentTime;
+    if (!hybridApiService) {
+        return;
     }
+
+    unsigned long currentTime = arduinoAdapter->millis();
+    std::string signature = buildDeviceStateSignature();
+
+    bool stateChanged = (signature != lastDeviceStateSignature);
+    bool periodicDue = (currentTime - lastDeviceUpdateTime >= DEVICE_UPDATE_INTERVAL);
+
+    if (stateChanged || periodicDue) {
+        if (stateChanged) {
+            log("DeviceService: Device state changed, sending update immediately");
+        }
+        sendDeviceUpdate();
+        lastDeviceStateSignature = signature;
+    }
+}
+
+void DeviceService::sendDeviceUpdate() {
+    if (!hybridApiService) {
+        return;
+    }
+
+    log("DeviceService: Sending device update to server");
+    UpdateDto updateDto = createDeviceUpdateDto();
+
+    hybridApiService->sendModuleUpdateData(updateDto);
+
+    lastDeviceUpdateTime = arduinoAdapter->millis();
+}
+
+std::string DeviceService::buildDeviceStateSignature() {
+    std::string signature;
+    auto devices = deviceModel->getAllDevices();
+    for (auto device : devices) {
+        if (!device) {
+            continue;
+        }
+        signature += device->deviceUid ? device->deviceUid : "";
+        signature += ":";
+        signature += std::to_string(static_cast<int>(device->state));
+        signature += ":";
+        signature += device->isAuto ? "1" : "0";
+        signature += device->isManual ? "1" : "0";
+        signature += device->workByRule ? "1" : "0";
+        signature += device->workManual ? "1" : "0";
+        signature += device->needToSwitchBack ? "1" : "0";
+        signature += ":";
+        signature += std::to_string(device->commandId);
+        signature += ":";
+        signature += device->ruleUid ? device->ruleUid : "";
+        signature += ":";
+        signature += device->switchedAt ? device->switchedAt : "";
+        signature += ";";
+    }
+    return signature;
 }
 
 UpdateDto DeviceService::createDeviceUpdateDto() {
@@ -216,7 +264,7 @@ UpdateDto DeviceService::createDeviceUpdateDto() {
         }
         
         if (device->workManual) {
-            deviceDto.commandId = std::to_string(device->commandId);
+            deviceDto.commandId = device->commandId;
             deviceDto.secondsToSwitchBack = secondsToSwitchBack;
             deviceDto.secondsEnabledFor = secondsEnabledFor;
         }

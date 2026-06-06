@@ -34,7 +34,7 @@ public:
     uint32_t secondsToSwitchBack;       // Seconds until switch back
     uint32_t secondsEnabledFor;         // Seconds device is enabled for
     uint32_t secondsDisabledFor;        // Seconds device is disabled for
-    std::string commandId;              // Command identifier for manual control
+    long commandId;                     // Command identifier for manual control
     
     DeviceDto() : 
         isAuto(false),
@@ -52,5 +52,6 @@ public:
         ruleScheduleDuration(0),
         secondsToSwitchBack(0),
         secondsEnabledFor(0),
-        secondsDisabledFor(0) {}
+        secondsDisabledFor(0),
+        commandId(0) {}
 };
