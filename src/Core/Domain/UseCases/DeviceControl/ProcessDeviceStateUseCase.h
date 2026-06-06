@@ -23,6 +23,7 @@ private:
 
     // Methods to process different device states
     void processDelayOn(Device* device, int index);
+    void processDelayOff(Device* device, int index);
     void processRequestOn(Device* device, int index, int moduleType);
     void processRequestStepOn(Device* device, int index, int moduleType);
     void processOn(Device* device, int index);

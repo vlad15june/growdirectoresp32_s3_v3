@@ -40,6 +40,75 @@ inline SensorVerdict evaluateSensorHysteresis(RuleDirection direction, double va
     return SensorVerdict::HOLD;
 }
 
+struct DelayDecision {
+    DeviceStateEnum newState;
+    const char* ruleStopReason;
+    bool armTimer;
+    unsigned long newDeadline;
+    bool clearTimer;
+};
+
+inline DelayDecision decideDelayTransition(DeviceStateEnum current, bool targetOn,
+                                           int delayOnSec, int delayOffSec,
+                                           unsigned long now, unsigned long deadline) {
+    DelayDecision d{current, "", false, 0, false};
+
+    if (current == DEVICE_STATE_DELAY_ON) {
+        if (!targetOn) {
+            d.newState = DEVICE_STATE_OFF;
+            d.ruleStopReason = "unstable_sensor";
+            d.clearTimer = true;
+        } else if (now >= deadline) {
+            d.newState = DEVICE_STATE_REQUEST_ON;
+            d.clearTimer = true;
+        } else {
+            d.newState = DEVICE_STATE_DELAY_ON;
+        }
+        return d;
+    }
+
+    if (current == DEVICE_STATE_DELAY_OFF) {
+        if (targetOn) {
+            d.newState = DEVICE_STATE_REQUEST_ON;
+            d.ruleStopReason = "unstable_sensor";
+            d.clearTimer = true;
+        } else if (now >= deadline) {
+            d.newState = DEVICE_STATE_OFF;
+            d.ruleStopReason = "setpoint_reach";
+            d.clearTimer = true;
+        } else {
+            d.newState = DEVICE_STATE_DELAY_OFF;
+        }
+        return d;
+    }
+
+    bool committedOn = (current == DEVICE_STATE_ON || current == DEVICE_STATE_REQUEST_ON);
+    if (committedOn) {
+        if (targetOn) {
+            d.newState = current;
+        } else if (delayOffSec > 0) {
+            d.newState = DEVICE_STATE_DELAY_OFF;
+            d.armTimer = true;
+            d.newDeadline = now + (unsigned long)delayOffSec * 1000UL;
+        } else {
+            d.newState = DEVICE_STATE_OFF;
+            d.ruleStopReason = "setpoint_reach";
+        }
+        return d;
+    }
+
+    if (!targetOn) {
+        d.newState = DEVICE_STATE_OFF;
+    } else if (delayOnSec > 0) {
+        d.newState = DEVICE_STATE_DELAY_ON;
+        d.armTimer = true;
+        d.newDeadline = now + (unsigned long)delayOnSec * 1000UL;
+    } else {
+        d.newState = DEVICE_STATE_REQUEST_ON;
+    }
+    return d;
+}
+
 /**
  * Use case for evaluating rules and executing their actions
  */
@@ -404,43 +473,27 @@ public:
                 resultState = result.state;
                 break;
             case RuleType::SENSOR: {
-                bool previouslyOn = _ruleActiveStates[rule.uid].isDeviceOn();
-                SensorVerdict verdict = evaluateSensorRule(rule);
+                DeviceStateEnum currentState = _ruleActiveStates[rule.uid].state;
+                bool committedOn = (currentState == DEVICE_STATE_ON ||
+                                    currentState == DEVICE_STATE_REQUEST_ON ||
+                                    currentState == DEVICE_STATE_DELAY_OFF);
+                SensorVerdict verdict = evaluateSensorRule(rule, committedOn);
+                bool targetOn;
                 switch (verdict) {
                     case SensorVerdict::TURN_ON:
-                        result.state = DEVICE_STATE_REQUEST_ON;
-                        result.isRuleTurnOnDevice = true;
-                        result.ruleSensorStartAt = sensorEventTimestamp();
-                        result.ruleSensorValueStart = result.sensorValue;
-                        conditionMet = true;
-                        log("EVALUATE_RULES: SENSOR_EVAL turn_on uid=%s value=%.2f high=%.2f",
-                            rule.uid.c_str(), result.sensorValue, rule.valueHigh);
+                        targetOn = true;
                         break;
                     case SensorVerdict::TURN_OFF:
-                        result.state = DEVICE_STATE_OFF;
-                        result.isRuleTurnOnDevice = false;
-                        result.ruleStopReason = "setpoint_reach";
-                        result.ruleSensorStopAt = sensorEventTimestamp();
-                        result.ruleSensorValueStop = result.sensorValue;
-                        conditionMet = false;
-                        log("EVALUATE_RULES: SENSOR_EVAL turn_off uid=%s value=%.2f low=%.2f reason=setpoint_reach",
-                            rule.uid.c_str(), result.sensorValue, rule.valueLow);
+                    case SensorVerdict::INERT:
+                        targetOn = false;
                         break;
                     case SensorVerdict::HOLD:
-                        result.state = previouslyOn ? DEVICE_STATE_REQUEST_ON : DEVICE_STATE_OFF;
-                        result.isRuleTurnOnDevice = previouslyOn;
-                        conditionMet = previouslyOn;
-                        log("EVALUATE_RULES: SENSOR_EVAL hold uid=%s value=%.2f prevOn=%d",
-                            rule.uid.c_str(), result.sensorValue, previouslyOn ? 1 : 0);
-                        break;
-                    case SensorVerdict::INERT:
-                        result.state = DEVICE_STATE_OFF;
-                        result.isRuleTurnOnDevice = false;
-                        conditionMet = false;
-                        log("EVALUATE_RULES: SENSOR_EVAL inert uid=%s dir=%s",
-                            rule.uid.c_str(), getRuleDirectionName(rule.direction));
+                    default:
+                        targetOn = committedOn;
                         break;
                 }
+                applyDelay(rule, targetOn, currentState, result);
+                conditionMet = targetOn;
                 resultState = result.state;
                 break;
             }
@@ -695,20 +748,87 @@ private:
         return std::string(buffer);
     }
 
-    SensorVerdict evaluateSensorRule(const Rule& rule) {
+    SensorVerdict evaluateSensorRule(const Rule& rule, bool committedOn) {
         if (rule.sensorUid.empty()) {
             log("EVALUATE_RULES: SENSOR_EVAL inert uid=%s reason=no_sensor_uid", rule.uid.c_str());
             return SensorVerdict::INERT;
         }
 
         double sensorValue = getSensorValue(rule.sensorUid);
-        bool previouslyOn = _ruleActiveStates[rule.uid].isDeviceOn();
 
         log("EVALUATE_RULES: SENSOR_EVAL uid=%s dir=%s value=%.2f low=%.2f high=%.2f prevOn=%d",
             rule.uid.c_str(), getRuleDirectionName(rule.direction), sensorValue,
-            rule.valueLow, rule.valueHigh, previouslyOn ? 1 : 0);
+            rule.valueLow, rule.valueHigh, committedOn ? 1 : 0);
 
-        return evaluateSensorHysteresis(rule.direction, sensorValue, rule.valueLow, rule.valueHigh, previouslyOn);
+        return evaluateSensorHysteresis(rule.direction, sensorValue, rule.valueLow, rule.valueHigh, committedOn);
+    }
+
+    void applyDelay(const Rule& rule, bool targetOn, DeviceStateEnum currentState, RuleEvaluationResult& result) {
+        unsigned long now = _arduinoAdapter ? _arduinoAdapter->millis() : 0;
+        unsigned long deadline = 0;
+        auto it = _delayTimers.find(rule.uid);
+        if (it != _delayTimers.end()) {
+            deadline = it->second;
+        }
+
+        DelayDecision d = decideDelayTransition(currentState, targetOn, rule.delayOn, rule.delayOff, now, deadline);
+
+        result.state = d.newState;
+        result.isRuleTurnOnDevice = targetOn;
+        if (d.ruleStopReason[0] != '\0') {
+            result.ruleStopReason = d.ruleStopReason;
+        }
+        if (d.armTimer) {
+            _delayTimers[rule.uid] = d.newDeadline;
+        }
+        if (d.clearTimer) {
+            _delayTimers.erase(rule.uid);
+        }
+
+        bool wasOn = (currentState == DEVICE_STATE_ON || currentState == DEVICE_STATE_REQUEST_ON);
+        bool nowOn = (d.newState == DEVICE_STATE_ON || d.newState == DEVICE_STATE_REQUEST_ON);
+        if (nowOn && !wasOn) {
+            result.timeOn = now;
+            result.ruleSensorStartAt = sensorEventTimestamp();
+            result.ruleSensorValueStart = result.sensorValue;
+        }
+        if (d.newState == DEVICE_STATE_OFF && currentState != DEVICE_STATE_OFF) {
+            result.ruleSensorStopAt = sensorEventTimestamp();
+            result.ruleSensorValueStop = result.sensorValue;
+        }
+
+        logDelayTransition(rule, currentState, d, now, deadline);
+    }
+
+    void logDelayTransition(const Rule& rule, DeviceStateEnum currentState,
+                            const DelayDecision& d, unsigned long now, unsigned long deadline) {
+        bool nowOn = (d.newState == DEVICE_STATE_ON || d.newState == DEVICE_STATE_REQUEST_ON);
+
+        if (currentState == DEVICE_STATE_OFF && d.newState == DEVICE_STATE_DELAY_ON) {
+            log("EVALUATE_RULES: SENSOR_DELAY arm_on uid=%s delayOn=%d deadline=%lu",
+                rule.uid.c_str(), rule.delayOn, d.newDeadline);
+        } else if ((currentState == DEVICE_STATE_ON || currentState == DEVICE_STATE_REQUEST_ON) &&
+                   d.newState == DEVICE_STATE_DELAY_OFF) {
+            log("EVALUATE_RULES: SENSOR_DELAY arm_off uid=%s delayOff=%d deadline=%lu",
+                rule.uid.c_str(), rule.delayOff, d.newDeadline);
+        } else if (currentState == DEVICE_STATE_DELAY_ON && nowOn) {
+            log("EVALUATE_RULES: SENSOR_DELAY commit_on uid=%s now=%lu", rule.uid.c_str(), now);
+        } else if (currentState == DEVICE_STATE_DELAY_OFF && d.newState == DEVICE_STATE_OFF) {
+            log("EVALUATE_RULES: SENSOR_DELAY commit_off uid=%s now=%lu reason=setpoint_reach",
+                rule.uid.c_str(), now);
+        } else if (currentState == DEVICE_STATE_DELAY_ON && d.newState == DEVICE_STATE_OFF) {
+            log("EVALUATE_RULES: SENSOR_DELAY cancel uid=%s from=delayOn reason=unstable_sensor",
+                rule.uid.c_str());
+        } else if (currentState == DEVICE_STATE_DELAY_OFF && nowOn) {
+            log("EVALUATE_RULES: SENSOR_DELAY cancel uid=%s from=delayOff reason=unstable_sensor",
+                rule.uid.c_str());
+        } else if (currentState == DEVICE_STATE_DELAY_ON && d.newState == DEVICE_STATE_DELAY_ON) {
+            log("EVALUATE_RULES: SENSOR_DELAY hold uid=%s state=delayOn remain=%lu",
+                rule.uid.c_str(), deadline > now ? deadline - now : 0UL);
+        } else if (currentState == DEVICE_STATE_DELAY_OFF && d.newState == DEVICE_STATE_DELAY_OFF) {
+            log("EVALUATE_RULES: SENSOR_DELAY hold uid=%s state=delayOff remain=%lu",
+                rule.uid.c_str(), deadline > now ? deadline - now : 0UL);
+        }
     }
     
     bool evaluateStepRule(const Rule& rule) {

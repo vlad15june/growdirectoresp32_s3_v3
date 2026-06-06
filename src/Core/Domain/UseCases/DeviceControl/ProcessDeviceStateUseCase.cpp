@@ -56,6 +56,10 @@ void ProcessDeviceStateUseCase::processDeviceState(Device *device, int index)
         processDelayOn(device, index);
         break;
 
+    case DEVICE_STATE_DELAY_OFF:
+        processDelayOff(device, index);
+        break;
+
     case DEVICE_STATE_REQUEST_ON:
         processRequestOn(device, index, moduleType);
         break;
@@ -90,6 +94,13 @@ void ProcessDeviceStateUseCase::processDelayOn(Device *device, int index)
 {
     // During delay state, the device remains off
     switchRelayOff(device, index);
+    // No state change here - the state change will be handled in the rule processing
+}
+
+void ProcessDeviceStateUseCase::processDelayOff(Device *device, int index)
+{
+    // During delayOff state, the device remains on while waiting to switch off
+    switchRelayOn(device, index);
     // No state change here - the state change will be handled in the rule processing
 }
 
