@@ -12,6 +12,7 @@
 #include "Application/Services/Rules/RuleValidator.h"
 #include "Core/Domain/Data/Models/RuleEvaluationResult.h"
 #include <map>
+#include <set>
 
 enum class SensorVerdict { TURN_ON, TURN_OFF, HOLD, INERT };
 
@@ -129,7 +130,47 @@ private:
             }
         }
     }
-    
+
+    void deactivateDroppedRules(const std::set<std::string>& activeUids) {
+        if (!_ruleRepository) {
+            return;
+        }
+
+        std::vector<Rule> allRules = _ruleRepository->getAll();
+        for (const auto& rule : allRules) {
+            if (rule.mode != RuleMode::OFF) {
+                continue;
+            }
+            if (activeUids.count(rule.uid)) {
+                continue;
+            }
+
+            auto it = _ruleActiveStates.find(rule.uid);
+            bool wasOn = it != _ruleActiveStates.end() && it->second.isDeviceOn();
+            if (!wasOn) {
+                continue;
+            }
+
+            log("EVALUATE_RULES: RULE_DEACTIVATED uid=%s deviceUid=%s reason=rule_manualy_off",
+                rule.uid.c_str(), rule.deviceUid.c_str());
+
+            RuleEvaluationResult off(rule.uid, rule.ruleType, rule.version);
+            off.state = DEVICE_STATE_OFF;
+            off.isRuleTurnOnDevice = false;
+            off.ruleStopReason = "rule_manualy_off";
+            off.sensorUid = rule.sensorUid;
+            off.sensorValueLow = rule.valueLow;
+            off.sensorValueHigh = rule.valueHigh;
+            off.switchedAt = sensorEventTimestamp();
+            executeDeviceAction(rule.deviceUid, off);
+
+            _ruleActiveStates.erase(rule.uid);
+            _lastEvaluationResults.erase(rule.uid);
+            _ruleLastEvaluated.erase(rule.uid);
+            _delayTimers.erase(rule.uid);
+        }
+    }
+
     bool executeDeviceAction(const std::string& deviceUid, const RuleEvaluationResult& evaluationResult) {
         if (!_deviceModel) {
             log("EVALUATE_RULES: Device model not available");
@@ -278,11 +319,15 @@ public:
             static_cast<int>(activeRules.size()));
         
         // Evaluate all active rules
+        std::set<std::string> activeUids;
         for (const auto& rule : activeRules) {
+            activeUids.insert(rule.uid);
             if (rule.state == RuleState::SYNCHRONIZED) {
                 executeRuleActions(rule);
             }
         }
+
+        deactivateDroppedRules(activeUids);
     }
     
     RuleEvaluationResult evaluateRule(const Rule& rule) override {
