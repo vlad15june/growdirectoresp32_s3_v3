@@ -1038,10 +1038,16 @@ public:
     std::string deviceCommandUpdateToJson(const DeviceCommandUpdateDto& commandUpdateDto) override
     {
         DynamicJsonDocument doc(1024);
+        JsonArray arr = doc.to<JsonArray>();
+        JsonObject obj = arr.createNestedObject();
 
-        doc["uid"] = commandUpdateDto.uid;
-        doc["status"] = commandUpdateDto.status;
-        doc["errorMessage"] = commandUpdateDto.errorMessage;
+        obj["uid"] = commandUpdateDto.uid;
+        obj["status"] = commandUpdateDto.status;
+        obj["errorMessage"] = commandUpdateDto.errorMessage;
+        if (!commandUpdateDto.timestamp.empty())
+            obj["timestamp"] = commandUpdateDto.timestamp;
+        if (!commandUpdateDto.accountUid.empty())
+            obj["accountUid"] = commandUpdateDto.accountUid;
 
         std::string output;
         serializeJson(doc, output);

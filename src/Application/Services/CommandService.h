@@ -291,6 +291,8 @@ private:
                     updateDto.uid = deviceCommand.uid;
                     updateDto.status = "error";
                     updateDto.errorMessage = "Command expired: too old to execute";
+                    if (timeAdapter)
+                        updateDto.timestamp = timeAdapter->getFormattedTime();
                     hybridApiService->sendDeviceCommandExecutionResult(updateDto);
 
                     allCommandsSuccessful = false;
@@ -324,6 +326,8 @@ private:
                     updateDto.errorMessage = "Device command execution failed";
                     allCommandsSuccessful = false;
                 }
+                if (timeAdapter)
+                    updateDto.timestamp = timeAdapter->getFormattedTime();
                 hybridApiService->sendDeviceCommandExecutionResult(updateDto);
             }
             else
@@ -333,6 +337,8 @@ private:
                 updateDto.uid = deviceCommand.uid;
                 updateDto.status = "error";
                 updateDto.errorMessage = "Device command execution service not available";
+                if (timeAdapter)
+                    updateDto.timestamp = timeAdapter->getFormattedTime();
                 hybridApiService->sendDeviceCommandExecutionResult(updateDto);
                 allCommandsSuccessful = false;
             }

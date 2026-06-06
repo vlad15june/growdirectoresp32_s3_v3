@@ -24,7 +24,7 @@ private:
     static constexpr const char* MODULE_STRUCTURE_TOPIC = "hardware/structure/%s";
     static constexpr const char* DIAGNOSTIC_TOPIC = "hardware/diagnostic/%s";
     static constexpr const char* UPDATE_TOPIC = "hardware/update/%s";
-    static constexpr const char* DEVICE_COMMAND_TOPIC = "hardware/devices_command/%s";
+    static constexpr const char* DEVICE_COMMAND_TOPIC = "hardware/devices_command/post/%s";
     static constexpr const char* COMMAND_RESULT_TOPIC = "hardware/command_result/%s";
     static constexpr const char* RAW_IO_RESULT_TOPIC = "hardware/raw_io_result/%s";
     static constexpr const char* RULE_STATE_TOPIC = "hardware/rules/state/%s";

@@ -1096,11 +1096,15 @@ public:
     std::string deviceCommandUpdateToJson(const DeviceCommandUpdateDto& commandUpdateDto) override
     {
         std::ostringstream oss;
-        oss << "{";
+        oss << "[{";
         oss << "\"uid\":\"" << commandUpdateDto.uid << "\"";
         oss << ",\"status\":\"" << commandUpdateDto.status << "\"";
         oss << ",\"errorMessage\":\"" << commandUpdateDto.errorMessage << "\"";
-        oss << "}";
+        if (!commandUpdateDto.timestamp.empty())
+            oss << ",\"timestamp\":\"" << commandUpdateDto.timestamp << "\"";
+        if (!commandUpdateDto.accountUid.empty())
+            oss << ",\"accountUid\":\"" << commandUpdateDto.accountUid << "\"";
+        oss << "}]";
         return oss.str();
     }
 
