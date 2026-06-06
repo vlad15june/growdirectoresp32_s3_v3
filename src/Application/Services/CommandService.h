@@ -309,9 +309,11 @@ private:
             if (deviceCommandUseCase)
             {
                 bool executionResult = deviceCommandUseCase->execute(
-                    deviceCommand.uid, 
-                    deviceCommand.requestedState, 
-                    deviceCommand.id
+                    deviceCommand.uid,
+                    deviceCommand.requestedState,
+                    deviceCommand.id,
+                    deviceCommand.needToSwitchBack,
+                    deviceCommand.secondsToSwitchBack
                 );
 
                 log(DebugFeatures::DEVICE_COMMAND_DEBUG,

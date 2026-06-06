@@ -50,10 +50,10 @@ public:
      * @param commandId Command identifier
      * @return true if command was executed successfully, false otherwise
      */
-    bool execute(const std::string &deviceUid, const std::string &requestedState, int commandId) override
+    bool execute(const std::string &deviceUid, const std::string &requestedState, int commandId, bool needToSwitchBack = false, int secondsToSwitchBack = 0) override
     {
-        log("DeviceCommandExecutionUseCase: Executing command - deviceUid: %s, state: %s, commandId: %d",
-            deviceUid.c_str(), requestedState.c_str(), commandId);
+        log("DeviceCommandExecutionUseCase: Executing command - deviceUid: %s, state: %s, commandId: %d, needToSwitchBack: %s, secondsToSwitchBack: %d",
+            deviceUid.c_str(), requestedState.c_str(), commandId, needToSwitchBack ? "true" : "false", secondsToSwitchBack);
 
         // Find the device
         Device *device = deviceModel->getDeviceByUid(deviceUid.c_str());
@@ -80,17 +80,21 @@ public:
             device->state = turnOn ? DEVICE_STATE_ON : DEVICE_STATE_OFF;
             device->isManual = true;
             device->isAuto = false;
+            device->workManual = true;
             device->commandId = commandId;
+            device->needToSwitchBack = needToSwitchBack;
 
-            // Set switch timestamp
+            // Set switch timestamp and switch-back duration
             unsigned long currentTime = arduinoAdapter->millis();
             if (turnOn)
             {
                 device->timeOn = currentTime;
+                device->durationOn = static_cast<uint32_t>(secondsToSwitchBack) * 1000;
             }
             else
             {
                 device->timeOff = currentTime;
+                device->durationOff = static_cast<uint32_t>(secondsToSwitchBack) * 1000;
             }
 
             log("DeviceCommandExecutionUseCase: Command executed successfully - device: %s, state: %s",

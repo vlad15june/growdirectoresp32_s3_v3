@@ -29,6 +29,7 @@ extern "C" int run_wifi_manager_tests(void);
 extern "C" int run_module_command_execution_use_case_tests(void);
 extern "C" int run_modbus_address_registers_tests(void);
 extern "C" void run_remote_sensor_tests(void);
+extern "C" void run_device_command_tests(void);
 
 void setUp(void) {
     // set stuff up here
@@ -137,6 +138,9 @@ int main(void) {
 
     // Run tests for remote sensor receiver and live sensor values
     run_remote_sensor_tests();
+
+    // Run tests for device command ack format + switch-back duration
+    run_device_command_tests();
 
     return UNITY_END();
 }

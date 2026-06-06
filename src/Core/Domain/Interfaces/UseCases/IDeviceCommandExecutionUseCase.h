@@ -17,5 +17,5 @@ public:
      * @param commandId Command identifier
      * @return true if command was executed successfully, false otherwise
      */
-    virtual bool execute(const std::string &deviceUid, const std::string &requestedState, int commandId) = 0;
+    virtual bool execute(const std::string &deviceUid, const std::string &requestedState, int commandId, bool needToSwitchBack = false, int secondsToSwitchBack = 0) = 0;
 };
