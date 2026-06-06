@@ -13,6 +13,32 @@
 #include "Core/Domain/Data/Models/RuleEvaluationResult.h"
 #include <map>
 
+enum class SensorVerdict { TURN_ON, TURN_OFF, HOLD, INERT };
+
+inline SensorVerdict evaluateSensorHysteresis(RuleDirection direction, double value, double valueLow, double valueHigh, bool previouslyOn) {
+    if (direction == RuleDirection::UNKNOWN) {
+        return SensorVerdict::INERT;
+    }
+
+    if (direction == RuleDirection::DOWN) {
+        if (value >= valueHigh) {
+            return previouslyOn ? SensorVerdict::HOLD : SensorVerdict::TURN_ON;
+        }
+        if (value <= valueLow) {
+            return previouslyOn ? SensorVerdict::TURN_OFF : SensorVerdict::HOLD;
+        }
+        return SensorVerdict::HOLD;
+    }
+
+    if (value <= valueLow) {
+        return previouslyOn ? SensorVerdict::HOLD : SensorVerdict::TURN_ON;
+    }
+    if (value >= valueHigh) {
+        return previouslyOn ? SensorVerdict::TURN_OFF : SensorVerdict::HOLD;
+    }
+    return SensorVerdict::HOLD;
+}
+
 /**
  * Use case for evaluating rules and executing their actions
  */
@@ -302,11 +328,47 @@ public:
                 conditionMet = result.isRuleTurnOnDevice;
                 resultState = result.state;
                 break;
-            case RuleType::SENSOR:
-                conditionMet = evaluateSensorRule(rule);
-                resultState = conditionMet ? DEVICE_STATE_ON : DEVICE_STATE_OFF;
-                result.isRuleTurnOnDevice = conditionMet;
+            case RuleType::SENSOR: {
+                bool previouslyOn = _ruleActiveStates[rule.uid].isDeviceOn();
+                SensorVerdict verdict = evaluateSensorRule(rule);
+                switch (verdict) {
+                    case SensorVerdict::TURN_ON:
+                        result.state = DEVICE_STATE_ON;
+                        result.isRuleTurnOnDevice = true;
+                        result.ruleSensorStartAt = sensorEventTimestamp();
+                        result.ruleSensorValueStart = result.sensorValue;
+                        conditionMet = true;
+                        log("EVALUATE_RULES: SENSOR_EVAL turn_on uid=%s value=%.2f high=%.2f",
+                            rule.uid.c_str(), result.sensorValue, rule.valueHigh);
+                        break;
+                    case SensorVerdict::TURN_OFF:
+                        result.state = DEVICE_STATE_OFF;
+                        result.isRuleTurnOnDevice = false;
+                        result.ruleStopReason = "setpoint_reach";
+                        result.ruleSensorStopAt = sensorEventTimestamp();
+                        result.ruleSensorValueStop = result.sensorValue;
+                        conditionMet = false;
+                        log("EVALUATE_RULES: SENSOR_EVAL turn_off uid=%s value=%.2f low=%.2f reason=setpoint_reach",
+                            rule.uid.c_str(), result.sensorValue, rule.valueLow);
+                        break;
+                    case SensorVerdict::HOLD:
+                        result.state = previouslyOn ? DEVICE_STATE_ON : DEVICE_STATE_OFF;
+                        result.isRuleTurnOnDevice = previouslyOn;
+                        conditionMet = previouslyOn;
+                        log("EVALUATE_RULES: SENSOR_EVAL hold uid=%s value=%.2f prevOn=%d",
+                            rule.uid.c_str(), result.sensorValue, previouslyOn ? 1 : 0);
+                        break;
+                    case SensorVerdict::INERT:
+                        result.state = DEVICE_STATE_OFF;
+                        result.isRuleTurnOnDevice = false;
+                        conditionMet = false;
+                        log("EVALUATE_RULES: SENSOR_EVAL inert uid=%s dir=%s",
+                            rule.uid.c_str(), getRuleDirectionName(rule.direction));
+                        break;
+                }
+                resultState = result.state;
                 break;
+            }
             case RuleType::STEP:
                 conditionMet = evaluateStepRule(rule);
                 if (conditionMet) {
@@ -543,26 +605,34 @@ private:
         return result;
     }
     
-    bool evaluateSensorRule(const Rule& rule) {
-        log("EVALUATE_RULES: Evaluating sensor rule %s", rule.uid.c_str());
-        
+    std::string sensorEventTimestamp() {
+        if (!_ntpTimeAdapter) {
+            return "";
+        }
+        time_t currentTime = _ntpTimeAdapter->getEpochTime();
+        struct tm timeinfo;
+        if (!gmtime_r(&currentTime, &timeinfo)) {
+            return "";
+        }
+        char buffer[32];
+        strftime(buffer, sizeof(buffer), "%Y-%m-%dT%H:%M:%SZ", &timeinfo);
+        return std::string(buffer);
+    }
+
+    SensorVerdict evaluateSensorRule(const Rule& rule) {
         if (rule.sensorUid.empty()) {
-            log("EVALUATE_RULES: Sensor rule %s has no sensor UID", rule.uid.c_str());
-            return false;
+            log("EVALUATE_RULES: SENSOR_EVAL inert uid=%s reason=no_sensor_uid", rule.uid.c_str());
+            return SensorVerdict::INERT;
         }
-        
+
         double sensorValue = getSensorValue(rule.sensorUid);
-        
-        // Check if sensor value is within the rule's range
-        if (sensorValue >= rule.valueLow && sensorValue <= rule.valueHigh) {
-            log("EVALUATE_RULES: Sensor rule %s condition MET - value %.2f in range [%.2f, %.2f]", 
-                rule.uid.c_str(), sensorValue, rule.valueLow, rule.valueHigh);
-            return true;
-        } else {
-            log("EVALUATE_RULES: Sensor rule %s condition NOT MET - value %.2f outside range [%.2f, %.2f]", 
-                rule.uid.c_str(), sensorValue, rule.valueLow, rule.valueHigh);
-            return false;
-        }
+        bool previouslyOn = _ruleActiveStates[rule.uid].isDeviceOn();
+
+        log("EVALUATE_RULES: SENSOR_EVAL uid=%s dir=%s value=%.2f low=%.2f high=%.2f prevOn=%d",
+            rule.uid.c_str(), getRuleDirectionName(rule.direction), sensorValue,
+            rule.valueLow, rule.valueHigh, previouslyOn ? 1 : 0);
+
+        return evaluateSensorHysteresis(rule.direction, sensorValue, rule.valueLow, rule.valueHigh, previouslyOn);
     }
     
     bool evaluateStepRule(const Rule& rule) {
