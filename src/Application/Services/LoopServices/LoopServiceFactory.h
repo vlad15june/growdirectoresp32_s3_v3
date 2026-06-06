@@ -11,6 +11,7 @@
 #include "Core/Domain/Interfaces/UseCases/IButtonUseCases.h"
 #include "Core/Domain/Interfaces/UseCases/IOnChangeModuleModeUseCase.h"
 #include "Core/Domain/Interfaces/UseCases/IOnChangeLocalIpUseCase.h"
+#include "Core/Domain/Interfaces/UseCases/IOnConnectivityRestoredUseCase.h"
 #include "Core/Domain/Interfaces/ILogger.h"
 #include "Core/Domain/Interfaces/IDebugSystem.h"
 #include "Core/Domain/Interfaces/IModuleConfig.h"
@@ -28,6 +29,7 @@ private:
     IButtonUseCases* buttonUseCases;
     IOnChangeModuleModeUseCase* moduleModeUseCase;
     IOnChangeLocalIpUseCase* onChangeLocalIpUseCase;
+    IOnConnectivityRestoredUseCase* onConnectivityRestoredUseCase;
     ILogger* logger;
     IDebugSystem* debugSystem;
     IWebServerLooper* webServer;
@@ -53,6 +55,7 @@ public:
         IModuleConfig* moduleConfig = nullptr,
         IArduinoAdapter* arduinoAdapter = nullptr,
         IOnChangeLocalIpUseCase* onChangeLocalIpUseCase = nullptr,
+        IOnConnectivityRestoredUseCase* onConnectivityRestoredUseCase = nullptr,
         IMqttManager* mqttManager = nullptr,
         IDiagnosticService* diagnosticService = nullptr,
         IDeviceService* deviceService = nullptr,
@@ -70,6 +73,7 @@ public:
         moduleConfig(moduleConfig),
         arduinoAdapter(arduinoAdapter),
         onChangeLocalIpUseCase(onChangeLocalIpUseCase),
+        onConnectivityRestoredUseCase(onConnectivityRestoredUseCase),
         mqttManager(mqttManager),
         diagnosticService(diagnosticService),
         deviceService(deviceService),
@@ -102,6 +106,7 @@ public:
                 // Create a LoopServiceConfigureDone explicitly, then inject specialized dependencies
                 LoopServiceConfigureDone* configDoneService = new LoopServiceConfigureDone();
                 configDoneService->setOnChangeLocalIpUseCase(onChangeLocalIpUseCase);
+                configDoneService->setOnConnectivityRestoredUseCase(onConnectivityRestoredUseCase);
                 configDoneService->setMqttManager(mqttManager);
                 configDoneService->setDiagnosticService(diagnosticService);
                 configDoneService->setDeviceService(deviceService);
@@ -132,7 +137,11 @@ public:
     void setOnChangeLocalIpUseCase(IOnChangeLocalIpUseCase* useCase) {
         this->onChangeLocalIpUseCase = useCase;
     }
-    
+
+    void setOnConnectivityRestoredUseCase(IOnConnectivityRestoredUseCase* useCase) {
+        this->onConnectivityRestoredUseCase = useCase;
+    }
+
     // Setter for MqttManager
     void setMqttManager(IMqttManager* manager) {
         this->mqttManager = manager;

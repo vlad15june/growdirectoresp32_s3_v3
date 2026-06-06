@@ -27,9 +27,9 @@ static void loop_service_factory_setup(void) {
     g_mockDiagnosticService = new MockDiagnosticService();
     
     g_loopServiceFactory = new LoopServiceFactory(
-        nullptr, nullptr, nullptr, nullptr, nullptr, 
+        nullptr, nullptr, nullptr, nullptr, nullptr,
         nullptr, nullptr, g_mockArduinoAdapter,
-        g_mockOnChangeLocalIpUseCase, g_mockMqttManager,
+        g_mockOnChangeLocalIpUseCase, nullptr, g_mockMqttManager,
         g_mockDiagnosticService);
 }
 

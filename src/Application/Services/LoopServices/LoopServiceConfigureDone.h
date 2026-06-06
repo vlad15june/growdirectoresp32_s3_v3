@@ -3,6 +3,7 @@
 
 #include "LoopServiceBase.h"
 #include "Core/Domain/Interfaces/UseCases/IOnChangeLocalIpUseCase.h"
+#include "Core/Domain/Interfaces/UseCases/IOnConnectivityRestoredUseCase.h"
 #include "Core/Domain/Interfaces/Mqtt/IMqttManager.h"
 #include "Application/Interfaces/IDiagnosticService.h"
 #include "Application/Services/Devices/IDeviceService.h"
@@ -12,6 +13,7 @@
 class LoopServiceConfigureDone : public LoopServiceBase {
 private:
     IOnChangeLocalIpUseCase* onChangeLocalIpUseCase;
+    IOnConnectivityRestoredUseCase* onConnectivityRestoredUseCase;
     IMqttManager* mqttManager;
     IDiagnosticService* diagnosticService;
     IDeviceService* deviceService;
@@ -24,8 +26,9 @@ private:
 
 public:
     LoopServiceConfigureDone() 
-        : LoopServiceBase(), 
+        : LoopServiceBase(),
           onChangeLocalIpUseCase(nullptr),
+          onConnectivityRestoredUseCase(nullptr),
           mqttManager(nullptr),
           diagnosticService(nullptr),
           deviceService(nullptr),
@@ -61,7 +64,11 @@ public:
             log("Checking for IP address changes");
             onChangeLocalIpUseCase->perform();
         }
-        
+
+        if (onConnectivityRestoredUseCase) {
+            onConnectivityRestoredUseCase->perform();
+        }
+
         if (mqttManager) {
             log("Processing MQTT messages");
             mqttManager->loop();
@@ -80,7 +87,11 @@ public:
     virtual void setOnChangeLocalIpUseCase(IOnChangeLocalIpUseCase* useCase) {
         this->onChangeLocalIpUseCase = useCase;
     }
-    
+
+    virtual void setOnConnectivityRestoredUseCase(IOnConnectivityRestoredUseCase* useCase) {
+        this->onConnectivityRestoredUseCase = useCase;
+    }
+
     virtual void setMqttManager(IMqttManager* manager) {
         this->mqttManager = manager;
     }

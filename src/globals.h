@@ -27,6 +27,7 @@
 #include "Core/Domain/UseCases/Buttons/ButtonUseCases.h"
 #include "Core/Domain/UseCases/ModuleMode/OnChangeModuleModeUseCase.h"
 #include "Core/Domain/UseCases/ModuleMode/OnChangeLocalIpUseCase.h"
+#include "Core/Domain/UseCases/ModuleMode/OnConnectivityRestoredUseCase.h"
 #include "Core/Domain/UseCases/DeviceControl/ProcessDeviceStateUseCaseFactory.h"
 #include "Core/Domain/UseCases/DeviceControl/DeviceCommandExecutionUseCase.h"
 #include "Core/Domain/UseCases/ModuleCommand/ModuleCommandExecutionUseCase.h"
@@ -340,6 +341,14 @@ OnChangeLocalIpUseCase onChangeLocalIpUseCase(
     mqttLogger,
     debugSystem);
 
+OnConnectivityRestoredUseCase onConnectivityRestoredUseCase(
+    &diagnosticService,
+    &syncRulesUseCase,
+    &moduleConfig,
+    &arduinoAdapter,
+    &mqttLogger,
+    &debugSystem);
+
 RuleService ruleService(
     &evaluateRulesUseCase,
     &syncRulesUseCase,
@@ -390,6 +399,7 @@ LoopServiceFactory loopServiceFactory(
     &moduleConfig,
     &arduinoAdapter,
     &onChangeLocalIpUseCase,
+    &onConnectivityRestoredUseCase,
     &mqttManager,
     &diagnosticService,
     &deviceService,
@@ -426,7 +436,8 @@ ModuleSetupService moduleSetupService(
     &clearModuleDataService,
     &arduinoAdapter,
     &syncSensorTypesUseCase,
-    &remoteSensorReceiver);
+    &remoteSensorReceiver,
+    &onConnectivityRestoredUseCase);
 
 void initDependencies()
 {
