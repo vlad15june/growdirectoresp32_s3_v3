@@ -12,6 +12,7 @@
 #include "Infrastructure/Adapters/Time/INTPTimeAdapter.h"
 #include "Application/Services/Rules/RuleValidator.h"
 #include "Application/DTOs/RuleStateUpdateDto.h"
+#include <set>
 
 /**
  * Use case for synchronizing rules with the server
@@ -198,10 +199,22 @@ private:
             }
         }
         
+        std::set<std::string> snapshotUids;
+        for (const auto& rule : serverRules) {
+            if (!rule.uid.empty()) {
+                snapshotUids.insert(rule.uid);
+            }
+        }
+        for (const auto& localRule : _ruleRepository->getAll()) {
+            if (!localRule.uid.empty() && snapshotUids.find(localRule.uid) == snapshotUids.end()) {
+                log("SYNC_RULES: RULE_SNAPSHOT absent uid=%s -> DELETING", localRule.uid.c_str());
+            }
+        }
+
         // Store valid rules in repository
         bool syncSuccess = false;
         if (!validRules.empty()) {
-            int syncedCount = _ruleRepository->synchronizeRules(validRules);
+            int syncedCount = _ruleRepository->synchronizeRules(validRules, true, snapshotUids);
             syncSuccess = (syncedCount > 0);
             log("SYNC_RULES: Synchronized %d/%d rules successfully", syncedCount, static_cast<int>(validRules.size()));
             if (_remoteSensorReceiver) {

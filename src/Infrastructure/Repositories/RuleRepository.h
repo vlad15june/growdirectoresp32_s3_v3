@@ -7,6 +7,7 @@
 #include <string>
 #include <vector>
 #include <unordered_map>
+#include <set>
 
 /**
  * @brief Implementation of rule repository using SPIFFS storage
@@ -201,28 +202,37 @@ public:
      * @param rules Vector of rules to sync
      * @return Number of successfully synchronized rules
      */
-    int synchronizeRules(const std::vector<Rule>& rules) override {
+    int synchronizeRules(const std::vector<Rule>& rules, bool isFullSnapshot = false, const std::set<std::string>& snapshotUids = {}) override {
         if (rules.empty()) return 0;
 
         // Get existing rules
         std::vector<Rule> existingRules = Repository<Rule>::getAll();
-        
+
         // Create a map of existing rules by UID for quick lookup
         std::unordered_map<std::string, Rule*> existingRuleMap;
         for (auto& rule : existingRules) {
             existingRuleMap[rule.uid] = &rule;
         }
-        
+
         int syncCount = 0;
         std::vector<Rule> updatedRules;
-        
+
         // Process incoming rules
         for (const auto& incomingRule : rules) {
             // Skip rules without UIDs
             if (incomingRule.uid.empty()) {
                 continue;
             }
-            
+
+            if (incomingRule.state == RuleState::DELETING) {
+                Rule updatedRule = incomingRule;
+                updatedRule.state = RuleState::DELETING;
+                updatedRules.push_back(updatedRule);
+                existingRuleMap.erase(incomingRule.uid);
+                syncCount++;
+                continue;
+            }
+
             auto it = existingRuleMap.find(incomingRule.uid);
             if (it != existingRuleMap.end()) {
                 // Rule exists - check if we need to update it
@@ -263,9 +273,14 @@ public:
             }
         }
         
-        // Add any remaining rules that weren't in the incoming set
         for (auto& pair : existingRuleMap) {
-            updatedRules.push_back(*pair.second);
+            if (isFullSnapshot && snapshotUids.find(pair.first) == snapshotUids.end()) {
+                Rule deletingRule = *pair.second;
+                deletingRule.state = RuleState::DELETING;
+                updatedRules.push_back(deletingRule);
+            } else {
+                updatedRules.push_back(*pair.second);
+            }
         }
         
         // Save all rules

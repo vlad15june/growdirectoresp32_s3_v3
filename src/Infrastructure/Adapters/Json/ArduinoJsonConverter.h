@@ -311,6 +311,8 @@ public:
             rule.state = RuleState::SYNCHRONIZED;
         else if (stateStr == "Synchronizing")
             rule.state = RuleState::SYNCHRONIZING;
+        else if (stateStr == "Deleting")
+            rule.state = RuleState::DELETING;
         else
             rule.state = RuleState::UNSYNCHRONIZED;
 
@@ -514,6 +516,8 @@ public:
             doc["state"] = "Synchronized";
         else if (rule.state == RuleState::SYNCHRONIZING)
             doc["state"] = "Synchronizing";
+        else if (rule.state == RuleState::DELETING)
+            doc["state"] = "Deleting";
         else
             doc["state"] = "Unsynchronized";
 

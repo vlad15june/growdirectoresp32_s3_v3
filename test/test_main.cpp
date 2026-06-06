@@ -18,6 +18,7 @@ extern "C" int run_diagnostic_service_tests(void);
 extern "C" int run_hybrid_api_service_tests(void);
 extern "C" void run_rule_converter_tests(void);
 extern "C" void run_rule_phase2_sync_tests(void);
+extern "C" void run_rule_phase3_deletion_tests(void);
 extern "C" void run_update_dto_converter_tests(void);
 extern "C" int run_sensor_type_repository_tests(void);
 extern "C" int run_spiffs_sensor_type_dao_tests(void);
@@ -104,7 +105,9 @@ int main(void) {
 
     // Run tests for Phase 2 rule sync semantics (push apply, version, state vocabulary)
     run_rule_phase2_sync_tests();
-    
+
+    run_rule_phase3_deletion_tests();
+
     // Run tests for UpdateDto JSON conversion
     run_update_dto_converter_tests();
     

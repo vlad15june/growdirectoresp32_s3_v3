@@ -6,6 +6,7 @@
 #include "Core/Domain/Enums/RuleEnums.h"
 #include <vector>
 #include <string>
+#include <set>
 
 class IRuleRepository : public IRepository<Rule> {
 public:
@@ -71,9 +72,11 @@ public:
     /**
      * @brief Synchronize rules with cloud/server
      * @param rules Vector of rules to sync
+     * @param isFullSnapshot True when rules is a full pull snapshot (enables deletion of absent rules)
+     * @param snapshotUids Full set of uids the server returned (authoritative for absence); empty for push
      * @return Number of successfully synchronized rules
      */
-    virtual int synchronizeRules(const std::vector<Rule>& rules) = 0;
+    virtual int synchronizeRules(const std::vector<Rule>& rules, bool isFullSnapshot = false, const std::set<std::string>& snapshotUids = {}) = 0;
 };
 
 #endif // I_RULE_REPOSITORY_H

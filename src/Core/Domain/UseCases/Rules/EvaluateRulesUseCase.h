@@ -32,11 +32,14 @@ private:
     std::map<std::string, RuleEvaluationResult> _lastEvaluationResults;
     std::map<std::string, unsigned long> _ruleLastEvaluated;
     std::map<std::string, unsigned long> _delayTimers;
-    
+    std::map<std::string, int> _deletePurgeRetries;
+
+    static const int DELETING_PURGE_MAX_RETRIES = 3;
+
     // Evaluation interval in milliseconds
     const int EVALUATION_INTERVAL_MS = 1000;
     unsigned long _lastEvaluationTime;
-    
+
     void log(const char* format, ...) {
         if (_logger && _debugSystem && _debugSystem->isFeatureEnabled(DebugFeatures::RULE_DEBUG)) {
             char buffer[512];
@@ -44,7 +47,59 @@ private:
             va_start(args, format);
             vsnprintf(buffer, sizeof(buffer), format, args);
             va_end(args);
-            _logger->println(DebugFeatures::RULE_DEBUG, buffer);
+            IDebugFeature* feature = _debugSystem->getFeature(DebugFeatures::RULE_DEBUG);
+            if (feature) {
+                _logger->println(DebugFeatures::RULE_DEBUG, buffer, feature->getLogChannel());
+            } else {
+                _logger->println(DebugFeatures::RULE_DEBUG, buffer);
+            }
+        }
+    }
+
+    void purgeDeletingRules() {
+        if (!_ruleRepository) {
+            return;
+        }
+
+        std::vector<Rule> allRules = _ruleRepository->getAll();
+        for (const auto& rule : allRules) {
+            if (rule.state != RuleState::DELETING) {
+                continue;
+            }
+
+            log("EVALUATE_RULES: RULE_DELETE mark uid=%s deviceUid=%s",
+                rule.uid.c_str(), rule.deviceUid.c_str());
+
+            auto activeIt = _ruleActiveStates.find(rule.uid);
+            bool wasActive = activeIt != _ruleActiveStates.end() &&
+                             activeIt->second.state != DEVICE_STATE_OFF;
+            if (wasActive && _deviceModel) {
+                Device* device = _deviceModel->getDeviceByUid(rule.deviceUid.c_str());
+                if (device) {
+                    device->state = DEVICE_STATE_OFF;
+                    device->ruleStopReason = "rule_manualy_deleted";
+                    log("EVALUATE_RULES: RULE_DELETE device_off uid=%s deviceUid=%s reason=rule_manualy_deleted",
+                        rule.uid.c_str(), rule.deviceUid.c_str());
+                }
+            }
+
+            _ruleActiveStates.erase(rule.uid);
+            _lastEvaluationResults.erase(rule.uid);
+            _ruleLastEvaluated.erase(rule.uid);
+            _delayTimers.erase(rule.uid);
+
+            if (_ruleRepository->remove(rule.uid.c_str())) {
+                _deletePurgeRetries.erase(rule.uid);
+                log("EVALUATE_RULES: RULE_DELETE purged uid=%s", rule.uid.c_str());
+            } else {
+                int retries = ++_deletePurgeRetries[rule.uid];
+                if (retries <= DELETING_PURGE_MAX_RETRIES) {
+                    log("EVALUATE_RULES: RULE_DELETE purge_fail uid=%s retry=%d", rule.uid.c_str(), retries);
+                }
+                if (retries == DELETING_PURGE_MAX_RETRIES) {
+                    log("EVALUATE_RULES: RULE_DELETE purge_giveup uid=%s", rule.uid.c_str());
+                }
+            }
         }
     }
     
@@ -157,7 +212,9 @@ public:
             log("EVALUATE_RULES: Rule repository not available in loop");
             return;
         }
-        
+
+        purgeDeletingRules();
+
         // Get active rules from repository
         std::vector<Rule> activeRules = _ruleRepository->getActiveRules();
         

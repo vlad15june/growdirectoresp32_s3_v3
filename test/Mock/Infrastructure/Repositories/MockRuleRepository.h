@@ -2,6 +2,7 @@
 #define MOCK_RULE_REPOSITORY_H
 
 #include "Core/Domain/Interfaces/Repositories/IRuleRepository.h"
+#include <set>
 
 class MockRuleRepository : public IRuleRepository {
 public:
@@ -10,6 +11,11 @@ public:
     int synchronizeReturnValue = 0;
     int synchronizeCallCount = 0;
     std::vector<Rule> lastSynchronizeRules;
+    bool lastIsFullSnapshot = false;
+    std::set<std::string> lastSnapshotUids;
+
+    bool removeReturnValue = true;
+    std::vector<std::string> removedUids;
 
     Utils::Optional<Rule> get(const char* uid) override {
         for (const auto& rule : rules) {
@@ -23,7 +29,7 @@ public:
     std::vector<Rule> getAll() override { return rules; }
     bool save(const Rule&) override { return true; }
     int saveAll(const std::vector<Rule>&) override { return 0; }
-    bool remove(const char*) override { return true; }
+    bool remove(const char* uid) override { removedUids.push_back(uid ? uid : ""); return removeReturnValue; }
     int removeAll() override { return 0; }
     int count() override { return static_cast<int>(rules.size()); }
     bool exists(const char*) override { return false; }
@@ -37,9 +43,11 @@ public:
     std::vector<Rule> getRulesNeedingSynchronization() override { return {}; }
     bool updateRuleState(const char*, RuleState) override { return true; }
     bool updateRuleMode(const char*, RuleMode, const char*) override { return true; }
-    int synchronizeRules(const std::vector<Rule>& r) override {
+    int synchronizeRules(const std::vector<Rule>& r, bool isFullSnapshot = false, const std::set<std::string>& snapshotUids = {}) override {
         synchronizeCallCount++;
         lastSynchronizeRules = r;
+        lastIsFullSnapshot = isFullSnapshot;
+        lastSnapshotUids = snapshotUids;
         return synchronizeReturnValue;
     }
 };
