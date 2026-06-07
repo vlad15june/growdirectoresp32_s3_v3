@@ -137,12 +137,12 @@ private:
                 _sensorValueModel->setSensorValue(pair.first, pair.second);
                 _sensorValueModel->setLastReadTime(pair.first, now);
             }
-            logSerial("write sensorUid=%s value=%.2f lastReadTime=%u", pair.first.c_str(), pair.second, now);
+            log("write sensorUid=%s value=%.2f lastReadTime=%u", pair.first.c_str(), pair.second, now);
         }
     }
 
     void onUdpPacket(const UdpPacketData& packet) {
-        logSerial("udp_packet len=%d from=%s",
+        log("udp_packet len=%d from=%s",
             static_cast<int>(packet.length), packet.remoteIP ? packet.remoteIP : "");
 
         std::string payload(packet.data, packet.length);
@@ -151,7 +151,7 @@ private:
 
     void onMqttMessage(const char* topic, const char* payload) {
         std::string payloadStr(payload ? payload : "");
-        logSerial("mqtt_message len=%d topic=%s",
+        log("mqtt_message len=%d topic=%s",
             static_cast<int>(payloadStr.size()), topic ? topic : "");
 
         writeSensorsFromPayload(payloadStr);

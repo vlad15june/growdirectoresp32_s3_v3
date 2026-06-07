@@ -11,12 +11,7 @@
 #include "Infrastructure/Adapters/Time/INTPTimeAdapter.h"
 #include "Application/Services/Rules/RuleValidator.h"
 #include "Core/Domain/Data/Models/RuleEvaluationResult.h"
-#include "Core/Domain/Interfaces/API/IHybridAPIService.h"
-#include "Core/Domain/Interfaces/Adapters/Json/IJsonConverter.h"
-#include "Core/Domain/Interfaces/ISettings.h"
-#include "Core/Domain/Interfaces/IModuleConfig.h"
-#include "Application/DTOs/RuleStateUpdateDto.h"
-#include "Application/DTOs/RuleSensorOfflineEventDto.h"
+#include "Core/Domain/Interfaces/Rules/IRuleStateNotifier.h"
 #include <map>
 #include <set>
 
@@ -129,10 +124,7 @@ private:
     IDebugSystem* _debugSystem;
     IArduinoAdapter* _arduinoAdapter;
     INTPTimeAdapter* _ntpTimeAdapter;
-    IHybridAPIService* _hybridApiService;
-    IJsonConverter* _jsonConverter;
-    ISettings* _settings;
-    IModuleConfig* _moduleConfig;
+    IRuleStateNotifier* _ruleStateNotifier;
     RuleValidator _ruleValidator;
 
     // Rule state tracking
@@ -318,10 +310,7 @@ public:
         ISensorValueModel* sensorValueModel,
         ILogger* logger = nullptr,
         IDebugSystem* debugSystem = nullptr,
-        IHybridAPIService* hybridApiService = nullptr,
-        IJsonConverter* jsonConverter = nullptr,
-        ISettings* settings = nullptr,
-        IModuleConfig* moduleConfig = nullptr
+        IRuleStateNotifier* ruleStateNotifier = nullptr
     ) : _deviceModel(deviceModel),
         _ruleRepository(ruleRepository),
         _sensorValueModel(sensorValueModel),
@@ -329,10 +318,7 @@ public:
         _debugSystem(debugSystem),
         _arduinoAdapter(arduinoAdapter),
         _ntpTimeAdapter(ntpTimeAdapter),
-        _hybridApiService(hybridApiService),
-        _jsonConverter(jsonConverter),
-        _settings(settings),
-        _moduleConfig(moduleConfig),
+        _ruleStateNotifier(ruleStateNotifier),
         _ruleValidator(logger, debugSystem),
         _lastEvaluationTime(0) {
         
@@ -788,9 +774,14 @@ private:
 
         double sensorValue = getSensorValue(rule.sensorUid);
 
-        log("EVALUATE_RULES: SENSOR_EVAL uid=%s dir=%s value=%.2f low=%.2f high=%.2f prevOn=%d",
+        unsigned long freshNow = _arduinoAdapter ? _arduinoAdapter->millis() : 0;
+        uint32_t freshLast = _sensorValueModel ? _sensorValueModel->getLastReadTime(rule.sensorUid) : 0;
+        unsigned long freshAge = (freshNow >= (unsigned long)freshLast) ? (freshNow - (unsigned long)freshLast) : 0UL;
+        log("EVALUATE_RULES: SENSOR_EVAL uid=%s dir=%s value=%.2f low=%.2f high=%.2f prevOn=%d sensor=%s last=%u age=%lu now=%lu",
             rule.uid.c_str(), getRuleDirectionName(rule.direction), sensorValue,
-            rule.valueLow, rule.valueHigh, committedOn ? 1 : 0);
+            rule.valueLow, rule.valueHigh, committedOn ? 1 : 0,
+            rule.sensorUid.c_str(), freshLast,
+            freshAge, freshNow);
 
         return evaluateSensorHysteresis(rule.direction, sensorValue, rule.valueLow, rule.valueHigh, committedOn);
     }
@@ -968,8 +959,15 @@ private:
             uint32_t last = _sensorValueModel ? _sensorValueModel->getLastReadTime(uid) : 0;
             if (last == 0) {
                 anyNeverSeen = true;
-            } else if ((unsigned long)(now - last) > SENSOR_FRESHNESS_WINDOW_MS) {
-                anyStale = true;
+                log("EVALUATE_RULES: FRESHNESS uid=%s sensor=%s last=0 age=NA now=%lu verdict=never_seen",
+                    rule.uid.c_str(), uid.c_str(), now);
+            } else {
+                unsigned long age = (now >= (unsigned long)last) ? (now - (unsigned long)last) : 0UL;
+                if (age > SENSOR_FRESHNESS_WINDOW_MS) {
+                    anyStale = true;
+                    log("EVALUATE_RULES: FRESHNESS uid=%s sensor=%s last=%u age=%lu now=%lu verdict=stale",
+                        rule.uid.c_str(), uid.c_str(), last, age, now);
+                }
             }
         }
 
@@ -996,57 +994,20 @@ private:
         return FreshnessVerdict::FRESH;
     }
 
-    const char* ruleModeWire(RuleMode mode) {
-        return mode == RuleMode::ON ? "On" : (mode == RuleMode::OFF ? "Off" : "WaitingForUserConfirm");
-    }
-
-    void sendPerUidRuleReport(const Rule& rule, const char* state, const char* errorType, const std::string& modeReason) {
-        if (!_hybridApiService || !_jsonConverter) {
-            return;
-        }
-        RuleStateDto dto(rule.uid, state, ruleModeWire(rule.mode), modeReason, errorType, rule.version);
-        std::string timestamp = sensorEventTimestamp();
-        std::string json = _jsonConverter->ruleStateUpdateSingleToJson(dto, timestamp);
-        _hybridApiService->sendByUidRuleStateCommand(rule.uid.c_str(), json.c_str());
-    }
-
-    void sendSensorOfflineEvent(const Rule& rule, const std::string& sensorUid) {
-        if (!_hybridApiService || !_jsonConverter) {
-            return;
-        }
-        std::string moduleUid = _moduleConfig ? _moduleConfig->getModuleUid() : "";
-        char accountUidBuffer[256];
-        accountUidBuffer[0] = '\0';
-        if (_settings) {
-            _settings->getAccountUid(accountUidBuffer);
-        }
-        RuleSensorOfflineEventDto dto(moduleUid, accountUidBuffer, sensorUid, rule.uid, rule.deviceUid);
-        std::string json = _jsonConverter->ruleSensorOfflineEventToJson(dto);
-        bool ok = _hybridApiService->sendRuleSensorOfflineEvent(json.c_str());
-        log("EVALUATE_RULES: SENSOR_OFFLINE_EVENT uid=%s sensor=%s device=%s ok=%d",
-            rule.uid.c_str(), sensorUid.c_str(), rule.deviceUid.c_str(), ok ? 1 : 0);
-        if (!ok) {
-            log("EVALUATE_RULES: SENSOR_OFFLINE_EVENT_fail uid=%s sensor=%s",
-                rule.uid.c_str(), sensorUid.c_str());
-        }
-    }
-
     void transitionToSensorUnreachable(const Rule& rule) {
         std::vector<std::string> uids = collectSensorUids(rule);
         std::string sensorUid = uids.empty() ? "" : uids[0];
-        std::string modeReason = "sensor " + sensorUid + " stale";
 
         if (_ruleRepository) {
             _ruleRepository->updateRuleError(rule.uid.c_str(), RuleState::ERROR,
-                                             "sensor_unreachable", modeReason.c_str());
+                                             "sensor_unreachable", rule.modeReason.c_str());
         }
         log("EVALUATE_RULES: SENSOR_STALE uid=%s sensor=%s", rule.uid.c_str(), sensorUid.c_str());
-        log("EVALUATE_RULES: SENSOR_UNREACHABLE_REPORT uid=%s errorType=sensor_unreachable", rule.uid.c_str());
-        sendPerUidRuleReport(rule, "Error", "sensor_unreachable", modeReason);
-        sendSensorOfflineEvent(rule, sensorUid);
+        if (_ruleStateNotifier) {
+            _ruleStateNotifier->notifySensorUnreachable(rule, sensorUid);
+        }
 
         _delayTimers.erase(rule.uid);
-        _sensorWaitSince.erase(rule.uid);
     }
 
     void recoverFromSensorUnreachable(const Rule& rule) {
@@ -1055,7 +1016,9 @@ private:
         }
         _sensorWaitSince.erase(rule.uid);
         log("EVALUATE_RULES: SENSOR_RECOVER uid=%s", rule.uid.c_str());
-        sendPerUidRuleReport(rule, "Synchronized", "", "");
+        if (_ruleStateNotifier) {
+            _ruleStateNotifier->notifyRuleRecovered(rule);
+        }
     }
 };
 

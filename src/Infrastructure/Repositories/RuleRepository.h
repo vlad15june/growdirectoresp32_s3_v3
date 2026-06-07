@@ -251,9 +251,18 @@ public:
             if (it != existingRuleMap.end()) {
                 // Rule exists - check if we need to update it
                 Rule* existingRule = it->second;
-                
+
+                if (existingRule->state == RuleState::ERROR &&
+                    existingRule->errorType == "sensor_unreachable" &&
+                    incomingRule.version <= existingRule->version) {
+                    updatedRules.push_back(*existingRule);
+                    existingRuleMap.erase(it);
+                    syncCount++;
+                    continue;
+                }
+
                 // Only update if version is newer or state needs synchronization
-                if (incomingRule.version > existingRule->version || 
+                if (incomingRule.version > existingRule->version ||
                     existingRule->state == RuleState::UNSYNCHRONIZED) {
                     
                     // Preserve local mode if needed

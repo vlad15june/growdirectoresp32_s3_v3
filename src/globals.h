@@ -81,6 +81,7 @@
 #include "Application/Services/Sensors/ISensorService.h"
 #include "Application/Services/Sensors/SensorService.h"
 #include "Application/Services/Rules/RuleService.h"
+#include "Application/Services/Rules/RuleStateReportingService.h"
 #include "Application/Services/ClearModuleDataService.h"
 
 #include "Infrastructure/Adapters/Sensors/SensorReader.h"
@@ -303,6 +304,15 @@ DeviceService deviceService(
     &mqttLogger,
     &debugSystem);
 
+RuleStateReportingService ruleStateReportingService(
+    &hybridApiService,
+    &jsonConverter,
+    &settings,
+    &moduleConfig,
+    &ntpTimeAdapter,
+    &mqttLogger,
+    &debugSystem);
+
 EvaluateRulesUseCase evaluateRulesUseCase(
     &deviceModel,
     &ruleRepository,
@@ -311,10 +321,7 @@ EvaluateRulesUseCase evaluateRulesUseCase(
     &sensorValueModel,
     &mqttLogger,
     &debugSystem,
-    &hybridApiService,
-    &jsonConverter,
-    &settings,
-    &moduleConfig);
+    &ruleStateReportingService);
 
 SyncRulesUseCase syncRulesUseCase(
     &hybridApiService,
