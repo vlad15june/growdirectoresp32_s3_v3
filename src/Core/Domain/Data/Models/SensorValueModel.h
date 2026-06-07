@@ -171,6 +171,15 @@ public:
         }
         sensorValue.lastReadTime = time;
     }
+
+    uint32_t getLastReadTime(const std::string& sensorUid) const override {
+        std::lock_guard<std::mutex> lock(valuesMutex);
+        auto sensorIt = sensorValues.find(sensorUid);
+        if (sensorIt != sensorValues.end()) {
+            return sensorIt->second.lastReadTime;
+        }
+        return 0;
+    }
     
     /**
      * @brief Set sensor as multi-channel

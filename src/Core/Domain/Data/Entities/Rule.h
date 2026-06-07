@@ -47,6 +47,7 @@ public:
     RuleType ruleType;
     RuleMode mode = RuleMode::OFF;
     std::string modeReason;
+    std::string errorType;
     bool protectiveShutdown = false;
     RuleState state = RuleState::UNSYNCHRONIZED;
     std::vector<int> daysOfWeek;

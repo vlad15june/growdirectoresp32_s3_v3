@@ -52,4 +52,6 @@ public:
      * @return true if the operation was successful, false otherwise
      */
     virtual bool sendRuleStateCommand(const char* msg) = 0;
+
+    virtual bool sendRuleSensorOfflineEvent(const char* msg) = 0;
 };

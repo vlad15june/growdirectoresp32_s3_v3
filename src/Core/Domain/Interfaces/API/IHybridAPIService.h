@@ -79,7 +79,9 @@ public:
      * @return true if the operation was successful, false otherwise
      */
     virtual bool sendByUidRuleStateCommand(const char* uid, const char* msg) = 0;
-    
+
+    virtual bool sendRuleSensorOfflineEvent(const char* msg) = 0;
+
     /**
      * Send firmware version information to the server
      * @return true if the operation was successful, false otherwise

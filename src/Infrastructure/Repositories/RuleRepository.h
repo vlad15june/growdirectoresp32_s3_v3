@@ -167,7 +167,21 @@ public:
             return false;
         }
 
-        rule.state = state;        
+        rule.state = state;
+        return Repository<Rule>::save(rule);
+    }
+
+    bool updateRuleError(const char* uid, RuleState state, const char* errorType, const char* modeReason) override {
+        if (!uid) return false;
+
+        Rule rule;
+        if (!ruleDao->getRule(uid, rule)) {
+            return false;
+        }
+
+        rule.state = state;
+        rule.errorType = errorType ? errorType : "";
+        rule.modeReason = modeReason ? modeReason : "";
         return Repository<Rule>::save(rule);
     }
 

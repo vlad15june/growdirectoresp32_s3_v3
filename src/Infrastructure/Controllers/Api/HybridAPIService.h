@@ -372,6 +372,20 @@ public:
         return success;
     }
 
+    bool sendRuleSensorOfflineEvent(const char *msg) override
+    {
+        if (_mqttApiService == nullptr)
+        {
+            log("HYBRID API: sendRuleSensorOfflineEvent - MQTT API not available");
+            return false;
+        }
+        bool success = _mqttApiService->sendRuleSensorOfflineEvent(msg);
+        if (!success)
+            trackApiSendFailure(false);
+        log("HYBRID API: rule_sensor_offline event sent - success: %s", success ? "true" : "false");
+        return success;
+    }
+
     bool sendFirmwareVersion() override
     {
         if (_restApiService == nullptr)

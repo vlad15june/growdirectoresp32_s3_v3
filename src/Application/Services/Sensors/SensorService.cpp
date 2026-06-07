@@ -165,6 +165,7 @@ bool SensorService::readSensor(SensorEntity sensor)
             {
                 sensorValueModel->setChannelValue(sensor.uid, pair.first, pair.second);
             }
+            sensorValueModel->setLastReadTime(sensor.uid, currentTime);
             sensorRepository->updateSensorStatus(sensor.uid.c_str(), true, false);
             log("SensorService: Read multi-channel sensor %s", sensor.uid.c_str());
             return true;
@@ -187,6 +188,7 @@ bool SensorService::readSensor(SensorEntity sensor)
         {
             // For single-channel sensors, use setSensorValue
             sensorValueModel->setSensorValue(sensor.uid, value);
+            sensorValueModel->setLastReadTime(sensor.uid, currentTime);
             sensorRepository->updateSensorStatus(sensor.uid.c_str(), true, false);
             log("SensorService: Read sensor %s, value: %.2f", sensor.uid.c_str(), value);
             return true;

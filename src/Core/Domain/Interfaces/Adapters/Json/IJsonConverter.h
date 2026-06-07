@@ -18,6 +18,7 @@
 #include "Application/DTOs/ModuleCommandDto.h"
 #include "Application/DTOs/ModuleCommandUpdateDto.h"
 #include "Application/DTOs/RuleStateUpdateDto.h"
+#include "Application/DTOs/RuleSensorOfflineEventDto.h"
 
 class IJsonConverter
 {
@@ -46,6 +47,7 @@ public:
     virtual std::string ruleStateUpdateToJson(const RuleStateUpdateDto& ruleStateUpdate) = 0;
     virtual bool ruleStateUpdateFromJson(const std::string& jsonStr, RuleStateUpdateDto& ruleStateUpdate) = 0;
     virtual std::string ruleStateUpdateSingleToJson(const RuleStateDto& ruleState, const std::string& timestamp) = 0;
+    virtual std::string ruleSensorOfflineEventToJson(const RuleSensorOfflineEventDto& event) = 0;
     virtual std::string commandResultToJson(const CommandResultDto &commandResultDto) = 0;
     virtual bool commandResultFromJson(const std::string &jsonStr, CommandResultDto &commandResultDto) = 0;
     virtual std::string rawIoResultToJson(const RawIoResultDto &rawIoResult) = 0;

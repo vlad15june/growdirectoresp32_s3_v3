@@ -39,6 +39,11 @@ public:
         lastSetLastReadTime = time;
     }
 
+    uint32_t getLastReadTime(const std::string& sensorUid) const override {
+        auto it = lastReadTimes.find(sensorUid);
+        return it != lastReadTimes.end() ? it->second : 0;
+    }
+
     float getChannelValue(const std::string&, const std::string&) const override { return 0.0f; }
     void setChannelValue(const std::string&, const std::string&, float) override {}
     std::vector<std::pair<std::string, float>> getChannelValues(const std::string&) const override { return {}; }

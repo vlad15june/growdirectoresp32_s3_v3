@@ -61,6 +61,16 @@ public:
     virtual bool updateRuleState(const char* uid, RuleState state) = 0;
 
     /**
+     * @brief Update rule state together with errorType and modeReason
+     * @param uid UID of the rule to update
+     * @param state New state value
+     * @param errorType Categorical error code (empty to clear)
+     * @param modeReason Human-readable detail (empty to clear)
+     * @return true if operation was successful, false otherwise
+     */
+    virtual bool updateRuleError(const char* uid, RuleState state, const char* errorType, const char* modeReason) = 0;
+
+    /**
      * @brief Update rule mode
      * @param uid UID of the rule to update
      * @param mode New mode value

@@ -28,6 +28,7 @@ private:
     static constexpr const char* COMMAND_RESULT_TOPIC = "hardware/command_result/%s";
     static constexpr const char* RAW_IO_RESULT_TOPIC = "hardware/raw_io_result/%s";
     static constexpr const char* RULE_STATE_TOPIC = "hardware/rules/state/%s";
+    static constexpr const char* RULE_SENSOR_OFFLINE_TOPIC = "hardware/event/rule_sensor_offline/%s";
     
     char _topicBuffer[128];
     
@@ -251,15 +252,36 @@ public:
         }
         
         log("MQTT: Publishing rule state command to topic: %s", topic);
-        
+
         if (!_mqttManager->publish(topic, msg)) {
             log("MQTT: Failed to publish rule state command");
             return false;
         }
-        
+
         return true;
     }
-    
+
+    bool sendRuleSensorOfflineEvent(const char* msg) override {
+        if (_mqttManager == nullptr || !_mqttManager->isConnected()) {
+            log("MQTT: sendRuleSensorOfflineEvent - MQTT Manager not available or not connected");
+            return false;
+        }
+
+        const char* topic = formatTopic(RULE_SENSOR_OFFLINE_TOPIC);
+        if (topic == nullptr) {
+            return false;
+        }
+
+        log("MQTT: Publishing rule_sensor_offline event to topic: %s", topic);
+
+        if (!_mqttManager->publish(topic, msg)) {
+            log("MQTT: Failed to publish rule_sensor_offline event");
+            return false;
+        }
+
+        return true;
+    }
+
     bool isModuleOnline() override {
         // Check if MQTT connection is active
         if (_mqttManager == nullptr) {

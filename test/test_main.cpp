@@ -23,6 +23,7 @@ extern "C" void run_rule_phase4_hysteresis_tests(void);
 extern "C" void run_rule_phase4_propagation_tests(void);
 extern "C" void run_rule_phase4_deactivation_tests(void);
 extern "C" void run_rule_phase5_delay_tests(void);
+extern "C" void run_rule_phase8_freshness_tests(void);
 extern "C" void run_update_dto_converter_tests(void);
 extern "C" int run_sensor_type_repository_tests(void);
 extern "C" int run_spiffs_sensor_type_dao_tests(void);
@@ -121,6 +122,8 @@ int main(void) {
     run_rule_phase4_deactivation_tests();
 
     run_rule_phase5_delay_tests();
+
+    run_rule_phase8_freshness_tests();
 
     // Run tests for UpdateDto JSON conversion
     run_update_dto_converter_tests();

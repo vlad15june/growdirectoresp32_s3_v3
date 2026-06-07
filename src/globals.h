@@ -310,7 +310,11 @@ EvaluateRulesUseCase evaluateRulesUseCase(
     &ntpTimeAdapter,
     &sensorValueModel,
     &mqttLogger,
-    &debugSystem);
+    &debugSystem,
+    &hybridApiService,
+    &jsonConverter,
+    &settings,
+    &moduleConfig);
 
 SyncRulesUseCase syncRulesUseCase(
     &hybridApiService,

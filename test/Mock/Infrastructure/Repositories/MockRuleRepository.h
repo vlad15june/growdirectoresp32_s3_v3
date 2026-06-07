@@ -42,6 +42,7 @@ public:
     std::vector<Rule> getActiveRulesByType(RuleType) override { return {}; }
     std::vector<Rule> getRulesNeedingSynchronization() override { return {}; }
     bool updateRuleState(const char*, RuleState) override { return true; }
+    bool updateRuleError(const char*, RuleState, const char*, const char*) override { return true; }
     bool updateRuleMode(const char*, RuleMode, const char*) override { return true; }
     int synchronizeRules(const std::vector<Rule>& r, bool isFullSnapshot = false, const std::set<std::string>& snapshotUids = {}) override {
         synchronizeCallCount++;

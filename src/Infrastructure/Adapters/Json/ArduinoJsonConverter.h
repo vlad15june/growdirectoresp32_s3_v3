@@ -303,6 +303,15 @@ public:
             rule.modeReason = "";
         }
 
+        if (doc.containsKey("errorType") && !doc["errorType"].isNull())
+        {
+            rule.errorType = doc["errorType"].as<std::string>();
+        }
+        else
+        {
+            rule.errorType = "";
+        }
+
         rule.protectiveShutdown = doc["protectiveShutdown"] | false;
 
         // Parse state
@@ -507,6 +516,15 @@ public:
         else
         {
             doc["modeReason"] = nullptr;
+        }
+
+        if (!rule.errorType.empty())
+        {
+            doc["errorType"] = rule.errorType;
+        }
+        else
+        {
+            doc["errorType"] = nullptr;
         }
 
         doc["protectiveShutdown"] = rule.protectiveShutdown;
@@ -1260,6 +1278,22 @@ public:
         {
             doc["errorType"] = ruleState.errorType;
         }
+
+        std::string output;
+        serializeJson(doc, output);
+        return output;
+    }
+
+    std::string ruleSensorOfflineEventToJson(const RuleSensorOfflineEventDto& event) override
+    {
+        DynamicJsonDocument doc(512);
+
+        doc["uid"] = event.uid;
+        doc["accountUid"] = event.accountUid;
+        doc["eventType"] = event.eventType;
+        doc["sensorUid"] = event.sensorUid;
+        doc["ruleUid"] = event.ruleUid;
+        doc["deviceUid"] = event.deviceUid;
 
         std::string output;
         serializeJson(doc, output);

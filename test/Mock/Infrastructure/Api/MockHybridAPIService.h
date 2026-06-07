@@ -178,7 +178,17 @@ public:
         lastByUidRuleStateCommand = msg;
         return sendByUidRuleStateCommandReturnValue;
     }
-    
+
+    bool sendRuleSensorOfflineEventCalled = false;
+    std::string lastRuleSensorOfflineEventStr;
+    bool sendRuleSensorOfflineEventReturnValue = true;
+
+    bool sendRuleSensorOfflineEvent(const char* msg) override {
+        sendRuleSensorOfflineEventCalled = true;
+        lastRuleSensorOfflineEventStr = msg ? msg : "";
+        return sendRuleSensorOfflineEventReturnValue;
+    }
+
     bool sendFirmwareVersion() override {
         sendFirmwareVersionCalled = true;
         return sendFirmwareVersionReturnValue;

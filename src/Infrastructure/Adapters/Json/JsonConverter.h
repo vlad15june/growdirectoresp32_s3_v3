@@ -450,6 +450,7 @@ public:
             rule.mode = RuleMode::RULE_MODE_WAITING_FOR_USER_CONFIRM;
 
         rule.modeReason = extractValue(jsonStr, "modeReason");
+        rule.errorType = extractValue(jsonStr, "errorType");
         rule.protectiveShutdown = jsonStr.find("\"protectiveShutdown\":true") != std::string::npos;
 
         // Parse state
@@ -602,6 +603,11 @@ public:
             oss << ",\"modeReason\":\"" << rule.modeReason << "\"";
         else
             oss << ",\"modeReason\":null";
+
+        if (!rule.errorType.empty())
+            oss << ",\"errorType\":\"" << rule.errorType << "\"";
+        else
+            oss << ",\"errorType\":null";
 
         oss << ",\"protectiveShutdown\":" << (rule.protectiveShutdown ? "true" : "false");
 
@@ -1301,6 +1307,21 @@ public:
             oss << ",\"errorType\":\"" << ruleState.errorType << "\"";
         }
 
+        oss << "}";
+
+        return oss.str();
+    }
+
+    std::string ruleSensorOfflineEventToJson(const RuleSensorOfflineEventDto& event) override
+    {
+        std::ostringstream oss;
+        oss << "{";
+        oss << "\"uid\":\"" << event.uid << "\"";
+        oss << ",\"accountUid\":\"" << event.accountUid << "\"";
+        oss << ",\"eventType\":\"" << event.eventType << "\"";
+        oss << ",\"sensorUid\":\"" << event.sensorUid << "\"";
+        oss << ",\"ruleUid\":\"" << event.ruleUid << "\"";
+        oss << ",\"deviceUid\":\"" << event.deviceUid << "\"";
         oss << "}";
 
         return oss.str();

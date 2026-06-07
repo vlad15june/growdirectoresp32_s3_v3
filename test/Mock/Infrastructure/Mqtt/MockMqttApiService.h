@@ -101,6 +101,16 @@ public:
         lastRuleStateCommand = msg;
         return sendRuleStateCommandReturnValue;
     }
+
+    bool sendRuleSensorOfflineEventCalled = false;
+    std::string lastRuleSensorOfflineEvent;
+    bool sendRuleSensorOfflineEventReturnValue = true;
+
+    bool sendRuleSensorOfflineEvent(const char* msg) override {
+        sendRuleSensorOfflineEventCalled = true;
+        lastRuleSensorOfflineEvent = msg ? msg : "";
+        return sendRuleSensorOfflineEventReturnValue;
+    }
 };
 
 #endif // MOCK_MQTT_API_SERVICE_H

@@ -80,6 +80,7 @@ static void test_disabling_rule_switches_device_off(void) {
 
     MockSensorValueModel sensors;
     sensors.values["sensor-1"] = 25.0f;
+    sensors.lastReadTimes["sensor-1"] = 1;
     MockArduinoAdapter arduino;
     arduino.setMillis(0);
     MockNTPTimeAdapter ntp;
@@ -115,6 +116,7 @@ static void test_active_rule_not_deactivated(void) {
 
     MockSensorValueModel sensors;
     sensors.values["sensor-1"] = 25.0f;
+    sensors.lastReadTimes["sensor-1"] = 1;
     MockArduinoAdapter arduino;
     arduino.setMillis(0);
     MockNTPTimeAdapter ntp;
