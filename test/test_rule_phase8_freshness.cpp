@@ -5,6 +5,8 @@
 #include "Core/Domain/Data/Entities/Device.h"
 #include "Core/Domain/Data/Entities/Rule.h"
 #include "Core/Domain/Enums/RuleEnums.h"
+#include "Core/Domain/Enums/DeviceStateEnum.h"
+#include "Core/Domain/Enums/DeviceTypeEnum.h"
 #include "Core/Domain/Data/Models/IDeviceModel.h"
 #include "Core/Domain/UseCases/Rules/EvaluateRulesUseCase.h"
 #include "Infrastructure/Adapters/Json/JsonConverter.h"
@@ -19,10 +21,21 @@
 
 class Phase8DeviceModel : public IDeviceModel {
 public:
+    Device* device = nullptr;
+
     bool init() override { return true; }
-    Device* getDeviceByUid(const char*) override { return nullptr; }
-    std::vector<Device*> getAllDevices() override { return {}; }
-    int getDeviceCount() const override { return 0; }
+    Device* getDeviceByUid(const char* uid) override {
+        if (device && device->deviceUid && uid && std::string(device->deviceUid) == uid) {
+            return device;
+        }
+        return nullptr;
+    }
+    std::vector<Device*> getAllDevices() override {
+        std::vector<Device*> v;
+        if (device) v.push_back(device);
+        return v;
+    }
+    int getDeviceCount() const override { return device ? 1 : 0; }
     bool addDevice(Device*) override { return true; }
     bool removeDevice(const char*) override { return true; }
     void clearDevices() override {}
@@ -184,6 +197,70 @@ static void test_recovery_from_sensor_unreachable(void) {
     TEST_ASSERT_FALSE(contains(hybridApi.lastByUidRuleStateCommandStr, "sensor_unreachable"));
 }
 
+static void test_never_seen_recovers_to_fresh_when_value_arrives(void) {
+    MockRuleRepository repo;
+    repo.rules.push_back(makeSensorRule());
+
+    DeviceDigitalOut device;
+    device.deviceUid = "dev-1";
+    device.deviceType = DEVICE_TYPE_DIGITAL;
+    device.state = DEVICE_STATE_OFF;
+    Phase8DeviceModel deviceModel;
+    deviceModel.device = &device;
+
+    MockSensorValueModel sensors;
+    MockArduinoAdapter arduino;
+    MockNTPTimeAdapter ntp;
+    ntp.setEpochTime(1700000000);
+    MockHybridAPIService hybridApi;
+    MockSettings settings;
+    MockModuleConfig moduleConfig;
+    JsonConverter json;
+
+    EvaluateRulesUseCase uc(&deviceModel, &repo, &arduino, &ntp, &sensors,
+                            nullptr, nullptr, &hybridApi, &json, &settings, &moduleConfig);
+
+    arduino.setMillis(400000);
+    uc.loop();
+    TEST_ASSERT_FALSE(hybridApi.sendRuleSensorOfflineEventCalled);
+
+    sensors.values["sensor-1"] = 5.0f;
+    sensors.lastReadTimes["sensor-1"] = 500000;
+    arduino.setMillis(500000);
+    uc.loop();
+
+    TEST_ASSERT_FALSE(hybridApi.sendRuleSensorOfflineEventCalled);
+}
+
+static void test_multi_sensor_any_stale_errors_without_grace(void) {
+    MockRuleRepository repo;
+    Rule rule = makeSensorRule();
+    RuleCondition cond;
+    cond.sensorUids.push_back("sensor-2");
+    rule.conditions.push_back(cond);
+    repo.rules.push_back(rule);
+
+    Phase8DeviceModel deviceModel;
+    MockSensorValueModel sensors;
+    sensors.lastReadTimes["sensor-1"] = 50000;
+    MockArduinoAdapter arduino;
+    MockNTPTimeAdapter ntp;
+    ntp.setEpochTime(1700000000);
+    MockHybridAPIService hybridApi;
+    MockSettings settings;
+    MockModuleConfig moduleConfig;
+    JsonConverter json;
+
+    EvaluateRulesUseCase uc(&deviceModel, &repo, &arduino, &ntp, &sensors,
+                            nullptr, nullptr, &hybridApi, &json, &settings, &moduleConfig);
+
+    arduino.setMillis(400000);
+    uc.loop();
+
+    TEST_ASSERT_TRUE(hybridApi.sendByUidRuleStateCommandCalled);
+    TEST_ASSERT_TRUE(hybridApi.sendRuleSensorOfflineEventCalled);
+}
+
 static void test_rule_errortype_json_roundtrip(void) {
     JsonConverter json;
     Rule rule = makeSensorRule();
@@ -203,5 +280,7 @@ extern "C" void run_rule_phase8_freshness_tests(void) {
     RUN_TEST(test_never_seen_waits_no_error);
     RUN_TEST(test_never_seen_past_grace_errors);
     RUN_TEST(test_recovery_from_sensor_unreachable);
+    RUN_TEST(test_never_seen_recovers_to_fresh_when_value_arrives);
+    RUN_TEST(test_multi_sensor_any_stale_errors_without_grace);
     RUN_TEST(test_rule_errortype_json_roundtrip);
 }
