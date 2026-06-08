@@ -30,6 +30,7 @@ namespace DebugFeatures {
     // Rule debug features
     constexpr const char* RULE_DEBUG = "RULE";
     constexpr const char* RULE_SYNC_DEBUG = "RULE_SYNC";
+    constexpr const char* RULE_REPOSITORY_DEBUG = "RULE_REPOSITORY";
     constexpr const char* RULE_ON_DEBUG = "RULE_ON";
     constexpr const char* RULE_SENSOR_VALUE_DEBUG = "RULE_SENSOR_VALUE";
     constexpr const char* RULE_SENSOR_OFFLINE_DEBUG = "RULE_SENSOR_OFFLINE";

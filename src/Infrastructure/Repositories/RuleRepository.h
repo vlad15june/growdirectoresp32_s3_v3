@@ -8,6 +8,8 @@
 #include <vector>
 #include <unordered_map>
 #include <set>
+#include <cstdarg>
+#include <cstdio>
 
 /**
  * @brief Implementation of rule repository using SPIFFS storage
@@ -17,6 +19,23 @@ class RuleRepository : public Repository<Rule>, public IRuleRepository {
 private:
     ISpiffsRuleDao* ruleDao;
     INTPTimeAdapter* _ntpTimeAdapter;
+
+    void log(const char* format, ...) const {
+        if (!logger || !debugSystem || !debugSystem->isFeatureEnabled(DebugFeatures::RULE_REPOSITORY_DEBUG)) {
+            return;
+        }
+        char buffer[256];
+        va_list args;
+        va_start(args, format);
+        vsnprintf(buffer, sizeof(buffer), format, args);
+        va_end(args);
+        IDebugFeature* feature = debugSystem->getFeature(DebugFeatures::RULE_REPOSITORY_DEBUG);
+        if (feature) {
+            logger->println(DebugFeatures::RULE_REPOSITORY_DEBUG, buffer, feature->getLogChannel());
+        } else {
+            logger->println(DebugFeatures::RULE_REPOSITORY_DEBUG, buffer);
+        }
+    }
 
 public:
     ~RuleRepository() noexcept override = default;
@@ -252,9 +271,15 @@ public:
                 // Rule exists - check if we need to update it
                 Rule* existingRule = it->second;
 
+                log("RULE_MERGE uid=%s existState=%d errType=%s existVer=%d inVer=%d inMode=%d existMode=%d",
+                        existingRule->uid.c_str(), static_cast<int>(existingRule->state),
+                        existingRule->errorType.c_str(), existingRule->version, incomingRule.version,
+                        static_cast<int>(incomingRule.mode), static_cast<int>(existingRule->mode));
+
                 if (existingRule->state == RuleState::ERROR &&
                     existingRule->errorType == "sensor_unreachable" &&
                     incomingRule.version <= existingRule->version) {
+                    log("RULE_MERGE uid=%s -> PRESERVE_ERR", existingRule->uid.c_str());
                     updatedRules.push_back(*existingRule);
                     existingRuleMap.erase(it);
                     syncCount++;
@@ -264,25 +289,29 @@ public:
                 // Only update if version is newer or state needs synchronization
                 if (incomingRule.version > existingRule->version ||
                     existingRule->state == RuleState::UNSYNCHRONIZED) {
-                    
+
+                    log("RULE_MERGE uid=%s -> FORCE_SYNC_VER_OR_UNSYNC", existingRule->uid.c_str());
+
                     // Preserve local mode if needed
                     Rule updatedRule = incomingRule;
                     if (existingRule->state != RuleState::UNSYNCHRONIZED) {
                         updatedRule.mode = existingRule->mode;
                         updatedRule.modeReason = existingRule->modeReason;
                     }
-                    
+
                     updatedRule.state = RuleState::SYNCHRONIZED;
                     updatedRules.push_back(updatedRule);
                     existingRuleMap.erase(it);
                     syncCount++;
                 } else if (incomingRule.mode != existingRule->mode) {
+                    log("RULE_MERGE uid=%s -> FORCE_SYNC_MODE", existingRule->uid.c_str());
                     Rule updatedRule = incomingRule;
                     updatedRule.state = RuleState::SYNCHRONIZED;
                     updatedRules.push_back(updatedRule);
                     existingRuleMap.erase(it);
                     syncCount++;
                 } else {
+                    log("RULE_MERGE uid=%s -> KEEP_EXISTING", existingRule->uid.c_str());
                     updatedRules.push_back(*existingRule);
                     existingRuleMap.erase(it);
                     syncCount++;
