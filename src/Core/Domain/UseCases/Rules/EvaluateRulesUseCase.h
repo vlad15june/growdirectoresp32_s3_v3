@@ -246,6 +246,43 @@ private:
         }
     }
 
+    void deactivateInactiveCyclingRules(const std::set<std::string>& activeUids) {
+        if (!_ruleRepository || !_deviceModel) {
+            return;
+        }
+
+        std::vector<Rule> allRules = _ruleRepository->getAll();
+        for (const auto& rule : allRules) {
+            if (rule.ruleType != RuleType::LOOP && rule.ruleType != RuleType::STEP) {
+                continue;
+            }
+            if (activeUids.count(rule.uid)) {
+                continue;
+            }
+
+            Device* device = _deviceModel->getDeviceByUid(rule.deviceUid.c_str());
+            if (!device || !isStepCycleState(device->state)) {
+                continue;
+            }
+            if (!device->ruleUid || rule.uid != device->ruleUid) {
+                continue;
+            }
+
+            device->state = DEVICE_STATE_OFF;
+            if (device->deviceType != DeviceTypeEnum::DEVICE_TYPE_ANALOG) {
+                static_cast<DeviceDigitalOut*>(device)->isRuleTurnOnDevice = false;
+            }
+
+            _ruleActiveStates.erase(rule.uid);
+            _lastEvaluationResults.erase(rule.uid);
+            _ruleLastEvaluated.erase(rule.uid);
+
+            log("EVALUATE_RULES: %s_STOP uid=%s deviceUid=%s reason=window_closed",
+                rule.ruleType == RuleType::LOOP ? "LOOP" : "STEP",
+                rule.uid.c_str(), rule.deviceUid.c_str());
+        }
+    }
+
     bool executeDeviceAction(const std::string& deviceUid, const RuleEvaluationResult& evaluationResult) {
         if (!_deviceModel) {
             log("EVALUATE_RULES: Device model not available");
@@ -415,8 +452,9 @@ public:
         }
 
         deactivateDroppedRules(activeUids);
+        deactivateInactiveCyclingRules(activeUids);
     }
-    
+
     RuleEvaluationResult evaluateRule(const Rule& rule) override {
         log("EVALUATE_RULES: Evaluating rule %s", rule.uid.c_str());
         
@@ -516,14 +554,39 @@ public:
                 break;
             }
             case RuleType::STEP:
-                conditionMet = evaluateStepRule(rule);
-                if (conditionMet) {
-                    resultState = DEVICE_STATE_STEP_ON;
-                    result.isRuleTurnOnDevice = true;
-                } else {
-                    resultState = DEVICE_STATE_STEP_WAITING;
-                    result.isRuleTurnOnDevice = false;
+                evaluateStepRule(rule, result);
+                conditionMet = result.isRuleTurnOnDevice;
+                resultState = result.state;
+                break;
+            case RuleType::AVERAGE_SENSOR: {
+                DeviceStateEnum currentState = _ruleActiveStates[rule.uid].state;
+                bool committedOn = (currentState == DEVICE_STATE_ON ||
+                                    currentState == DEVICE_STATE_REQUEST_ON ||
+                                    currentState == DEVICE_STATE_DELAY_OFF);
+                SensorVerdict verdict = evaluateAverageSensorRule(rule, committedOn, result);
+                bool targetOn;
+                switch (verdict) {
+                    case SensorVerdict::TURN_ON:
+                        targetOn = true;
+                        break;
+                    case SensorVerdict::TURN_OFF:
+                    case SensorVerdict::INERT:
+                        targetOn = false;
+                        break;
+                    case SensorVerdict::HOLD:
+                    default:
+                        targetOn = committedOn;
+                        break;
                 }
+                applyDelay(rule, targetOn, currentState, result);
+                conditionMet = targetOn;
+                resultState = result.state;
+                break;
+            }
+            case RuleType::LOOP:
+                evaluateLoopRule(rule, result);
+                conditionMet = result.isRuleTurnOnDevice;
+                resultState = result.state;
                 break;
             default:
                 log("EVALUATE_RULES: Unsupported rule type for rule %s", rule.uid.c_str());
@@ -854,37 +917,183 @@ private:
         }
     }
     
-    bool evaluateStepRule(const Rule& rule) {
-        log("EVALUATE_RULES: Evaluating step rule %s", rule.uid.c_str());
-        
-        if (rule.sensorUid.empty()) {
-            log("EVALUATE_RULES: Step rule %s has no sensor UID", rule.uid.c_str());
-            return false;
+    static bool isStepCycleState(DeviceStateEnum s) {
+        return s == DEVICE_STATE_REQUEST_STEP_ON ||
+               s == DEVICE_STATE_STEP_ON ||
+               s == DEVICE_STATE_STEP_WAITING;
+    }
+
+    double computeMean(const std::string& ruleUid, const std::vector<std::string>& uids) {
+        double sum = 0.0;
+        int count = 0;
+        for (const auto& uid : uids) {
+            if (uid.empty()) {
+                continue;
+            }
+            sum += getSensorValue(uid);
+            count++;
         }
-        
-        double sensorValue = getSensorValue(rule.sensorUid);
-        
-        // Get device to check current cycle
-        Device* device = nullptr;
-        if (_deviceModel) {
-            device = _deviceModel->getDeviceByUid(rule.deviceUid.c_str());
+        double mean = count > 0 ? sum / count : 0.0;
+        log("EVALUATE_RULES: AVG_MEAN uid=%s n=%d mean=%.2f", ruleUid.c_str(), count, mean);
+        return mean;
+    }
+
+    static bool conditionFires(double value, RuleDirection direction, double target) {
+        if (direction == RuleDirection::DOWN) {
+            return value >= target;
         }
-        
+        if (direction == RuleDirection::UP) {
+            return value <= target;
+        }
+        return false;
+    }
+
+    bool evaluateConditionSet(const Rule& rule) {
+        if (!rule.conditions.empty()) {
+            bool anyTrue = false;
+            bool allTrue = true;
+            for (const auto& cond : rule.conditions) {
+                double mean = computeMean(rule.uid, cond.sensorUids);
+                double target = (cond.valueTarget != 0.0)
+                                ? cond.valueTarget
+                                : (cond.direction == RuleDirection::DOWN ? cond.valueHigh : cond.valueLow);
+                bool fires = conditionFires(mean, cond.direction, target);
+                anyTrue = anyTrue || fires;
+                allTrue = allTrue && fires;
+            }
+            bool firing = rule.conditionOr ? anyTrue : allTrue;
+            log("EVALUATE_RULES: STEP_COND uid=%s mode=%s nConds=%d firing=%d",
+                rule.uid.c_str(), rule.conditionOr ? "or" : "and",
+                static_cast<int>(rule.conditions.size()), firing ? 1 : 0);
+            return firing;
+        }
+
+        double value = getSensorValue(rule.sensorUid);
+        bool firing = conditionFires(value, rule.direction, rule.valueTarget);
+        log("EVALUATE_RULES: STEP_COND uid=%s mode=single firing=%d", rule.uid.c_str(), firing ? 1 : 0);
+        return firing;
+    }
+
+    SensorVerdict evaluateAverageSensorRule(const Rule& rule, bool committedOn, RuleEvaluationResult& result) {
+        std::vector<std::string> uids = rule.conditions.empty()
+            ? std::vector<std::string>()
+            : rule.conditions[0].sensorUids;
+
+        if (uids.empty()) {
+            log("EVALUATE_RULES: AVG_EVAL inert uid=%s reason=no_sensors", rule.uid.c_str());
+            return SensorVerdict::INERT;
+        }
+
+        double mean = computeMean(rule.uid, uids);
+        result.sensorUid = uids[0];
+        result.sensorValue = static_cast<float>(mean);
+        result.sensorValueLow = rule.valueLow;
+        result.sensorValueHigh = rule.valueHigh;
+
+        SensorVerdict verdict = evaluateSensorHysteresis(rule.direction, mean, rule.valueLow, rule.valueHigh, committedOn);
+
+        log("EVALUATE_RULES: AVG_EVAL uid=%s n=%d mean=%.2f dir=%s low=%.2f high=%.2f prevOn=%d",
+            rule.uid.c_str(), static_cast<int>(uids.size()), mean, getRuleDirectionName(rule.direction),
+            rule.valueLow, rule.valueHigh, committedOn ? 1 : 0);
+
+        return verdict;
+    }
+
+    void evaluateLoopRule(const Rule& rule, RuleEvaluationResult& result) {
+        Device* device = _deviceModel ? _deviceModel->getDeviceByUid(rule.deviceUid.c_str()) : nullptr;
+        DeviceStateEnum deviceState = device ? device->state : DEVICE_STATE_OFF;
+        bool running = isStepCycleState(deviceState);
+
+        if (!running) {
+            result.state = DEVICE_STATE_REQUEST_STEP_ON;
+            result.isRuleTurnOnDevice = true;
+            result.durationOn = static_cast<uint32_t>(rule.workingTime) * 1000;
+            result.mixTime = rule.waitingTime * 1000;
+            result.needToSwitchBack = true;
+            result.cyclesToSetPoint = 0;
+            result.currentCycle = 1;
+            log("EVALUATE_RULES: LOOP_START uid=%s work=%d wait=%d",
+                rule.uid.c_str(), rule.workingTime, rule.waitingTime);
+            return;
+        }
+
+        if (device && device->deviceType != DeviceTypeEnum::DEVICE_TYPE_ANALOG) {
+            static_cast<DeviceDigitalOut*>(device)->isRuleTurnOnDevice = true;
+        }
+        result.state = _ruleActiveStates[rule.uid].state;
+        result.isRuleTurnOnDevice = true;
+        log("EVALUATE_RULES: LOOP_RUN uid=%s", rule.uid.c_str());
+    }
+
+    void evaluateStepRule(const Rule& rule, RuleEvaluationResult& result) {
+        Device* device = _deviceModel ? _deviceModel->getDeviceByUid(rule.deviceUid.c_str()) : nullptr;
+        DeviceStateEnum deviceState = device ? device->state : DEVICE_STATE_OFF;
+        DeviceDigitalOut* digitalDevice = nullptr;
         int currentCycle = 0;
         if (device && device->deviceType != DeviceTypeEnum::DEVICE_TYPE_ANALOG) {
-            DeviceDigitalOut* digitalDevice = static_cast<DeviceDigitalOut*>(device);
+            digitalDevice = static_cast<DeviceDigitalOut*>(device);
             currentCycle = digitalDevice->currentCycle;
         }
-        
-        // Check if we've reached the target cycles and sensor value is within range
-        bool cyclesReached = currentCycle >= rule.cyclesToSetPoint;
-        bool valueInRange = sensorValue >= rule.valueLow && sensorValue <= rule.valueHigh;
-        
-        log("EVALUATE_RULES: Step rule %s - cycles: %d/%d, value: %.2f [%.2f-%.2f], condition: %s", 
-            rule.uid.c_str(), currentCycle, rule.cyclesToSetPoint, sensorValue, 
-            rule.valueLow, rule.valueHigh, (cyclesReached && valueInRange) ? "MET" : "NOT MET");
-        
-        return cyclesReached && valueInRange;
+
+        bool running = isStepCycleState(deviceState);
+        bool firing = evaluateConditionSet(rule);
+
+        if (!running) {
+            if (firing) {
+                result.state = DEVICE_STATE_REQUEST_STEP_ON;
+                result.isRuleTurnOnDevice = true;
+                result.durationOn = static_cast<uint32_t>(rule.workingTime) * 1000;
+                result.mixTime = rule.waitingTime * 1000;
+                result.needToSwitchBack = true;
+                result.cyclesToSetPoint = rule.cyclesToSetPoint;
+                result.currentCycle = 1;
+                result.sensorValueLow = rule.valueLow;
+                result.sensorValueHigh = rule.valueHigh;
+                if (!rule.sensorUid.empty()) {
+                    result.sensorUid = rule.sensorUid;
+                    result.sensorValue = static_cast<float>(getSensorValue(rule.sensorUid));
+                }
+                log("EVALUATE_RULES: STEP_START uid=%s cyclesCap=%d", rule.uid.c_str(), rule.cyclesToSetPoint);
+            } else {
+                result.state = DEVICE_STATE_OFF;
+                result.isRuleTurnOnDevice = false;
+            }
+            return;
+        }
+
+        result.state = _ruleActiveStates[rule.uid].state;
+        result.currentCycle = currentCycle;
+        result.cyclesToSetPoint = rule.cyclesToSetPoint;
+
+        if (!firing) {
+            if (digitalDevice) {
+                digitalDevice->isRuleTurnOnDevice = false;
+            }
+            if (device) {
+                device->ruleStopReason = "setpoint_reach";
+            }
+            result.isRuleTurnOnDevice = false;
+            result.ruleStopReason = "setpoint_reach";
+            log("EVALUATE_RULES: STEP_STOP uid=%s reason=setpoint_reach cycle=%d", rule.uid.c_str(), currentCycle);
+        } else if (rule.cyclesToSetPoint > 0 && currentCycle >= rule.cyclesToSetPoint) {
+            if (digitalDevice) {
+                digitalDevice->isRuleTurnOnDevice = false;
+            }
+            if (device) {
+                device->ruleStopReason = "time_reach";
+            }
+            result.isRuleTurnOnDevice = false;
+            result.ruleStopReason = "time_reach";
+            log("EVALUATE_RULES: STEP_STOP uid=%s reason=time_reach cycle=%d/%d",
+                rule.uid.c_str(), currentCycle, rule.cyclesToSetPoint);
+        } else {
+            if (digitalDevice) {
+                digitalDevice->isRuleTurnOnDevice = true;
+            }
+            result.isRuleTurnOnDevice = true;
+            log("EVALUATE_RULES: STEP_RUN uid=%s cycle=%d/%d firing=1",
+                rule.uid.c_str(), currentCycle, rule.cyclesToSetPoint);
+        }
     }
     
     bool evaluateTimeConditions(const Rule& rule) {
