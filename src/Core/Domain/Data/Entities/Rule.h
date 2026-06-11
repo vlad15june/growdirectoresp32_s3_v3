@@ -44,7 +44,7 @@ public:
     std::string uid;
     int version = 0;
     std::string deviceUid;
-    RuleType ruleType;
+    RuleType ruleType = RuleType::UNKNOWN;
     RuleMode mode = RuleMode::OFF;
     std::string modeReason;
     std::string errorType;

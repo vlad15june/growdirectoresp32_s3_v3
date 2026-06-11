@@ -285,6 +285,20 @@ public:
             rule.ruleType = RuleType::SENSOR;
         else if (ruleTypeStr == "schedule")
             rule.ruleType = RuleType::SCHEDULE;
+        else if (ruleTypeStr == "loop")
+            rule.ruleType = RuleType::LOOP;
+        else if (ruleTypeStr == "average_sensor")
+            rule.ruleType = RuleType::AVERAGE_SENSOR;
+        else if (ruleTypeStr == "ph")
+            rule.ruleType = RuleType::PH;
+        else if (ruleTypeStr == "ec")
+            rule.ruleType = RuleType::EC;
+        else if (ruleTypeStr == "dimmer_auto")
+            rule.ruleType = RuleType::DIMMER_AUTO;
+        else if (ruleTypeStr == "dimmer_manual")
+            rule.ruleType = RuleType::DIMMER_MANUAL;
+        else
+            rule.ruleType = RuleType::UNKNOWN;
 
         // Parse mode
         std::string modeStr = doc["mode"] | "";
@@ -430,6 +444,29 @@ public:
             rule.waitingTime = doc["waitingTime"] | 0;
         }
 
+        // Loop / ph / ec working-cycle properties
+        if (rule.ruleType == RuleType::LOOP ||
+            rule.ruleType == RuleType::PH ||
+            rule.ruleType == RuleType::EC)
+        {
+            rule.workingTime = doc["workingTime"] | 0;
+            rule.waitingTime = doc["waitingTime"] | 0;
+
+            if (doc.containsKey("cyclesToSetPoint") && !doc["cyclesToSetPoint"].isNull())
+            {
+                rule.cyclesToSetPoint = doc["cyclesToSetPoint"].as<int>();
+            }
+        }
+
+        // Average sensor / ph / ec threshold properties
+        if (rule.ruleType == RuleType::AVERAGE_SENSOR ||
+            rule.ruleType == RuleType::PH ||
+            rule.ruleType == RuleType::EC)
+        {
+            rule.valueLow = doc["valueLow"] | 0.0;
+            rule.valueHigh = doc["valueHigh"] | 0.0;
+        }
+
         // Sensor rule specific properties
         if (rule.isSensorRule())
         {
@@ -500,6 +537,18 @@ public:
             doc["ruleType"] = "sensor";
         else if (rule.ruleType == RuleType::SCHEDULE)
             doc["ruleType"] = "schedule";
+        else if (rule.ruleType == RuleType::LOOP)
+            doc["ruleType"] = "loop";
+        else if (rule.ruleType == RuleType::AVERAGE_SENSOR)
+            doc["ruleType"] = "average_sensor";
+        else if (rule.ruleType == RuleType::PH)
+            doc["ruleType"] = "ph";
+        else if (rule.ruleType == RuleType::EC)
+            doc["ruleType"] = "ec";
+        else if (rule.ruleType == RuleType::DIMMER_AUTO)
+            doc["ruleType"] = "dimmer_auto";
+        else if (rule.ruleType == RuleType::DIMMER_MANUAL)
+            doc["ruleType"] = "dimmer_manual";
 
         // Mode
         if (rule.mode == RuleMode::ON)
@@ -630,6 +679,33 @@ public:
 
             doc["workingTime"] = rule.workingTime;
             doc["waitingTime"] = rule.waitingTime;
+        }
+
+        // Loop / ph / ec working-cycle properties
+        if (rule.ruleType == RuleType::LOOP ||
+            rule.ruleType == RuleType::PH ||
+            rule.ruleType == RuleType::EC)
+        {
+            doc["workingTime"] = rule.workingTime;
+            doc["waitingTime"] = rule.waitingTime;
+
+            if (rule.cyclesToSetPoint > 0)
+            {
+                doc["cyclesToSetPoint"] = rule.cyclesToSetPoint;
+            }
+            else
+            {
+                doc["cyclesToSetPoint"] = nullptr;
+            }
+        }
+
+        // Average sensor / ph / ec threshold properties
+        if (rule.ruleType == RuleType::AVERAGE_SENSOR ||
+            rule.ruleType == RuleType::PH ||
+            rule.ruleType == RuleType::EC)
+        {
+            doc["valueLow"] = rule.valueLow;
+            doc["valueHigh"] = rule.valueHigh;
         }
 
         // Sensor rule specific properties

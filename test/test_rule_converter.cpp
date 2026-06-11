@@ -310,6 +310,122 @@ void test_rule_array_roundtrip_json_converter(void) {
     TEST_ASSERT_EQUAL(rules[1].ruleType, rules2[1].ruleType);
 }
 
+// Sample loop rule JSON (matches GDV1-3557 repro: 10s active / 10s idle)
+static const char* test_loop_rule_json = R"({
+    "workingTime":10,
+    "waitingTime":10,
+    "uid":"loop-uid-1",
+    "version":1,
+    "deviceUid":"9C:13:9E:99:47:38.00",
+    "ruleType":"loop",
+    "mode":"On",
+    "modeReason":null,
+    "protectiveShutdown":false,
+    "state":"Synchronized",
+    "daysOfWeek":[],
+    "daysOfMonth":[]
+})";
+
+// Sample average_sensor rule JSON
+static const char* test_average_rule_json = R"({
+    "valueLow":24,
+    "valueHigh":26,
+    "direction":"down",
+    "conditions":[
+        {
+            "sensorUids":["84:F7:03:FE:88:30.00.01","84:F7:03:FE:88:30.01.01"],
+            "valueLow":24,
+            "valueHigh":26,
+            "direction":"down"
+        }
+    ],
+    "conditionOr":false,
+    "uid":"avg-uid-1",
+    "version":1,
+    "deviceUid":"9C:13:9E:99:47:38.00",
+    "ruleType":"average_sensor",
+    "mode":"On",
+    "modeReason":null,
+    "protectiveShutdown":false,
+    "state":"Synchronized",
+    "daysOfWeek":[],
+    "daysOfMonth":[]
+})";
+
+// Sample unknown-type rule JSON
+static const char* test_unknown_rule_json = R"({
+    "uid":"unk-uid-1",
+    "version":1,
+    "deviceUid":"9C:13:9E:99:47:38.00",
+    "ruleType":"frobnicate",
+    "mode":"On",
+    "state":"Synchronized",
+    "daysOfWeek":[],
+    "daysOfMonth":[]
+})";
+
+void test_loop_rule_parse_json_converter(void) {
+    JsonConverter jsonConverter;
+    Rule rule;
+
+    TEST_ASSERT_TRUE(jsonConverter.ruleFromJson(test_loop_rule_json, rule));
+
+    TEST_ASSERT_EQUAL(RuleType::LOOP, rule.ruleType);
+    TEST_ASSERT_EQUAL_STRING("loop-uid-1", rule.uid.c_str());
+    TEST_ASSERT_EQUAL(RuleMode::ON, rule.mode);
+    TEST_ASSERT_EQUAL(10, rule.workingTime);
+    TEST_ASSERT_EQUAL(10, rule.waitingTime);
+}
+
+void test_loop_rule_roundtrip_json_converter(void) {
+    JsonConverter jsonConverter;
+    Rule rule;
+    TEST_ASSERT_TRUE(jsonConverter.ruleFromJson(test_loop_rule_json, rule));
+
+    std::string serialized = jsonConverter.ruleToJson(rule);
+
+    Rule rule2;
+    TEST_ASSERT_TRUE(jsonConverter.ruleFromJson(serialized, rule2));
+    TEST_ASSERT_EQUAL(RuleType::LOOP, rule2.ruleType);
+    TEST_ASSERT_EQUAL(10, rule2.workingTime);
+    TEST_ASSERT_EQUAL(10, rule2.waitingTime);
+}
+
+void test_average_rule_parse_json_converter(void) {
+    JsonConverter jsonConverter;
+    Rule rule;
+
+    TEST_ASSERT_TRUE(jsonConverter.ruleFromJson(test_average_rule_json, rule));
+
+    TEST_ASSERT_EQUAL(RuleType::AVERAGE_SENSOR, rule.ruleType);
+    TEST_ASSERT_EQUAL(RuleDirection::DOWN, rule.direction);
+    TEST_ASSERT_EQUAL_FLOAT(24.0, rule.valueLow);
+    TEST_ASSERT_EQUAL_FLOAT(26.0, rule.valueHigh);
+    TEST_ASSERT_EQUAL(1, rule.conditions.size());
+    TEST_ASSERT_EQUAL(2, rule.conditions[0].sensorUids.size());
+}
+
+void test_average_rule_roundtrip_json_converter(void) {
+    JsonConverter jsonConverter;
+    Rule rule;
+    TEST_ASSERT_TRUE(jsonConverter.ruleFromJson(test_average_rule_json, rule));
+
+    std::string serialized = jsonConverter.ruleToJson(rule);
+
+    Rule rule2;
+    TEST_ASSERT_TRUE(jsonConverter.ruleFromJson(serialized, rule2));
+    TEST_ASSERT_EQUAL(RuleType::AVERAGE_SENSOR, rule2.ruleType);
+    TEST_ASSERT_EQUAL_FLOAT(24.0, rule2.valueLow);
+    TEST_ASSERT_EQUAL_FLOAT(26.0, rule2.valueHigh);
+}
+
+void test_unknown_rule_type_json_converter(void) {
+    JsonConverter jsonConverter;
+    Rule rule;
+    TEST_ASSERT_TRUE(jsonConverter.ruleFromJson(test_unknown_rule_json, rule));
+    TEST_ASSERT_EQUAL(RuleType::UNKNOWN, rule.ruleType);
+}
+
 extern "C" void run_rule_converter_tests(void) {
     RUN_TEST(test_step_rule_parse_json_converter);
     RUN_TEST(test_sensor_rule_parse_json_converter);
@@ -317,4 +433,9 @@ extern "C" void run_rule_converter_tests(void) {
     RUN_TEST(test_rule_roundtrip_json_converter);
     RUN_TEST(test_rule_array_parse_json_converter);
     RUN_TEST(test_rule_array_roundtrip_json_converter);
+    RUN_TEST(test_loop_rule_parse_json_converter);
+    RUN_TEST(test_loop_rule_roundtrip_json_converter);
+    RUN_TEST(test_average_rule_parse_json_converter);
+    RUN_TEST(test_average_rule_roundtrip_json_converter);
+    RUN_TEST(test_unknown_rule_type_json_converter);
 }

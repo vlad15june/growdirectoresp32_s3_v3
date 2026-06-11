@@ -440,6 +440,20 @@ public:
             rule.ruleType = RuleType::SENSOR;
         else if (ruleTypeStr == "schedule")
             rule.ruleType = RuleType::SCHEDULE;
+        else if (ruleTypeStr == "loop")
+            rule.ruleType = RuleType::LOOP;
+        else if (ruleTypeStr == "average_sensor")
+            rule.ruleType = RuleType::AVERAGE_SENSOR;
+        else if (ruleTypeStr == "ph")
+            rule.ruleType = RuleType::PH;
+        else if (ruleTypeStr == "ec")
+            rule.ruleType = RuleType::EC;
+        else if (ruleTypeStr == "dimmer_auto")
+            rule.ruleType = RuleType::DIMMER_AUTO;
+        else if (ruleTypeStr == "dimmer_manual")
+            rule.ruleType = RuleType::DIMMER_MANUAL;
+        else
+            rule.ruleType = RuleType::UNKNOWN;
 
         // Parse mode
         std::string modeStr = extractValue(jsonStr, "mode");
@@ -587,6 +601,18 @@ public:
             oss << "sensor";
         else if (rule.ruleType == RuleType::SCHEDULE)
             oss << "schedule";
+        else if (rule.ruleType == RuleType::LOOP)
+            oss << "loop";
+        else if (rule.ruleType == RuleType::AVERAGE_SENSOR)
+            oss << "average_sensor";
+        else if (rule.ruleType == RuleType::PH)
+            oss << "ph";
+        else if (rule.ruleType == RuleType::EC)
+            oss << "ec";
+        else if (rule.ruleType == RuleType::DIMMER_AUTO)
+            oss << "dimmer_auto";
+        else if (rule.ruleType == RuleType::DIMMER_MANUAL)
+            oss << "dimmer_manual";
         oss << "\"";
 
         // Mode
@@ -721,6 +747,29 @@ public:
 
             oss << ",\"workingTime\":" << rule.workingTime;
             oss << ",\"waitingTime\":" << rule.waitingTime;
+        }
+
+        // Loop / ph / ec working-cycle properties
+        if (rule.ruleType == RuleType::LOOP ||
+            rule.ruleType == RuleType::PH ||
+            rule.ruleType == RuleType::EC)
+        {
+            oss << ",\"workingTime\":" << rule.workingTime;
+            oss << ",\"waitingTime\":" << rule.waitingTime;
+
+            if (rule.cyclesToSetPoint > 0)
+                oss << ",\"cyclesToSetPoint\":" << rule.cyclesToSetPoint;
+            else
+                oss << ",\"cyclesToSetPoint\":null";
+        }
+
+        // Average sensor / ph / ec threshold properties
+        if (rule.ruleType == RuleType::AVERAGE_SENSOR ||
+            rule.ruleType == RuleType::PH ||
+            rule.ruleType == RuleType::EC)
+        {
+            oss << ",\"valueLow\":" << rule.valueLow;
+            oss << ",\"valueHigh\":" << rule.valueHigh;
         }
 
         // Sensor rule specific properties
