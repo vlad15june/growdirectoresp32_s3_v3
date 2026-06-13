@@ -88,6 +88,52 @@ static void test_stale_sensor_transitions_and_notifies(void) {
     TEST_ASSERT_EQUAL_STRING("sensor-1", notifier.lastUnreachableSensorUid.c_str());
 }
 
+static void test_stale_sensor_turns_device_off_and_clears_state(void) {
+    MockRuleRepository repo;
+    repo.rules.push_back(makeSensorRule());
+
+    DeviceDigitalOut device;
+    device.deviceUid = "dev-1";
+    device.deviceType = DEVICE_TYPE_DIGITAL;
+    device.state = DEVICE_STATE_OFF;
+    Phase8DeviceModel deviceModel;
+    deviceModel.device = &device;
+
+    MockSensorValueModel sensors;
+    sensors.values["sensor-1"] = 25.0f;
+    sensors.lastReadTimes["sensor-1"] = 399000;
+    MockArduinoAdapter arduino;
+    MockNTPTimeAdapter ntp;
+    ntp.setEpochTime(1700000000);
+    MockRuleStateNotifier notifier;
+
+    EvaluateRulesUseCase uc(&deviceModel, &repo, &arduino, &ntp, &sensors,
+                            nullptr, nullptr, &notifier);
+
+    arduino.setMillis(400000);
+    uc.loop();
+
+    TEST_ASSERT_NOT_EQUAL(DEVICE_STATE_OFF, device.state);
+    TEST_ASSERT_FALSE(notifier.sensorUnreachableCalled);
+
+    arduino.setMillis(800000);
+    uc.loop();
+
+    TEST_ASSERT_EQUAL_INT(DEVICE_STATE_OFF, device.state);
+    TEST_ASSERT_EQUAL_STRING("sensor_unreachable", device.ruleStopReason);
+    TEST_ASSERT_TRUE(device.workByRule);
+    TEST_ASSERT_FALSE(device.isAuto);
+    TEST_ASSERT_TRUE(notifier.sensorUnreachableCalled);
+    TEST_ASSERT_EQUAL_INT(1, notifier.sensorUnreachableCount);
+
+    arduino.setMillis(1200000);
+    uc.loop();
+
+    TEST_ASSERT_EQUAL_INT(DEVICE_STATE_OFF, device.state);
+    TEST_ASSERT_EQUAL_STRING("sensor_unreachable", device.ruleStopReason);
+    TEST_ASSERT_EQUAL_INT(1, notifier.sensorUnreachableCount);
+}
+
 static void test_fresh_sensor_no_error(void) {
     MockRuleRepository repo;
     repo.rules.push_back(makeSensorRule());
@@ -368,6 +414,7 @@ static void test_rule_errortype_json_roundtrip(void) {
 
 extern "C" void run_rule_phase8_freshness_tests(void) {
     RUN_TEST(test_stale_sensor_transitions_and_notifies);
+    RUN_TEST(test_stale_sensor_turns_device_off_and_clears_state);
     RUN_TEST(test_fresh_sensor_no_error);
     RUN_TEST(test_never_seen_waits_no_error);
     RUN_TEST(test_never_seen_past_grace_errors);

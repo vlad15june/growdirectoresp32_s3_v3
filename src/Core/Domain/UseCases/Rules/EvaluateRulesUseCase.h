@@ -1216,6 +1216,26 @@ private:
             _ruleStateNotifier->notifySensorUnreachable(rule, sensorUid);
         }
 
+        auto activeIt = _ruleActiveStates.find(rule.uid);
+        if (activeIt != _ruleActiveStates.end() && activeIt->second.isDeviceOn()) {
+            RuleEvaluationResult off(rule.uid, rule.ruleType, rule.version);
+            off.state = DEVICE_STATE_OFF;
+            off.isRuleTurnOnDevice = false;
+            off.ruleStopReason = "sensor_unreachable";
+            off.sensorUid = rule.sensorUid;
+            off.sensorValueLow = rule.valueLow;
+            off.sensorValueHigh = rule.valueHigh;
+            off.switchedAt = sensorEventTimestamp();
+            executeDeviceAction(rule.deviceUid, off);
+
+            log("EVALUATE_RULES: SENSOR_STALE off uid=%s deviceUid=%s reason=sensor_unreachable switchedAt=%s",
+                rule.uid.c_str(), rule.deviceUid.c_str(), off.switchedAt.c_str());
+
+            _ruleActiveStates.erase(rule.uid);
+            _lastEvaluationResults.erase(rule.uid);
+            _ruleLastEvaluated.erase(rule.uid);
+        }
+
         _delayTimers.erase(rule.uid);
     }
 
