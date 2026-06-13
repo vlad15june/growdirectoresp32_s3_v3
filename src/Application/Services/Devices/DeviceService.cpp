@@ -61,6 +61,8 @@ void DeviceService::loop() {
         processDeviceStateUseCase->loop();
     }
 
+    refreshSwitchedAtForChangedDevices();
+
     if (!hybridApiService) {
         return;
     }
@@ -91,6 +93,32 @@ void DeviceService::sendDeviceUpdate() {
     hybridApiService->sendModuleUpdateData(updateDto);
 
     lastDeviceUpdateTime = arduinoAdapter->millis();
+}
+
+void DeviceService::refreshSwitchedAtForChangedDevices() {
+    if (!timeAdapter) {
+        return;
+    }
+
+    auto devices = deviceModel->getAllDevices();
+    for (auto device : devices) {
+        if (!device || !device->deviceUid) {
+            continue;
+        }
+
+        std::string uid = device->deviceUid;
+        auto it = prevDeviceStates.find(uid);
+
+        if (it != prevDeviceStates.end() && it->second != device->state) {
+            const char* now = timeAdapter->getFormattedTime();
+            if (now) {
+                device->switchedAtStorage = now;
+                device->switchedAt = device->switchedAtStorage.c_str();
+            }
+        }
+
+        prevDeviceStates[uid] = device->state;
+    }
 }
 
 std::string DeviceService::buildDeviceStateSignature() {

@@ -1,6 +1,8 @@
 #pragma once
 
 #include <vector>
+#include <map>
+#include <string>
 #include <cstdarg>
 #include "IDeviceService.h"
 #include "Core/Domain/Interfaces/IModuleConfig.h"
@@ -32,10 +34,12 @@ private:
     const unsigned long DEVICE_UPDATE_INTERVAL = 30000;
     unsigned long lastDeviceUpdateTime = 0;
     std::string lastDeviceStateSignature;
+    std::map<std::string, DeviceStateEnum> prevDeviceStates;
 
     UpdateDto createDeviceUpdateDto();
     void sendDeviceUpdate();
     std::string buildDeviceStateSignature();
+    void refreshSwitchedAtForChangedDevices();
 
     void log(const char* format, ...)
     {

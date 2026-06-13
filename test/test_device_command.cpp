@@ -225,6 +225,51 @@ static void test_manual_device_update_json_has_switchedat_and_numeric_commandid(
     TEST_ASSERT_EQUAL_STRING("0", npos_safe(json, "\"commandId\":\"4421\""));
 }
 
+static void test_switchedat_refreshes_on_loop_phase_transitions(void) {
+    ModuleStructure ms;
+    MockModuleConfig moduleConfig;
+    DeviceModel deviceModel(&moduleConfig, &ms);
+
+    DeviceDigitalOut* device = new DeviceDigitalOut();
+    device->deviceUid = "9C:13:9E:99:47:38.00";
+    device->deviceType = DEVICE_TYPE_DIGITAL;
+    device->state = DEVICE_STATE_REQUEST_STEP_ON;
+    device->switchedAt = "T0";
+    device->isAuto = true;
+    device->workByRule = true;
+    device->ruleType = RuleType::LOOP;
+    device->durationOn = 20000;
+    device->mixTime = 10000;
+    device->needToSwitchBack = true;
+    deviceModel.addDevice(device);
+
+    MockNTPTimeAdapter timeAdapter;
+    MockArduinoAdapter arduino;
+    MockHybridAPIService hybrid;
+    MockLogger logger;
+    MockDebugSystem debug;
+
+    DeviceService svc(&moduleConfig, &ms, &deviceModel, &timeAdapter, &arduino,
+                      nullptr, &hybrid, &logger, &debug);
+
+    timeAdapter.setFormattedTime("T0");
+    arduino.currentMillis = 1000;
+    svc.loop();
+    TEST_ASSERT_EQUAL_STRING("T0", hybrid.lastUpdateData.devices[0].switchedAt.c_str());
+
+    device->state = DEVICE_STATE_STEP_ON;
+    timeAdapter.setFormattedTime("T1");
+    arduino.currentMillis = 2000;
+    svc.loop();
+    TEST_ASSERT_EQUAL_STRING("T1", hybrid.lastUpdateData.devices[0].switchedAt.c_str());
+
+    device->state = DEVICE_STATE_STEP_WAITING;
+    timeAdapter.setFormattedTime("T2");
+    arduino.currentMillis = 3000;
+    svc.loop();
+    TEST_ASSERT_EQUAL_STRING("T2", hybrid.lastUpdateData.devices[0].switchedAt.c_str());
+}
+
 extern "C" void run_device_command_tests(void) {
     RUN_TEST(test_device_command_ack_is_array_with_timestamp);
     RUN_TEST(test_device_command_ack_omits_empty_timestamp);
@@ -233,4 +278,5 @@ extern "C" void run_device_command_tests(void) {
     RUN_TEST(test_device_update_carries_switchback_time);
     RUN_TEST(test_device_update_sent_immediately_on_state_change);
     RUN_TEST(test_manual_device_update_json_has_switchedat_and_numeric_commandid);
+    RUN_TEST(test_switchedat_refreshes_on_loop_phase_transitions);
 }
