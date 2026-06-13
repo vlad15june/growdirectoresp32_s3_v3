@@ -13,6 +13,7 @@
 #include <string>
 #include <cstdarg>
 #include <cstdio>
+#include <cctype>
 
 class SensorReader : public ISensorReader
 {
@@ -22,6 +23,10 @@ private:
     IArduinoAdapter *_arduino;
     ILogger *_logger;
     IDebugSystem *_debugSystem;
+
+    static constexpr const char *XF700A_MODEL = "XF700A";
+    static constexpr uint16_t RAIN_ACCUM_TIME_REGISTER = 0x0107;
+    static constexpr uint16_t RAIN_ACCUM_TIME_MINUTES = 5;
 
 public:
     SensorReader(IAnalogSensorReader *analogReader,
@@ -231,6 +236,73 @@ private:
         initModbusReader(sensors);
         bool stateChanged = configureModbusPortsPower(sensors);
         warmupModbusPortsIfChanged(stateChanged);
+        applyXf700aRainfallWindow(sensors);
+    }
+
+    void applyXf700aRainfallWindow(const std::vector<SensorEntity>& sensors)
+    {
+        for (const auto& sensor : sensors)
+        {
+            if (sensor.protocol != "ModBus")
+            {
+                continue;
+            }
+
+            if (!equalsIgnoreCase(sensor.model, XF700A_MODEL))
+            {
+                continue;
+            }
+
+            if (sensor.modbusDeviceAddress == 0)
+            {
+                log("SensorReader: XF700A_RAIN skip uid=%s reason=addr0", sensor.uid.c_str());
+                continue;
+            }
+
+            bool ok = _modbusReader->writeHoldingRegister(sensor.modbusDeviceAddress,
+                                                          RAIN_ACCUM_TIME_REGISTER,
+                                                          RAIN_ACCUM_TIME_MINUTES,
+                                                          sensor.pin);
+            if (!ok)
+            {
+                log("SensorReader: XF700A_RAIN write_fail uid=%s addr=%d port=%d",
+                    sensor.uid.c_str(), sensor.modbusDeviceAddress, sensor.pin);
+                continue;
+            }
+
+            uint16_t raw = 0;
+            bool readOk = _modbusReader->readHoldingRegister(sensor.modbusDeviceAddress,
+                                                            RAIN_ACCUM_TIME_REGISTER,
+                                                            raw,
+                                                            sensor.pin);
+            if (readOk && raw == RAIN_ACCUM_TIME_MINUTES)
+            {
+                log("SensorReader: XF700A_RAIN verify uid=%s addr=%d raw=%u expected=%u match=1",
+                    sensor.uid.c_str(), sensor.modbusDeviceAddress, raw, RAIN_ACCUM_TIME_MINUTES);
+            }
+            else
+            {
+                log("SensorReader: XF700A_RAIN verify_fail uid=%s addr=%d raw=%u expected=%u",
+                    sensor.uid.c_str(), sensor.modbusDeviceAddress, raw, RAIN_ACCUM_TIME_MINUTES);
+            }
+        }
+    }
+
+    static bool equalsIgnoreCase(const std::string& a, const char* b)
+    {
+        size_t n = a.size();
+        for (size_t i = 0; i < n; i++)
+        {
+            if (b[i] == '\0')
+            {
+                return false;
+            }
+            if (std::tolower((unsigned char)a[i]) != std::tolower((unsigned char)b[i]))
+            {
+                return false;
+            }
+        }
+        return b[n] == '\0';
     }
 
     void initModbusReader(const std::vector<SensorEntity>& sensors)

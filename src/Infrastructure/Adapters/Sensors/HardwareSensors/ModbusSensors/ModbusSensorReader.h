@@ -257,6 +257,62 @@ public:
         }
     }
 
+    bool writeHoldingRegister(uint8_t address, uint16_t reg, uint16_t value, int portIndex) override
+    {
+        if (portIndex < 0 || portIndex >= (int)_modbusPorts.size())
+        {
+            log("ModbusSensorReader: XF700A_RAIN port_invalid port=%d", portIndex);
+            return false;
+        }
+
+        bool ok = _modbusPorts[portIndex]->writeSingleRegister(address, reg, value);
+        log("ModbusSensorReader: XF700A_RAIN write addr=%d reg=0x%04X value=%u port=%d result=%d",
+            address, reg, value, portIndex, ok ? 1 : 0);
+        return ok;
+    }
+
+    bool readHoldingRegister(uint8_t address, uint16_t reg, uint16_t &outValue, int portIndex) override
+    {
+        if (portIndex < 0 || portIndex >= (int)_modbusPorts.size())
+        {
+            log("ModbusSensorReader: XF700A_RAIN port_invalid port=%d", portIndex);
+            return false;
+        }
+
+        IModbusRS485* modbus = _modbusPorts[portIndex];
+
+        uint8_t request[8] = {
+            address,
+            0x03,
+            (uint8_t)(reg >> 8),
+            (uint8_t)(reg & 0xFF),
+            0x00,
+            0x01
+        };
+
+        uint16_t crc = modbus->calculateCRC(request, 6);
+        request[6] = crc & 0xFF;
+        request[7] = (crc >> 8);
+
+        modbus->sendData(request, sizeof(request));
+        _arduino.delay(300);
+
+        uint8_t response[64];
+        int bytesRead = modbus->readAvailable(response, sizeof(response));
+
+        if (bytesRead >= 5 && response[1] == 0x03 && response[2] == 0x02)
+        {
+            outValue = (response[3] << 8) | response[4];
+            log("ModbusSensorReader: XF700A_RAIN verify addr=%d reg=0x%04X raw=%u port=%d",
+                address, reg, outValue, portIndex);
+            return true;
+        }
+
+        log("ModbusSensorReader: XF700A_RAIN verify_fail addr=%d reg=0x%04X port=%d bytes=%d",
+            address, reg, portIndex, bytesRead);
+        return false;
+    }
+
 private:
     void isolatePortForAddressWrite(int portIndex)
     {

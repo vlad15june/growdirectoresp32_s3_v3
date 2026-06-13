@@ -36,6 +36,7 @@ extern "C" int run_ff_wildcard_broadcast_fallback_tests(void);
 extern "C" void run_remote_sensor_tests(void);
 extern "C" void run_device_command_tests(void);
 extern "C" void run_relay_output_tests(void);
+extern "C" int run_xf700a_rainfall_window_tests(void);
 
 void setUp(void) {
     // set stuff up here
@@ -161,6 +162,9 @@ int main(void) {
 
     // Run tests for physical relay output drive
     run_relay_output_tests();
+
+    // Run tests for XF700A rainfall accumulation-window configuration
+    run_xf700a_rainfall_window_tests();
 
     return UNITY_END();
 }

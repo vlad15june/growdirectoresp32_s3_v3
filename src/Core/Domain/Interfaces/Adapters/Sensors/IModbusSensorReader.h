@@ -42,6 +42,26 @@ public:
      * @return true if state changed, false if already off
      */
     virtual bool powerOffPort(int portIndex) = 0;
+
+    /**
+     * @brief Write a single holding register (FC06)
+     * @param address Device address
+     * @param reg Register address
+     * @param value Value to write
+     * @param portIndex Port index for communication
+     * @return true if the write was issued successfully, false otherwise
+     */
+    virtual bool writeHoldingRegister(uint8_t address, uint16_t reg, uint16_t value, int portIndex) = 0;
+
+    /**
+     * @brief Read a single register (FC03), returning the raw 16-bit word with no scaling
+     * @param address Device address
+     * @param reg Register address
+     * @param outValue Raw register value on success
+     * @param portIndex Port index for communication
+     * @return true if a valid response was parsed, false otherwise
+     */
+    virtual bool readHoldingRegister(uint8_t address, uint16_t reg, uint16_t &outValue, int portIndex) = 0;
 };
 
 #endif
