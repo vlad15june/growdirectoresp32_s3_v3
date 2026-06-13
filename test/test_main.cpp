@@ -32,6 +32,7 @@ extern "C" int run_sync_sensor_types_use_case_tests(void);
 extern "C" int run_wifi_manager_tests(void);
 extern "C" int run_module_command_execution_use_case_tests(void);
 extern "C" int run_modbus_address_registers_tests(void);
+extern "C" int run_ff_wildcard_broadcast_fallback_tests(void);
 extern "C" void run_remote_sensor_tests(void);
 extern "C" void run_device_command_tests(void);
 extern "C" void run_relay_output_tests(void);
@@ -148,6 +149,9 @@ int main(void) {
 
     // Run tests for configurable Modbus address-management registers
     run_modbus_address_registers_tests();
+
+    // Run tests for FF-wildcard broadcast fallback (WS12S, CWYW)
+    run_ff_wildcard_broadcast_fallback_tests();
 
     // Run tests for remote sensor receiver and live sensor values
     run_remote_sensor_tests();

@@ -21,6 +21,16 @@ private:
     ILogger* _logger;
     IDebugSystem* _debugSystem;
 
+    static constexpr uint8_t kWildcardSlave = 0xFF;
+    static constexpr uint8_t kWs12sQueryFc = 0x03;
+    static constexpr uint16_t kWs12sQueryReg = 0x0100;
+    static constexpr uint8_t kWs12sWriteFc = 0x06;
+    static constexpr uint16_t kWs12sWriteReg = 0x0100;
+    static constexpr uint8_t kCwywQueryFc = 0x6E;
+    static constexpr uint16_t kCwywQueryReg = 0x0012;
+    static constexpr uint8_t kCwywWriteFc = 0x10;
+    static constexpr uint16_t kCwywWriteReg = 0x0018;
+
 public:
     ModbusSensorReader(const std::vector<IModbusRS485*>& modbusPorts, IArduinoAdapter &arduino, ILogger* logger, IDebugSystem* debugSystem)
         : _modbusPorts(modbusPorts), _arduino(arduino), _logger(logger), _debugSystem(debugSystem) {}
@@ -268,6 +278,49 @@ public:
                 writeCommand);
         }
 
+        {
+            uint8_t discoveredAddr = 0;
+
+            log("ModbusSensorReader: FF_FALLBACK ws12s query slave=0xFF fc=0x%02X reg=0x%04X on port %d",
+                kWs12sQueryFc, kWs12sQueryReg, portIndex);
+            if (queryAddressViaWildcard(kWs12sQueryFc, kWs12sQueryReg, portIndex, discoveredAddr))
+            {
+                log("ModbusSensorReader: FF_FALLBACK ws12s discovered addr=%d on port %d, writing FC%d reg=0x%04X value=%d",
+                    discoveredAddr, portIndex, kWs12sWriteFc, kWs12sWriteReg, newAddress);
+                modbus->writeSingleRegister(discoveredAddr, kWs12sWriteReg, (uint16_t)newAddress);
+                _arduino.delay(300);
+                if (pingAddress((uint8_t)newAddress, probe, portIndex))
+                {
+                    log("ModbusSensorReader: FF_FALLBACK ws12s CONFIRMED - device responds at new address %d on port %d",
+                        newAddress, portIndex);
+                    return true;
+                }
+                log("ModbusSensorReader: FF_FALLBACK ws12s write_unconfirmed discoveredAddr=%d newAddr=%d port=%d",
+                    discoveredAddr, newAddress, portIndex);
+            }
+
+            log("ModbusSensorReader: FF_FALLBACK cwyw query slave=0xFF fc=0x%02X reg=0x%04X on port %d",
+                kCwywQueryFc, kCwywQueryReg, portIndex);
+            if (queryAddressViaWildcard(kCwywQueryFc, kCwywQueryReg, portIndex, discoveredAddr))
+            {
+                log("ModbusSensorReader: FF_FALLBACK cwyw discovered addr=%d on port %d, writing FC%d reg=0x%04X value=%d",
+                    discoveredAddr, portIndex, kCwywWriteFc, kCwywWriteReg, newAddress);
+                modbus->writeRegister(discoveredAddr, kCwywWriteReg, (uint16_t)newAddress);
+                _arduino.delay(300);
+                if (pingAddress((uint8_t)newAddress, probe, portIndex))
+                {
+                    log("ModbusSensorReader: FF_FALLBACK cwyw CONFIRMED - device responds at new address %d on port %d",
+                        newAddress, portIndex);
+                    return true;
+                }
+                log("ModbusSensorReader: FF_FALLBACK cwyw write_unconfirmed discoveredAddr=%d newAddr=%d port=%d",
+                    discoveredAddr, newAddress, portIndex);
+            }
+
+            log("ModbusSensorReader: FF_FALLBACK both_stages_failed port=%d, entering legacy broadcast loop",
+                portIndex);
+        }
+
         for (int attempt = 1; attempt <= 3; attempt++)
         {
             log("ModbusSensorReader: Broadcast FC06 write attempt %d/3 for new address %d on port %d",
@@ -357,6 +410,73 @@ public:
     }
 
 private:
+    bool queryAddressViaWildcard(uint8_t fc, uint16_t reg, int portIndex, uint8_t& outAddress)
+    {
+        if (portIndex < 0 || portIndex >= (int)_modbusPorts.size())
+        {
+            return false;
+        }
+        IModbusRS485* modbus = _modbusPorts[portIndex];
+
+        uint8_t req[8];
+        req[0] = kWildcardSlave;
+        req[1] = fc;
+        req[2] = (uint8_t)(reg >> 8);
+        req[3] = (uint8_t)(reg & 0xFF);
+        req[4] = 0x00;
+        req[5] = 0x01;
+        uint16_t crc = modbus->calculateCRC(req, 6);
+        req[6] = (uint8_t)(crc & 0xFF);
+        req[7] = (uint8_t)((crc >> 8) & 0xFF);
+
+        modbus->sendData(req, 8);
+
+        uint8_t buf[16];
+        int n = 0;
+        for (int attempt = 1; attempt <= 3; attempt++)
+        {
+            _arduino.delay(20);
+            n = modbus->readAvailable(buf, sizeof(buf));
+            if (n >= 5)
+            {
+                break;
+            }
+        }
+
+        if (n < 5)
+        {
+            log("ModbusSensorReader: FF_FALLBACK query timeout slave=0xFF fc=0x%02X reg=0x%04X port=%d",
+                fc, reg, portIndex);
+            return false;
+        }
+
+        if (buf[1] != fc)
+        {
+            log("ModbusSensorReader: FF_FALLBACK query fc_mismatch expected=0x%02X got=0x%02X port=%d",
+                fc, buf[1], portIndex);
+            return false;
+        }
+
+        uint16_t computedCrc = modbus->calculateCRC(buf, n - 2);
+        uint16_t receivedCrc = (uint16_t)buf[n - 2] | ((uint16_t)buf[n - 1] << 8);
+        if (computedCrc != receivedCrc)
+        {
+            log("ModbusSensorReader: FF_FALLBACK query crc_mismatch fc=0x%02X reg=0x%04X port=%d",
+                fc, reg, portIndex);
+            return false;
+        }
+
+        if (buf[0] == 0x00 || buf[0] == 0xFF)
+        {
+            log("ModbusSensorReader: FF_FALLBACK query bad_slave=0x%02X fc=0x%02X reg=0x%04X port=%d",
+                buf[0], fc, reg, portIndex);
+            return false;
+        }
+
+        outAddress = buf[0];
+        return true;
+    }
+
     void powerOffAllPorts()
     {
         for (int i = 0; i < _modbusPorts.size(); i++)

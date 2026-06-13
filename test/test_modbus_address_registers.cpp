@@ -194,7 +194,13 @@ void test_zero_fields_skip_primary_and_use_legacy(void) {
     TEST_ASSERT_EQUAL_INT(0x00, fake.writes[0].slave);
     TEST_ASSERT_EQUAL_INT(0x0000, fake.writes[0].reg);
 
-    const auto *ping = fake.firstFrameWithFunctionCode(0x03);
+    const FakeModbusRS485::Frame *ping = nullptr;
+    for (const auto &f : fake.sent) {
+        if (f.bytes.size() >= 2 && f.bytes[0] == 22 && f.bytes[1] == 0x03) {
+            ping = &f;
+            break;
+        }
+    }
     TEST_ASSERT_NOT_NULL(ping);
     TEST_ASSERT_EQUAL_UINT8(0x00, ping->bytes[2]);
     TEST_ASSERT_EQUAL_UINT8(0x00, ping->bytes[3]);
