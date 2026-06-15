@@ -561,6 +561,16 @@ private:
             return false;
         }
 
+        char hexBuffer[256] = "";
+        for (int i = 0; i < n && i < 32; i++)
+        {
+            char temp[4];
+            snprintf(temp, sizeof(temp), "%02X ", buf[i]);
+            strcat(hexBuffer, temp);
+        }
+        log("ModbusSensorReader: FF_FALLBACK query response (%d bytes) fc=0x%02X reg=0x%04X port=%d: %s",
+            n, fc, reg, portIndex, hexBuffer);
+
         if (buf[1] != fc)
         {
             log("ModbusSensorReader: FF_FALLBACK query fc_mismatch expected=0x%02X got=0x%02X port=%d",
@@ -572,19 +582,21 @@ private:
         uint16_t receivedCrc = (uint16_t)buf[n - 2] | ((uint16_t)buf[n - 1] << 8);
         if (computedCrc != receivedCrc)
         {
-            log("ModbusSensorReader: FF_FALLBACK query crc_mismatch fc=0x%02X reg=0x%04X port=%d",
+            log("ModbusSensorReader: FF_FALLBACK query crc_mismatch fc=0x%02X reg=0x%04X port=%d computed=0x%04X received=0x%04X",
+                fc, reg, portIndex, computedCrc, receivedCrc);
+            return false;
+        }
+
+        if (buf[0] == 0x00)
+        {
+            log("ModbusSensorReader: FF_FALLBACK query bad_slave=0x00 fc=0x%02X reg=0x%04X port=%d",
                 fc, reg, portIndex);
             return false;
         }
 
-        if (buf[0] == 0x00 || buf[0] == 0xFF)
-        {
-            log("ModbusSensorReader: FF_FALLBACK query bad_slave=0x%02X fc=0x%02X reg=0x%04X port=%d",
-                buf[0], fc, reg, portIndex);
-            return false;
-        }
-
         outAddress = buf[0];
+        log("ModbusSensorReader: FF_FALLBACK query accepted slave=0x%02X fc=0x%02X reg=0x%04X port=%d",
+            buf[0], fc, reg, portIndex);
         return true;
     }
 

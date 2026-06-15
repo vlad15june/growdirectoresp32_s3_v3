@@ -210,8 +210,7 @@ void test_ff_query_crc_mismatch_skips_stage(void) {
     }
 }
 
-// INV-7: FF query slave-byte 0xFF -> stage rejects, never writes to 0xFF.
-void test_ff_query_bad_slave_ff_skips_stage(void) {
+void test_ff_query_slave_ff_is_now_accepted_writes_to_ff(void) {
     MockModbusRS485 fake;
     fake.responses[{0xFF, 0x03}] = { 0xFF, 0x03, 0x02, 0x00, 0xAB, 0x00, 0x00 };
     std::vector<IModbusRS485 *> ports{ &fake };
@@ -220,9 +219,7 @@ void test_ff_query_bad_slave_ff_skips_stage(void) {
 
     reader.writeSensorAddress(10, 22, 0, 0x0100, 16, 0x0100);
 
-    for (const auto &w : fake.writes) {
-        TEST_ASSERT_NOT_EQUAL(0xFF, w.slave);
-    }
+    TEST_ASSERT_TRUE(fake.hasWrite(false, 0xFF, 0x0100, 22));
 }
 
 // INV-7: FF query slave-byte 0x00 -> stage rejects, no WS12S addr-specific write at slave=0.
@@ -278,7 +275,7 @@ extern "C" int run_ff_wildcard_broadcast_fallback_tests(void) {
     RUN_TEST(test_cwyw_stage_runs_after_ws12s_timeout_and_confirms);
     RUN_TEST(test_both_stages_fail_then_legacy_loop_runs);
     RUN_TEST(test_ff_query_crc_mismatch_skips_stage);
-    RUN_TEST(test_ff_query_bad_slave_ff_skips_stage);
+    RUN_TEST(test_ff_query_slave_ff_is_now_accepted_writes_to_ff);
     RUN_TEST(test_ff_query_bad_slave_zero_skips_stage);
     RUN_TEST(test_ff_query_fc_mismatch_skips_stage);
     RUN_TEST(test_no_restore_factory_frame_ever_emitted);
