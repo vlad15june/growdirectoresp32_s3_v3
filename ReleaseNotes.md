@@ -1,5 +1,26 @@
 # Release Notes
 
+## Version 2.2.5 (2026-06-15)
+
+### Added
+- **Advanced Automation Rules**: GDV1-3557 The device now supports additional rule kinds, including rules that act on the averaged value of several sensors and rules built from repeating loop steps, enabling more flexible automation scenarios.
+- **Workflow Rule Attributes**: The device now understands and validates workflow-related settings on rules and devices, preparing automation for multi-step workflow control.
+- **Remote Sensor Readings**: The device can now receive measurements from remote sensor modules over the network and use them when evaluating rules, allowing automation based on sensors that are not directly wired to the device.
+- **Rainfall Accumulation**: The device now accumulates rainfall measurements from the XF700A rain sensor over a time window, providing cumulative rainfall values.
+- **Timed Device Activation**: Device commands can now include a duration after which the output automatically returns to its previous state, supporting temporary activations without sending a separate switch-off command.
+- **Per-Rule State Reporting**: The device now reports the current state of individual automation rules to the platform, improving visibility into which rules are active.
+
+### Changed
+- **More Reliable Platform Messaging**: The communication channel with the platform was rebuilt on a non-blocking messaging engine, improving responsiveness and the stability of message delivery in both directions.
+- **Rule Synchronization with Deletion and Recovery**: GDV1-3502 Rule synchronization now applies rule deletions and keeps a consistent snapshot of active rules. After a connectivity outage, the device automatically re-synchronizes and restores rule state when the connection is restored.
+- **Smoother Sensor-Based Triggering**: GDV1-3502 Sensor-driven rules now apply hysteresis around their thresholds, reducing rapid on/off toggling of devices near the trigger point.
+- **Safe Behavior on Stale Sensor Data**: When the sensor data controlling a device becomes stale or the sensor goes offline, the device now turns off the affected outputs and clears their state, preventing automation from acting on outdated readings.
+- **Wider Sensor Addressing Compatibility**: GDV1-3532 The device now accepts a broadcast/wildcard sensor address during address assignment and detection, improving compatibility with sensors that respond to wildcard addressing.
+- **PWM Output Support**: GDV1-3416 The device gained PWM output capability on supported channels, enabling finer control of connected equipment.
+- **Improved Manufacturing Test Mode**: Board test and diagnostic mode were extended with additional bus, power, and connectivity checks and more robust startup handling, improving reliability of production testing.
+
+---
+
 ## Version 2.2.4 (2026-06-01)
 
 ### Added
