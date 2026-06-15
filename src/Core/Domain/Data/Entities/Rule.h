@@ -43,6 +43,11 @@ public:
     
     std::string uid;
     int version = 0;
+    std::string workflowUid;
+    int workflowVersion = 0;
+    int workflowDisplayOrder = 0;
+    int workflowPriority = 0;
+    std::string dependsOnRuleUid;
     std::string deviceUid;
     RuleType ruleType = RuleType::UNKNOWN;
     RuleMode mode = RuleMode::OFF;

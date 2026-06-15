@@ -35,6 +35,8 @@ public:
     const char* ruleUid;
     RuleType ruleType;
     int ruleVersion;
+    const char* workflowUid;
+    int workflowVersion;
     float sensorValueLow;
     float sensorValueHigh;
     const char* ruleScheduleStartAt;

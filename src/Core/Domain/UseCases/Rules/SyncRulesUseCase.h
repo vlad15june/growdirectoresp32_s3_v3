@@ -265,8 +265,8 @@ private:
             stateUpdate.addRuleState(rule.uid, ruleState, ruleMode, rule.modeReason,
                                    result.isValid ? "" : result.errorType, rule.version);
 
-            log("SYNC_RULES: RULE_ACK item uid=%s version=%d state=%s",
-                rule.uid.c_str(), rule.version, ruleState.c_str());
+            log("SYNC_RULES: RULE_ACK item uid=%s version=%d state=%s workflowUid=%s workflowVersion=%d",
+                rule.uid.c_str(), rule.version, ruleState.c_str(), rule.workflowUid.c_str(), rule.workflowVersion);
         }
         
         return stateUpdate;

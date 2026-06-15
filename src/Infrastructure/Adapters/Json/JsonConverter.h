@@ -430,6 +430,11 @@ public:
     {
         rule.uid = extractValue(jsonStr, "uid");
         rule.version = extractIntValue(jsonStr, "version");
+        rule.workflowUid = extractValue(jsonStr, "workflowUid");
+        rule.workflowVersion = extractIntValue(jsonStr, "workflowVersion");
+        rule.workflowDisplayOrder = extractIntValue(jsonStr, "workflowDisplayOrder");
+        rule.workflowPriority = extractIntValue(jsonStr, "workflowPriority");
+        rule.dependsOnRuleUid = extractValue(jsonStr, "dependsOnRuleUid");
         rule.deviceUid = extractValue(jsonStr, "deviceUid");
 
         // Parse ruleType
@@ -591,6 +596,11 @@ public:
         oss << "{";
         oss << "\"uid\":\"" << rule.uid << "\"";
         oss << ",\"version\":" << rule.version;
+        oss << ",\"workflowUid\":\"" << rule.workflowUid << "\"";
+        oss << ",\"workflowVersion\":" << rule.workflowVersion;
+        oss << ",\"workflowDisplayOrder\":" << rule.workflowDisplayOrder;
+        oss << ",\"workflowPriority\":" << rule.workflowPriority;
+        oss << ",\"dependsOnRuleUid\":\"" << rule.dependsOnRuleUid << "\"";
         oss << ",\"deviceUid\":\"" << rule.deviceUid << "\"";
 
         // RuleType
@@ -886,6 +896,12 @@ public:
                     oss << ",\"ruleSensorStartAt\":\"" << device.ruleSensorStartAt << "\"";
 
                 oss << ",\"ruleVersion\":" << device.ruleVersion;
+
+                if (!device.workflowUid.empty())
+                {
+                    oss << ",\"workflowUid\":\"" << device.workflowUid << "\"";
+                    oss << ",\"workflowVersion\":" << device.workflowVersion;
+                }
 
                 if (device.ruleType == "ph" || device.ruleType == "ec" ||
                     device.ruleType == "sensor" || device.ruleType == "step")

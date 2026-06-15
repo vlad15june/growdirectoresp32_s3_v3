@@ -50,7 +50,12 @@ public:
         if (rule.deviceUid.empty()) {
             return RuleValidationResult(false, "missing_device_uid", "Device UID is required");
         }
-        
+
+        if (!rule.workflowUid.empty() && rule.workflowVersion == 0) {
+            log("RULE_VALIDATION: workflow_version_missing uid=%s workflowUid=%s", rule.uid.c_str(), rule.workflowUid.c_str());
+            return RuleValidationResult(false, "wrong_format", "workflowVersion required when workflowUid is set");
+        }
+
         return RuleValidationResult(true);
     }
     

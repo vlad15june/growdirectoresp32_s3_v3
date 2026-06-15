@@ -230,6 +230,8 @@ private:
                 rule.uid.c_str(), rule.deviceUid.c_str());
 
             RuleEvaluationResult off(rule.uid, rule.ruleType, rule.version);
+            off.workflowUid = rule.workflowUid;
+            off.workflowVersion = rule.workflowVersion;
             off.state = DEVICE_STATE_OFF;
             off.isRuleTurnOnDevice = false;
             off.ruleStopReason = "rule_manualy_off";
@@ -310,6 +312,8 @@ private:
         device->ruleUid = ctx.ruleUid.c_str();
         device->ruleType = evaluationResult.ruleType;
         device->ruleVersion = evaluationResult.ruleVersion;
+        device->workflowUid = ctx.workflowUid.c_str();
+        device->workflowVersion = evaluationResult.workflowVersion;
         device->sensorUid = ctx.sensorUid.c_str();
         device->sensorValue = evaluationResult.sensorValue;
         device->sensorValueTime = evaluationResult.sensorValueTime;
@@ -334,6 +338,9 @@ private:
 
         log("EVALUATE_RULES: Executing device action - device %s, state %s, ruleUid %s",
             deviceUid.c_str(), getDeviceStateName(evaluationResult.state), ctx.ruleUid.c_str());
+
+        log("EVALUATE_RULES: WF_ATTR deviceUid=%s ruleUid=%s workflowUid=%s workflowVersion=%d",
+            deviceUid.c_str(), ctx.ruleUid.c_str(), ctx.workflowUid.c_str(), evaluationResult.workflowVersion);
 
         return true;
     }
@@ -460,6 +467,8 @@ public:
         
         // Create result with basic rule information
         RuleEvaluationResult result(rule.uid, rule.ruleType, rule.version);
+        result.workflowUid = rule.workflowUid;
+        result.workflowVersion = rule.workflowVersion;
         
         // Skip if rule is not active
         if (rule.mode != RuleMode::ON) {
@@ -1219,6 +1228,8 @@ private:
         auto activeIt = _ruleActiveStates.find(rule.uid);
         if (activeIt != _ruleActiveStates.end() && activeIt->second.isDeviceOn()) {
             RuleEvaluationResult off(rule.uid, rule.ruleType, rule.version);
+            off.workflowUid = rule.workflowUid;
+            off.workflowVersion = rule.workflowVersion;
             off.state = DEVICE_STATE_OFF;
             off.isRuleTurnOnDevice = false;
             off.ruleStopReason = "sensor_unreachable";

@@ -198,6 +198,11 @@ UpdateDto DeviceService::createDeviceUpdateDto() {
         if (device->workByRule) {
             if (device->ruleUid) {
                 deviceDto.ruleUid = device->ruleUid;
+
+                if (device->workflowUid && device->workflowUid[0]) {
+                    deviceDto.workflowUid = device->workflowUid;
+                    deviceDto.workflowVersion = device->workflowVersion;
+                }
                 
                 switch (device->ruleType) {
                     case RuleType::STEP:

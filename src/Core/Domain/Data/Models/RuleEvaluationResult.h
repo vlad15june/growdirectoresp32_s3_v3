@@ -31,6 +31,8 @@ public:
     std::string ruleUid;
     RuleType ruleType = RuleType::SENSOR;
     int ruleVersion = 0;
+    std::string workflowUid;
+    int workflowVersion = 0;
     float sensorValueLow = 0.0f;
     float sensorValueHigh = 0.0f;
     std::string ruleScheduleStartAt;

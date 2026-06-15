@@ -14,6 +14,8 @@ public:
     bool isAuto;                        // Whether device is in auto mode
     bool isManual;                      // Whether device is in manual mode
     std::string ruleUid;                // Unique identifier of the rule
+    std::string workflowUid;
+    int workflowVersion;
     std::string ruleType;               // Type of rule
     bool isRuleTurnOnDevice;            // Whether rule turns on the device
     std::string ruleSensorStopAt;       // Time when rule sensor stopped
@@ -42,6 +44,7 @@ public:
         isRuleTurnOnDevice(false),
         ruleSensorValueStop(0.0f),
         ruleVersion(0),
+        workflowVersion(0),
         sensorValueLow(0.0f),
         sensorValueHigh(0.0f),
         sensorValue(0.0f),

@@ -264,9 +264,6 @@ public:
 
     bool ruleFromJson(const std::string &jsonStr, Rule &rule) override
     {
-        // Debug: Log the JSON string being parsed
-        printf("Parsing rule JSON: %s\n", jsonStr.c_str());
-
         DynamicJsonDocument doc(4096);
         DeserializationError error = deserializeJson(doc, jsonStr);
         if (error)
@@ -275,6 +272,11 @@ public:
         // Common properties
         rule.uid = doc["uid"] | "";
         rule.version = doc["version"] | 0;
+        rule.workflowUid = doc["workflowUid"] | "";
+        rule.workflowVersion = doc["workflowVersion"] | 0;
+        rule.workflowDisplayOrder = doc["workflowDisplayOrder"] | 0;
+        rule.workflowPriority = doc["workflowPriority"] | 0;
+        rule.dependsOnRuleUid = doc["dependsOnRuleUid"] | "";
         rule.deviceUid = doc["deviceUid"] | "";
 
         // Parse ruleType
@@ -528,6 +530,11 @@ public:
         // Common properties
         doc["uid"] = rule.uid;
         doc["version"] = rule.version;
+        doc["workflowUid"] = rule.workflowUid;
+        doc["workflowVersion"] = rule.workflowVersion;
+        doc["workflowDisplayOrder"] = rule.workflowDisplayOrder;
+        doc["workflowPriority"] = rule.workflowPriority;
+        doc["dependsOnRuleUid"] = rule.dependsOnRuleUid;
         doc["deviceUid"] = rule.deviceUid;
 
         // RuleType
@@ -852,6 +859,12 @@ public:
                 }
 
                 deviceObj["ruleVersion"] = device.ruleVersion;
+
+                if (!device.workflowUid.empty())
+                {
+                    deviceObj["workflowUid"] = device.workflowUid;
+                    deviceObj["workflowVersion"] = device.workflowVersion;
+                }
 
                 if (device.ruleType == "ph" || device.ruleType == "ec" ||
                     device.ruleType == "sensor" || device.ruleType == "step")
