@@ -5,6 +5,8 @@
 #include <WiFiUdp.h>
 #include "time.h"
 #include "esp_sntp.h"
+#include <cstdarg>
+#include <cstdio>
 
 #include "Core/Domain/Interfaces/ILogger.h"
 #include "Core/Domain/Interfaces/IDebugSystem.h"

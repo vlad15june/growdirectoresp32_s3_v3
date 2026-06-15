@@ -11,6 +11,8 @@
 #include "Infrastructure/Adapters/Time/INTPTimeAdapter.h"
 #include "Application/DTOs/RuleStateUpdateDto.h"
 #include "Application/DTOs/RuleSensorOfflineEventDto.h"
+#include <cstdarg>
+#include <cstdio>
 
 class RuleStateReportingService : public IRuleStateNotifier {
 private:

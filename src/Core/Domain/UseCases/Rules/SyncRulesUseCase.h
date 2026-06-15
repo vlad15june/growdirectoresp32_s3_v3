@@ -13,6 +13,8 @@
 #include "Application/Services/Rules/RuleValidator.h"
 #include "Application/DTOs/RuleStateUpdateDto.h"
 #include <set>
+#include <cstdarg>
+#include <cstdio>
 
 /**
  * Use case for synchronizing rules with the server

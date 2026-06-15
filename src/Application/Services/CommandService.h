@@ -19,6 +19,8 @@
 #include "Core/Domain/Interfaces/Repositories/IRuleRepository.h"
 #include "Application/Services/Rules/RuleValidator.h"
 #include "Infrastructure/Adapters/Time/INTPTimeAdapter.h"
+#include <cstdarg>
+#include <cstdio>
 
 class CommandService : public ICommandService
 {

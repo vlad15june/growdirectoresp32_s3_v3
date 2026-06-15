@@ -11,6 +11,7 @@
 #include <cstdio>
 #include <functional>
 #include <stdexcept>
+#include <algorithm>
 
 class SpiffsSensorTypeDao : public ISpiffsSensorTypeDao {
 protected:

@@ -7,6 +7,8 @@
 #include "Core/Domain/Interfaces/ISettings.h"
 #include "Core/Domain/Interfaces/IDebugSystem.h"
 #include <time.h>
+#include <cstdarg>
+#include <cstdio>
 
 class Settings : public ISettings
 {

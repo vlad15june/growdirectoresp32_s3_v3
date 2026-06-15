@@ -3,6 +3,7 @@
 
 #include "ModuleStructure.h"
 #include "Core/Domain/Data/Entities/Sensor/Sensor.h"
+#include <algorithm>
 
 Sensor* ModuleStructure::findSensorByUid(const std::string& sensorUid) {
     for (Node& node : nodes) {

@@ -15,6 +15,8 @@
 #include "Core/Domain/Interfaces/Mqtt/IMqttManager.h"
 #include "Core/Domain/Interfaces/Adapters/IWifiAdapter.h"
 #include "TopicHandlerFactory.h"
+#include <cstdarg>
+#include <cstdio>
 
 class MqttManager : public IMqttManager
 {

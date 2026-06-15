@@ -12,6 +12,8 @@
 #include "Core/Domain/Interfaces/IModuleConfig.h"
 #include "Core/Domain/Enums/ModuleModeEnum.h" // Added include for ModuleModeEnum
 #include "Application/Interfaces/WebServices/IWebServerLooper.h" // Added include for IWebServerLooper
+#include <cstdarg>
+#include <cstdio>
 
 class ModuleConfigurationWebServer : public IWebServerLooper
 {

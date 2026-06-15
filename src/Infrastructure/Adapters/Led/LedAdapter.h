@@ -6,6 +6,8 @@
 #include "Core/Domain/Interfaces/IDebugSystem.h"
 #include <Arduino.h>
 #include <vector>
+#include <cstdarg>
+#include <cstdio>
 
 // Implementation of LED adapter for ESP32 hardware
 class LedAdapter : public ILedAdapter

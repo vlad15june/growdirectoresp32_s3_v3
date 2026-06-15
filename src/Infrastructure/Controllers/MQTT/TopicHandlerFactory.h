@@ -9,6 +9,8 @@
 #include "Application/Interfaces/ICommandService.h"
 #include "Core/Domain/Interfaces/Adapters/Json/IJsonConverter.h"
 #include "TopicHandlers.h"
+#include <cstdarg>
+#include <cstdio>
 
 /**
  * Factory class to create topic handlers

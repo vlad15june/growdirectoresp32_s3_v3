@@ -15,6 +15,8 @@
 #include "Core/Domain/Enums/ModuleModeEnum.h"
 #include "Core/Domain/Enums/FileSystemStatusEnum.h"
 #include "Application/Interfaces/WebServices/IWebServerLooper.h"
+#include <cstdarg>
+#include <cstdio>
 
 // Parameter constants
 #define PARAM_CH "ch"

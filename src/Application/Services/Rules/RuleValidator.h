@@ -7,6 +7,8 @@
 #include "Core/Domain/Interfaces/IDebugSystem.h"
 #include <string>
 #include <vector>
+#include <cstdarg>
+#include <cstdio>
 
 struct RuleValidationResult {
     bool isValid = true;

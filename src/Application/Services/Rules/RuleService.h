@@ -8,6 +8,8 @@
 #include "Core/Domain/Interfaces/IDebugSystem.h"
 #include "Core/Domain/Data/Models/IDeviceModel.h"
 #include <vector>
+#include <cstdarg>
+#include <cstdio>
 
 /**
  * Implementation of rule service that manages rule operations

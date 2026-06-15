@@ -11,6 +11,8 @@
 #include "Application/DTOs/UpdateDto.h"
 #include "Application/DTOs/DeviceCommandUpdateDto.h"
 #include "Application/DTOs/RawIoResultDto.h"
+#include <cstdarg>
+#include <cstdio>
 
 class MqttApiService : public IMqttApiService {
 private:

@@ -8,6 +8,7 @@
 #include <string>
 #include <vector>
 #include <stdarg.h>
+#include <algorithm>
 
 template <typename T>
 class SpiffsDao : public ISpiffsDao<T> {

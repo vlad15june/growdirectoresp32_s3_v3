@@ -1,4 +1,6 @@
 #include "LedUseCases.h"
+#include <cstdarg>
+#include <cstdio>
 
 // Constructor
 LedUseCases::LedUseCases(ILedAdapter *adapter, IModuleConfig *moduleConfig, IArduinoAdapter *arduinoAdapter,

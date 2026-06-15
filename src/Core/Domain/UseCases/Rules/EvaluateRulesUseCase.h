@@ -14,6 +14,8 @@
 #include "Core/Domain/Interfaces/Rules/IRuleStateNotifier.h"
 #include <map>
 #include <set>
+#include <cstdarg>
+#include <cstdio>
 
 enum class SensorVerdict { TURN_ON, TURN_OFF, HOLD, INERT };
 

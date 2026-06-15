@@ -14,6 +14,8 @@
 #include "Application/DTOs/ModuleCommandDto.h"
 #include "Application/DTOs/ModuleCommandUpdateDto.h"
 #include "Core/Domain/Data/Entities/Rule.h"
+#include <cstdarg>
+#include <cstdio>
 
 class RestAPIService : public IRestAPIService
 {

@@ -7,6 +7,9 @@
 #include "Core/Domain/Interfaces/IDebugSystem.h"
 #include "Core/Domain/Interfaces/Mqtt/IMessageProcessor.h"
 #include "Core/Domain/Interfaces/Mqtt/ITopicHandler.h"
+#include <cstdarg>
+#include <cstdio>
+#include <algorithm>
 
 /**
  * MQTT Message Processor implementation

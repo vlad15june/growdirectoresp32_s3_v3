@@ -10,6 +10,8 @@
 #include "Core/Domain/Interfaces/IDebugSystem.h"
 #include "Core/Domain/Interfaces/ISettings.h"
 #include "Infrastructure/Controllers/WebServices/TestModeWebServer.h"
+#include <cstdarg>
+#include <cstdio>
 
 class WebServerLauncher : public IWebServerLauncher {
 private:

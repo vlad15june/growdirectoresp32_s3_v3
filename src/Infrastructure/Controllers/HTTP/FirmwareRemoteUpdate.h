@@ -8,6 +8,8 @@
 #include "Infrastructure/Adapters/Http/HttpClientAdapter.h"
 #include <WiFi.h>
 #include <Update.h>
+#include <cstdarg>
+#include <cstdio>
 
 // Firmware update status constants
 #define FIRMWARE_UPDATE_STATE_DONE 3
