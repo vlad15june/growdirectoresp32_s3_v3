@@ -1,5 +1,12 @@
 # Release Notes
 
+## Version 2.2.7 (2026-06-15)
+
+### Changed
+- **Firmware Build Stability**: Improved build consistency across environments so the firmware compiles reliably, and ensured automation rules start with a well-defined default state when their direction is not explicitly provided, avoiding undefined behavior.
+
+---
+
 ## Version 2.2.6 (2026-06-15)
 
 ### Fixed
