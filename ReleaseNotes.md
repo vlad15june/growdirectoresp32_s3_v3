@@ -1,5 +1,12 @@
 # Release Notes
 
+## Version 2.2.6 (2026-06-15)
+
+### Fixed
+- **Correct Sensor Address Detection via Wildcard**: GDV1-3532 During wildcard-based sensor address detection, the device now reads the sensor's actual address from the correct position in its response and ignores out-of-range or invalid values, instead of mistaking the response marker for the address. This prevents address assignment to an incorrect target and improves reliable detection of sensors that respond to wildcard addressing.
+
+---
+
 ## Version 2.2.5 (2026-06-15)
 
 ### Added
