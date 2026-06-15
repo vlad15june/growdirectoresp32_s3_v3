@@ -7,6 +7,8 @@
 #include "Application/DTOs/CommandDto.h"
 #include <string.h>
 #include <string>
+#include <cstdarg>
+#include <cstdio>
 
 /**
  * Base Topic Handler implementation

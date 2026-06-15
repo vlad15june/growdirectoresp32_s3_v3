@@ -2,6 +2,7 @@
 
 #include <vector>
 #include <cstring>
+#include <algorithm>
 #include "IDeviceModel.h"
 #include "Core/Domain/Data/Entities/Device.h"
 #include "Core/Domain/Data/Models/ModuleStructure.h"
