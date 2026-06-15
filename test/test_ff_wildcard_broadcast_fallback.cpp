@@ -133,13 +133,9 @@ void test_primary_confirmed_skips_ff_fallback(void) {
     TEST_ASSERT_FALSE(fake.hasWrite(false, 5, 0x0100, 22));
 }
 
-// INV-2: WS12S stage discovers, writes via FC06, ping confirms, returns true.
 void test_ws12s_stage_query_write_ping_confirms(void) {
     MockModbusRS485 fake;
-    // WS12S query reply: discovered addr=5, fc echo=0x03, valid (mock CRC=0).
-    fake.responses[{0xFF, 0x03}] = { 0x05, 0x03, 0x02, 0x00, 0xAB, 0x00, 0x00 };
-    // Address 22 starts responding only after 3 writes:
-    // #1 primary FC16 at 10, #2 primary broadcast FC16 at 0, #3 WS12S FC06 at 5.
+    fake.responses[{0xFF, 0x03}] = { 0xFF, 0x03, 0x02, 0x00, 0x05, 0x00, 0x00 };
     fake.respondAddressAfterWrites = 22;
     fake.respondAfterWriteCount = 3;
     std::vector<IModbusRS485 *> ports{ &fake };
@@ -154,14 +150,9 @@ void test_ws12s_stage_query_write_ping_confirms(void) {
     TEST_ASSERT_FALSE(fake.hasWildcardFrameWithFc(0x6E));
 }
 
-// INV-3: CWYW stage runs when WS12S query times out; discovered addr written via FC16; ping confirms.
 void test_cwyw_stage_runs_after_ws12s_timeout_and_confirms(void) {
     MockModbusRS485 fake;
-    // WS12S query: no scripted response -> times out.
-    // CWYW query reply: discovered addr=7, fc echo=0x6E, valid (mock CRC=0).
-    fake.responses[{0xFF, 0x6E}] = { 0x07, 0x6E, 0x02, 0x00, 0xAB, 0x00, 0x00 };
-    // Address 22 responds after 3 writes:
-    // #1 primary FC16 at 10, #2 primary broadcast FC16 at 0, #3 CWYW FC16 at 7.
+    fake.responses[{0xFF, 0x6E}] = { 0xFF, 0x6E, 0x02, 0x00, 0x07, 0x00, 0x00 };
     fake.respondAddressAfterWrites = 22;
     fake.respondAfterWriteCount = 3;
     std::vector<IModbusRS485 *> ports{ &fake };
@@ -210,33 +201,44 @@ void test_ff_query_crc_mismatch_skips_stage(void) {
     }
 }
 
-void test_ff_query_slave_ff_is_now_accepted_writes_to_ff(void) {
+void test_ws12s_address_parsed_from_payload_not_slave_byte(void) {
     MockModbusRS485 fake;
-    fake.responses[{0xFF, 0x03}] = { 0xFF, 0x03, 0x02, 0x00, 0xAB, 0x00, 0x00 };
+    fake.responses[{0xFF, 0x03}] = { 0xFF, 0x03, 0x02, 0x00, 0x73, 0x00, 0x00 };
     std::vector<IModbusRS485 *> ports{ &fake };
     MockArduinoAdapter arduino;
     ModbusSensorReader reader(ports, arduino, nullptr, nullptr);
 
     reader.writeSensorAddress(10, 22, 0, 0x0100, 16, 0x0100);
 
-    TEST_ASSERT_TRUE(fake.hasWrite(false, 0xFF, 0x0100, 22));
+    TEST_ASSERT_TRUE(fake.hasWrite(false, 0x73, 0x0100, 22));
+    TEST_ASSERT_FALSE(fake.hasWrite(false, 0xFF, 0x0100, 22));
 }
 
-// INV-7: FF query slave-byte 0x00 -> stage rejects, no WS12S addr-specific write at slave=0.
-void test_ff_query_bad_slave_zero_skips_stage(void) {
+void test_ws12s_address_byte_zero_in_payload_skips_stage(void) {
     MockModbusRS485 fake;
-    fake.responses[{0xFF, 0x03}] = { 0x00, 0x03, 0x02, 0x00, 0xAB, 0x00, 0x00 };
+    fake.responses[{0xFF, 0x03}] = { 0xFF, 0x03, 0x02, 0x00, 0x00, 0x00, 0x00 };
     std::vector<IModbusRS485 *> ports{ &fake };
     MockArduinoAdapter arduino;
     ModbusSensorReader reader(ports, arduino, nullptr, nullptr);
 
     reader.writeSensorAddress(10, 22, 0, 0x0100, 16, 0x0100);
 
-    // No WS12S FC06 single-register write at register 0x0100 to slave 0x00 must occur.
     for (const auto &w : fake.writes) {
-        bool badWs12sWrite = (!w.multi && w.slave == 0x00 && w.reg == 0x0100);
+        bool badWs12sWrite = (!w.multi && w.reg == 0x0100 && w.slave != 0x00);
         TEST_ASSERT_FALSE(badWs12sWrite);
     }
+}
+
+void test_ws12s_address_byte_above_247_skips_stage(void) {
+    MockModbusRS485 fake;
+    fake.responses[{0xFF, 0x03}] = { 0xFF, 0x03, 0x02, 0x00, 0xFA, 0x00, 0x00 };
+    std::vector<IModbusRS485 *> ports{ &fake };
+    MockArduinoAdapter arduino;
+    ModbusSensorReader reader(ports, arduino, nullptr, nullptr);
+
+    reader.writeSensorAddress(10, 22, 0, 0x0100, 16, 0x0100);
+
+    TEST_ASSERT_FALSE(fake.hasWrite(false, 0xFA, 0x0100, 22));
 }
 
 // INV-7: FF query FC echo mismatch -> stage rejects.
@@ -275,8 +277,9 @@ extern "C" int run_ff_wildcard_broadcast_fallback_tests(void) {
     RUN_TEST(test_cwyw_stage_runs_after_ws12s_timeout_and_confirms);
     RUN_TEST(test_both_stages_fail_then_legacy_loop_runs);
     RUN_TEST(test_ff_query_crc_mismatch_skips_stage);
-    RUN_TEST(test_ff_query_slave_ff_is_now_accepted_writes_to_ff);
-    RUN_TEST(test_ff_query_bad_slave_zero_skips_stage);
+    RUN_TEST(test_ws12s_address_parsed_from_payload_not_slave_byte);
+    RUN_TEST(test_ws12s_address_byte_zero_in_payload_skips_stage);
+    RUN_TEST(test_ws12s_address_byte_above_247_skips_stage);
     RUN_TEST(test_ff_query_fc_mismatch_skips_stage);
     RUN_TEST(test_no_restore_factory_frame_ever_emitted);
     return 0;

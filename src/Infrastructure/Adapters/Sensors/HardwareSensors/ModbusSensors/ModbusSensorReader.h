@@ -26,10 +26,12 @@ private:
     static constexpr uint16_t kWs12sQueryReg = 0x0100;
     static constexpr uint8_t kWs12sWriteFc = 0x06;
     static constexpr uint16_t kWs12sWriteReg = 0x0100;
+    static constexpr int kWs12sAddressByteOffset = 4;
     static constexpr uint8_t kCwywQueryFc = 0x6E;
     static constexpr uint16_t kCwywQueryReg = 0x0012;
     static constexpr uint8_t kCwywWriteFc = 0x10;
     static constexpr uint16_t kCwywWriteReg = 0x0018;
+    static constexpr int kCwywAddressByteOffset = 4;
 
 public:
     ModbusSensorReader(const std::vector<IModbusRS485*>& modbusPorts, IArduinoAdapter &arduino, ILogger* logger, IDebugSystem* debugSystem)
@@ -402,14 +404,14 @@ private:
         IModbusRS485* modbus = _modbusPorts[portIndex];
 
         if (runFfWildcardStage("ws12s", kWs12sQueryFc, kWs12sQueryReg,
-                               kWs12sWriteFc, kWs12sWriteReg,
+                               kWs12sWriteFc, kWs12sWriteReg, kWs12sAddressByteOffset,
                                newAddress, portIndex, modbus, probe))
         {
             return true;
         }
 
         if (runFfWildcardStage("cwyw", kCwywQueryFc, kCwywQueryReg,
-                               kCwywWriteFc, kCwywWriteReg,
+                               kCwywWriteFc, kCwywWriteReg, kCwywAddressByteOffset,
                                newAddress, portIndex, modbus, probe))
         {
             return true;
@@ -422,7 +424,7 @@ private:
 
     bool runFfWildcardStage(const char* tag,
                             uint8_t queryFc, uint16_t queryReg,
-                            uint8_t writeFc, uint16_t writeReg,
+                            uint8_t writeFc, uint16_t writeReg, int addressByteOffset,
                             int newAddress, int portIndex,
                             IModbusRS485* modbus, const ModbusRegisterConfig& probe)
     {
@@ -430,7 +432,7 @@ private:
             tag, queryFc, queryReg, portIndex);
 
         uint8_t discoveredAddr = 0;
-        if (!queryAddressViaWildcard(queryFc, queryReg, portIndex, discoveredAddr))
+        if (!queryAddressViaWildcard(queryFc, queryReg, portIndex, addressByteOffset, discoveredAddr))
         {
             return false;
         }
@@ -521,7 +523,8 @@ private:
         return false;
     }
 
-    bool queryAddressViaWildcard(uint8_t fc, uint16_t reg, int portIndex, uint8_t& outAddress)
+    bool queryAddressViaWildcard(uint8_t fc, uint16_t reg, int portIndex,
+                                  int addressByteOffset, uint8_t& outAddress)
     {
         if (portIndex < 0 || portIndex >= (int)_modbusPorts.size())
         {
@@ -587,16 +590,24 @@ private:
             return false;
         }
 
-        if (buf[0] == 0x00)
+        if (addressByteOffset < 0 || addressByteOffset >= n - 2)
         {
-            log("ModbusSensorReader: FF_FALLBACK query bad_slave=0x00 fc=0x%02X reg=0x%04X port=%d",
-                fc, reg, portIndex);
+            log("ModbusSensorReader: FF_FALLBACK query bad_offset=%d (n=%d) fc=0x%02X reg=0x%04X port=%d",
+                addressByteOffset, n, fc, reg, portIndex);
             return false;
         }
 
-        outAddress = buf[0];
-        log("ModbusSensorReader: FF_FALLBACK query accepted slave=0x%02X fc=0x%02X reg=0x%04X port=%d",
-            buf[0], fc, reg, portIndex);
+        uint8_t candidate = buf[addressByteOffset];
+        if (candidate == 0x00 || candidate > 247)
+        {
+            log("ModbusSensorReader: FF_FALLBACK query bad_address=0x%02X (offset=%d) fc=0x%02X reg=0x%04X port=%d",
+                candidate, addressByteOffset, fc, reg, portIndex);
+            return false;
+        }
+
+        outAddress = candidate;
+        log("ModbusSensorReader: FF_FALLBACK query accepted address=%d (slave-byte=0x%02X, offset=%d) fc=0x%02X reg=0x%04X port=%d",
+            candidate, buf[0], addressByteOffset, fc, reg, portIndex);
         return true;
     }
 
