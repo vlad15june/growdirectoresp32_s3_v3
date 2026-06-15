@@ -60,7 +60,7 @@ public:
     
     // Sensor and Step rule properties
     std::string sensorUid;
-    RuleDirection direction;
+    RuleDirection direction = RuleDirection::UNKNOWN;
     std::vector<RuleCondition> conditions;
     bool conditionOr = false;
     int delayOn = 0;
