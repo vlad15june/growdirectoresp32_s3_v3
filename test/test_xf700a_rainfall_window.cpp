@@ -21,7 +21,7 @@ public:
     std::vector<Frame> sent;
     std::vector<WriteCall> writes;
     std::set<int> respondingAddresses;
-    uint16_t readbackValue = 5;
+    uint16_t readbackValue = 1;
     bool powered = false;
 
     void begin(unsigned long) override {}
@@ -105,7 +105,7 @@ SensorEntity makeSensor(const std::string &model, int addr, int pin) {
 void test_xf700a_writes_accum_time_and_verifies(void) {
     FakeModbusRS485 p0, p1, p2, p3;
     p0.respondingAddresses.insert(255);
-    p0.readbackValue = 5;
+    p0.readbackValue = 1;
     std::vector<IModbusRS485 *> ports{ &p0, &p1, &p2, &p3 };
     MockArduinoAdapter arduino;
     ModbusSensorReader modbusReader(ports, arduino, nullptr, nullptr);
@@ -118,7 +118,7 @@ void test_xf700a_writes_accum_time_and_verifies(void) {
     TEST_ASSERT_NOT_NULL(w);
     TEST_ASSERT_FALSE(w->multi);
     TEST_ASSERT_EQUAL_INT(255, w->slave);
-    TEST_ASSERT_EQUAL_UINT16(5, w->value);
+    TEST_ASSERT_EQUAL_UINT16(1, w->value);
 
     const auto *readFrame = p0.firstFc03FrameToRegister(0x0107);
     TEST_ASSERT_NOT_NULL(readFrame);
@@ -184,7 +184,7 @@ void test_xf700a_idempotent_two_passes(void) {
 
     TEST_ASSERT_EQUAL_INT(2, p0.countWritesToRegister(0x0107));
     for (const auto &w : p0.writes) {
-        if (w.reg == 0x0107) TEST_ASSERT_EQUAL_UINT16(5, w.value);
+        if (w.reg == 0x0107) TEST_ASSERT_EQUAL_UINT16(1, w.value);
     }
 }
 
