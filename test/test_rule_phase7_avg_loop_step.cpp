@@ -43,7 +43,7 @@ public:
 };
 
 static DeviceDigitalOut makeDigitalDevice(const char* uid, DeviceStateEnum state) {
-    DeviceDigitalOut d;
+    DeviceDigitalOut d{};
     d.deviceUid = uid;
     d.deviceType = DEVICE_TYPE_DIGITAL;
     d.state = state;

@@ -123,7 +123,7 @@ static Rule makeWorkflowSensorRule()
 static void test_attribution_propagates_to_device(void)
 {
     MockRuleRepository repo;
-    DeviceDigitalOut device;
+    DeviceDigitalOut device{};
     device.deviceUid = "dev-1";
     device.deviceType = DEVICE_TYPE_DIGITAL;
     device.state = DEVICE_STATE_OFF;
@@ -153,7 +153,7 @@ static void test_attribution_propagates_to_device(void)
 static void test_predecessor_and_priority_do_not_gate(void)
 {
     MockRuleRepository repo;
-    DeviceDigitalOut device;
+    DeviceDigitalOut device{};
     device.deviceUid = "dev-1";
     device.deviceType = DEVICE_TYPE_DIGITAL;
     device.state = DEVICE_STATE_OFF;

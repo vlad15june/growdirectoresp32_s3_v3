@@ -164,7 +164,7 @@ static void test_consumer_purges_deleting_rule(void)
     MockRuleRepository repo;
     repo.rules = {makeSensorRule("u1", RuleMode::OFF, RuleState::DELETING)};
 
-    Device device;
+    Device device{};
     device.deviceUid = "dev-1";
     device.state = DEVICE_STATE_OFF;
     device.ruleStopReason = nullptr;
@@ -189,7 +189,7 @@ static void test_consumer_ignores_non_deleting_rule(void)
     MockRuleRepository repo;
     repo.rules = {makeSensorRule("u1", RuleMode::OFF, RuleState::SYNCHRONIZED)};
 
-    Device device;
+    Device device{};
     device.deviceUid = "dev-1";
     device.state = DEVICE_STATE_OFF;
     SingleDeviceModel deviceModel;
@@ -213,7 +213,7 @@ static void test_consumer_retries_on_purge_failure(void)
     repo.rules = {makeSensorRule("u1", RuleMode::OFF, RuleState::DELETING)};
     repo.removeReturnValue = false;
 
-    Device device;
+    Device device{};
     device.deviceUid = "dev-1";
     device.state = DEVICE_STATE_OFF;
     SingleDeviceModel deviceModel;
@@ -238,7 +238,7 @@ static void test_consumer_switches_off_active_device(void)
     MockRuleRepository repo;
     repo.rules = {makeActiveScheduleRule("u1")};
 
-    Device device;
+    Device device{};
     device.deviceUid = "dev-1";
     device.state = DEVICE_STATE_OFF;
     device.ruleStopReason = nullptr;

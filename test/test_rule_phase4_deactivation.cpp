@@ -69,7 +69,7 @@ static void test_disabling_rule_switches_device_off(void) {
     FilteringRuleRepo repo;
     repo.rules = {makeOnSensorRule()};
 
-    DeviceDigitalOut device;
+    DeviceDigitalOut device{};
     device.deviceUid = "dev-1";
     device.deviceType = DEVICE_TYPE_DIGITAL;
     device.state = DEVICE_STATE_OFF;
@@ -106,7 +106,7 @@ static void test_active_rule_not_deactivated(void) {
     FilteringRuleRepo repo;
     repo.rules = {makeOnSensorRule()};
 
-    DeviceDigitalOut device;
+    DeviceDigitalOut device{};
     device.deviceUid = "dev-1";
     device.deviceType = DEVICE_TYPE_DIGITAL;
     device.state = DEVICE_STATE_OFF;
@@ -138,7 +138,7 @@ static void test_disabling_rule_with_device_off_no_action(void) {
     r.mode = RuleMode::OFF;
     repo.rules = {r};
 
-    DeviceDigitalOut device;
+    DeviceDigitalOut device{};
     device.deviceUid = "dev-1";
     device.deviceType = DEVICE_TYPE_DIGITAL;
     device.state = DEVICE_STATE_OFF;

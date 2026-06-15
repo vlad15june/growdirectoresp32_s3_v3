@@ -54,7 +54,7 @@ static Rule makeDownSensorRule() {
 
 static void test_sensor_turn_on_propagates_context(void) {
     MockRuleRepository repo;
-    DeviceDigitalOut device;
+    DeviceDigitalOut device{};
     device.deviceUid = "dev-1";
     device.deviceType = DEVICE_TYPE_DIGITAL;
     device.state = DEVICE_STATE_OFF;
@@ -88,7 +88,7 @@ static void test_sensor_turn_on_propagates_context(void) {
 
 static void test_sensor_turn_off_sets_setpoint_reach(void) {
     MockRuleRepository repo;
-    DeviceDigitalOut device;
+    DeviceDigitalOut device{};
     device.deviceUid = "dev-1";
     device.deviceType = DEVICE_TYPE_DIGITAL;
     device.state = DEVICE_STATE_OFF;
@@ -120,7 +120,7 @@ static void test_sensor_turn_off_sets_setpoint_reach(void) {
 
 static void test_sensor_deadband_no_device_change(void) {
     MockRuleRepository repo;
-    DeviceDigitalOut device;
+    DeviceDigitalOut device{};
     device.deviceUid = "dev-1";
     device.deviceType = DEVICE_TYPE_DIGITAL;
     device.state = DEVICE_STATE_OFF;

@@ -92,7 +92,7 @@ static void test_stale_sensor_turns_device_off_and_clears_state(void) {
     MockRuleRepository repo;
     repo.rules.push_back(makeSensorRule());
 
-    DeviceDigitalOut device;
+    DeviceDigitalOut device{};
     device.deviceUid = "dev-1";
     device.deviceType = DEVICE_TYPE_DIGITAL;
     device.state = DEVICE_STATE_OFF;
@@ -231,7 +231,7 @@ static void test_never_seen_recovers_to_fresh_when_value_arrives(void) {
     MockRuleRepository repo;
     repo.rules.push_back(makeSensorRule());
 
-    DeviceDigitalOut device;
+    DeviceDigitalOut device{};
     device.deviceUid = "dev-1";
     device.deviceType = DEVICE_TYPE_DIGITAL;
     device.state = DEVICE_STATE_OFF;
@@ -263,7 +263,7 @@ static void test_last_ahead_of_now_not_stale(void) {
     MockRuleRepository repo;
     repo.rules.push_back(makeSensorRule());
 
-    DeviceDigitalOut device;
+    DeviceDigitalOut device{};
     device.deviceUid = "dev-1";
     device.deviceType = DEVICE_TYPE_DIGITAL;
     device.state = DEVICE_STATE_OFF;
