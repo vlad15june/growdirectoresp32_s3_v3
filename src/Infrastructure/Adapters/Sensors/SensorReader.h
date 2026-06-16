@@ -26,7 +26,7 @@ private:
 
     static constexpr const char *XF700A_MODEL = "XF700A";
     static constexpr uint16_t RAIN_ACCUM_TIME_REGISTER = 0x0107;
-    static constexpr uint16_t RAIN_ACCUM_TIME_MINUTES = 1;
+    static constexpr uint16_t RAIN_ACCUM_TIME_MINUTES = 5;
 
 public:
     SensorReader(IAnalogSensorReader *analogReader,
