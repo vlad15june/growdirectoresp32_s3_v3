@@ -1,5 +1,12 @@
 # Release Notes
 
+## Version 2.2.9 (2026-06-16)
+
+### Changed
+- **Rainfall Accumulation Window**: GDV1-3568 The rainfall accumulation period for the rain sensor is now five minutes, so cumulative rainfall is reported over a longer averaging interval.
+
+---
+
 ## Version 2.2.8 (2026-06-15)
 
 ### Changed
