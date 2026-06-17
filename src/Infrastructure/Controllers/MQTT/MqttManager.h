@@ -49,6 +49,11 @@ private:
     };
     QueueHandle_t _messageQueue;
 
+    static const size_t MAX_MESSAGE_SIZE = 8192;
+    String _assemblyTopic;
+    std::vector<uint8_t> _assemblyBuf;
+    size_t _assemblyTotal = 0;
+
     struct OptLock {
         std::recursive_mutex *m;
         explicit OptLock(std::recursive_mutex *mm) : m(mm) { if (m) m->lock(); }
@@ -128,20 +133,55 @@ private:
         log("MQTT: disconnected (reason=%d), next try in %ums", static_cast<int>(reason), _reconnectInterval);
     }
 
-    void onMqttMessage(char *topic, char *payload, size_t len, size_t index, size_t total)
+    void enqueueMessage(const String &topic, const uint8_t *data, size_t len)
     {
-        if (index != 0 || len != total)
-        {
-            return;
-        }
-
         MqttMessage *msg = new MqttMessage();
-        msg->topic = String(topic);
-        msg->payload.assign(reinterpret_cast<uint8_t *>(payload), reinterpret_cast<uint8_t *>(payload) + len);
+        msg->topic = topic;
+        msg->payload.assign(data, data + len);
 
         if (xQueueSend(_messageQueue, &msg, 0) != pdTRUE)
         {
             delete msg;
+        }
+    }
+
+    void onMqttMessage(char *topic, char *payload, size_t len, size_t index, size_t total)
+    {
+        if (total == 0 || total > MAX_MESSAGE_SIZE)
+        {
+            return;
+        }
+
+        if (len == total)
+        {
+            enqueueMessage(String(topic), reinterpret_cast<uint8_t *>(payload), len);
+            return;
+        }
+
+        if (index == 0)
+        {
+            _assemblyTopic = String(topic);
+            _assemblyTotal = total;
+            _assemblyBuf.clear();
+            _assemblyBuf.reserve(total);
+        }
+        else if (_assemblyTotal != total || _assemblyTopic != String(topic))
+        {
+            log("MQTT: dropping out-of-order fragment topic=%s", topic);
+            return;
+        }
+
+        _assemblyBuf.insert(_assemblyBuf.end(),
+                            reinterpret_cast<uint8_t *>(payload),
+                            reinterpret_cast<uint8_t *>(payload) + len);
+
+        if (_assemblyBuf.size() >= _assemblyTotal)
+        {
+            enqueueMessage(_assemblyTopic, _assemblyBuf.data(), _assemblyBuf.size());
+            _assemblyBuf.clear();
+            _assemblyBuf.shrink_to_fit();
+            _assemblyTotal = 0;
+            _assemblyTopic = "";
         }
     }
 
