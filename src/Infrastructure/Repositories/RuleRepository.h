@@ -388,35 +388,7 @@ public:
                         continue; // Not a valid day of month
                     }
                 }
-                
-                // For schedule rules, check if there's an active schedule right now
-                if (rule.isScheduleRule()) {
-                    bool isScheduleActive = false;
-                    int currentHour = timeinfo.tm_hour;
-                    int currentMinute = timeinfo.tm_min;
-                    int currentSecond = timeinfo.tm_sec;
-                    uint32_t totalSecondsNow = currentHour * 3600 + currentMinute * 60 + currentSecond;
-                    
-                    for (const auto& scheduleItem : rule.schedule) {
-                        // Here we assume startAt is a time_t value or can be converted to hours/minutes
-                        // In a real implementation, you'd need to parse the time string properly
-                        int startHour = (scheduleItem.startAt / 3600) % 24; // Extract hour
-                        int startMinute = (scheduleItem.startAt / 60) % 60; // Extract minute
-                        
-                        uint32_t totalSecondsStart = startHour * 3600 + startMinute * 60;
-                        uint32_t totalSecondsEnd = totalSecondsStart + scheduleItem.duration;
-                        
-                        if (totalSecondsStart <= totalSecondsNow && totalSecondsNow < totalSecondsEnd) {
-                            isScheduleActive = true;
-                            break;
-                        }
-                    }
-                    
-                    if (!isScheduleActive) {
-                        continue; // No active schedule at this time
-                    }
-                }
-                
+
                 isRuleOn = true;
             }
             

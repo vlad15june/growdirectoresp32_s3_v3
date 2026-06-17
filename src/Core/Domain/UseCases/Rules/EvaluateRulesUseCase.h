@@ -718,6 +718,7 @@ private:
             log("EVALUATE_RULES: NTP time adapter not available for schedule rule");
             result.state = DEVICE_STATE_OFF;
             result.isRuleTurnOnDevice = false;
+            result.ruleStopReason = "time_not_available_error";
             return result;
         }
         
@@ -728,6 +729,7 @@ private:
             log("EVALUATE_RULES: Failed to get current time for schedule rule");
             result.state = DEVICE_STATE_OFF;
             result.isRuleTurnOnDevice = false;
+            result.ruleStopReason = "time_not_available_error";
             return result;
         }
         
@@ -823,11 +825,12 @@ private:
         } else {
             result.isRuleTurnOnDevice = false;
             result.state = DEVICE_STATE_OFF;
+            result.ruleStopReason = "time_reach";
         }
-        
+
         return result;
     }
-    
+
     std::string sensorEventTimestamp() {
         if (!_ntpTimeAdapter) {
             return "";
