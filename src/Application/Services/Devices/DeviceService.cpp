@@ -77,22 +77,46 @@ void DeviceService::loop() {
         if (stateChanged) {
             log("DeviceService: Device state changed, sending update immediately");
         }
-        sendDeviceUpdate();
+        bool sent = sendDeviceUpdate();
         lastDeviceStateSignature = signature;
+        if (sent) {
+            clearReportedRuleContext();
+        }
     }
 }
 
-void DeviceService::sendDeviceUpdate() {
+void DeviceService::clearReportedRuleContext() {
+    auto devices = deviceModel->getAllDevices();
+    for (auto device : devices) {
+        if (!device || !device->needReportingRuleUid) {
+            continue;
+        }
+
+        device->workByRule = false;
+        device->ruleUid = nullptr;
+        device->ruleStopReason = nullptr;
+        device->needReportingRuleUid = false;
+        if (device->deviceType != DEVICE_TYPE_ANALOG) {
+            static_cast<DeviceDigitalOut*>(device)->isRuleTurnOnDevice = false;
+        }
+
+        log("DeviceService: Cleared rule context after reporting for %s",
+            device->deviceUid ? device->deviceUid : "");
+    }
+}
+
+bool DeviceService::sendDeviceUpdate() {
     if (!hybridApiService) {
-        return;
+        return false;
     }
 
     log("DeviceService: Sending device update to server");
     UpdateDto updateDto = createDeviceUpdateDto();
 
-    hybridApiService->sendModuleUpdateData(updateDto);
+    bool sent = hybridApiService->sendModuleUpdateData(updateDto);
 
     lastDeviceUpdateTime = arduinoAdapter->millis();
+    return sent;
 }
 
 void DeviceService::refreshSwitchedAtForChangedDevices() {
@@ -182,7 +206,7 @@ UpdateDto DeviceService::createDeviceUpdateDto() {
         deviceDto.state_hw = isOn ? "on" : "off";
         
         deviceDto.isAuto = device->workByRule;
-        deviceDto.isManual = device->isManual;
+        deviceDto.isManual = device->workManual;
         
         uint32_t secondsToSwitchBack = 0;
         uint32_t secondsEnabledFor = 0;

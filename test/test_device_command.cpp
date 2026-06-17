@@ -287,6 +287,7 @@ static void test_rule_off_update_carries_stop_reason(void) {
     device->ruleUid = "rule-1";
     device->ruleType = RuleType::SENSOR;
     device->ruleStopReason = "rule_manualy_off";
+    device->needReportingRuleUid = true;
     deviceModel.addDevice(device);
 
     MockNTPTimeAdapter timeAdapter;
@@ -299,18 +300,33 @@ static void test_rule_off_update_carries_stop_reason(void) {
     DeviceService svc(&moduleConfig, &ms, &deviceModel, &timeAdapter, &arduino,
                       nullptr, &hybrid, &logger, &debug);
 
-    svc.loop();
-
-    TEST_ASSERT_TRUE(hybrid.sendModuleUpdateDataCalled);
-    TEST_ASSERT_EQUAL_INT(1, static_cast<int>(hybrid.lastUpdateData.devices.size()));
-    const DeviceDto& d = hybrid.lastUpdateData.devices[0];
-    TEST_ASSERT_TRUE(d.isAuto);
-    TEST_ASSERT_EQUAL_STRING("rule_manualy_off", d.ruleStopReason.c_str());
-
     JsonConverter converter;
-    std::string json = converter.updateToJson(hybrid.lastUpdateData);
-    TEST_ASSERT_TRUE(json.find("\"ruleStopReason\":\"rule_manualy_off\"") != std::string::npos);
-    TEST_ASSERT_TRUE(json.find("\"isAuto\":true") != std::string::npos);
+
+    // Packet 1: rule-stop event carries reason and isAuto=true
+    svc.loop();
+    TEST_ASSERT_TRUE(hybrid.sendModuleUpdateDataCalled);
+    const DeviceDto& d1 = hybrid.lastUpdateData.devices[0];
+    TEST_ASSERT_TRUE(d1.isAuto);
+    TEST_ASSERT_EQUAL_STRING("rule_manualy_off", d1.ruleStopReason.c_str());
+    std::string json1 = converter.updateToJson(hybrid.lastUpdateData);
+    TEST_ASSERT_TRUE(json1.find("\"ruleStopReason\":\"rule_manualy_off\"") != std::string::npos);
+    TEST_ASSERT_TRUE(json1.find("\"isAuto\":true") != std::string::npos);
+
+    // Context cleared after reporting
+    TEST_ASSERT_FALSE(device->workByRule);
+    TEST_ASSERT_FALSE(device->needReportingRuleUid);
+
+    // Packet 2: cleared state, isAuto=false, no rule context
+    arduino.currentMillis = 2000;
+    hybrid.sendModuleUpdateDataCalled = false;
+    svc.loop();
+    TEST_ASSERT_TRUE(hybrid.sendModuleUpdateDataCalled);
+    const DeviceDto& d2 = hybrid.lastUpdateData.devices[0];
+    TEST_ASSERT_FALSE(d2.isAuto);
+    std::string json2 = converter.updateToJson(hybrid.lastUpdateData);
+    TEST_ASSERT_TRUE(json2.find("\"isAuto\":false") != std::string::npos);
+    TEST_ASSERT_TRUE(json2.find("ruleStopReason") == std::string::npos);
+    TEST_ASSERT_TRUE(json2.find("\"ruleUid\"") == std::string::npos);
 }
 
 extern "C" void run_device_command_tests(void) {

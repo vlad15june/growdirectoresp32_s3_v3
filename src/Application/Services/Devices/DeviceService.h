@@ -37,9 +37,10 @@ private:
     std::map<std::string, DeviceStateEnum> prevDeviceStates;
 
     UpdateDto createDeviceUpdateDto();
-    void sendDeviceUpdate();
+    bool sendDeviceUpdate();
     std::string buildDeviceStateSignature();
     void refreshSwitchedAtForChangedDevices();
+    void clearReportedRuleContext();
 
     void log(const char* format, ...)
     {

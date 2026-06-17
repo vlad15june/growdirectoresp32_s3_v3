@@ -44,7 +44,8 @@ public:
     bool workByRule;
     long commandId;
     bool workManual;
-    
+    bool needReportingRuleUid = false;
+
     bool needToSwitchBack;
     int mixTime;
     

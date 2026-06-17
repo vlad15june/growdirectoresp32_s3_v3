@@ -190,16 +190,27 @@ private:
             bool wasActive = activeIt != _ruleActiveStates.end() &&
                              activeIt->second.state != DEVICE_STATE_OFF;
             if (wasActive && _deviceModel) {
-                Device* device = _deviceModel->getDeviceByUid(rule.deviceUid.c_str());
-                if (device) {
-                    device->state = DEVICE_STATE_OFF;
-                    device->ruleStopReason = "rule_manualy_deleted";
-                    if (device->deviceType != DeviceTypeEnum::DEVICE_TYPE_ANALOG) {
-                        static_cast<DeviceDigitalOut*>(device)->isRuleTurnOnDevice = false;
-                    }
-                    log("EVALUATE_RULES: RULE_DELETE device_off uid=%s deviceUid=%s reason=rule_manualy_deleted",
-                        rule.uid.c_str(), rule.deviceUid.c_str());
-                }
+                const RuleEvaluationResult& prev = activeIt->second;
+                RuleEvaluationResult off(rule.uid, rule.ruleType, rule.version);
+                off.workflowUid = rule.workflowUid;
+                off.workflowVersion = rule.workflowVersion;
+                off.state = DEVICE_STATE_OFF;
+                off.isRuleTurnOnDevice = false;
+                off.ruleStopReason = "rule_manualy_deleted";
+                off.sensorUid = rule.sensorUid;
+                off.sensorValue = static_cast<float>(getSensorValue(rule.sensorUid));
+                off.sensorValueLow = rule.valueLow;
+                off.sensorValueHigh = rule.valueHigh;
+                off.ruleSensorStartAt = prev.ruleSensorStartAt;
+                off.ruleSensorValueStart = prev.ruleSensorValueStart;
+                off.ruleSensorStopAt = sensorEventTimestamp();
+                off.ruleScheduleStartAt = prev.ruleScheduleStartAt;
+                off.ruleScheduleDuration = prev.ruleScheduleDuration;
+                off.switchedAt = sensorEventTimestamp();
+                executeDeviceAction(rule.deviceUid, off);
+
+                log("EVALUATE_RULES: RULE_DELETE device_off uid=%s deviceUid=%s reason=rule_manualy_deleted",
+                    rule.uid.c_str(), rule.deviceUid.c_str());
             }
 
             _ruleActiveStates.erase(rule.uid);
@@ -245,6 +256,7 @@ private:
             log("EVALUATE_RULES: RULE_DEACTIVATED uid=%s deviceUid=%s reason=rule_manualy_off",
                 rule.uid.c_str(), rule.deviceUid.c_str());
 
+            const RuleEvaluationResult& prev = it->second;
             RuleEvaluationResult off(rule.uid, rule.ruleType, rule.version);
             off.workflowUid = rule.workflowUid;
             off.workflowVersion = rule.workflowVersion;
@@ -252,8 +264,14 @@ private:
             off.isRuleTurnOnDevice = false;
             off.ruleStopReason = "rule_manualy_off";
             off.sensorUid = rule.sensorUid;
+            off.sensorValue = static_cast<float>(getSensorValue(rule.sensorUid));
             off.sensorValueLow = rule.valueLow;
             off.sensorValueHigh = rule.valueHigh;
+            off.ruleSensorStartAt = prev.ruleSensorStartAt;
+            off.ruleSensorValueStart = prev.ruleSensorValueStart;
+            off.ruleSensorStopAt = sensorEventTimestamp();
+            off.ruleScheduleStartAt = prev.ruleScheduleStartAt;
+            off.ruleScheduleDuration = prev.ruleScheduleDuration;
             off.switchedAt = sensorEventTimestamp();
             executeDeviceAction(rule.deviceUid, off);
 
@@ -343,6 +361,10 @@ private:
         device->ruleScheduleStartAt = ctx.ruleScheduleStartAt.c_str();
         device->ruleScheduleDuration = evaluationResult.ruleScheduleDuration;
         device->switchedAt = ctx.switchedAt.c_str();
+
+        if (evaluationResult.state == DEVICE_STATE_OFF && !ctx.ruleStopReason.empty()) {
+            device->needReportingRuleUid = true;
+        }
 
         if (device->deviceType != DeviceTypeEnum::DEVICE_TYPE_ANALOG) {
             DeviceDigitalOut* digitalDevice = static_cast<DeviceDigitalOut*>(device);
