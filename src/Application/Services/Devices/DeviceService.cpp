@@ -181,7 +181,7 @@ UpdateDto DeviceService::createDeviceUpdateDto() {
         }
         deviceDto.state_hw = isOn ? "on" : "off";
         
-        deviceDto.isAuto = device->isAuto;
+        deviceDto.isAuto = device->workByRule;
         deviceDto.isManual = device->isManual;
         
         uint32_t secondsToSwitchBack = 0;

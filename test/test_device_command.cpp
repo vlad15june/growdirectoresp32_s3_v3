@@ -270,7 +270,51 @@ static void test_switchedat_refreshes_on_loop_phase_transitions(void) {
     TEST_ASSERT_EQUAL_STRING("T2", hybrid.lastUpdateData.devices[0].switchedAt.c_str());
 }
 
+static void test_rule_off_update_carries_stop_reason(void) {
+    ModuleStructure ms;
+    MockModuleConfig moduleConfig;
+    DeviceModel deviceModel(&moduleConfig, &ms);
+
+    DeviceDigitalOut* device = new DeviceDigitalOut();
+    device->deviceUid = "9C:13:9E:99:47:38.00";
+    device->deviceType = DEVICE_TYPE_DIGITAL;
+    device->state = DEVICE_STATE_OFF;
+    device->isAuto = false;
+    device->isManual = false;
+    device->workByRule = true;
+    device->workManual = false;
+    device->isRuleTurnOnDevice = false;
+    device->ruleUid = "rule-1";
+    device->ruleType = RuleType::SENSOR;
+    device->ruleStopReason = "rule_manualy_off";
+    deviceModel.addDevice(device);
+
+    MockNTPTimeAdapter timeAdapter;
+    MockArduinoAdapter arduino;
+    arduino.currentMillis = 1000;
+    MockHybridAPIService hybrid;
+    MockLogger logger;
+    MockDebugSystem debug;
+
+    DeviceService svc(&moduleConfig, &ms, &deviceModel, &timeAdapter, &arduino,
+                      nullptr, &hybrid, &logger, &debug);
+
+    svc.loop();
+
+    TEST_ASSERT_TRUE(hybrid.sendModuleUpdateDataCalled);
+    TEST_ASSERT_EQUAL_INT(1, static_cast<int>(hybrid.lastUpdateData.devices.size()));
+    const DeviceDto& d = hybrid.lastUpdateData.devices[0];
+    TEST_ASSERT_TRUE(d.isAuto);
+    TEST_ASSERT_EQUAL_STRING("rule_manualy_off", d.ruleStopReason.c_str());
+
+    JsonConverter converter;
+    std::string json = converter.updateToJson(hybrid.lastUpdateData);
+    TEST_ASSERT_TRUE(json.find("\"ruleStopReason\":\"rule_manualy_off\"") != std::string::npos);
+    TEST_ASSERT_TRUE(json.find("\"isAuto\":true") != std::string::npos);
+}
+
 extern "C" void run_device_command_tests(void) {
+    RUN_TEST(test_rule_off_update_carries_stop_reason);
     RUN_TEST(test_device_command_ack_is_array_with_timestamp);
     RUN_TEST(test_device_command_ack_omits_empty_timestamp);
     RUN_TEST(test_execute_sets_switchback_duration);

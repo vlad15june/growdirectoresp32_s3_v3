@@ -234,6 +234,37 @@ static void test_hydro_pump_drives_pump_pin(void)
     TEST_ASSERT_EQUAL_UINT8(1, arduino.digitalOutputs[9]);
 }
 
+static void test_switch_back_sets_time_reach_reason(void)
+{
+    ModuleStructure ms;
+    MockModuleConfig moduleConfig;
+    moduleConfig.setModuleType(MODULE_TYPE_DEVICE);
+    moduleConfig.setDeviceCount(1);
+
+    DeviceModel deviceModel(&moduleConfig, &ms);
+    DeviceDigitalOut* device = makeDigital("relay-0", DEVICE_STATE_ON);
+    device->needToSwitchBack = true;
+    device->timeOn = 0;
+    device->durationOn = 1000;
+    device->isRuleTurnOnDevice = true;
+    device->ruleStopReason = nullptr;
+    deviceModel.addDevice(device);
+
+    MockArduinoAdapter arduino;
+    MockLogger logger;
+    MockDebugSystem debug;
+
+    ProcessDeviceStateUseCase uc(&logger, &debug, &moduleConfig, &arduino, &deviceModel);
+
+    arduino.setMillis(2000);
+    uc.loop();
+
+    TEST_ASSERT_EQUAL_INT(DEVICE_STATE_OFF, device->state);
+    TEST_ASSERT_FALSE(device->isRuleTurnOnDevice);
+    TEST_ASSERT_NOT_NULL(device->ruleStopReason);
+    TEST_ASSERT_EQUAL_STRING("time_reach", device->ruleStopReason);
+}
+
 extern "C" void run_relay_output_tests(void)
 {
     RUN_TEST(test_rule_on_energizes_and_off_deenergizes);
@@ -244,4 +275,5 @@ extern "C" void run_relay_output_tests(void)
     RUN_TEST(test_factory_routes_hydro_to_digital_use_case);
     RUN_TEST(test_out_of_range_channel_does_not_write);
     RUN_TEST(test_manual_command_targets_same_pin_as_rule);
+    RUN_TEST(test_switch_back_sets_time_reach_reason);
 }

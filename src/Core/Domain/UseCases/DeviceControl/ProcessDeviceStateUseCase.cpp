@@ -218,6 +218,11 @@ void ProcessDeviceStateUseCase::processOn(Device *device, int index)
             switchRelayOff(device, index);
             device->isAuto = false;
             device->isManual = false;
+            device->ruleStopReason = "time_reach";
+            if (device->deviceType != DeviceTypeEnum::DEVICE_TYPE_ANALOG)
+            {
+                static_cast<DeviceDigitalOut *>(device)->isRuleTurnOnDevice = false;
+            }
         }
     }
     else

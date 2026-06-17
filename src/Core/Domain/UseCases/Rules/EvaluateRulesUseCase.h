@@ -194,6 +194,9 @@ private:
                 if (device) {
                     device->state = DEVICE_STATE_OFF;
                     device->ruleStopReason = "rule_manualy_deleted";
+                    if (device->deviceType != DeviceTypeEnum::DEVICE_TYPE_ANALOG) {
+                        static_cast<DeviceDigitalOut*>(device)->isRuleTurnOnDevice = false;
+                    }
                     log("EVALUATE_RULES: RULE_DELETE device_off uid=%s deviceUid=%s reason=rule_manualy_deleted",
                         rule.uid.c_str(), rule.deviceUid.c_str());
                 }

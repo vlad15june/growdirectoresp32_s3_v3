@@ -162,8 +162,47 @@ static void test_disabling_rule_with_device_off_no_action(void) {
     TEST_ASSERT_NULL(device.ruleStopReason);
 }
 
+static void test_deleting_active_rule_sets_manualy_deleted(void) {
+    FilteringRuleRepo repo;
+    repo.rules = {makeOnSensorRule()};
+
+    DeviceDigitalOut device{};
+    device.deviceUid = "dev-1";
+    device.deviceType = DEVICE_TYPE_DIGITAL;
+    device.state = DEVICE_STATE_OFF;
+    device.ruleStopReason = nullptr;
+
+    DeactDeviceModel deviceModel;
+    deviceModel.device = &device;
+
+    MockSensorValueModel sensors;
+    sensors.values["sensor-1"] = 25.0f;
+    sensors.lastReadTimes["sensor-1"] = 1;
+    MockArduinoAdapter arduino;
+    arduino.setMillis(0);
+    MockNTPTimeAdapter ntp;
+    ntp.setEpochTime(1700000000);
+
+    EvaluateRulesUseCase uc(&deviceModel, &repo, &arduino, &ntp, &sensors);
+
+    arduino.setMillis(2000);
+    uc.loop();
+    TEST_ASSERT_EQUAL_INT(DEVICE_STATE_REQUEST_ON, device.state);
+    TEST_ASSERT_TRUE(device.isRuleTurnOnDevice);
+
+    repo.rules[0].state = RuleState::DELETING;
+    arduino.setMillis(4000);
+    uc.loop();
+
+    TEST_ASSERT_EQUAL_INT(DEVICE_STATE_OFF, device.state);
+    TEST_ASSERT_FALSE(device.isRuleTurnOnDevice);
+    TEST_ASSERT_NOT_NULL(device.ruleStopReason);
+    TEST_ASSERT_EQUAL_STRING("rule_manualy_deleted", device.ruleStopReason);
+}
+
 extern "C" void run_rule_phase4_deactivation_tests(void) {
     RUN_TEST(test_disabling_rule_switches_device_off);
     RUN_TEST(test_active_rule_not_deactivated);
     RUN_TEST(test_disabling_rule_with_device_off_no_action);
+    RUN_TEST(test_deleting_active_rule_sets_manualy_deleted);
 }
