@@ -1,5 +1,19 @@
 # Release Notes
 
+## Version 2.2.10 (2026-06-17)
+
+### Added
+- **Sensor Rule Protective Shutdown**: GDV1-3592 Added a safety shutdown for sensor-based rules — if the target value is not reached within the configured time-to-setpoint, the device is turned off, the rule is flagged with an error awaiting user confirmation, and it recovers reliably once confirmed
+
+### Fixed
+- **Schedule Rule Recurrence**: GDV1-3591 Fixed schedule rules firing only on the first period — they now turn the device on for every scheduled period
+- **Large Rule Updates Dropped**: GDV1-3591 Fixed large rule configuration pushes from the server being lost; fragmented messages are now reassembled so the full update is applied
+- **Commands Blocked During Schedule Processing**: GDV1-3591 Fixed the device becoming unresponsive to commands while schedule rules were being processed
+- **Stop Reason in Device History**: GDV1-3591 Fixed missing/incorrect stop reason — device history now records the correct reason every time a rule turns a device off
+- **Automatic/Manual State Reporting**: GDV1-3591 Fixed device updates reporting wrong automatic/manual state and rule start/stop context to the server
+
+---
+
 ## Version 2.2.9 (2026-06-16)
 
 ### Changed
