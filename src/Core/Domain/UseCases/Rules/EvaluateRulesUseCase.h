@@ -161,6 +161,17 @@ private:
         }
     }
 
+    void logSerial(const char* format, ...) {
+        if (_logger && _debugSystem && _debugSystem->isFeatureEnabled(DebugFeatures::RULE_DEBUG)) {
+            char buffer[512];
+            va_list args;
+            va_start(args, format);
+            vsnprintf(buffer, sizeof(buffer), format, args);
+            va_end(args);
+            _logger->println(DebugFeatures::RULE_DEBUG, buffer, MqttLoggerMode::SerialOnly);
+        }
+    }
+
     void purgeDeletingRules() {
         if (!_ruleRepository) {
             return;
@@ -733,7 +744,7 @@ private:
             return result;
         }
         
-        log("EVALUATE_RULES: LocalTime = %d:%d", timeinfo.tm_hour, timeinfo.tm_min);
+        logSerial("EVALUATE_RULES: LocalTime = %d:%d", timeinfo.tm_hour, timeinfo.tm_min);
         
         if (rule.schedule.empty()) {
             log("EVALUATE_RULES: No schedule items in rule %s", rule.uid.c_str());
@@ -742,7 +753,7 @@ private:
             return result;
         }
         
-        log("EVALUATE_RULES: rules[%s][schedule].size= %d", rule.uid.c_str(), static_cast<int>(rule.schedule.size()));
+        logSerial("EVALUATE_RULES: rules[%s][schedule].size= %d", rule.uid.c_str(), static_cast<int>(rule.schedule.size()));
         
         bool isSchRuleOn = false;
         uint32_t durationOn = 0;
@@ -754,16 +765,16 @@ private:
         for (size_t si = 0; si < rule.schedule.size(); ++si) {
             const auto& scheduleItem = rule.schedule[si];
             
-            log("EVALUATE_RULES: schedule[%d][duration]= %d", static_cast<int>(si), scheduleItem.duration);
+            logSerial("EVALUATE_RULES: schedule[%d][duration]= %d", static_cast<int>(si), scheduleItem.duration);
             
             // Convert startAt time_t to tm structure
             struct tm startAt = {0};
             if (!gmtime_r(&scheduleItem.startAt, &startAt)) {
-                log("EVALUATE_RULES: Failed to parse startAt time for schedule item %d", static_cast<int>(si));
+                logSerial("EVALUATE_RULES: Failed to parse startAt time for schedule item %d", static_cast<int>(si));
                 continue;
             }
             
-            log("EVALUATE_RULES: startAt = %d:%d", startAt.tm_hour, startAt.tm_min);
+            logSerial("EVALUATE_RULES: startAt = %d:%d", startAt.tm_hour, startAt.tm_min);
             
             uint32_t duration = scheduleItem.duration;
             uint32_t totalSecondWhenStart = startAt.tm_hour * 3600 + startAt.tm_min * 60;
@@ -780,10 +791,10 @@ private:
                 whenRuleShouldStarted.tm_min = startAt.tm_min;
                 whenRuleShouldStarted.tm_sec = 0;
                 strftime(buffer, sizeof(buffer), "%Y-%m-%dT%H:%M:%SZ", &whenRuleShouldStarted);
-                log("EVALUATE_RULES: RULE_ON: whenRuleShouldStarted=%s", buffer);
+                logSerial("EVALUATE_RULES: RULE_ON: whenRuleShouldStarted=%s", buffer);
                 break;
             }
-            
+
             // Check if current time is within schedule from yesterday (cross-midnight schedules)
             struct tm yesterday = timeinfo;
             yesterday.tm_mday--;
@@ -798,17 +809,17 @@ private:
                 whenRuleShouldStarted.tm_min = startAt.tm_min;
                 whenRuleShouldStarted.tm_sec = 0;
                 strftime(buffer, sizeof(buffer), "%Y-%m-%dT%H:%M:%SZ", &whenRuleShouldStarted);
-                log("EVALUATE_RULES: RULE_ON: whenRuleShouldStarted=%s", buffer);
+                logSerial("EVALUATE_RULES: RULE_ON: whenRuleShouldStarted=%s", buffer);
                 break;
             }
-            
-            log("EVALUATE_RULES: RULE_ON: totalSecondWhenStart = %d, totalSecondWhenEnd = %d, totalSecondNow = %d, duration in rule = %d", 
+
+            logSerial("EVALUATE_RULES: RULE_ON: totalSecondWhenStart = %d, totalSecondWhenEnd = %d, totalSecondNow = %d, duration in rule = %d",
                 totalSecondWhenStart, totalSecondWhenEnd, totalSecondNow, duration);
         }
         
         if (isSchRuleOn) {
-            log("EVALUATE_RULES: RULE_ON: uid = %s, current time = %d:%d; rule time = %d:%d ; duration = %d", 
-                rule.uid.c_str(), timeinfo.tm_hour, timeinfo.tm_min, 
+            logSerial("EVALUATE_RULES: RULE_ON: uid = %s, current time = %d:%d; rule time = %d:%d ; duration = %d",
+                rule.uid.c_str(), timeinfo.tm_hour, timeinfo.tm_min,
                 whenRuleShouldStarted.tm_hour, whenRuleShouldStarted.tm_min, durationOn);
             
             result.isRuleTurnOnDevice = true;
