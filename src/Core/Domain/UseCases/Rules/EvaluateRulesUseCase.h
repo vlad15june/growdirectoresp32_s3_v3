@@ -450,7 +450,9 @@ public:
                 if (freshness == FreshnessVerdict::STALE) {
                     transitionToSensorUnreachable(rule);
                 } else if (freshness == FreshnessVerdict::FRESH) {
-                    executeRuleActions(rule);
+                    if (!maybeProtectiveShutdown(rule, now)) {
+                        executeRuleActions(rule);
+                    }
                 }
             } else if (rule.state == RuleState::ERROR &&
                        rule.errorType == "sensor_unreachable") {
@@ -1212,6 +1214,70 @@ private:
 
         _sensorWaitSince.erase(rule.uid);
         return FreshnessVerdict::FRESH;
+    }
+
+    bool maybeProtectiveShutdown(const Rule& rule, unsigned long now) {
+        if (!rule.protectiveShutdown) {
+            return false;
+        }
+        if (rule.ruleType != RuleType::SENSOR && rule.ruleType != RuleType::AVERAGE_SENSOR) {
+            return false;
+        }
+        if (rule.timeToSetPoint <= 0) {
+            return false;
+        }
+
+        auto it = _ruleActiveStates.find(rule.uid);
+        if (it == _ruleActiveStates.end() || !it->second.isDeviceOn()) {
+            return false;
+        }
+
+        unsigned long onSince = it->second.timeOn;
+        if (onSince == 0) {
+            return false;
+        }
+
+        unsigned long elapsedSec = (now >= onSince) ? (now - onSince) / 1000UL : 0UL;
+        if (elapsedSec <= (unsigned long)rule.timeToSetPoint) {
+            return false;
+        }
+
+        triggerProtectiveShutdown(rule, elapsedSec);
+        return true;
+    }
+
+    void triggerProtectiveShutdown(const Rule& rule, unsigned long elapsedSec) {
+        log("EVALUATE_RULES: PROTECTIVE_SHUTDOWN uid=%s deviceUid=%s timeToSetPoint=%d elapsed=%lu",
+            rule.uid.c_str(), rule.deviceUid.c_str(), rule.timeToSetPoint, elapsedSec);
+
+        if (_ruleRepository) {
+            _ruleRepository->updateRuleError(rule.uid.c_str(), RuleState::ERROR,
+                                             "protective_shutdown", "protective_shutdown");
+            _ruleRepository->updateRuleMode(rule.uid.c_str(),
+                                            RuleMode::RULE_MODE_WAITING_FOR_USER_CONFIRM,
+                                            "protective_shutdown");
+        }
+
+        if (_ruleStateNotifier) {
+            _ruleStateNotifier->notifyProtectiveShutdown(rule);
+        }
+
+        RuleEvaluationResult off(rule.uid, rule.ruleType, rule.version);
+        off.workflowUid = rule.workflowUid;
+        off.workflowVersion = rule.workflowVersion;
+        off.state = DEVICE_STATE_OFF;
+        off.isRuleTurnOnDevice = false;
+        off.ruleStopReason = "protective_shutdown";
+        off.sensorUid = rule.sensorUid;
+        off.sensorValueLow = rule.valueLow;
+        off.sensorValueHigh = rule.valueHigh;
+        off.switchedAt = sensorEventTimestamp();
+        executeDeviceAction(rule.deviceUid, off);
+
+        _ruleActiveStates.erase(rule.uid);
+        _lastEvaluationResults.erase(rule.uid);
+        _ruleLastEvaluated.erase(rule.uid);
+        _delayTimers.erase(rule.uid);
     }
 
     void transitionToSensorUnreachable(const Rule& rule) {

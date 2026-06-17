@@ -293,13 +293,7 @@ public:
 
                     log("RULE_MERGE uid=%s -> FORCE_SYNC_VER_OR_UNSYNC", existingRule->uid.c_str());
 
-                    // Preserve local mode if needed
                     Rule updatedRule = incomingRule;
-                    if (existingRule->state != RuleState::UNSYNCHRONIZED) {
-                        updatedRule.mode = existingRule->mode;
-                        updatedRule.modeReason = existingRule->modeReason;
-                    }
-
                     updatedRule.state = RuleState::SYNCHRONIZED;
                     updatedRules.push_back(updatedRule);
                     existingRuleMap.erase(it);
@@ -370,8 +364,11 @@ public:
         for (const auto& rule : allRules) {
             bool isRuleOn = false;
             
-            // Check if rule is deleted or disabled
-            if (rule.state == RuleState::DELETING || rule.protectiveShutdown) {
+            bool inProtectiveShutdown =
+                rule.mode == RuleMode::RULE_MODE_WAITING_FOR_USER_CONFIRM ||
+                (rule.state == RuleState::ERROR && rule.errorType == "protective_shutdown");
+
+            if (rule.state == RuleState::DELETING || inProtectiveShutdown) {
                 continue;
             }
             

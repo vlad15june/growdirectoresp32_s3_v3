@@ -112,4 +112,15 @@ public:
         log("EVALUATE_RULES: SENSOR_RECOVER_REPORT uid=%s", rule.uid.c_str());
         sendPerUidReport(rule, "Synchronized", "");
     }
+
+    void notifyProtectiveShutdown(const Rule& rule) override {
+        log("EVALUATE_RULES: PROTECTIVE_SHUTDOWN_REPORT uid=%s errorType=protective_shutdown", rule.uid.c_str());
+        if (!_hybridApiService || !_jsonConverter) {
+            return;
+        }
+        RuleStateDto dto(rule.uid, "Error", "WaitingForUserConfirm", "protective_shutdown",
+                         "protective_shutdown", rule.version);
+        std::string json = _jsonConverter->ruleStateUpdateSingleToJson(dto, reportTimestamp());
+        _hybridApiService->sendByUidRuleStateCommand(rule.uid.c_str(), json.c_str());
+    }
 };

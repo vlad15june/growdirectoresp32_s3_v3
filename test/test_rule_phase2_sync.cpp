@@ -307,7 +307,7 @@ static void test_sync_same_version_mode_changed_applies_incoming(void)
     TEST_ASSERT_TRUE(stored.state == RuleState::SYNCHRONIZED);
 }
 
-static void test_sync_higher_version_preserves_local_mode(void)
+static void test_sync_higher_version_applies_incoming_mode(void)
 {
     MockSpiffsRuleDao dao;
     RuleRepository repo(&dao);
@@ -320,7 +320,7 @@ static void test_sync_higher_version_preserves_local_mode(void)
     Rule stored = findStored(repo, "u1");
     TEST_ASSERT_EQUAL_INT(1, stored.version);
     TEST_ASSERT_EQUAL_INT(99, (int)stored.valueHigh);
-    TEST_ASSERT_TRUE(stored.mode == RuleMode::ON);
+    TEST_ASSERT_TRUE(stored.mode == RuleMode::OFF);
 }
 
 extern "C" void run_rule_phase2_sync_tests(void)
@@ -338,5 +338,5 @@ extern "C" void run_rule_phase2_sync_tests(void)
     RUN_TEST(test_sync_new_rule_is_stored_and_counted);
     RUN_TEST(test_sync_same_version_same_mode_keeps_and_counts);
     RUN_TEST(test_sync_same_version_mode_changed_applies_incoming);
-    RUN_TEST(test_sync_higher_version_preserves_local_mode);
+    RUN_TEST(test_sync_higher_version_applies_incoming_mode);
 }
