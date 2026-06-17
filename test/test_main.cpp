@@ -40,6 +40,7 @@ extern "C" void run_relay_output_tests(void);
 extern "C" int run_xf700a_rainfall_window_tests(void);
 extern "C" void run_rule_workflow_phase1_tests(void);
 extern "C" void run_rule_schedule_periods_tests(void);
+extern "C" void run_rule_completion_fields_tests(void);
 
 void setUp(void) {
     // set stuff up here
@@ -175,6 +176,8 @@ int main(void) {
     run_rule_workflow_phase1_tests();
 
     run_rule_schedule_periods_tests();
+
+    run_rule_completion_fields_tests();
 
     return UNITY_END();
 }

@@ -188,6 +188,9 @@ static void test_step_starts_cycle(void) {
     TEST_ASSERT_EQUAL_INT(5, device.cyclesToSetPoint);
     TEST_ASSERT_EQUAL_INT(1, device.currentCycle);
     TEST_ASSERT_TRUE(device.isRuleTurnOnDevice);
+    TEST_ASSERT_NOT_NULL(device.ruleSensorStartAt);
+    TEST_ASSERT_TRUE(std::string(device.ruleSensorStartAt).size() > 0);
+    TEST_ASSERT_EQUAL_FLOAT(30.0f, device.ruleSensorValueStart);
 }
 
 static void test_step_stops_on_setpoint(void) {

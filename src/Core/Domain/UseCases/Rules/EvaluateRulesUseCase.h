@@ -190,7 +190,6 @@ private:
             bool wasActive = activeIt != _ruleActiveStates.end() &&
                              activeIt->second.state != DEVICE_STATE_OFF;
             if (wasActive && _deviceModel) {
-                const RuleEvaluationResult& prev = activeIt->second;
                 RuleEvaluationResult off(rule.uid, rule.ruleType, rule.version);
                 off.workflowUid = rule.workflowUid;
                 off.workflowVersion = rule.workflowVersion;
@@ -201,11 +200,7 @@ private:
                 off.sensorValue = static_cast<float>(getSensorValue(rule.sensorUid));
                 off.sensorValueLow = rule.valueLow;
                 off.sensorValueHigh = rule.valueHigh;
-                off.ruleSensorStartAt = prev.ruleSensorStartAt;
-                off.ruleSensorValueStart = prev.ruleSensorValueStart;
                 off.ruleSensorStopAt = sensorEventTimestamp();
-                off.ruleScheduleStartAt = prev.ruleScheduleStartAt;
-                off.ruleScheduleDuration = prev.ruleScheduleDuration;
                 off.switchedAt = sensorEventTimestamp();
                 executeDeviceAction(rule.deviceUid, off);
 
@@ -256,7 +251,6 @@ private:
             log("EVALUATE_RULES: RULE_DEACTIVATED uid=%s deviceUid=%s reason=rule_manualy_off",
                 rule.uid.c_str(), rule.deviceUid.c_str());
 
-            const RuleEvaluationResult& prev = it->second;
             RuleEvaluationResult off(rule.uid, rule.ruleType, rule.version);
             off.workflowUid = rule.workflowUid;
             off.workflowVersion = rule.workflowVersion;
@@ -267,11 +261,7 @@ private:
             off.sensorValue = static_cast<float>(getSensorValue(rule.sensorUid));
             off.sensorValueLow = rule.valueLow;
             off.sensorValueHigh = rule.valueHigh;
-            off.ruleSensorStartAt = prev.ruleSensorStartAt;
-            off.ruleSensorValueStart = prev.ruleSensorValueStart;
             off.ruleSensorStopAt = sensorEventTimestamp();
-            off.ruleScheduleStartAt = prev.ruleScheduleStartAt;
-            off.ruleScheduleDuration = prev.ruleScheduleDuration;
             off.switchedAt = sensorEventTimestamp();
             executeDeviceAction(rule.deviceUid, off);
 
@@ -304,16 +294,23 @@ private:
                 continue;
             }
 
-            device->state = DEVICE_STATE_OFF;
-            if (device->deviceType != DeviceTypeEnum::DEVICE_TYPE_ANALOG) {
-                static_cast<DeviceDigitalOut*>(device)->isRuleTurnOnDevice = false;
-            }
+            RuleEvaluationResult off(rule.uid, rule.ruleType, rule.version);
+            off.workflowUid = rule.workflowUid;
+            off.workflowVersion = rule.workflowVersion;
+            off.state = DEVICE_STATE_OFF;
+            off.isRuleTurnOnDevice = false;
+            off.ruleStopReason = "rule_off_by_date";
+            off.sensorUid = rule.sensorUid;
+            off.sensorValueLow = rule.valueLow;
+            off.sensorValueHigh = rule.valueHigh;
+            off.switchedAt = sensorEventTimestamp();
+            executeDeviceAction(rule.deviceUid, off);
 
             _ruleActiveStates.erase(rule.uid);
             _lastEvaluationResults.erase(rule.uid);
             _ruleLastEvaluated.erase(rule.uid);
 
-            log("EVALUATE_RULES: %s_STOP uid=%s deviceUid=%s reason=window_closed",
+            log("EVALUATE_RULES: %s_STOP uid=%s deviceUid=%s reason=rule_off_by_date",
                 rule.ruleType == RuleType::LOOP ? "LOOP" : "STEP",
                 rule.uid.c_str(), rule.deviceUid.c_str());
         }
@@ -331,35 +328,50 @@ private:
             return false;
         }
         
-        _deviceRuleContext[deviceUid] = evaluationResult;
+        RuleEvaluationResult merged = evaluationResult;
+        if (merged.state == DEVICE_STATE_OFF) {
+            auto prevIt = _deviceRuleContext.find(deviceUid);
+            if (prevIt != _deviceRuleContext.end()) {
+                const RuleEvaluationResult& prev = prevIt->second;
+                if (merged.ruleSensorStartAt.empty()) merged.ruleSensorStartAt = prev.ruleSensorStartAt;
+                if (merged.ruleSensorValueStart == 0.0f) merged.ruleSensorValueStart = prev.ruleSensorValueStart;
+                if (merged.ruleScheduleStartAt.empty()) merged.ruleScheduleStartAt = prev.ruleScheduleStartAt;
+                if (merged.ruleScheduleDuration == 0) merged.ruleScheduleDuration = prev.ruleScheduleDuration;
+                if (merged.cyclesToSetPoint == 0) merged.cyclesToSetPoint = prev.cyclesToSetPoint;
+                if (merged.sensorUid.empty()) merged.sensorUid = prev.sensorUid;
+                if (merged.sensorValueLow == 0.0f) merged.sensorValueLow = prev.sensorValueLow;
+                if (merged.sensorValueHigh == 0.0f) merged.sensorValueHigh = prev.sensorValueHigh;
+            }
+        }
+        _deviceRuleContext[deviceUid] = merged;
         const RuleEvaluationResult& ctx = _deviceRuleContext[deviceUid];
 
-        device->state = evaluationResult.state;
-        device->durationOn = evaluationResult.durationOn;
-        device->timeOn = evaluationResult.timeOn;
-        device->timeOff = evaluationResult.timeOff;
-        device->needToSwitchBack = evaluationResult.needToSwitchBack;
-        device->mixTime = evaluationResult.mixTime;
+        device->state = ctx.state;
+        device->durationOn = ctx.durationOn;
+        device->timeOn = ctx.timeOn;
+        device->timeOff = ctx.timeOff;
+        device->needToSwitchBack = ctx.needToSwitchBack;
+        device->mixTime = ctx.mixTime;
 
         device->workByRule = true;
-        device->isAuto = evaluationResult.isRuleTurnOnDevice;
+        device->isAuto = ctx.isRuleTurnOnDevice;
         device->ruleUid = ctx.ruleUid.c_str();
-        device->ruleType = evaluationResult.ruleType;
-        device->ruleVersion = evaluationResult.ruleVersion;
+        device->ruleType = ctx.ruleType;
+        device->ruleVersion = ctx.ruleVersion;
         device->workflowUid = ctx.workflowUid.c_str();
-        device->workflowVersion = evaluationResult.workflowVersion;
+        device->workflowVersion = ctx.workflowVersion;
         device->sensorUid = ctx.sensorUid.c_str();
-        device->sensorValue = evaluationResult.sensorValue;
-        device->sensorValueTime = evaluationResult.sensorValueTime;
-        device->sensorValueLow = evaluationResult.sensorValueLow;
-        device->sensorValueHigh = evaluationResult.sensorValueHigh;
+        device->sensorValue = ctx.sensorValue;
+        device->sensorValueTime = ctx.sensorValueTime;
+        device->sensorValueLow = ctx.sensorValueLow;
+        device->sensorValueHigh = ctx.sensorValueHigh;
         device->ruleSensorStartAt = ctx.ruleSensorStartAt.c_str();
-        device->ruleSensorValueStart = evaluationResult.ruleSensorValueStart;
+        device->ruleSensorValueStart = ctx.ruleSensorValueStart;
         device->ruleSensorStopAt = ctx.ruleSensorStopAt.c_str();
-        device->ruleSensorValueStop = evaluationResult.ruleSensorValueStop;
+        device->ruleSensorValueStop = ctx.ruleSensorValueStop;
         device->ruleStopReason = ctx.ruleStopReason.c_str();
         device->ruleScheduleStartAt = ctx.ruleScheduleStartAt.c_str();
-        device->ruleScheduleDuration = evaluationResult.ruleScheduleDuration;
+        device->ruleScheduleDuration = ctx.ruleScheduleDuration;
         device->switchedAt = ctx.switchedAt.c_str();
 
         if (evaluationResult.state == DEVICE_STATE_OFF && !ctx.ruleStopReason.empty()) {
@@ -368,10 +380,10 @@ private:
 
         if (device->deviceType != DeviceTypeEnum::DEVICE_TYPE_ANALOG) {
             DeviceDigitalOut* digitalDevice = static_cast<DeviceDigitalOut*>(device);
-            digitalDevice->isRuleTurnOnDevice = evaluationResult.isRuleTurnOnDevice;
-            digitalDevice->timeToSetPoint = evaluationResult.timeToSetPoint;
-            digitalDevice->cyclesToSetPoint = evaluationResult.cyclesToSetPoint;
-            digitalDevice->currentCycle = evaluationResult.currentCycle;
+            digitalDevice->isRuleTurnOnDevice = ctx.isRuleTurnOnDevice;
+            digitalDevice->timeToSetPoint = ctx.timeToSetPoint;
+            digitalDevice->cyclesToSetPoint = ctx.cyclesToSetPoint;
+            digitalDevice->currentCycle = ctx.currentCycle;
         }
 
         log("EVALUATE_RULES: Executing device action - device %s, state %s, ruleUid %s",
@@ -1105,6 +1117,8 @@ private:
                     result.sensorUid = rule.sensorUid;
                     result.sensorValue = static_cast<float>(getSensorValue(rule.sensorUid));
                 }
+                result.ruleSensorStartAt = sensorEventTimestamp();
+                result.ruleSensorValueStart = result.sensorValue;
                 log("EVALUATE_RULES: STEP_START uid=%s cyclesCap=%d", rule.uid.c_str(), rule.cyclesToSetPoint);
             } else {
                 result.state = DEVICE_STATE_OFF;

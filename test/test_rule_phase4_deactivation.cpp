@@ -98,8 +98,23 @@ static void test_disabling_rule_switches_device_off(void) {
 
     TEST_ASSERT_EQUAL_INT(DEVICE_STATE_OFF, device.state);
     TEST_ASSERT_FALSE(device.isAuto);
+    TEST_ASSERT_FALSE(device.isRuleTurnOnDevice);
     TEST_ASSERT_NOT_NULL(device.ruleStopReason);
     TEST_ASSERT_EQUAL_STRING("rule_manualy_off", device.ruleStopReason);
+    // full field set on completion
+    TEST_ASSERT_TRUE(device.workByRule);
+    TEST_ASSERT_NOT_NULL(device.ruleUid);
+    TEST_ASSERT_EQUAL_STRING("u1", device.ruleUid);
+    TEST_ASSERT_TRUE(device.ruleType == RuleType::SENSOR);
+    TEST_ASSERT_EQUAL_INT(3, device.ruleVersion);
+    TEST_ASSERT_EQUAL_STRING("sensor-1", device.sensorUid);
+    TEST_ASSERT_EQUAL_FLOAT(10.0f, device.sensorValueLow);
+    TEST_ASSERT_EQUAL_FLOAT(20.0f, device.sensorValueHigh);
+    TEST_ASSERT_NOT_NULL(device.ruleSensorStartAt);
+    TEST_ASSERT_TRUE(std::string(device.ruleSensorStartAt).size() > 0); // preserved from ON
+    TEST_ASSERT_EQUAL_FLOAT(25.0f, device.ruleSensorValueStart);
+    TEST_ASSERT_NOT_NULL(device.ruleSensorStopAt);
+    TEST_ASSERT_TRUE(std::string(device.ruleSensorStopAt).size() > 0);
 }
 
 static void test_active_rule_not_deactivated(void) {
@@ -195,9 +210,68 @@ static void test_deleting_active_rule_sets_manualy_deleted(void) {
     uc.loop();
 
     TEST_ASSERT_EQUAL_INT(DEVICE_STATE_OFF, device.state);
+    TEST_ASSERT_FALSE(device.isAuto);
     TEST_ASSERT_FALSE(device.isRuleTurnOnDevice);
     TEST_ASSERT_NOT_NULL(device.ruleStopReason);
     TEST_ASSERT_EQUAL_STRING("rule_manualy_deleted", device.ruleStopReason);
+    // full field set on completion
+    TEST_ASSERT_TRUE(device.workByRule);
+    TEST_ASSERT_NOT_NULL(device.ruleUid);
+    TEST_ASSERT_EQUAL_STRING("u1", device.ruleUid);
+    TEST_ASSERT_TRUE(device.ruleType == RuleType::SENSOR);
+    TEST_ASSERT_EQUAL_INT(3, device.ruleVersion);
+    TEST_ASSERT_EQUAL_STRING("sensor-1", device.sensorUid);
+    TEST_ASSERT_EQUAL_FLOAT(10.0f, device.sensorValueLow);
+    TEST_ASSERT_EQUAL_FLOAT(20.0f, device.sensorValueHigh);
+    TEST_ASSERT_NOT_NULL(device.ruleSensorStartAt);
+    TEST_ASSERT_TRUE(std::string(device.ruleSensorStartAt).size() > 0); // preserved from ON
+    TEST_ASSERT_EQUAL_FLOAT(25.0f, device.ruleSensorValueStart);
+    TEST_ASSERT_NOT_NULL(device.ruleSensorStopAt);
+    TEST_ASSERT_TRUE(std::string(device.ruleSensorStopAt).size() > 0);
+}
+
+class NoActiveRuleRepo : public MockRuleRepository {
+public:
+    std::vector<Rule> getActiveRules() override { return {}; }
+};
+
+static void test_cycling_window_closed_sets_by_date(void) {
+    Rule loopRule;
+    loopRule.uid = "u1";
+    loopRule.version = 1;
+    loopRule.ruleType = RuleType::LOOP;
+    loopRule.deviceUid = "dev-1";
+    loopRule.mode = RuleMode::ON;
+    loopRule.state = RuleState::SYNCHRONIZED;
+
+    NoActiveRuleRepo repo;
+    repo.rules = {loopRule};
+
+    DeviceDigitalOut device{};
+    device.deviceUid = "dev-1";
+    device.deviceType = DEVICE_TYPE_DIGITAL;
+    device.state = DEVICE_STATE_STEP_ON;
+    device.ruleUid = "u1";
+    device.ruleStopReason = nullptr;
+
+    DeactDeviceModel deviceModel;
+    deviceModel.device = &device;
+
+    MockSensorValueModel sensors;
+    MockArduinoAdapter arduino;
+    arduino.setMillis(0);
+    MockNTPTimeAdapter ntp;
+    ntp.setEpochTime(1700000000);
+
+    EvaluateRulesUseCase uc(&deviceModel, &repo, &arduino, &ntp, &sensors);
+
+    arduino.setMillis(2000);
+    uc.loop();
+
+    TEST_ASSERT_EQUAL_INT(DEVICE_STATE_OFF, device.state);
+    TEST_ASSERT_FALSE(device.isRuleTurnOnDevice);
+    TEST_ASSERT_NOT_NULL(device.ruleStopReason);
+    TEST_ASSERT_EQUAL_STRING("rule_off_by_date", device.ruleStopReason);
 }
 
 extern "C" void run_rule_phase4_deactivation_tests(void) {
@@ -205,4 +279,5 @@ extern "C" void run_rule_phase4_deactivation_tests(void) {
     RUN_TEST(test_active_rule_not_deactivated);
     RUN_TEST(test_disabling_rule_with_device_off_no_action);
     RUN_TEST(test_deleting_active_rule_sets_manualy_deleted);
+    RUN_TEST(test_cycling_window_closed_sets_by_date);
 }

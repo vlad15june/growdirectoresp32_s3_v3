@@ -142,8 +142,48 @@ static void test_sensor_deadband_no_device_change(void) {
     TEST_ASSERT_FALSE(device.workByRule);
 }
 
+static void test_sensor_off_preserves_start_context(void) {
+    MockRuleRepository repo;
+    DeviceDigitalOut device{};
+    device.deviceUid = "dev-1";
+    device.deviceType = DEVICE_TYPE_DIGITAL;
+    device.state = DEVICE_STATE_OFF;
+    device.ruleSensorStartAt = nullptr;
+    device.ruleSensorValueStart = 0.0f;
+
+    Phase4DeviceModel deviceModel;
+    deviceModel.device = &device;
+
+    MockSensorValueModel sensors;
+    MockArduinoAdapter arduino;
+    MockNTPTimeAdapter ntp;
+    ntp.setEpochTime(1700000000);
+
+    EvaluateRulesUseCase uc(&deviceModel, &repo, &arduino, &ntp, &sensors);
+    Rule rule = makeDownSensorRule();
+
+    sensors.values["sensor-1"] = 25.0f;
+    uc.executeRuleActions(rule);
+    TEST_ASSERT_EQUAL_INT(DEVICE_STATE_REQUEST_ON, device.state);
+    TEST_ASSERT_NOT_NULL(device.ruleSensorStartAt);
+    TEST_ASSERT_TRUE(std::string(device.ruleSensorStartAt).size() > 0);
+    TEST_ASSERT_EQUAL_FLOAT(25.0f, device.ruleSensorValueStart);
+
+    sensors.values["sensor-1"] = 5.0f;
+    uc.executeRuleActions(rule);
+
+    TEST_ASSERT_EQUAL_INT(DEVICE_STATE_OFF, device.state);
+    TEST_ASSERT_EQUAL_STRING("setpoint_reach", device.ruleStopReason);
+    TEST_ASSERT_NOT_NULL(device.ruleSensorStartAt);
+    TEST_ASSERT_TRUE(std::string(device.ruleSensorStartAt).size() > 0);
+    TEST_ASSERT_EQUAL_FLOAT(25.0f, device.ruleSensorValueStart);
+    TEST_ASSERT_NOT_NULL(device.ruleSensorStopAt);
+    TEST_ASSERT_TRUE(std::string(device.ruleSensorStopAt).size() > 0);
+}
+
 extern "C" void run_rule_phase4_propagation_tests(void) {
     RUN_TEST(test_sensor_turn_on_propagates_context);
     RUN_TEST(test_sensor_turn_off_sets_setpoint_reach);
     RUN_TEST(test_sensor_deadband_no_device_change);
+    RUN_TEST(test_sensor_off_preserves_start_context);
 }
