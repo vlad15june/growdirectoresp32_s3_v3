@@ -114,7 +114,7 @@ public:
     bool clear() override {
         log("SpiffsSensorTypeDao: Clearing all data (removing file)");
         if (filePath.empty()) initialize();
-        spiffsAdapter->RemoveFile(filePath.c_str());
+        spiffsAdapter->removeFile(filePath.c_str());
         log("SpiffsSensorTypeDao: Clear operation completed");
         return true;
     }
@@ -251,7 +251,7 @@ public:
         
         log("SpiffsSensorTypeDao: Starting file write to: %s", filePath.c_str());
         try {
-            bool writeOk = spiffsAdapter->RewriteToFile(filePath.c_str(), jsonStr.c_str());
+            bool writeOk = spiffsAdapter->rewriteToFile(filePath.c_str(), jsonStr.c_str());
 #ifdef ESP_PLATFORM
             log("SpiffsSensorTypeDao: Free heap after file write: %d", ESP.getFreeHeap());
 #endif

@@ -20,6 +20,8 @@ public:
     bool serialReadCalled = false;
     bool restartCalled = false;
     bool millisCalled = false;
+    bool getResetReasonCalled = false;
+    int resetReasonValue = 0;
     
     bool getFreeHeapCalled = false;
     bool getMinFreeHeapCalled = false;
@@ -159,7 +161,12 @@ public:
         // In a real implementation, this would restart the device
         // For testing, we just set a flag
     }
-    
+
+    int getResetReason() override {
+        getResetReasonCalled = true;
+        return resetReasonValue;
+    }
+
     // Memory information
     uint32_t getFreeHeap() override {
         getFreeHeapCalled = true;

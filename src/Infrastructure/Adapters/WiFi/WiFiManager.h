@@ -80,7 +80,7 @@ private:
         }
         networks.push_back({ssid, password});
         std::string json = _jsonConverter->wifiNetworksToJson(networks);
-        (void)_spiffsAdapter->RewriteToFile(WIFI_NETWORKS_FILE, json.c_str());
+        (void)_spiffsAdapter->rewriteToFile(WIFI_NETWORKS_FILE, json.c_str());
         return true;
     }
 

@@ -2,6 +2,7 @@
 #define ARDUINO_ADAPTER_H
 
 #include <Arduino.h>
+#include "esp_system.h"
 #include "Core/Domain/Interfaces/Adapters/IArduinoAdapter.h"
 
 class ArduinoAdapter : public IArduinoAdapter {
@@ -113,7 +114,11 @@ public:
         // For ESP32
         ESP.restart();
     }
-    
+
+    int getResetReason() override {
+        return (int)esp_reset_reason();
+    }
+
     // Memory information
     uint32_t getFreeHeap() override {
         return ESP.getFreeHeap();

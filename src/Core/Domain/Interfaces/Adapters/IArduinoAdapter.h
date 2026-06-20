@@ -45,7 +45,8 @@ public:
     
     // System control
     virtual void restart() = 0;
-    
+    virtual int getResetReason() = 0;
+
     // Memory information
     virtual uint32_t getFreeHeap() = 0;
     virtual uint32_t getMinFreeHeap() = 0;

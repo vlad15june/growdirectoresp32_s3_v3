@@ -9,6 +9,7 @@
 #include "Application/Services/Devices/IDeviceService.h"
 #include "Application/Services/Sensors/ISensorService.h"
 #include "Application/Services/Rules/IRuleService.h"
+#include "Core/Domain/Interfaces/IOtaUpdateLog.h"
 
 class LoopServiceConfigureDone : public LoopServiceBase {
 private:
@@ -19,13 +20,18 @@ private:
     IDeviceService* deviceService;
     ISensorService* sensorService;
     IRuleService* ruleService;
-    
+    IOtaUpdateLog* otaUpdateLog;
+
     // Diagnostic timer variables
     unsigned long lastDiagnosticTime = 0;
     const unsigned long DIAGNOSTIC_INTERVAL = 30 * 1000; // 30 sec in milliseconds
 
+    // OTA log flush timer
+    unsigned long lastOtaFlushTime = 0;
+    const unsigned long OTA_FLUSH_INTERVAL = 5 * 1000; // 5 sec in milliseconds
+
 public:
-    LoopServiceConfigureDone() 
+    LoopServiceConfigureDone()
         : LoopServiceBase(),
           onChangeLocalIpUseCase(nullptr),
           onConnectivityRestoredUseCase(nullptr),
@@ -33,7 +39,8 @@ public:
           diagnosticService(nullptr),
           deviceService(nullptr),
           sensorService(nullptr),
-          ruleService(nullptr) {}
+          ruleService(nullptr),
+          otaUpdateLog(nullptr) {}
     
     ~LoopServiceConfigureDone() override = default;
     
@@ -82,8 +89,22 @@ public:
                 lastDiagnosticTime = currentTime;
             }
         }
+
+        if (otaUpdateLog && arduinoAdapter) {
+            unsigned long currentTime = arduinoAdapter->millis();
+            if (currentTime - lastOtaFlushTime >= OTA_FLUSH_INTERVAL) {
+                lastOtaFlushTime = currentTime;
+                if (otaUpdateLog->hasPending()) {
+                    otaUpdateLog->flushToMqttIfAny();
+                }
+            }
+        }
     }
-    
+
+    virtual void setOtaUpdateLog(IOtaUpdateLog* otaLog) {
+        this->otaUpdateLog = otaLog;
+    }
+
     virtual void setOnChangeLocalIpUseCase(IOnChangeLocalIpUseCase* useCase) {
         this->onChangeLocalIpUseCase = useCase;
     }

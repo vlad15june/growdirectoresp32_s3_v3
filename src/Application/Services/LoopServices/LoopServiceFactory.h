@@ -22,6 +22,7 @@
 #include "Application/Services/Sensors/ISensorService.h"
 #include "Application/Services/Rules/IRuleService.h"
 #include "Core/Domain/Interfaces/BoardTesting/IBoardTest.h"
+#include "Core/Domain/Interfaces/IOtaUpdateLog.h"
 
 class LoopServiceFactory : public ILoopServiceFactory {
 private:
@@ -43,6 +44,7 @@ private:
     IRuleService* ruleService;
     IClearModuleDataService* clearModuleDataService;
     IBoardTest* boardTest;
+    IOtaUpdateLog* otaUpdateLog = nullptr;
 
 public:
     LoopServiceFactory(
@@ -112,7 +114,8 @@ public:
                 configDoneService->setDeviceService(deviceService);
                 configDoneService->setSensorService(sensorService);
                 configDoneService->setRuleService(ruleService);
-                
+                configDoneService->setOtaUpdateLog(otaUpdateLog);
+
                 // Then assign to the service unique_ptr
                 service = std::unique_ptr<LoopServiceBase>(configDoneService);
                 break;
@@ -175,6 +178,10 @@ public:
     // Setter for ClearModuleDataService
     void setClearModuleDataService(IClearModuleDataService* service) {
         this->clearModuleDataService = service;
+    }
+
+    void setOtaUpdateLog(IOtaUpdateLog* otaLog) {
+        this->otaUpdateLog = otaLog;
     }
 };
 

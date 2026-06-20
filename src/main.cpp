@@ -290,17 +290,17 @@ void setup()
 
   settings.begin();
   spiffsAdapter.initSPIFFS();
-  // spiffsAdapter.RemoveFile("/data/sensorTypes.json");
-  // spiffsAdapter.RemoveFile("/data/sensors.json");
-  // spiffsAdapter.RemoveFile("/sensors/sensors.json");
-  // spiffsAdapter.RemoveFile("/wifiNetworks.json");
+  // spiffsAdapter.removeFile("/data/sensorTypes.json");
+  // spiffsAdapter.removeFile("/data/sensors.json");
+  // spiffsAdapter.removeFile("/sensors/sensors.json");
+  // spiffsAdapter.removeFile("/wifiNetworks.json");
 
   if (settings.getNeedClearSpiffs() == NEED_CLEAR_SPIFFS_MARKER) {
     Serial.println("needClearSpiffs flag set — removing SPIFFS files");
-    spiffsAdapter.RemoveFile("/data/sensorTypes.json");
-    spiffsAdapter.RemoveFile("/data/sensors.json");
-    spiffsAdapter.RemoveFile("/sensors/sensors.json");
-    spiffsAdapter.RemoveFile("/wifiNetworks.json");
+    spiffsAdapter.removeFile("/data/sensorTypes.json");
+    spiffsAdapter.removeFile("/data/sensors.json");
+    spiffsAdapter.removeFile("/sensors/sensors.json");
+    spiffsAdapter.removeFile("/wifiNetworks.json");
     settings.setNeedClearSpiffs(0);
     Serial.println("SPIFFS files removed, needClearSpiffs flag cleared");
   }

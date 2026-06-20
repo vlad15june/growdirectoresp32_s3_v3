@@ -107,7 +107,7 @@ public:
         return std::string(content.c_str());
     }
 
-    void RemoveFile(const char* filePath) override {
+    void removeFile(const char* filePath) override {
         if (SPIFFS.exists(filePath)) {
             if (SPIFFS.remove(filePath)) {
                 log("File removed: %s", filePath);
@@ -119,7 +119,7 @@ public:
         }
     }
 
-    bool RewriteToFile(const char* filePath, const char* body) override {
+    bool rewriteToFile(const char* filePath, const char* body) override {
         File file = SPIFFS.open(filePath, "w");
         if (!file) {
             log("Failed to open file for writing: %s", filePath);
@@ -134,6 +134,33 @@ public:
         }
         log("Wrote %d bytes to file: %s", written, filePath);
         return true;
+    }
+
+    bool appendToFile(const char* filePath, const char* body) override {
+        File file = SPIFFS.open(filePath, "a");
+        if (!file) {
+            log("Failed to open file for append: %s", filePath);
+            return false;
+        }
+        size_t written = file.print(body);
+        written += file.print("\n");
+        file.close();
+        size_t expected = strlen(body) + 1;
+        if (written != expected) {
+            log("Append incomplete: expected %d, wrote %d bytes to %s", expected, written, filePath);
+            return false;
+        }
+        return true;
+    }
+
+    unsigned int getFileSize(const char* filePath) override {
+        File file = SPIFFS.open(filePath, "r");
+        if (!file) {
+            return 0;
+        }
+        unsigned int size = file.size();
+        file.close();
+        return size;
     }
 
     bool directoryExists(const char* path) override {

@@ -150,7 +150,7 @@ public:
         std::string jsonStr = entitiesToJson(entities);
         log("SpiffsDao: JSON serialization complete, length: %d", jsonStr.length());
         
-        bool result = spiffsAdapter->RewriteToFile(filePath.c_str(), jsonStr.c_str());
+        bool result = spiffsAdapter->rewriteToFile(filePath.c_str(), jsonStr.c_str());
         log("SpiffsDao: File write %s", result ? "complete" : "failed");
         return result;
     }
@@ -176,7 +176,7 @@ public:
         if (filePath.empty()) initialize();
         
         // Just remove the file, no need to check if it exists first
-        spiffsAdapter->RemoveFile(filePath.c_str());
+        spiffsAdapter->removeFile(filePath.c_str());
         log("SpiffsDao: Clear operation completed");
         return true;
     }

@@ -44,6 +44,7 @@
 
 #include "Infrastructure/Adapters/eepromAdapter.h"
 #include "Infrastructure/Logging/MqttLogger.h"
+#include "Infrastructure/Logging/OtaUpdateLog.h"
 #include "Infrastructure/Configuration/ModuleConfig.h"
 #include "Infrastructure/Configuration/Settings.h"
 #include "Infrastructure/Logging/DebugSystem.h"
@@ -165,9 +166,11 @@ DeviceCommandExecutionUseCase deviceCommandExecutionUseCase(
     &debugSystem,
     &moduleConfig);
 
-FirmwareRemoteUpdate firmwareRemoteUpdate(&mqttLogger, &debugSystem, &settings);
-
 SpiffsAdapter spiffsAdapter(&mqttLogger, &debugSystem);
+
+OtaUpdateLog otaUpdateLog(&spiffsAdapter, &mqttLogger, &ntpTimeAdapter);
+
+FirmwareRemoteUpdate firmwareRemoteUpdate(&mqttLogger, &debugSystem, &settings, &otaUpdateLog);
 
 WiFiManager wifiManager(&wifiAdapter, &settings, &mqttLogger, &debugSystem, &spiffsAdapter, &jsonConverter);
 
@@ -449,7 +452,8 @@ ModuleSetupService moduleSetupService(
     &arduinoAdapter,
     &syncSensorTypesUseCase,
     &remoteSensorReceiver,
-    &onConnectivityRestoredUseCase);
+    &onConnectivityRestoredUseCase,
+    &otaUpdateLog);
 
 void initDependencies()
 {
@@ -459,5 +463,6 @@ void initDependencies()
     boardTest.setModbusPorts(modbusPorts);
     syncRulesUseCase.setRemoteSensorReceiver(&remoteSensorReceiver);
     commandService.setRemoteSensorReceiver(&remoteSensorReceiver);
+    loopServiceFactory.setOtaUpdateLog(&otaUpdateLog);
 }
 #endif // GLOBALS_H

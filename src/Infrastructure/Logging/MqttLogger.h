@@ -112,6 +112,20 @@ public:
     void setMode(MqttLoggerMode mode) {
         _mode = mode;
     }
+
+    bool isConnected() const {
+        return _mqttClient.connected();
+    }
+
+    bool publishToTopic(const char* subTopic, const char* message) {
+        if (!_mqttClient.connected()) {
+            return false;
+        }
+        String baseTopic = _defaultTopic + "/" + subTopic;
+        String fullTopic = getTopicWithModuleUid(baseTopic);
+        publishMqtt(fullTopic.c_str(), message);
+        return true;
+    }
     
     // Base printing methods for default topic
     void print(const char* message) override {

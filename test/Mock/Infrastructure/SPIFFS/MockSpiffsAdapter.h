@@ -24,23 +24,12 @@ public:
         return true;
     }
     
-    bool appendToFile(const char* fileName, const char* content) {
-        if (shouldFail) return false;
-        fileSystem[fileName] += content;
-        return true;
-    }
-    
     bool removeDirectory(const char* dirName) {
         if (shouldFail) return false;
         directories.erase(dirName);
         return true;
     }
-    
-    uint32_t getFileSize(const char* fileName) {
-        auto it = fileSystem.find(fileName);
-        return (it != fileSystem.end()) ? it->second.length() : 0;
-    }
-    
+
     bool fileExists(const char* fileName) {
         return fileSystem.find(fileName) != fileSystem.end();
     }
@@ -60,20 +49,32 @@ public:
         return (it != fileSystem.end()) ? it->second : "";
     }
     
-    void RemoveFile(const char* filePath) override {
+    void removeFile(const char* filePath) override {
         if (!shouldFail) {
             fileSystem.erase(filePath);
         }
     }
     
-    bool RewriteToFile(const char* filePath, const char* body) override {
+    bool rewriteToFile(const char* filePath, const char* body) override {
         if (!shouldFail) {
             fileSystem[filePath] = body;
             return true;
         }
         return false;
     }
-    
+
+    bool appendToFile(const char* filePath, const char* body) override {
+        if (shouldFail) return false;
+        fileSystem[filePath] += body;
+        fileSystem[filePath] += "\n";
+        return true;
+    }
+
+    unsigned int getFileSize(const char* filePath) override {
+        auto it = fileSystem.find(filePath);
+        return (it != fileSystem.end()) ? (unsigned int)it->second.length() : 0;
+    }
+
     bool directoryExists(const char* path) override {
         if (shouldFail) return false;
         return directories.find(path) != directories.end();

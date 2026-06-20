@@ -32,6 +32,7 @@
 #include "Core/Domain/Interfaces/API/IHybridAPIService.h"
 #include "Core/Domain/Interfaces/IClearModuleDataService.h"
 #include "Core/Domain/Interfaces/Adapters/IArduinoAdapter.h"
+#include "Core/Domain/Interfaces/IOtaUpdateLog.h"
 #include "Core/Domain/Interfaces/UseCases/SensorTypes/ISyncSensorTypesUseCase.h"
 #include "Core/Domain/Interfaces/Adapters/Sensors/IRemoteSensorReceiver.h"
 #include "Core/Domain/Interfaces/UseCases/IOnConnectivityRestoredUseCase.h"
@@ -81,6 +82,7 @@ private:
     ISyncSensorTypesUseCase *syncSensorTypesUseCase;
     IRemoteSensorReceiver *remoteSensorReceiver;
     IOnConnectivityRestoredUseCase *onConnectivityRestoredUseCase;
+    IOtaUpdateLog *otaUpdateLog;
 
     void log(const char *format, ...);
 
@@ -175,7 +177,8 @@ public:
         IArduinoAdapter *arduinoAdapter = nullptr,
         ISyncSensorTypesUseCase *syncSensorTypesUseCase = nullptr,
         IRemoteSensorReceiver *remoteSensorReceiver = nullptr,
-        IOnConnectivityRestoredUseCase *onConnectivityRestoredUseCase = nullptr);
+        IOnConnectivityRestoredUseCase *onConnectivityRestoredUseCase = nullptr,
+        IOtaUpdateLog *otaUpdateLog = nullptr);
 
     void setupModule() override;
     std::unique_ptr<ILoopService> getLoopService() override;
@@ -211,7 +214,8 @@ inline ModuleSetupService::ModuleSetupService(
     IArduinoAdapter *arduinoAdapter,
     ISyncSensorTypesUseCase *syncSensorTypesUseCase,
     IRemoteSensorReceiver *remoteSensorReceiver,
-    IOnConnectivityRestoredUseCase *onConnectivityRestoredUseCase) : logger(logger),
+    IOnConnectivityRestoredUseCase *onConnectivityRestoredUseCase,
+    IOtaUpdateLog *otaUpdateLog) : logger(logger),
                                                        debugSystem(debugSystem),
                                                        moduleConfig(moduleConfig),
                                                        ledAdapter(ledAdapter),
@@ -238,7 +242,8 @@ inline ModuleSetupService::ModuleSetupService(
                                                        arduinoAdapter(arduinoAdapter),
                                                        syncSensorTypesUseCase(syncSensorTypesUseCase),
                                                        remoteSensorReceiver(remoteSensorReceiver),
-                                                       onConnectivityRestoredUseCase(onConnectivityRestoredUseCase)
+                                                       onConnectivityRestoredUseCase(onConnectivityRestoredUseCase),
+                                                       otaUpdateLog(otaUpdateLog)
 {
 }
 
@@ -1525,6 +1530,22 @@ inline void ModuleSetupService::setupModule()
     else
     {
         log("SETUP: SPIFFS adapter not available");
+    }
+
+    if (otaUpdateLog && moduleConfig)
+    {
+        ISettings *bootSettings = moduleConfig->getSettings();
+        if (bootSettings && bootSettings->getBootType() == BOOT_TYPE_FIRMWARE_UPDATE)
+        {
+            char bootRecord[160];
+            snprintf(bootRecord, sizeof(bootRecord),
+                     "BOOT in OTA: reset_reason=%d updateStatus=%d bootType=%d fw=%s",
+                     arduinoAdapter ? arduinoAdapter->getResetReason() : -1,
+                     (int)bootSettings->getUpdateStatus(),
+                     (int)bootSettings->getBootType(),
+                     moduleConfig->getFirmwareVersion());
+            otaUpdateLog->write(bootRecord);
+        }
     }
 
     if (!initializeModuleConfiguration())
