@@ -52,6 +52,9 @@
 ##### `/src/Core/Domain/Data/Entities`
 Доменные сущности - базовые бизнес-объекты (Device, Sensor, Rule, Module и т.д.).
 
+###### `/src/Core/Domain/Data/Entities/Sensor`
+Сущности сенсора и его конфигурации каналов: `Sensor.h`, `SensorType.h`, `SensorValue.h`, а также конфиги подключения — `AnalogPinConfig.h`, `I2CRegisterConfig.h`, `ModbusRegisterConfig.h`.
+
 ##### `/src/Core/Domain/Data/Models`
 Доменные модели - структуры данных, используемые в бизнес-логике.
 
@@ -67,6 +70,12 @@
 ##### `/src/Core/Domain/Interfaces/Adapters`
 Интерфейсы для адаптеров внешних систем.
 
+###### `/src/Core/Domain/Interfaces/Adapters/Json`
+Интерфейсы JSON-адаптеров (конвертеры).
+
+###### `/src/Core/Domain/Interfaces/Adapters/Sensors`
+Интерфейсы адаптеров сенсоров (чтение, ридеры).
+
 ##### `/src/Core/Domain/Interfaces/BoardTesting`
 Интерфейсы для тестирования платы.
 
@@ -76,11 +85,23 @@
 ##### `/src/Core/Domain/Interfaces/Repositories`
 Интерфейсы репозиториев для работы с данными.
 
+##### `/src/Core/Domain/Interfaces/Rules`
+Интерфейсы, относящиеся к правилам автоматизации.
+
 ##### `/src/Core/Domain/Interfaces/Udp`
 Интерфейсы для UDP коммуникации.
 
 ##### `/src/Core/Domain/Interfaces/UseCases`
 Интерфейсы для use cases (сценариев использования).
+
+###### `/src/Core/Domain/Interfaces/UseCases/DeviceControl`
+Интерфейсы use cases управления устройствами.
+
+###### `/src/Core/Domain/Interfaces/UseCases/Rules`
+Интерфейсы use cases правил автоматизации.
+
+###### `/src/Core/Domain/Interfaces/UseCases/SensorTypes`
+Интерфейсы use cases типов сенсоров.
 
 #### `/src/Core/Domain/UseCases`
 Use Cases (сценарии использования) - бизнес-логика приложения, организованная по функциональным возможностям.
@@ -113,7 +134,7 @@ Use Cases (сценарии использования) - бизнес-логи�
 Логика работы с показаниями сенсоров.
 
 ### `/src/Core/Utils`
-Утилиты общего назначения (например, Optional для работы с опциональными значениями).
+Утилиты общего назначения (например, `Optional` для работы с опциональными значениями, `HexCodec` для конвертации hex↔байты). Все header-only утилиты живут здесь в `namespace Utils`, **не** в `Core/Domain/...`. Новые общие хелперы добавлять сюда.
 
 ---
 
@@ -210,7 +231,16 @@ Data Transfer Objects - объекты для передачи данных ме
 Адаптер для коммуникации по RS485.
 
 ##### `/src/Infrastructure/Adapters/Sensors`
-Адаптеры для различных типов сенсоров.
+Адаптеры сенсоров. Верхний уровень — общий `SensorReader.h`; конкретные реализации разделены на локальные (по шине) и удалённые.
+
+###### `/src/Infrastructure/Adapters/Sensors/HardwareSensors`
+Физически подключённые сенсоры, сгруппированы по шине:
+- `AnalogSensors/` — `AnalogSensorReader.h` (АЦП-каналы)
+- `I2c/` — I2C-сенсоры (`CO2Sensor.h`, `LuxSensor.h`, `SHT4xSensor.h`, `SHT85Sensor.h`)
+- `ModbusSensors/` — `ModbusSensorReader.h` (RS485/Modbus)
+
+###### `/src/Infrastructure/Adapters/Sensors/RemoteSensors`
+Удалённые сенсоры, получаемые по сети (`RemoteSensorClient.h`).
 
 ##### `/src/Infrastructure/Adapters/SPIFFS`
 Адаптер для работы с файловой системой SPIFFS.
@@ -250,6 +280,9 @@ MQTT контроллеры для обработки MQTT сообщений.
 
 ##### `/src/Infrastructure/Controllers/WebServices`
 Контроллеры для веб-сервисов.
+
+###### `/src/Infrastructure/Controllers/WebServices/Launchers`
+Запускатели веб-серверов (`WebServerLauncher.h`).
 
 ##### `/src/Infrastructure/Controllers/WiFi`
 Контроллеры для управления WiFi.
