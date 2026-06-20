@@ -7,6 +7,7 @@
 #include <T67XX.h>
 #include "globals.h"
 #include "Infrastructure/Adapters/ExternalWDT/ExternalWDT.h"
+#include "esp_task_wdt.h"
 
 // Global loop service instance
 std::unique_ptr<ILoopService> loopService;
@@ -269,6 +270,15 @@ void setup()
     Serial.printf("[%lu ms] External WDT failed to start.\n", millis());
   }
 
+  esp_err_t wdtInitRc = esp_task_wdt_init(WDT_TIMEOUT_S, true);
+  esp_err_t wdtAddRc = esp_task_wdt_add(NULL);
+  if (wdtInitRc == ESP_OK && wdtAddRc == ESP_OK) {
+    Serial.printf("[%lu ms] WDT: task_wdt_armed timeout_s=%d\n", millis(), WDT_TIMEOUT_S);
+  } else {
+    Serial.printf("[%lu ms] WDT: task_wdt_arm_fail init_rc=%d add_rc=%d\n",
+                  millis(), wdtInitRc, wdtAddRc);
+  }
+
   // settings.begin();
   // settings.setConfigured(ModuleModeEnum::USER_CAN_CONFIGURE);
 
@@ -319,6 +329,8 @@ void setup()
 
 void loop()
 {
+  esp_task_wdt_reset();
+
   if (loopService)
   {
     loopService->loop();

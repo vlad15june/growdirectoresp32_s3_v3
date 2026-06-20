@@ -8,6 +8,7 @@
 #include "Infrastructure/Adapters/Http/HttpClientAdapter.h"
 #include <WiFi.h>
 #include <Update.h>
+#include "esp_task_wdt.h"
 #include <cstdarg>
 #include <cstdio>
 
@@ -125,7 +126,11 @@ public:
             setFirmwareUpdateCommandResultStatus("Error", "Not enough space to begin OTA");
             return false;
         }
-        
+
+        Update.onProgress([](size_t cur, size_t total) {
+            esp_task_wdt_reset();
+        });
+
         // Stream the firmware data
         WiFiClient* client = _httpClient->getStreamPtr();
         if (client == nullptr) {

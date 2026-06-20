@@ -144,4 +144,6 @@
 // Maximum number of channels per sensor
 #define MAX_SENSOR_CHANNELS 4
 
+#define WDT_TIMEOUT_S 300
+
 #endif // CONSTANTS_H
