@@ -19,6 +19,7 @@ public:
     bool serialAvailableCalled = false;
     bool serialReadCalled = false;
     bool restartCalled = false;
+    bool hardResetCalled = false;
     bool millisCalled = false;
     bool getResetReasonCalled = false;
     int resetReasonValue = 0;
@@ -162,6 +163,10 @@ public:
         // For testing, we just set a flag
     }
 
+    void hardReset() override {
+        hardResetCalled = true;
+    }
+
     int getResetReason() override {
         getResetReasonCalled = true;
         return resetReasonValue;
@@ -260,8 +265,9 @@ public:
         serialAvailableCalled = false;
         serialReadCalled = false;
         restartCalled = false;
+        hardResetCalled = false;
         millisCalled = false;
-        
+
         getFreeHeapCalled = false;
         getMinFreeHeapCalled = false;
         getHeapSizeCalled = false;

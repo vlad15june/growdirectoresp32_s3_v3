@@ -77,12 +77,30 @@ void test_loop_when_mode_changes_to_need_restart(void) {
     TEST_ASSERT_EQUAL(2, g_mockArduinoAdapter.delayCount);
     TEST_ASSERT_EQUAL(1000, g_mockArduinoAdapter.lastDelayMs);
     
-    // Verify restart was called
+    // Verify restart was called (soft path, boot type USER)
     TEST_ASSERT_TRUE(g_mockArduinoAdapter.restartCalled);
-    
+    TEST_ASSERT_FALSE(g_mockArduinoAdapter.hardResetCalled);
+
     // Verify that mode was NOT saved to settings
     TEST_ASSERT_NOT_EQUAL(CONFIGURED_NEED_RESTART, g_mockSettings.getIfConfigured());
-    
+
+    on_change_module_mode_use_case_teardown();
+}
+
+void test_loop_technical_need_restart_calls_hard_reset(void) {
+    on_change_module_mode_use_case_setup();
+
+    // Boot type set to TECHNICAL by diagnostic before the restart request
+    g_mockSettings.setBootType(BOOT_TYPE_TECHNICAL);
+    g_mockModuleConfig.setRequestedModuleMode(CONFIGURED_NEED_RESTART);
+
+    g_onChangeModuleModeUseCase->loop();
+
+    // Boot type stays TECHNICAL and the technical path takes the hard reset
+    TEST_ASSERT_EQUAL(BOOT_TYPE_TECHNICAL, g_mockSettings.getBootType());
+    TEST_ASSERT_TRUE(g_mockArduinoAdapter.hardResetCalled);
+    TEST_ASSERT_FALSE(g_mockArduinoAdapter.restartCalled);
+
     on_change_module_mode_use_case_teardown();
 }
 
@@ -211,6 +229,7 @@ extern "C" int run_on_change_module_mode_use_case_tests(void) {
     
     RUN_TEST(test_loop_when_no_mode_change);
     RUN_TEST(test_loop_when_mode_changes_to_need_restart);
+    RUN_TEST(test_loop_technical_need_restart_calls_hard_reset);
     RUN_TEST(test_loop_when_mode_changes_to_user_can_configure);
     RUN_TEST(test_loop_when_mode_changes_to_user_can_reconfigure);
     RUN_TEST(test_loop_when_mode_changes_to_ap_test_mode);

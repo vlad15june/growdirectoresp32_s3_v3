@@ -10,6 +10,7 @@
 #include "Core/Domain/Interfaces/IDebugSystem.h"
 #include "Core/Domain/Enums/ModuleModeEnum.h"
 #include "Core/Domain/Enums/BootTypeEnum.h"
+#include "constants.h"
 
 class OnChangeModuleModeUseCase : public IOnChangeModuleModeUseCase
 {
@@ -81,9 +82,18 @@ public:
 private:
     void restart()
     {
-        log("OnChangeModuleModeUseCase: Restarting device...");
+        uint8_t bootType = _moduleConfig.getSettings()->getBootType();
         _arduinoAdapter.delay(1000);
-        _arduinoAdapter.restart();
+        if (bootType == BOOT_TYPE_TECHNICAL)
+        {
+            log("OnChangeModuleModeUseCase: hard_reset bootType=%d sleepMs=%d", bootType, HARD_RESET_SLEEP_MS);
+            _arduinoAdapter.hardReset();
+        }
+        else
+        {
+            log("OnChangeModuleModeUseCase: soft_reset bootType=%d", bootType);
+            _arduinoAdapter.restart();
+        }
     }
 
     void log(const char *format, ...)

@@ -2,7 +2,10 @@
 #define ARDUINO_ADAPTER_H
 
 #include <Arduino.h>
+#include <WiFi.h>
 #include "esp_system.h"
+#include "esp_sleep.h"
+#include "constants.h"
 #include "Core/Domain/Interfaces/Adapters/IArduinoAdapter.h"
 
 class ArduinoAdapter : public IArduinoAdapter {
@@ -112,6 +115,15 @@ public:
     // System control
     void restart() override {
         // For ESP32
+        ESP.restart();
+    }
+
+    void hardReset() override {
+        WiFi.disconnect(true);
+        WiFi.mode(WIFI_OFF);
+        ::delay(100);
+        esp_sleep_enable_timer_wakeup((uint64_t)HARD_RESET_SLEEP_MS * 1000ULL);
+        esp_deep_sleep_start();
         ESP.restart();
     }
 

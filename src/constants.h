@@ -146,4 +146,6 @@
 
 #define WDT_TIMEOUT_S 300
 
+#define HARD_RESET_SLEEP_MS 1500
+
 #endif // CONSTANTS_H
