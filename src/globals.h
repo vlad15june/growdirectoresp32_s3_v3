@@ -198,7 +198,7 @@ std::vector<IModbusRS485*> modbusPorts = {&modbusRS485_pin1, &modbusRS485_pin2, 
 
 AnalogSensorReader analogSensorReader(arduinoAdapter);
 ModbusSensorReader modbusSensorReader(modbusPorts, arduinoAdapter, &mqttLogger, &debugSystem);
-RawBusAccessAdapter rawBusAccessAdapter(modbusPorts, arduinoAdapter);
+RawBusAccessAdapter rawBusAccessAdapter(modbusPorts, arduinoAdapter, &mqttLogger, &debugSystem);
 
 SensorReader sensorReader(&analogSensorReader, &modbusSensorReader, &arduinoAdapter, &mqttLogger, &debugSystem);
 

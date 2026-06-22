@@ -41,7 +41,8 @@ namespace DebugFeatures {
     constexpr const char* MODULE_MODE_DEBUG = "MODULE_MODE";
     constexpr const char* DEVICE_COMMAND_DEBUG = "DEVICE_COMMAND";
     constexpr const char* ANALOG_INPUT_DEVICE_COMMAND_DEBUG = "ANALOG_INPUT_DEVICE_COMMAND";
-    
+    constexpr const char* RAW_MODBUS_DEBUG = "RAW_MODBUS";
+
     // Sensor debug features
     constexpr const char* SETUP_SENSOR_DEBUG = "SETUP_SENSOR";
     constexpr const char* SENSOR_ERROR_DEBUG = "SENSOR_ERROR";

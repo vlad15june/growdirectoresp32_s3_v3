@@ -4,15 +4,21 @@
 #include <vector>
 #include <cstdint>
 #include <cstddef>
+#include <cstdarg>
+#include <cstdio>
 #include "IModbusRS485.h"
 #include "Core/Domain/Interfaces/Adapters/Sensors/IRawBusAccess.h"
 #include "Core/Domain/Interfaces/Adapters/IArduinoAdapter.h"
+#include "Core/Domain/Interfaces/ILogger.h"
+#include "Core/Domain/Interfaces/IDebugSystem.h"
 
 class RawBusAccessAdapter : public IRawBusAccess
 {
 private:
     std::vector<IModbusRS485*> _ports;
     IArduinoAdapter &_arduino;
+    ILogger* _logger;
+    IDebugSystem* _debugSystem;
 
     bool readWithTimeout(IModbusRS485 *port, unsigned long timeoutMs, std::vector<uint8_t> &out)
     {
@@ -35,9 +41,42 @@ private:
         return false;
     }
 
+    void log(const char* format, ...)
+    {
+        if (_debugSystem && _logger)
+        {
+            char buffer[256];
+            va_list args;
+            va_start(args, format);
+            vsnprintf(buffer, sizeof(buffer), format, args);
+            va_end(args);
+
+            IDebugFeature* feature = _debugSystem->getFeature(DebugFeatures::RAW_MODBUS_DEBUG);
+            if (feature)
+            {
+                _logger->println(DebugFeatures::RAW_MODBUS_DEBUG, buffer, feature->getLogChannel());
+            }
+            else
+            {
+                _logger->println(DebugFeatures::RAW_MODBUS_DEBUG, buffer);
+            }
+        }
+    }
+
+    void logTxFrame(int channel, const uint8_t* frame, size_t n)
+    {
+        char hex[3 * 256 + 1];
+        size_t pos = 0;
+        for (size_t i = 0; i < n && pos + 3 < sizeof(hex); i++)
+        {
+            pos += snprintf(hex + pos, sizeof(hex) - pos, "%02X ", frame[i]);
+        }
+        log("RawBusAccessAdapter: TX ch%d (%d bytes): %s", channel, (int)n, hex);
+    }
+
 public:
-    RawBusAccessAdapter(const std::vector<IModbusRS485*> &ports, IArduinoAdapter &arduino)
-        : _ports(ports), _arduino(arduino) {}
+    RawBusAccessAdapter(const std::vector<IModbusRS485*> &ports, IArduinoAdapter &arduino, ILogger* logger, IDebugSystem* debugSystem)
+        : _ports(ports), _arduino(arduino), _logger(logger), _debugSystem(debugSystem) {}
 
     bool modbusRequest(int channel, const uint8_t *pduNoCrc, size_t len, bool expectResponse, unsigned long timeoutMs, std::vector<uint8_t> &out) override
     {
@@ -62,6 +101,7 @@ public:
         frame[len] = crc & 0xFF;
         frame[len + 1] = (crc >> 8) & 0xFF;
 
+        logTxFrame(channel, frame, len + 2);
         port->sendData(frame, (uint8_t)(len + 2));
 
         if (!expectResponse)
@@ -85,6 +125,7 @@ public:
 
         IModbusRS485 *port = _ports[channel];
 
+        logTxFrame(channel, bytes, len);
         port->sendData(const_cast<uint8_t *>(bytes), (uint8_t)len);
 
         if (!expectResponse)
