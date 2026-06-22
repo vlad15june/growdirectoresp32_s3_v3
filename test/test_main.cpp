@@ -14,6 +14,7 @@ extern "C" void run_fill_module_structure_tests(void);
 extern "C" int run_on_change_local_ip_use_case_tests(void);
 extern "C" void run_on_connectivity_restored_tests(void);
 extern "C" int run_on_change_module_mode_use_case_tests(void);
+extern "C" int run_check_module_deletion_use_case_tests(void);
 extern "C" int run_diagnostic_service_tests(void);
 extern "C" int run_hybrid_api_service_tests(void);
 extern "C" void run_rule_converter_tests(void);
@@ -108,7 +109,9 @@ int main(void) {
 
     // Run tests for OnChangeModuleModeUseCase
     run_on_change_module_mode_use_case_tests();
-    
+
+    run_check_module_deletion_use_case_tests();
+
     // Run tests for DiagnosticService
     run_diagnostic_service_tests();
     

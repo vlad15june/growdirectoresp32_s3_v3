@@ -28,6 +28,7 @@
 #include "Core/Domain/UseCases/ModuleMode/OnChangeModuleModeUseCase.h"
 #include "Core/Domain/UseCases/ModuleMode/OnChangeLocalIpUseCase.h"
 #include "Core/Domain/UseCases/ModuleMode/OnConnectivityRestoredUseCase.h"
+#include "Core/Domain/UseCases/ModuleMode/CheckModuleDeletionUseCase.h"
 #include "Core/Domain/UseCases/DeviceControl/ProcessDeviceStateUseCaseFactory.h"
 #include "Core/Domain/UseCases/DeviceControl/DeviceCommandExecutionUseCase.h"
 #include "Core/Domain/UseCases/ModuleCommand/ModuleCommandExecutionUseCase.h"
@@ -219,6 +220,11 @@ HybridAPIService hybridApiService(
     &debugSystem,
     ApiPriority::BOTH);
 
+CheckModuleDeletionUseCase checkModuleDeletionUseCase(
+    &hybridApiService,
+    &mqttLogger,
+    &debugSystem);
+
 SensorCommandUseCase sensorCommandUseCase(
     &moduleConfig,
     &settings,
@@ -275,7 +281,7 @@ DiagnosticService diagnosticService(
 
 LedUseCases ledUseCases(&ledAdapter, &moduleConfig, &arduinoAdapter, &mqttLogger, &debugSystem, &deviceModel, &diagnosticService);
 
-ModuleCommandExecutionUseCase moduleCommandExecutionUseCase(&mqttLogger, &debugSystem, &ntpTimeAdapter, &firmwareRemoteUpdate, &arduinoAdapter, &sensorRepository, &sensorTypeRepository, &sensorReader, &moduleConfig, &settings, &hybridApiService, &clearModuleDataService, &moduleStructure, &sensorValueModel, &wifiManager, &ledUseCases, &rawBusAccessAdapter);
+ModuleCommandExecutionUseCase moduleCommandExecutionUseCase(&mqttLogger, &debugSystem, &ntpTimeAdapter, &firmwareRemoteUpdate, &arduinoAdapter, &sensorRepository, &sensorTypeRepository, &sensorReader, &moduleConfig, &settings, &hybridApiService, &clearModuleDataService, &moduleStructure, &sensorValueModel, &wifiManager, &ledUseCases, &rawBusAccessAdapter, &checkModuleDeletionUseCase);
 
 CommandService commandService(
     &deviceCommandExecutionUseCase,
@@ -453,7 +459,8 @@ ModuleSetupService moduleSetupService(
     &syncSensorTypesUseCase,
     &remoteSensorReceiver,
     &onConnectivityRestoredUseCase,
-    &otaUpdateLog);
+    &otaUpdateLog,
+    &checkModuleDeletionUseCase);
 
 void initDependencies()
 {

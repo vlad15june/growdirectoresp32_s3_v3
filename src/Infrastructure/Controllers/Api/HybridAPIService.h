@@ -870,30 +870,16 @@ public:
         log("HYBRID API: Statistics reset");
     }
 
-    bool checkIsModuleDeleted() override
+    ModuleDeletionQueryResult queryModuleDeletion() override
     {
-        // This operation only makes sense via REST API, as it's a query
-        // Use REST_ONLY priority since MQTT doesn't support this query
-        bool result = false;
-        
         if (_restApiService != nullptr)
         {
-            result = _restApiService->checkIsModuleDeleted();
-            if (!result)
-            {
-                // Note: We don't track failure here because false might be a valid response
-                log("HYBRID API: Module deletion check returned false (not deleted or error)");
-            }
-            else
-            {
-                log("HYBRID API: Module is confirmed deleted on server");
-            }
+            return _restApiService->queryModuleDeletion();
         }
-        else
-        {
-            log("HYBRID API: REST API not available for module deletion check");
-        }
-        
+
+        log("HYBRID API: REST API not available for module deletion query");
+        ModuleDeletionQueryResult result;
+        result.queryFailed = true;
         return result;
     }
 };

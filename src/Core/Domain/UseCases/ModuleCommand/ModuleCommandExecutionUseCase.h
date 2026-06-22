@@ -14,6 +14,7 @@
 #include "Core/Domain/Interfaces/ISettings.h"
 #include "Core/Domain/Interfaces/IWifiManager.h"
 #include "Core/Domain/Interfaces/UseCases/ILedUseCases.h"
+#include "Core/Domain/Interfaces/UseCases/ICheckModuleDeletionUseCase.h"
 #include "Core/Domain/Interfaces/Adapters/Sensors/IRawBusAccess.h"
 #include "Core/Utils/HexCodec.h"
 #include "Core/Domain/Data/Entities/Sensor/Sensor.h"
@@ -52,12 +53,13 @@ private:
     IWifiManager *wifiManager;
     ILedUseCases *ledUseCases;
     IRawBusAccess *rawBus;
+    ICheckModuleDeletionUseCase *checkModuleDeletionUseCase;
     static const unsigned long commandMaxAgeSeconds = 300;
     static const unsigned long rawReadTimeoutMs = 1000;
 
 public:
-    ModuleCommandExecutionUseCase(ILogger *logger = nullptr, IDebugSystem *debugSystem = nullptr, INTPTimeAdapter *timeAdapter = nullptr, IFirmwareRemoteUpdate *firmwareUpdater = nullptr, IArduinoAdapter *arduinoAdapter = nullptr, ISensorRepository *sensorRepository = nullptr, ISensorTypeRepository *sensorTypeRepository = nullptr, ISensorReader *sensorReader = nullptr, IModuleConfig *moduleConfig = nullptr, ISettings *settings = nullptr, IHybridAPIService *hybridApiService = nullptr, IClearModuleDataService *clearModuleDataService = nullptr, ModuleStructure *moduleStructure = nullptr, ISensorValueModel *sensorValueModel = nullptr, IWifiManager *wifiManager = nullptr, ILedUseCases *ledUseCases = nullptr, IRawBusAccess *rawBus = nullptr)
-        : logger(logger), debugSystem(debugSystem), timeAdapter(timeAdapter), firmwareUpdater(firmwareUpdater), arduinoAdapter(arduinoAdapter), sensorRepository(sensorRepository), sensorTypeRepository(sensorTypeRepository), sensorReader(sensorReader), moduleConfig(moduleConfig), settings(settings), hybridApiService(hybridApiService), clearModuleDataService(clearModuleDataService), moduleStructure(moduleStructure), sensorValueModel(sensorValueModel), wifiManager(wifiManager), ledUseCases(ledUseCases), rawBus(rawBus) {}
+    ModuleCommandExecutionUseCase(ILogger *logger = nullptr, IDebugSystem *debugSystem = nullptr, INTPTimeAdapter *timeAdapter = nullptr, IFirmwareRemoteUpdate *firmwareUpdater = nullptr, IArduinoAdapter *arduinoAdapter = nullptr, ISensorRepository *sensorRepository = nullptr, ISensorTypeRepository *sensorTypeRepository = nullptr, ISensorReader *sensorReader = nullptr, IModuleConfig *moduleConfig = nullptr, ISettings *settings = nullptr, IHybridAPIService *hybridApiService = nullptr, IClearModuleDataService *clearModuleDataService = nullptr, ModuleStructure *moduleStructure = nullptr, ISensorValueModel *sensorValueModel = nullptr, IWifiManager *wifiManager = nullptr, ILedUseCases *ledUseCases = nullptr, IRawBusAccess *rawBus = nullptr, ICheckModuleDeletionUseCase *checkModuleDeletionUseCase = nullptr)
+        : logger(logger), debugSystem(debugSystem), timeAdapter(timeAdapter), firmwareUpdater(firmwareUpdater), arduinoAdapter(arduinoAdapter), sensorRepository(sensorRepository), sensorTypeRepository(sensorTypeRepository), sensorReader(sensorReader), moduleConfig(moduleConfig), settings(settings), hybridApiService(hybridApiService), clearModuleDataService(clearModuleDataService), moduleStructure(moduleStructure), sensorValueModel(sensorValueModel), wifiManager(wifiManager), ledUseCases(ledUseCases), rawBus(rawBus), checkModuleDeletionUseCase(checkModuleDeletionUseCase) {}
     
     virtual ~ModuleCommandExecutionUseCase() = default;
 
@@ -1160,27 +1162,32 @@ private:
         log(DebugFeatures::MODULE_COMMAND_DEBUG,
             "ModuleCommandUseCase: Processing DeleteModule command - uid: %s", moduleCommand.uid.c_str());
 
-        // Check if hybridApiService is available for verification
-        if (!hybridApiService)
+        if (!checkModuleDeletionUseCase)
         {
-            logError("ModuleCommandUseCase: HybridAPIService not available for module deletion verification");
-            return {ModuleCommandStatus::ERROR, "API service not available"};
-        }
-
-        // Verify with server that module is actually marked as deleted
-        log(DebugFeatures::MODULE_COMMAND_DEBUG,
-            "ModuleCommandUseCase: Verifying module deletion status with server");
-        
-        bool isDeleted = hybridApiService->checkIsModuleDeleted();
-        
-        if (!isDeleted)
-        {
-            logError("ModuleCommandUseCase: Server verification failed - module is not marked as deleted");
-            return {ModuleCommandStatus::ERROR, "Module deletion not confirmed by server"};
+            logError("ModuleCommandUseCase: CheckModuleDeletionUseCase not available for module deletion verification");
+            return {ModuleCommandStatus::ERROR, "Deletion check use case not available"};
         }
 
         log(DebugFeatures::MODULE_COMMAND_DEBUG,
-            "ModuleCommandUseCase: Server confirmed module deletion - proceeding with factory reset");
+            "DELETE_MODULE: Verifying module deletion status with server");
+
+        ModuleDeletionStatusEnum deletionStatus = checkModuleDeletionUseCase->evaluate();
+
+        if (deletionStatus == ModuleDeletionStatusEnum::UNKNOWN)
+        {
+            log(DebugFeatures::MODULE_COMMAND_DEBUG,
+                "DELETE_MODULE: verdict UNKNOWN - returning InProgress (retry)");
+            return {ModuleCommandStatus::IN_PROGRESS, "Deletion not confirmed yet, will retry"};
+        }
+
+        if (deletionStatus == ModuleDeletionStatusEnum::NOT_DELETED)
+        {
+            logError("ModuleCommandUseCase: DELETE_MODULE verdict NOT_DELETED - module is not marked as deleted");
+            return {ModuleCommandStatus::ERROR, "Module not marked as deleted"};
+        }
+
+        log(DebugFeatures::MODULE_COMMAND_DEBUG,
+            "DELETE_MODULE: verdict DELETED - proceeding with factory reset");
 
         // Check if clearModuleDataService is available
         if (!clearModuleDataService)

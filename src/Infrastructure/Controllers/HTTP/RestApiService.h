@@ -903,12 +903,15 @@ public:
         return sensorTypes;
     }
 
-    bool checkIsModuleDeleted() override
+    ModuleDeletionQueryResult queryModuleDeletion() override
     {
+        ModuleDeletionQueryResult result;
+
         if (init() == false)
         {
-            log("NET: checkIsModuleDeleted - Initialization failed");
-            return false;
+            log("NET: queryModuleDeletion - Initialization failed");
+            result.queryFailed = true;
+            return result;
         }
 
         const char *url = buildUrl("/api/v1/HardWare/is_deleted");
@@ -925,67 +928,81 @@ public:
 
         byte tries = 0;
         int httpResponseCode = 0;
+        byte forbiddenCount = 0;
+        bool got200 = false;
         std::string responseBody;
-        
+
         while (tries < 3 && httpResponseCode != 200)
         {
             _httpClient->setTimeout(10000);
             _httpClient->begin(url);
-            
+
             httpResponseCode = _httpClient->GET();
-            
+
             if (httpResponseCode > 0)
             {
                 log("NET: HTTP Response code: %d", httpResponseCode);
-                
-                // Get response body
-                responseBody = _httpClient->getString();
-                log("NET: HTTP Response: %s", responseBody.c_str());
+
+                if (httpResponseCode == 403)
+                {
+                    forbiddenCount++;
+                }
+
+                if (httpResponseCode == 200)
+                {
+                    got200 = true;
+                    responseBody = _httpClient->getString();
+                    log("NET: HTTP Response: %s", responseBody.c_str());
+                }
             }
             else
             {
                 log("NET: HTTP Response Error code: %d", httpResponseCode);
             }
-            
+
             _httpClient->end();
             delay(200);
             tries++;
         }
-        
-        if (httpResponseCode == 200 && !responseBody.empty())
+
+        result.received200 = got200;
+        result.allTries403 = (!got200 && forbiddenCount == 3);
+        result.queryFailed = (httpResponseCode <= 0);
+        result.finalHttpCode = httpResponseCode;
+
+        if (got200 && !responseBody.empty())
         {
-            // Parse JSON response to extract isDeleted boolean field
-            // Expected format: {"isDeleted": true/false}
             size_t isDeletedPos = responseBody.find("\"isDeleted\"");
             if (isDeletedPos != std::string::npos)
             {
                 size_t truePos = responseBody.find("true", isDeletedPos);
                 size_t falsePos = responseBody.find("false", isDeletedPos);
-                
+
                 if (truePos != std::string::npos && (falsePos == std::string::npos || truePos < falsePos))
                 {
-                    log("NET: Module is marked as deleted on server");
-                    trackApiSendSuccess();
-                    return true;
+                    result.isDeletedFlag = 1;
                 }
                 else if (falsePos != std::string::npos)
                 {
-                    log("NET: Module is NOT marked as deleted on server");
-                    trackApiSendSuccess();
-                    return false;
+                    result.isDeletedFlag = 0;
                 }
             }
-            
-            log("NET: Failed to parse isDeleted field from response");
-            trackApiSendFailure();
-            return false;
+        }
+
+        if (got200)
+        {
+            trackApiSendSuccess();
         }
         else
         {
-            log("NET: Failed to check module deletion status - HTTP code: %d", httpResponseCode);
             trackApiSendFailure();
-            return false;
         }
+
+        log("NET: queryModuleDeletion result received200=%d allTries403=%d isDeletedFlag=%d queryFailed=%d code=%d",
+            result.received200 ? 1 : 0, result.allTries403 ? 1 : 0, result.isDeletedFlag,
+            result.queryFailed ? 1 : 0, result.finalHttpCode);
+
+        return result;
     }
 
     // Implementations of network diagnostic counter methods

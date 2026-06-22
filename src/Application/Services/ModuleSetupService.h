@@ -36,6 +36,7 @@
 #include "Core/Domain/Interfaces/UseCases/SensorTypes/ISyncSensorTypesUseCase.h"
 #include "Core/Domain/Interfaces/Adapters/Sensors/IRemoteSensorReceiver.h"
 #include "Core/Domain/Interfaces/UseCases/IOnConnectivityRestoredUseCase.h"
+#include "Core/Domain/Interfaces/UseCases/ICheckModuleDeletionUseCase.h"
 #include <memory>
 #include <cstdarg>
 #include <cstdio>
@@ -79,6 +80,7 @@ private:
     IHybridAPIService *hybridApiService;
     IClearModuleDataService *clearModuleDataService;
     IArduinoAdapter *arduinoAdapter;
+    ICheckModuleDeletionUseCase *checkModuleDeletionUseCase;
     ISyncSensorTypesUseCase *syncSensorTypesUseCase;
     IRemoteSensorReceiver *remoteSensorReceiver;
     IOnConnectivityRestoredUseCase *onConnectivityRestoredUseCase;
@@ -178,7 +180,8 @@ public:
         ISyncSensorTypesUseCase *syncSensorTypesUseCase = nullptr,
         IRemoteSensorReceiver *remoteSensorReceiver = nullptr,
         IOnConnectivityRestoredUseCase *onConnectivityRestoredUseCase = nullptr,
-        IOtaUpdateLog *otaUpdateLog = nullptr);
+        IOtaUpdateLog *otaUpdateLog = nullptr,
+        ICheckModuleDeletionUseCase *checkModuleDeletionUseCase = nullptr);
 
     void setupModule() override;
     std::unique_ptr<ILoopService> getLoopService() override;
@@ -215,7 +218,8 @@ inline ModuleSetupService::ModuleSetupService(
     ISyncSensorTypesUseCase *syncSensorTypesUseCase,
     IRemoteSensorReceiver *remoteSensorReceiver,
     IOnConnectivityRestoredUseCase *onConnectivityRestoredUseCase,
-    IOtaUpdateLog *otaUpdateLog) : logger(logger),
+    IOtaUpdateLog *otaUpdateLog,
+    ICheckModuleDeletionUseCase *checkModuleDeletionUseCase) : logger(logger),
                                                        debugSystem(debugSystem),
                                                        moduleConfig(moduleConfig),
                                                        ledAdapter(ledAdapter),
@@ -243,7 +247,8 @@ inline ModuleSetupService::ModuleSetupService(
                                                        syncSensorTypesUseCase(syncSensorTypesUseCase),
                                                        remoteSensorReceiver(remoteSensorReceiver),
                                                        onConnectivityRestoredUseCase(onConnectivityRestoredUseCase),
-                                                       otaUpdateLog(otaUpdateLog)
+                                                       otaUpdateLog(otaUpdateLog),
+                                                       checkModuleDeletionUseCase(checkModuleDeletionUseCase)
 {
 }
 
@@ -589,8 +594,7 @@ inline void ModuleSetupService::checkModuleDeletionOnStartup()
         return;
     }
 
-    // Verify all required dependencies are available
-    if (!hybridApiService || !clearModuleDataService || !arduinoAdapter)
+    if (!checkModuleDeletionUseCase || !clearModuleDataService || !arduinoAdapter)
     {
         log("SETUP: Cannot check module deletion - missing required services");
         return;
@@ -598,11 +602,10 @@ inline void ModuleSetupService::checkModuleDeletionOnStartup()
 
     log("SETUP: Checking if module was deleted from server...");
 
-    // Query server for deletion status
-    bool isDeleted = false;
+    ModuleDeletionStatusEnum status = ModuleDeletionStatusEnum::UNKNOWN;
     try
     {
-        isDeleted = hybridApiService->checkIsModuleDeleted();
+        status = checkModuleDeletionUseCase->evaluate();
     }
     catch (...)
     {
@@ -610,26 +613,23 @@ inline void ModuleSetupService::checkModuleDeletionOnStartup()
         return;
     }
 
-    if (isDeleted)
+    if (status == ModuleDeletionStatusEnum::DELETED)
     {
-        log("SETUP: Module is marked as DELETED on server - initiating factory reset");
+        log("SETUP: deletion verdict DELETED - factory reset");
 
-        // Set module to unconfigured mode
         moduleConfig->getSettings()->setConfigured(ModuleModeEnum::USER_CAN_CONFIGURE);
         log("SETUP: Module mode set to USER_CAN_CONFIGURE");
 
-        // Clear all data
         clearModuleDataService->clearAllData();
         log("SETUP: All module data cleared");
 
-        // Restart to apply changes
         log("SETUP: Restarting module to complete reset...");
-        arduinoAdapter->delay(1000); // Allow logs to flush
+        arduinoAdapter->delay(1000);
         arduinoAdapter->restart();
     }
     else
     {
-        log("SETUP: Module deletion check passed - continuing normal operation");
+        log("SETUP: deletion verdict %s - continuing normal operation", getModuleDeletionStatusName(status));
     }
 }
 

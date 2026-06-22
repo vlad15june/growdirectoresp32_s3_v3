@@ -175,10 +175,11 @@ public:
      * @return vector of ModuleCommandDto containing the command details, empty if no commands or error
      */
     virtual std::vector<ModuleCommandDto> getModuleCommand() = 0;
-    
+
     /**
-     * Check if module is marked as deleted on the server (REST only)
-     * @return true if module is deleted, false otherwise or on error
+     * Query the server for the module deletion status (REST only).
+     * Delegates to the REST service; returns raw transport facts, not a verdict.
+     * @return ModuleDeletionQueryResult with the raw outcome of the query
      */
-    virtual bool checkIsModuleDeleted() = 0;
+    virtual ModuleDeletionQueryResult queryModuleDeletion() = 0;
 };

@@ -284,7 +284,8 @@ public:
         apiSendFailRatioValue = 0.0f;
     }
 
-    bool checkIsModuleDeleted() override { return false; }
+    ModuleDeletionQueryResult queryModuleDeletionResult;
+    ModuleDeletionQueryResult queryModuleDeletion() override { return queryModuleDeletionResult; }
 };
 
 #endif // MOCK_HYBRID_API_SERVICE_H

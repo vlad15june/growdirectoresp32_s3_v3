@@ -9,6 +9,7 @@
 #include "Application/DTOs/ModuleCommandUpdateDto.h"
 #include "Core/Domain/Data/Entities/Rule.h"
 #include "Core/Domain/Data/Entities/Sensor/SensorType.h"
+#include "Core/Domain/Data/Models/ModuleDeletionQueryResult.h"
 #include <vector>
 
 class IRestAPIService {
@@ -67,10 +68,15 @@ public:
     virtual std::vector<ModuleCommandDto> getModuleCommand() = 0;
     
     /**
-     * @brief Check if module is marked as deleted on the server
-     * @return true if module is deleted, false otherwise or on error
+     * @brief Query the server for the module deletion status (REST only)
+     *
+     * Performs the /is_deleted request with the existing retry budget and returns
+     * the raw transport facts (final HTTP code, whether every retry returned 403,
+     * the parsed isDeleted flag as tri-state, transport failure). It does NOT decide
+     * whether the module is deleted — that policy lives in CheckModuleDeletionUseCase.
+     * @return ModuleDeletionQueryResult with the raw outcome of the query
      */
-    virtual bool checkIsModuleDeleted() = 0;
+    virtual ModuleDeletionQueryResult queryModuleDeletion() = 0;
     
     // Network diagnostic counter methods - getters and reset methods only
     virtual int getApiSendFails() const = 0;
