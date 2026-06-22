@@ -1,5 +1,17 @@
 # Release Notes
 
+## Version 2.2.11 (2026-06-22)
+
+### Added
+- **OTA Update Session Logging**: GDV1-3602 The device now keeps a detailed record of each firmware update — start, download, install, and final outcome — stores it on the device, and uploads it to monitoring once back online, so failed or interrupted updates can be diagnosed.
+- **Full Power-Cycle on Technical Restart**: GDV1-3602 Technical and offline-triggered restarts now fully power-cycle the hardware (including radio and analog circuitry) instead of a soft reboot, improving recovery from a bad state. User-initiated restarts remain a normal reboot.
+
+### Fixed
+- **Stalled Operation/Update Recovery**: GDV1-3602 The device now recovers automatically when its main operation or a firmware update gets stuck, instead of staying frozen until it is manually power-cycled.
+- **Deleted Module Detection**: GDV1-3604 A module deleted on the server while it was offline or repeatedly rejected for authorization now correctly resets to factory state, instead of remaining active.
+
+---
+
 ## Version 2.2.10 (2026-06-17)
 
 ### Added
