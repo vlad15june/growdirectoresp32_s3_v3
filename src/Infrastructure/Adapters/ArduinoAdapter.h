@@ -5,6 +5,7 @@
 #include <WiFi.h>
 #include "esp_system.h"
 #include "esp_sleep.h"
+#include "esp_task_wdt.h"
 #include "constants.h"
 #include "Core/Domain/Interfaces/Adapters/IArduinoAdapter.h"
 
@@ -129,6 +130,10 @@ public:
 
     int getResetReason() override {
         return (int)esp_reset_reason();
+    }
+
+    void feedTaskWatchdog() override {
+        esp_task_wdt_reset();
     }
 
     // Memory information

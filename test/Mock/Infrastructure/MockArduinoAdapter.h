@@ -32,6 +32,7 @@ public:
     bool getFreePsramCalled = false;
 
     int delayCount = 0;
+    int feedTaskWatchdogCount = 0;
     int delayMicrosecondsCount = 0;
     unsigned long lastDelayMs = 0;
     unsigned long lastDelayUs = 0;
@@ -170,6 +171,10 @@ public:
     int getResetReason() override {
         getResetReasonCalled = true;
         return resetReasonValue;
+    }
+
+    void feedTaskWatchdog() override {
+        feedTaskWatchdogCount++;
     }
 
     // Memory information

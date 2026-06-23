@@ -47,6 +47,7 @@ public:
     virtual void restart() = 0;
     virtual void hardReset() = 0;
     virtual int getResetReason() = 0;
+    virtual void feedTaskWatchdog() = 0;
 
     // Memory information
     virtual uint32_t getFreeHeap() = 0;

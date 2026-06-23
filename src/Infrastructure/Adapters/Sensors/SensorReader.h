@@ -465,6 +465,11 @@ private:
             return false;
         }
 
+        if (_arduino)
+        {
+            _arduino->feedTaskWatchdog();
+        }
+
         int portIndex = sensor.pin;
         _modbusReader->init(sensor.baudRate);
 
@@ -501,6 +506,7 @@ private:
         if (stateChanged && _arduino)
         {
             log("SensorReader: Port state changed, warmup 10s");
+            _arduino->feedTaskWatchdog();
             _arduino->delay(10000);
         }
 
