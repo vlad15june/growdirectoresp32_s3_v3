@@ -39,7 +39,7 @@ private:
         // Register all debug features with their default values
         registerFeature(DebugFeatures::IP_CHANGE_DEBUG, "ip_local_change", true, MqttLoggerMode::SerialOnly);
         registerFeature(DebugFeatures::RULE_SENSOR_OFFLINE_DEBUG, "rule_sensor_offline", true, MqttLoggerMode::SerialOnly);
-        registerFeature(DebugFeatures::REMOTE_SENSOR_RECEIVE_DEBUG, "remote_sensor_receive", true, MqttLoggerMode::MqttAndSerial);
+        registerFeature(DebugFeatures::REMOTE_SENSOR_RECEIVE_DEBUG, "remote_sensor_receive", true, MqttLoggerMode::SerialOnly);
         registerFeature(DebugFeatures::UDP_RECEIVE_DEBUG, "udp_receive", false, MqttLoggerMode::SerialOnly);
         registerFeature(DebugFeatures::UDP_SEND_DEBUG, "udp_send", false, MqttLoggerMode::SerialOnly);
         registerFeature(DebugFeatures::WIFI_DEBUG, "wifi", true, MqttLoggerMode::SerialOnly);
@@ -49,10 +49,10 @@ private:
         registerFeature(DebugFeatures::NET_DEBUG, "net", true, MqttLoggerMode::SerialOnly);
         registerFeature(DebugFeatures::CONTROL_DEBUG, "control", false, MqttLoggerMode::SerialOnly);
         registerFeature(DebugFeatures::RELAY_DRIVE_DEBUG, "relay_drive", true, MqttLoggerMode::MqttAndSerial);
-        registerFeature(DebugFeatures::RULE_DEBUG, "rule", true, MqttLoggerMode::MqttAndSerial);
+        registerFeature(DebugFeatures::RULE_DEBUG, "rule", true, MqttLoggerMode::SerialOnly);
         registerFeature(DebugFeatures::RULE_SYNC_DEBUG, "rule_sync", true, MqttLoggerMode::MqttAndSerial);
         registerFeature(DebugFeatures::RULE_REPOSITORY_DEBUG, "rule_repository", true, MqttLoggerMode::MqttAndSerial);
-        registerFeature(DebugFeatures::RULE_ON_DEBUG, "rule_on", true, MqttLoggerMode::SerialOnly);
+        registerFeature(DebugFeatures::RULE_ON_DEBUG, "rule_on", true, MqttLoggerMode::MqttAndSerial);
         registerFeature(DebugFeatures::RULE_SENSOR_VALUE_DEBUG, "rule_sensor_value", false, MqttLoggerMode::MqttAndSerial);
         registerFeature(DebugFeatures::RULE_SUNRISE_DEBUG, "rule_sunrise", true, MqttLoggerMode::SerialOnly);
         registerFeature(DebugFeatures::MODULE_COMMAND_DEBUG, "module_command", true, MqttLoggerMode::MqttAndSerial);

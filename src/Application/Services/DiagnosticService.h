@@ -339,14 +339,6 @@ public:
     {
         DiagnosticDto diagnosticData;
 
-        // Check network state - WiFi and MQTT connection
-        bool wifiConnected = false;
-        if (_wifiAdapter != nullptr)
-        {
-            wifiConnected = _wifiAdapter->isConnected();
-        }
-
-        // Update MQTT connection status if manager is available
         if (_mqttManager != nullptr)
         {
             _mqttConnected = _mqttManager->isConnected();
@@ -358,8 +350,10 @@ public:
         // Check for prolonged offline state and trigger automatic reboot if needed
         checkOfflineStateAndTriggerReboot();
 
-        // Check and update network state
-        if (!_mqttConnected || !wifiConnected)
+        bool httpDown = (_restApiService ? _restApiService->getCountOffline() : 0) > _maxCountOffline;
+        bool offline = !_mqttConnected && httpDown;
+
+        if (offline)
         {
             if (_lastNetworkState == DIAGNOSTICS_NETWORK_STATE_OK)
             {
