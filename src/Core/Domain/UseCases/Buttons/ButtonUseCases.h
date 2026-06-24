@@ -112,6 +112,39 @@ public:
         return buttonPressedState;
     }
     
+    void checkStartupFactoryReset() override {
+        if (!buttonPressedState) {
+            return;
+        }
+        if (buttonWasPressedBeforeReboot) {
+            return;
+        }
+        if (buttonAdapter == nullptr || arduinoAdapter == nullptr) {
+            return;
+        }
+
+        unsigned long start = arduinoAdapter->millis();
+        while (arduinoAdapter->millis() - start < factoryResetDurationMs) {
+            buttonAdapter->updateButtonStates();
+            if (!buttonAdapter->isButtonPressed(buttonIndex)) {
+                logBoot("BUTTON: startup factory reset aborted - released before %lu ms", factoryResetDurationMs);
+                return;
+            }
+            arduinoAdapter->feedTaskWatchdog();
+            arduinoAdapter->delay(50);
+        }
+
+        logBoot("BUTTON: factory reset at startup (held %lu ms) - USER_CAN_CONFIGURE", factoryResetDurationMs);
+        if (clearModuleDataService) {
+            clearModuleDataService->clearAllData();
+            logBoot("BUTTON: module data cleared");
+        }
+        if (moduleConfig) {
+            moduleConfig->setRequestedModuleMode(ModuleModeEnum::USER_CAN_CONFIGURE);
+        }
+        arduinoAdapter->restart();
+    }
+
     bool isButtonPressedWhenOn() override {
         return buttonPressedState;
     }

@@ -9,6 +9,7 @@ public:
     
     // Button behavior use cases
     virtual bool checkButtonPressedWhenOn() = 0;
+    virtual void checkStartupFactoryReset() = 0;
     virtual bool isButtonPressedWhenOn() = 0;
     virtual bool isButtonHeldForDuration() = 0;
     virtual bool isTestModeRequested() = 0;

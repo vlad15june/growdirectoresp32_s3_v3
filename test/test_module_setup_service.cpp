@@ -334,6 +334,20 @@ static void test_module_mode_handling_for_configured_done(void) {
     if (debug_file != nullptr) fprintf(debug_file, "Finished test_module_mode_handling_for_configured_done\n");
 }
 
+static void test_handle_module_mode_invokes_startup_factory_reset(void) {
+    if (debug_file != nullptr) fprintf(debug_file, "Starting test_handle_module_mode_invokes_startup_factory_reset\n");
+    module_setup_service_setup();
+
+    g_mockSettings.setConfigured(ModuleModeEnum::CONFIGURED_DONE);
+
+    g_moduleSetupService->setupModule();
+
+    TEST_ASSERT_TRUE(g_mockButtonUseCases.checkStartupFactoryResetCalled);
+
+    module_setup_service_teardown();
+    if (debug_file != nullptr) fprintf(debug_file, "Finished test_handle_module_mode_invokes_startup_factory_reset\n");
+}
+
 static void test_module_mode_handling_for_test_mode(void) {
     if (debug_file != nullptr) fprintf(debug_file, "Starting test_module_mode_handling_for_test_mode\n");
     module_setup_service_setup();
@@ -1556,6 +1570,7 @@ extern "C" int run_module_setup_service_tests(void) {
     RUN_TEST(test_setup_module_launches_web_server_in_config_mode);
     RUN_TEST(test_module_mode_handling_for_user_can_configure);
     RUN_TEST(test_module_mode_handling_for_configured_done);
+    RUN_TEST(test_handle_module_mode_invokes_startup_factory_reset);
     RUN_TEST(test_module_mode_handling_for_test_mode);
     RUN_TEST(test_module_mode_initialization_when_invalid);
     RUN_TEST(test_setup_module_without_web_server_launcher);

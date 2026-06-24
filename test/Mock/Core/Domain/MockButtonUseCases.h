@@ -6,6 +6,7 @@
 class MockButtonUseCases : public IButtonUseCases {
 public:
     bool checkButtonPressedWhenOnCalled = false;
+    bool checkStartupFactoryResetCalled = false;
     bool isButtonPressedWhenOnCalled = false;
     bool isButtonHeldForDurationCalled = false;
     bool isTestModeRequestedCalled = false;
@@ -23,6 +24,7 @@ public:
     
     void reset() {
         checkButtonPressedWhenOnCalled = false;
+        checkStartupFactoryResetCalled = false;
         isButtonPressedWhenOnCalled = false;
         isButtonHeldForDurationCalled = false;
         isTestModeRequestedCalled = false;
@@ -42,7 +44,11 @@ public:
         checkButtonPressedWhenOnCalled = true;
         return checkButtonResult;
     }
-    
+
+    void checkStartupFactoryReset() override {
+        checkStartupFactoryResetCalled = true;
+    }
+
     bool isButtonPressedWhenOn() override {
         isButtonPressedWhenOnCalled = true;
         return buttonPressedResult;

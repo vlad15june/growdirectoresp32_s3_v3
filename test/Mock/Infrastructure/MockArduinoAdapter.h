@@ -38,6 +38,7 @@ public:
     unsigned long lastDelayUs = 0;
     unsigned long currentTime = 0;
     unsigned long currentMillis = 0;
+    bool advanceMillisOnDelay = false;
     
     uint32_t freeHeapValue = 0;
     uint32_t minFreeHeapValue = 0;
@@ -71,6 +72,9 @@ public:
         delayCount++;
         lastDelayMs = ms;
         currentTime += ms;
+        if (advanceMillisOnDelay) {
+            currentMillis += ms;
+        }
     }
     
     void delayMicroseconds(unsigned int us) override {

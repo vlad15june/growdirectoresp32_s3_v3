@@ -4,6 +4,18 @@
 #include "Mock/Infrastructure/Logging/MockLogger.h"
 #include "Mock/Infrastructure/Logging/MockDebugSystem.h"
 #include "Mock/Infrastructure/Configuration/MockSettings.h"
+#include "Mock/Infrastructure/MockArduinoAdapter.h"
+#include "Mock/Infrastructure/Configuration/MockModuleConfig.h"
+#include "Core/Domain/Interfaces/IClearModuleDataService.h"
+
+class MockClearModuleDataService : public IClearModuleDataService {
+public:
+    bool clearAllDataCalled = false;
+    bool clearAllData() override {
+        clearAllDataCalled = true;
+        return true;
+    }
+};
 
 // Global test variables
 static MockButtonAdapter g_mockButtonAdapter;
@@ -366,6 +378,101 @@ static void test_add_mode_requested() {
     if (debug_file != nullptr) fprintf(debug_file, "Finished test_add_mode_requested\n");
 }
 
+static void test_startup_factory_reset_held_triggers_reset() {
+    button_use_cases_setup();
+    delete g_buttonUseCases;
+
+    MockArduinoAdapter arduino;
+    MockModuleConfig moduleConfig;
+    MockClearModuleDataService clearData;
+    arduino.advanceMillisOnDelay = true;
+
+    g_mockButtonAdapter.pressedState = true;
+    g_buttonUseCases = new ButtonUseCases(
+        &g_mockButtonAdapter, &g_mockLogger, &g_mockDebugSystem, 1,
+        &g_mockSettings, &moduleConfig, &clearData, &arduino);
+
+    g_buttonUseCases->checkButtonPressedWhenOn();
+    g_buttonUseCases->checkStartupFactoryReset();
+
+    TEST_ASSERT_TRUE(clearData.clearAllDataCalled);
+    TEST_ASSERT_EQUAL(ModuleModeEnum::USER_CAN_CONFIGURE, moduleConfig.getRequestedModuleMode());
+    TEST_ASSERT_TRUE(arduino.restartCalled);
+
+    button_use_cases_teardown();
+}
+
+static void test_startup_factory_reset_released_early_no_reset() {
+    button_use_cases_setup();
+    delete g_buttonUseCases;
+
+    MockArduinoAdapter arduino;
+    MockModuleConfig moduleConfig;
+    MockClearModuleDataService clearData;
+    arduino.advanceMillisOnDelay = true;
+
+    g_mockButtonAdapter.pressedState = true;
+    g_buttonUseCases = new ButtonUseCases(
+        &g_mockButtonAdapter, &g_mockLogger, &g_mockDebugSystem, 1,
+        &g_mockSettings, &moduleConfig, &clearData, &arduino);
+
+    g_buttonUseCases->checkButtonPressedWhenOn();
+    g_mockButtonAdapter.pressedState = false;
+    g_buttonUseCases->checkStartupFactoryReset();
+
+    TEST_ASSERT_FALSE(clearData.clearAllDataCalled);
+    TEST_ASSERT_FALSE(arduino.restartCalled);
+
+    button_use_cases_teardown();
+}
+
+static void test_startup_factory_reset_not_pressed_no_reset() {
+    button_use_cases_setup();
+    delete g_buttonUseCases;
+
+    MockArduinoAdapter arduino;
+    MockModuleConfig moduleConfig;
+    MockClearModuleDataService clearData;
+
+    g_mockButtonAdapter.pressedState = false;
+    g_buttonUseCases = new ButtonUseCases(
+        &g_mockButtonAdapter, &g_mockLogger, &g_mockDebugSystem, 1,
+        &g_mockSettings, &moduleConfig, &clearData, &arduino);
+
+    g_buttonUseCases->checkButtonPressedWhenOn();
+    g_buttonUseCases->checkStartupFactoryReset();
+
+    TEST_ASSERT_FALSE(clearData.clearAllDataCalled);
+    TEST_ASSERT_FALSE(arduino.restartCalled);
+
+    button_use_cases_teardown();
+}
+
+static void test_startup_factory_reset_skipped_when_pressed_before_reboot() {
+    button_use_cases_setup();
+    delete g_buttonUseCases;
+
+    g_mockSettings.setButtonPressedBeforeReboot(1);
+
+    MockArduinoAdapter arduino;
+    MockModuleConfig moduleConfig;
+    MockClearModuleDataService clearData;
+    arduino.advanceMillisOnDelay = true;
+
+    g_mockButtonAdapter.pressedState = true;
+    g_buttonUseCases = new ButtonUseCases(
+        &g_mockButtonAdapter, &g_mockLogger, &g_mockDebugSystem, 1,
+        &g_mockSettings, &moduleConfig, &clearData, &arduino);
+
+    g_buttonUseCases->checkButtonPressedWhenOn();
+    g_buttonUseCases->checkStartupFactoryReset();
+
+    TEST_ASSERT_FALSE(clearData.clearAllDataCalled);
+    TEST_ASSERT_FALSE(arduino.restartCalled);
+
+    button_use_cases_teardown();
+}
+
 // Main test runner function
 extern "C" int run_button_use_cases_tests(void) {
     if (debug_file != nullptr) fprintf(debug_file, "\n----- Running ButtonUseCases Tests -----\n");
@@ -384,6 +491,10 @@ extern "C" int run_button_use_cases_tests(void) {
     RUN_TEST(test_test_mode_button_not_pressed_at_startup);
     RUN_TEST(test_factory_reset_requested);
     RUN_TEST(test_add_mode_requested);
+    RUN_TEST(test_startup_factory_reset_held_triggers_reset);
+    RUN_TEST(test_startup_factory_reset_released_early_no_reset);
+    RUN_TEST(test_startup_factory_reset_not_pressed_no_reset);
+    RUN_TEST(test_startup_factory_reset_skipped_when_pressed_before_reboot);
     
     if (debug_file != nullptr) fprintf(debug_file, "\n----- ButtonUseCases Tests Complete -----\n");
     
