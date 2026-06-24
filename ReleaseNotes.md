@@ -1,5 +1,18 @@
 # Release Notes
 
+## Version 2.2.12 (2026-06-24)
+
+### Added
+- **Raw ModBus Frame Logging**: New diagnostic capability that captures and logs the raw outgoing serial/ModBus frames sent to sensors, to aid troubleshooting of sensor communication.
+- **Boot and Button Event Logging**: The device now records boot events and button actions, giving testers and analysts visibility into how and why the device restarted and what button interactions occurred.
+
+### Fixed
+- **Offline Factory Reset**: GDV1-3619 Fixed button-triggered factory reset so it now works when the device has no internet/WiFi connection, instead of only working while online.
+- **Sensor Scan Reboot Loop**: GDV1-3618 Fixed a reboot loop that occurred while the device was scanning ModBus sensors; the device now stays running through the scan instead of restarting.
+- **False Network-Offline Detection**: GDV1-3558 Fixed incorrect "network offline" detection that relied on the WiFi indicator and could trigger unnecessary automatic reboots; offline state is now determined by the actual data channels.
+
+---
+
 ## Version 2.2.11 (2026-06-22)
 
 ### Added
