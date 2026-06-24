@@ -1,5 +1,12 @@
 # Release Notes
 
+## Version 2.2.14 (2026-06-24)
+
+### Changed
+- **Rainfall Accumulation Window**: GDV1-3568 The rain sensor now reports rainfall accumulated over a 1-minute window instead of 5 minutes, so rainfall readings update more responsively.
+
+---
+
 ## Version 2.2.12 (2026-06-24)
 
 ### Added
