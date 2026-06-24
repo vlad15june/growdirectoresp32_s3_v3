@@ -10,6 +10,7 @@
 #include "Application/Services/Sensors/ISensorService.h"
 #include "Application/Services/Rules/IRuleService.h"
 #include "Core/Domain/Interfaces/IOtaUpdateLog.h"
+#include "Core/Domain/Interfaces/IBootEventLog.h"
 
 class LoopServiceConfigureDone : public LoopServiceBase {
 private:
@@ -21,6 +22,7 @@ private:
     ISensorService* sensorService;
     IRuleService* ruleService;
     IOtaUpdateLog* otaUpdateLog;
+    IBootEventLog* bootEventLog;
 
     // Diagnostic timer variables
     unsigned long lastDiagnosticTime = 0;
@@ -40,7 +42,8 @@ public:
           deviceService(nullptr),
           sensorService(nullptr),
           ruleService(nullptr),
-          otaUpdateLog(nullptr) {}
+          otaUpdateLog(nullptr),
+          bootEventLog(nullptr) {}
     
     ~LoopServiceConfigureDone() override = default;
     
@@ -97,12 +100,19 @@ public:
                 if (otaUpdateLog->hasPending()) {
                     otaUpdateLog->flushToMqttIfAny();
                 }
+                if (bootEventLog && bootEventLog->hasPending()) {
+                    bootEventLog->flushToMqttIfAny();
+                }
             }
         }
     }
 
     virtual void setOtaUpdateLog(IOtaUpdateLog* otaLog) {
         this->otaUpdateLog = otaLog;
+    }
+
+    virtual void setBootEventLog(IBootEventLog* bootLog) {
+        this->bootEventLog = bootLog;
     }
 
     virtual void setOnChangeLocalIpUseCase(IOnChangeLocalIpUseCase* useCase) {

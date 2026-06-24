@@ -46,6 +46,7 @@
 #include "Infrastructure/Adapters/eepromAdapter.h"
 #include "Infrastructure/Logging/MqttLogger.h"
 #include "Infrastructure/Logging/OtaUpdateLog.h"
+#include "Infrastructure/Logging/BootEventLog.h"
 #include "Infrastructure/Configuration/ModuleConfig.h"
 #include "Infrastructure/Configuration/Settings.h"
 #include "Infrastructure/Logging/DebugSystem.h"
@@ -169,7 +170,9 @@ DeviceCommandExecutionUseCase deviceCommandExecutionUseCase(
 
 SpiffsAdapter spiffsAdapter(&mqttLogger, &debugSystem);
 
-OtaUpdateLog otaUpdateLog(&spiffsAdapter, &mqttLogger, &ntpTimeAdapter);
+OtaUpdateLog otaUpdateLog(&spiffsAdapter, &mqttLogger, &ntpTimeAdapter, &arduinoAdapter, &wifiAdapter);
+
+BootEventLog bootEventLog(&spiffsAdapter, &mqttLogger, &ntpTimeAdapter, &arduinoAdapter, &wifiAdapter, DebugFeatures::BUTTON_DEBUG);
 
 FirmwareRemoteUpdate firmwareRemoteUpdate(&mqttLogger, &debugSystem, &settings, &otaUpdateLog);
 
@@ -238,7 +241,7 @@ OnChangeModuleModeUseCase moduleModeUseCase(
     mqttLogger,
     debugSystem);
 
-ButtonUseCases buttonUseCases(&buttonAdapter, &mqttLogger, &debugSystem, 0, &settings, &moduleConfig, &clearModuleDataService, &arduinoAdapter);
+ButtonUseCases buttonUseCases(&buttonAdapter, &mqttLogger, &debugSystem, 0, &settings, &moduleConfig, &clearModuleDataService, &arduinoAdapter, &bootEventLog);
 
 ModuleConfigurationWebServer moduleConfigurationWebServer(
     webServer,
@@ -471,5 +474,6 @@ void initDependencies()
     syncRulesUseCase.setRemoteSensorReceiver(&remoteSensorReceiver);
     commandService.setRemoteSensorReceiver(&remoteSensorReceiver);
     loopServiceFactory.setOtaUpdateLog(&otaUpdateLog);
+    loopServiceFactory.setBootEventLog(&bootEventLog);
 }
 #endif // GLOBALS_H

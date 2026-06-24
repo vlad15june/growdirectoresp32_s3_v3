@@ -10,6 +10,7 @@
 #include "Core/Domain/Enums/ModuleModeEnum.h"
 #include "Core/Domain/Interfaces/IClearModuleDataService.h"
 #include "Core/Domain/Interfaces/Adapters/IArduinoAdapter.h"
+#include "Core/Domain/Interfaces/IBootEventLog.h"
 #include <cstdarg>
 #include <cstdio>
 
@@ -22,27 +23,52 @@ private:
     IModuleConfig* moduleConfig;
     IClearModuleDataService* clearModuleDataService;
     IArduinoAdapter* arduinoAdapter;
+    IBootEventLog* bootEventLog;
     const uint8_t buttonIndex;
     bool isSystemOn;
     bool buttonPressedState;
     bool buttonWasPressedBeforeReboot;
+    bool lastLoggedPressed;
     unsigned long lastPressTime;
     const unsigned long durationMs = 10000;  // 10 seconds for test mode (changed from 15)
     const unsigned long factoryResetDurationMs = 10000;  // 10 seconds minimum for factory reset
     const unsigned long addModeDurationMs = 10000;  // 10 seconds minimum for add mode
 
-    void log(const char *format, ...)
+    void publishChannel(const char *buffer)
     {
         if (logger != nullptr && debugSystem != nullptr && debugSystem->isFeatureEnabled(DebugFeatures::BUTTON_DEBUG))
         {
-            char buffer[128];
-            va_list args;
-            va_start(args, format);
-            vsnprintf(buffer, sizeof(buffer), format, args);
-            va_end(args);
-
-            logger->println(DebugFeatures::BUTTON_DEBUG, buffer);
+            IDebugFeature *feature = debugSystem->getFeature(DebugFeatures::BUTTON_DEBUG);
+            MqttLoggerMode channel = feature ? feature->getLogChannel() : MqttLoggerMode::MqttAndSerial;
+            logger->println(DebugFeatures::BUTTON_DEBUG, buffer, channel);
         }
+    }
+
+    void log(const char *format, ...)
+    {
+        char buffer[160];
+        va_list args;
+        va_start(args, format);
+        vsnprintf(buffer, sizeof(buffer), format, args);
+        va_end(args);
+
+        publishChannel(buffer);
+    }
+
+    void logBoot(const char *format, ...)
+    {
+        char buffer[160];
+        va_list args;
+        va_start(args, format);
+        vsnprintf(buffer, sizeof(buffer), format, args);
+        va_end(args);
+
+        if (bootEventLog != nullptr)
+        {
+            bootEventLog->write(buffer);
+        }
+
+        publishChannel(buffer);
     }
 
 public:
@@ -50,15 +76,17 @@ public:
                   IDebugSystem* debugSystemInstance = nullptr, uint8_t index = 0,
                   ISettings* settingsInstance = nullptr, IModuleConfig* moduleConfigInstance = nullptr,
                   IClearModuleDataService* clearModuleDataServiceInstance = nullptr,
-                  IArduinoAdapter* arduinoAdapterInstance = nullptr)
-        : buttonAdapter(adapter), logger(loggerInstance), debugSystem(debugSystemInstance), 
-          settings(settingsInstance), moduleConfig(moduleConfigInstance), 
+                  IArduinoAdapter* arduinoAdapterInstance = nullptr,
+                  IBootEventLog* bootEventLogInstance = nullptr)
+        : buttonAdapter(adapter), logger(loggerInstance), debugSystem(debugSystemInstance),
+          settings(settingsInstance), moduleConfig(moduleConfigInstance),
           clearModuleDataService(clearModuleDataServiceInstance), arduinoAdapter(arduinoAdapterInstance),
-          buttonIndex(index), isSystemOn(false), 
-          buttonPressedState(false), buttonWasPressedBeforeReboot(false), lastPressTime(0) {
+          bootEventLog(bootEventLogInstance),
+          buttonIndex(index), isSystemOn(false),
+          buttonPressedState(false), buttonWasPressedBeforeReboot(false),
+          lastLoggedPressed(false), lastPressTime(0) {
         if (settings != nullptr) {
             buttonWasPressedBeforeReboot = settings->getButtonPressedBeforeReboot() != 0;
-            log("Button %d state before reboot: %s", buttonIndex, buttonWasPressedBeforeReboot ? "pressed" : "not pressed");
         }
     }
     
@@ -70,16 +98,17 @@ public:
             buttonPressedState = true;
             if (settings != nullptr) {
                 settings->setButtonPressedBeforeReboot(1);
-                log("Button %d state saved to settings for potential reboot", buttonIndex);
             }
-            log("Button %d is pressed when system is on", buttonIndex);
+            logBoot("BUTTON: pressed at power-on (idx %d, beforeReboot=%d) - saved flag",
+                buttonIndex, buttonWasPressedBeforeReboot ? 1 : 0);
         } else {
             if (settings != nullptr && !buttonWasPressedBeforeReboot) {
                 settings->setButtonPressedBeforeReboot(0);
-                log("Button %d normal boot - clearing any stale saved state", buttonIndex);
             }
+            logBoot("BUTTON: not pressed at power-on (idx %d, beforeReboot=%d)",
+                buttonIndex, buttonWasPressedBeforeReboot ? 1 : 0);
         }
-        log("Button %d pressed state: %s", buttonIndex, buttonPressedState ? "true" : "false");
+        lastLoggedPressed = pressed;
         return buttonPressedState;
     }
     
@@ -88,68 +117,50 @@ public:
     }
     
     bool isButtonHeldForDuration() override {
-        bool held = buttonAdapter->wasButtonHeld(buttonIndex, durationMs);
-        log("Button %d held for %lu ms: %s", buttonIndex, durationMs, held ? "true" : "false");
-        return held;
+        return buttonAdapter->wasButtonHeld(buttonIndex, durationMs);
     }
-    
+
     bool isTestModeRequested() override {
         if (!buttonWasPressedBeforeReboot) {
-            log("Button %d wasn't pressed before reboot - test mode not possible", buttonIndex);
             return false;
         }
-        
+
         if (!buttonPressedState) {
-            log("Button %d not pressed at startup - test mode not possible", buttonIndex);
             if (settings != nullptr) {
                 settings->setButtonPressedBeforeReboot(0);
             }
             return false;
         }
-        
+
         bool held = buttonAdapter->wasButtonHeld(buttonIndex, durationMs);
-        
-        if (held) {
-            log("Button %d TEST MODE activated (pressed before reboot, held at startup for %lu ms)", 
-                buttonIndex, durationMs);
-            if (settings != nullptr) {
-                settings->setButtonPressedBeforeReboot(0);
-            }
-        } else {
-            log("Button %d held time insufficient for test mode", buttonIndex);
+
+        if (held && settings != nullptr) {
+            settings->setButtonPressedBeforeReboot(0);
         }
-        
+
         return held;
     }
-    
+
     bool isFactoryResetRequested() override {
         if (buttonWasPressedBeforeReboot) {
-            log("Button %d was pressed before reboot - this is test mode, not factory reset", buttonIndex);
             return false;
         }
-        
+
         if (!buttonPressedState) {
-            log("Button %d wasn't pressed during power on - factory reset not possible", buttonIndex);
             return false;
         }
-        
-        bool held = buttonAdapter->wasButtonHeld(buttonIndex, factoryResetDurationMs);
-        log("Button %d factory reset requested (pressed at power on, held for %lu ms): %s", 
-            buttonIndex, factoryResetDurationMs, held ? "true" : "false");
-        return held;
+
+        return buttonAdapter->wasButtonHeld(buttonIndex, factoryResetDurationMs);
     }
-    
+
     bool isAddModeRequested() override {
-        bool held = buttonAdapter->wasButtonHeld(buttonIndex, addModeDurationMs);
-        log("Button %d add mode requested (held for %lu ms): %s", 
-            buttonIndex, addModeDurationMs, held ? "true" : "false");
-        return held;
+        return buttonAdapter->wasButtonHeld(buttonIndex, addModeDurationMs);
     }
     
     void clearSavedButtonState() override {
         if (settings != nullptr) {
             settings->setButtonPressedBeforeReboot(0);
-            log("Button %d saved state cleared", buttonIndex);
+            log("BUTTON: saved state cleared (idx %d)", buttonIndex);
         }
         buttonWasPressedBeforeReboot = false;
     }
@@ -158,16 +169,22 @@ public:
         if (!moduleConfig) {
             return;
         }
-        
+
+        bool nowPressed = buttonAdapter->isButtonPressed(buttonIndex);
+        if (nowPressed != lastLoggedPressed) {
+            log("BUTTON: %s (idx %d)", nowPressed ? "pressed" : "released", buttonIndex);
+            lastLoggedPressed = nowPressed;
+        }
+
         if (isTestModeRequested()) {
-            log("Test mode requested - switching to AP_TEST_MODE");
+            logBoot("BUTTON: test mode requested (held %lu ms) - switching to AP_TEST_MODE", durationMs);
             moduleConfig->setRequestedModuleMode(ModuleModeEnum::AP_TEST_MODE);
         }
         else if (isFactoryResetRequested()) {
-            log("Factory reset requested - switching to USER_CAN_CONFIGURE mode");
+            logBoot("BUTTON: factory reset requested (held %lu ms) - clearing data, USER_CAN_CONFIGURE", factoryResetDurationMs);
             if (clearModuleDataService) {
                 clearModuleDataService->clearAllData();
-                log("Module data cleared");
+                logBoot("BUTTON: module data cleared");
             }
             moduleConfig->setRequestedModuleMode(ModuleModeEnum::USER_CAN_CONFIGURE);
             if (arduinoAdapter) {
@@ -175,7 +192,7 @@ public:
             }
         }
         else if (isAddModeRequested()) {
-            log("Add mode requested - switching to USER_CAN_RE_CONFIGURE mode");
+            log("BUTTON: add mode requested (held %lu ms) - switching to USER_CAN_RE_CONFIGURE", addModeDurationMs);
             moduleConfig->setRequestedModuleMode(ModuleModeEnum::USER_CAN_RE_CONFIGURE);
         }
     }

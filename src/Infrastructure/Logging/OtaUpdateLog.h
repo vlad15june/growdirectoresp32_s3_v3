@@ -1,12 +1,12 @@
 #pragma once
 
 #include "Core/Domain/Interfaces/IOtaUpdateLog.h"
+#include "Core/Domain/Interfaces/Adapters/IArduinoAdapter.h"
+#include "Core/Domain/Interfaces/Adapters/IWifiAdapter.h"
 #include "Infrastructure/Adapters/SPIFFS/ISpiffsAdapter.h"
 #include "Infrastructure/Logging/MqttLogger.h"
 #include "Infrastructure/Logging/OtaProgressThrottle.h"
 #include "Infrastructure/Adapters/Time/INTPTimeAdapter.h"
-#include <Arduino.h>
-#include <WiFi.h>
 #include <cstdio>
 #include <string>
 
@@ -22,7 +22,22 @@ private:
     ISpiffsAdapter* _spiffs;
     MqttLogger* _mqttLogger;
     INTPTimeAdapter* _timeAdapter;
+    IArduinoAdapter* _arduino;
+    IWifiAdapter* _wifi;
     OtaProgressThrottle _throttle;
+
+    unsigned long nowMs() {
+        return _arduino ? _arduino->millis() : 0;
+    }
+
+    void serialDebug(const char* line) {
+        if (_arduino == nullptr) {
+            return;
+        }
+        char dbg[360];
+        snprintf(dbg, sizeof(dbg), "OTA_LOG: %s", line);
+        _arduino->serialPrintln(dbg);
+    }
 
     void appendLine(const char* msg) {
         if (_spiffs == nullptr) {
@@ -36,15 +51,20 @@ private:
         const char* timeStr = _timeAdapter ? _timeAdapter->getFormattedTime() : "";
         char line[320];
         snprintf(line, sizeof(line), "%s up=%lu heap=%u rssi=%d %s",
-                 timeStr, millis(), ESP.getFreeHeap(), (int)WiFi.RSSI(), msg);
+                 timeStr, nowMs(),
+                 (unsigned)(_arduino ? _arduino->getFreeHeap() : 0),
+                 (_wifi ? _wifi->getRSSI() : 0), msg);
 
         _spiffs->appendToFile(OTA_LOG_FILE, line);
-        Serial.printf("OTA_LOG: %s\n", line);
+        serialDebug(line);
     }
 
 public:
-    OtaUpdateLog(ISpiffsAdapter* spiffs = nullptr, MqttLogger* mqttLogger = nullptr, INTPTimeAdapter* timeAdapter = nullptr)
-        : _spiffs(spiffs), _mqttLogger(mqttLogger), _timeAdapter(timeAdapter) {}
+    OtaUpdateLog(ISpiffsAdapter* spiffs = nullptr, MqttLogger* mqttLogger = nullptr,
+                 INTPTimeAdapter* timeAdapter = nullptr, IArduinoAdapter* arduino = nullptr,
+                 IWifiAdapter* wifi = nullptr)
+        : _spiffs(spiffs), _mqttLogger(mqttLogger), _timeAdapter(timeAdapter),
+          _arduino(arduino), _wifi(wifi) {}
 
     void startSession(const char* url) override {
         if (_spiffs == nullptr) {
@@ -53,9 +73,9 @@ public:
 
         char header[320];
         snprintf(header, sizeof(header), "===== OTA SESSION mac=%s url=%s =====\n",
-                 WiFi.macAddress().c_str(), url ? url : "");
+                 _wifi ? _wifi->getMACAddress() : "", url ? url : "");
         _spiffs->rewriteToFile(OTA_LOG_FILE, header);
-        Serial.printf("OTA_LOG: %s", header);
+        serialDebug(header);
 
         _throttle.reset();
         write("OTA REQUESTED");
@@ -67,7 +87,7 @@ public:
 
     void writeProgress(size_t cur, size_t total) override {
         int pct = 0;
-        if (_throttle.shouldEmit(cur, total, millis(), OTA_PROGRESS_PCT_STEP, OTA_PROGRESS_MS_STEP, pct)) {
+        if (_throttle.shouldEmit(cur, total, nowMs(), OTA_PROGRESS_PCT_STEP, OTA_PROGRESS_MS_STEP, pct)) {
             char msg[96];
             snprintf(msg, sizeof(msg), "DL %d%% %u/%u", pct, (unsigned)cur, (unsigned)total);
             write(msg);

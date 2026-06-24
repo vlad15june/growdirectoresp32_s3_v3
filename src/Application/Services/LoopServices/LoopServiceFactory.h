@@ -23,6 +23,7 @@
 #include "Application/Services/Rules/IRuleService.h"
 #include "Core/Domain/Interfaces/BoardTesting/IBoardTest.h"
 #include "Core/Domain/Interfaces/IOtaUpdateLog.h"
+#include "Core/Domain/Interfaces/IBootEventLog.h"
 
 class LoopServiceFactory : public ILoopServiceFactory {
 private:
@@ -45,6 +46,7 @@ private:
     IClearModuleDataService* clearModuleDataService;
     IBoardTest* boardTest;
     IOtaUpdateLog* otaUpdateLog = nullptr;
+    IBootEventLog* bootEventLog = nullptr;
 
 public:
     LoopServiceFactory(
@@ -115,6 +117,7 @@ public:
                 configDoneService->setSensorService(sensorService);
                 configDoneService->setRuleService(ruleService);
                 configDoneService->setOtaUpdateLog(otaUpdateLog);
+                configDoneService->setBootEventLog(bootEventLog);
 
                 // Then assign to the service unique_ptr
                 service = std::unique_ptr<LoopServiceBase>(configDoneService);
@@ -182,6 +185,10 @@ public:
 
     void setOtaUpdateLog(IOtaUpdateLog* otaLog) {
         this->otaUpdateLog = otaLog;
+    }
+
+    void setBootEventLog(IBootEventLog* bootLog) {
+        this->bootEventLog = bootLog;
     }
 };
 
