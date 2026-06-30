@@ -1,5 +1,13 @@
 # Release Notes
 
+## Version 2.2.16 (2026-06-30)
+
+### Fixed
+- **Step Rule Protective Shutdown**: GDV1-3650 Fixed step-based rules with protective shutdown so that, on reaching their configured cycle limit, the device now turns the output off and reports the awaiting-confirmation state; previously the output went off but the app kept showing the device as ON.
+- **Account Identification in Rule-State Reports**: GDV1-3625 Fixed rule-state reports sent to the server so they again include the account identifier on every report, restoring correct attribution of rule-state updates to the account.
+
+---
+
 ## Version 2.2.15 (2026-06-30)
 
 ### Fixed
