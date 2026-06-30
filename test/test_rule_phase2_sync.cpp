@@ -77,6 +77,31 @@ static void test_per_uid_ack_error_carries_errortype(void)
     TEST_ASSERT_FALSE(contains(json, "version"));
 }
 
+static void test_per_uid_ack_carries_accountuid(void)
+{
+    JsonConverter c;
+    RuleStateDto item("r1", "Synchronized", "On", "", "", 0);
+    item.accountUid = "acc-123";
+
+    std::string json = c.ruleStateUpdateSingleToJson(item, "t");
+    TEST_ASSERT_TRUE(contains(json, "\"accountUid\":\"acc-123\""));
+
+    RuleStateDto noAcc("r2", "Synchronized", "On", "", "", 0);
+    std::string jsonNoAcc = c.ruleStateUpdateSingleToJson(noAcc, "t");
+    TEST_ASSERT_FALSE(contains(jsonNoAcc, "accountUid"));
+}
+
+static void test_bulk_ack_carries_accountuid(void)
+{
+    JsonConverter c;
+    RuleStateUpdateDto u;
+    u.accountUid = "acc-123";
+    u.addRuleState("r1", "Synchronized", "On", "", "", 0);
+
+    std::string json = c.ruleStateUpdateToJson(u);
+    TEST_ASSERT_TRUE(contains(json, "\"accountUid\":\"acc-123\""));
+}
+
 static void test_state_literal_synchronizing_roundtrip(void)
 {
     JsonConverter c;
@@ -329,6 +354,8 @@ extern "C" void run_rule_phase2_sync_tests(void)
     RUN_TEST(test_bulk_ack_carries_version_and_synchronizing);
     RUN_TEST(test_per_uid_ack_shape_flat);
     RUN_TEST(test_per_uid_ack_error_carries_errortype);
+    RUN_TEST(test_per_uid_ack_carries_accountuid);
+    RUN_TEST(test_bulk_ack_carries_accountuid);
     RUN_TEST(test_state_literal_synchronizing_roundtrip);
     RUN_TEST(test_push_drop_malformed_payload);
     RUN_TEST(test_push_drop_empty_array);

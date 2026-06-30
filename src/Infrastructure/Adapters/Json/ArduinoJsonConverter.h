@@ -1358,6 +1358,10 @@ public:
         DynamicJsonDocument doc(1024);
 
         doc["timestamp"] = timestamp;
+        if (!ruleState.accountUid.empty())
+        {
+            doc["accountUid"] = ruleState.accountUid;
+        }
         doc["uid"] = ruleState.uid;
         doc["state"] = ruleState.state;
         doc["mode"] = ruleState.mode;

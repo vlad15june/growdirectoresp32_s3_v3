@@ -296,7 +296,8 @@ CommandService commandService(
     &debugSystem,
     &ntpTimeAdapter,
     &jsonConverter,
-    &ruleRepository);
+    &ruleRepository,
+    &settings);
 
 ProcessDeviceStateUseCaseFactory deviceStateUseCaseFactory(
     &mqttLogger,
@@ -472,6 +473,7 @@ void initDependencies()
     topicHandlerFactory.setJsonConverter(&jsonConverter);
     boardTest.setModbusPorts(modbusPorts);
     syncRulesUseCase.setRemoteSensorReceiver(&remoteSensorReceiver);
+    syncRulesUseCase.setSettings(&settings);
     commandService.setRemoteSensorReceiver(&remoteSensorReceiver);
     loopServiceFactory.setOtaUpdateLog(&otaUpdateLog);
     loopServiceFactory.setBootEventLog(&bootEventLog);

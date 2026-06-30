@@ -1362,6 +1362,10 @@ public:
         std::ostringstream oss;
         oss << "{";
         oss << "\"timestamp\":\"" << timestamp << "\"";
+        if (!ruleState.accountUid.empty())
+        {
+            oss << ",\"accountUid\":\"" << ruleState.accountUid << "\"";
+        }
         oss << ",\"uid\":\"" << ruleState.uid << "\"";
         oss << ",\"state\":\"" << ruleState.state << "\"";
         oss << ",\"mode\":\"" << ruleState.mode << "\"";

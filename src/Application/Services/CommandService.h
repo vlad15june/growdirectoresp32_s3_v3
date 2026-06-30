@@ -17,6 +17,7 @@
 #include "Core/Domain/Enums/ModuleCommandStatus.h"
 #include "Core/Domain/Interfaces/Adapters/Sensors/IRemoteSensorReceiver.h"
 #include "Core/Domain/Interfaces/Repositories/IRuleRepository.h"
+#include "Core/Domain/Interfaces/ISettings.h"
 #include "Application/Services/Rules/RuleValidator.h"
 #include "Infrastructure/Adapters/Time/INTPTimeAdapter.h"
 #include <cstdarg>
@@ -36,8 +37,21 @@ private:
     IJsonConverter *jsonConverter;
     IRemoteSensorReceiver *_remoteSensorReceiver = nullptr;
     IRuleRepository *ruleRepository;
+    ISettings *settings;
     RuleValidator _ruleValidator;
     static const unsigned long commandMaxAgeSeconds = 300;
+
+    std::string accountUid()
+    {
+        if (!settings)
+        {
+            return "";
+        }
+        char buffer[256];
+        buffer[0] = '\0';
+        settings->getAccountUid(buffer);
+        return std::string(buffer);
+    }
 
 public:
     CommandService(
@@ -50,7 +64,8 @@ public:
         IDebugSystem *debugSystem,
         INTPTimeAdapter *timeAdapter = nullptr,
         IJsonConverter *jsonConverter = nullptr,
-        IRuleRepository *ruleRepository = nullptr)
+        IRuleRepository *ruleRepository = nullptr,
+        ISettings *settings = nullptr)
         : deviceCommandUseCase(deviceCommandUseCase),
           moduleCommandUseCase(moduleCommandUseCase),
           sensorCommandUseCase(sensorCommandUseCase),
@@ -61,6 +76,7 @@ public:
           timeAdapter(timeAdapter),
           jsonConverter(jsonConverter),
           ruleRepository(ruleRepository),
+          settings(settings),
           _ruleValidator(logger, debugSystem) {}
 
     void setRemoteSensorReceiver(IRemoteSensorReceiver *remoteSensorReceiver)
@@ -423,6 +439,7 @@ private:
 
             if (emitAck && hybridApiService)
             {
+                ackItem.accountUid = accountUid();
                 std::string json = jsonConverter->ruleStateUpdateSingleToJson(ackItem, timestamp);
                 log(DebugFeatures::RULE_DEBUG,
                     "CommandService: RULE_PUSH ack uid=%s body=%s", ackItem.uid.c_str(), json.c_str());

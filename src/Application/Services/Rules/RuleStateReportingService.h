@@ -58,11 +58,22 @@ private:
         return std::string(buffer);
     }
 
+    std::string accountUid() {
+        if (!_settings) {
+            return "";
+        }
+        char buffer[256];
+        buffer[0] = '\0';
+        _settings->getAccountUid(buffer);
+        return std::string(buffer);
+    }
+
     void sendPerUidReport(const Rule& rule, const char* state, const char* errorType) {
         if (!_hybridApiService || !_jsonConverter) {
             return;
         }
         RuleStateDto dto(rule.uid, state, ruleModeWire(rule.mode), rule.modeReason, errorType, rule.version);
+        dto.accountUid = accountUid();
         std::string json = _jsonConverter->ruleStateUpdateSingleToJson(dto, reportTimestamp());
         _hybridApiService->sendByUidRuleStateCommand(rule.uid.c_str(), json.c_str());
     }
@@ -120,6 +131,7 @@ public:
         }
         RuleStateDto dto(rule.uid, "Error", "WaitingForUserConfirm", "protective_shutdown",
                          "protective_shutdown", rule.version);
+        dto.accountUid = accountUid();
         std::string json = _jsonConverter->ruleStateUpdateSingleToJson(dto, reportTimestamp());
         _hybridApiService->sendByUidRuleStateCommand(rule.uid.c_str(), json.c_str());
     }

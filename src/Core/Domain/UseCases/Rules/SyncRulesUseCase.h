@@ -9,6 +9,7 @@
 #include "Core/Domain/Interfaces/Adapters/IArduinoAdapter.h"
 #include "Core/Domain/Interfaces/Adapters/Json/IJsonConverter.h"
 #include "Core/Domain/Interfaces/Adapters/Sensors/IRemoteSensorReceiver.h"
+#include "Core/Domain/Interfaces/ISettings.h"
 #include "Infrastructure/Adapters/Time/INTPTimeAdapter.h"
 #include "Application/Services/Rules/RuleValidator.h"
 #include "Application/DTOs/RuleStateUpdateDto.h"
@@ -29,6 +30,7 @@ private:
     INTPTimeAdapter* _ntpTimeAdapter;
     IJsonConverter* _jsonConverter;
     IRemoteSensorReceiver* _remoteSensorReceiver = nullptr;
+    ISettings* _settings = nullptr;
     RuleValidator _ruleValidator;
 
     // Sync timing
@@ -90,6 +92,10 @@ public:
 
     void setRemoteSensorReceiver(IRemoteSensorReceiver* remoteSensorReceiver) {
         _remoteSensorReceiver = remoteSensorReceiver;
+    }
+
+    void setSettings(ISettings* settings) {
+        _settings = settings;
     }
 
     bool init() override {
@@ -244,6 +250,13 @@ private:
             char timestamp[32];
             strftime(timestamp, sizeof(timestamp), "%Y-%m-%dT%H:%M:%S.000Z", timeinfo);
             stateUpdate.timestamp = timestamp;
+        }
+
+        if (_settings) {
+            char accountUidBuffer[256];
+            accountUidBuffer[0] = '\0';
+            _settings->getAccountUid(accountUidBuffer);
+            stateUpdate.accountUid = accountUidBuffer;
         }
         
         bool hasErrors = false;

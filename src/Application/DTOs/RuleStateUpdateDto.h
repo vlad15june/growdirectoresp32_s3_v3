@@ -11,6 +11,7 @@ public:
     std::string mode = "Off";
     std::string modeReason;
     std::string errorType;
+    std::string accountUid;
 
     RuleStateDto() = default;
     RuleStateDto(const std::string& ruleUid, const std::string& ruleState = "Synchronized",
