@@ -30,6 +30,7 @@ private:
     static constexpr const char* COMMAND_RESULT_TOPIC = "hardware/command_result/%s";
     static constexpr const char* RAW_IO_RESULT_TOPIC = "hardware/raw_io_result/%s";
     static constexpr const char* RULE_STATE_TOPIC = "hardware/rules/state/%s";
+    static constexpr const char* RULE_STATE_BY_UID_TOPIC = "hardware/rules/state/%s/%s";
     static constexpr const char* RULE_SENSOR_OFFLINE_TOPIC = "hardware/event/rule_sensor_offline/%s";
     
     char _topicBuffer[128];
@@ -257,6 +258,35 @@ public:
 
         if (!_mqttManager->publish(topic, msg)) {
             log("MQTT: Failed to publish rule state command");
+            return false;
+        }
+
+        return true;
+    }
+
+    bool sendByUidRuleStateCommand(const char* uid, const char* msg) override {
+        if (_mqttManager == nullptr || !_mqttManager->isConnected()) {
+            log("MQTT: sendByUidRuleStateCommand - MQTT Manager not available or not connected");
+            return false;
+        }
+
+        if (_moduleConfig == nullptr) {
+            log("MQTT: sendByUidRuleStateCommand - ModuleConfig not available");
+            return false;
+        }
+
+        const char* moduleUid = _moduleConfig->getModuleUid();
+        if (moduleUid == nullptr || strlen(moduleUid) == 0) {
+            log("MQTT: sendByUidRuleStateCommand - Module UID not available");
+            return false;
+        }
+
+        snprintf(_topicBuffer, sizeof(_topicBuffer), RULE_STATE_BY_UID_TOPIC, moduleUid, uid);
+
+        log("MQTT: Publishing rule state command to topic: %s", _topicBuffer);
+
+        if (!_mqttManager->publish(_topicBuffer, msg)) {
+            log("MQTT: Failed to publish by-uid rule state command");
             return false;
         }
 

@@ -102,6 +102,18 @@ public:
         return sendRuleStateCommandReturnValue;
     }
 
+    bool sendByUidRuleStateCommandCalled = false;
+    const char* lastByUidRuleStateUid = nullptr;
+    const char* lastByUidRuleStateCommand = nullptr;
+    bool sendByUidRuleStateCommandReturnValue = true;
+
+    bool sendByUidRuleStateCommand(const char* uid, const char* msg) override {
+        sendByUidRuleStateCommandCalled = true;
+        lastByUidRuleStateUid = uid;
+        lastByUidRuleStateCommand = msg;
+        return sendByUidRuleStateCommandReturnValue;
+    }
+
     bool sendRuleSensorOfflineEventCalled = false;
     std::string lastRuleSensorOfflineEvent;
     bool sendRuleSensorOfflineEventReturnValue = true;

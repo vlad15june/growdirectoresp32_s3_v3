@@ -361,6 +361,11 @@ public:
 
     bool sendByUidRuleStateCommand(const char *uid, const char *msg) override
     {
+        if (_mqttApiService != nullptr && _mqttApiService->sendByUidRuleStateCommand(uid, msg))
+        {
+            return true;
+        }
+
         if (_restApiService == nullptr)
         {
             log("HYBRID API: sendByUidRuleStateCommand - REST API not available");

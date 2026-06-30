@@ -374,8 +374,19 @@ void test_rest_only_methods() {
     hybrid_api_service_setup();
 
     g_mockRestApi.reset();
+    g_mockMqttApi.reset();
+    g_mockMqttApi.sendByUidRuleStateCommandReturnValue = true;
     bool result = g_hybridApiService->sendByUidRuleStateCommand("test-uid", "test-rule-state");
     TEST_ASSERT_TRUE(result);
+    TEST_ASSERT_TRUE(g_mockMqttApi.sendByUidRuleStateCommandCalled);
+    TEST_ASSERT_FALSE(g_mockRestApi.sendByUidRuleStateCommandCalled);
+
+    g_mockRestApi.reset();
+    g_mockMqttApi.reset();
+    g_mockMqttApi.sendByUidRuleStateCommandReturnValue = false;
+    result = g_hybridApiService->sendByUidRuleStateCommand("test-uid", "test-rule-state");
+    TEST_ASSERT_TRUE(result);
+    TEST_ASSERT_TRUE(g_mockMqttApi.sendByUidRuleStateCommandCalled);
     TEST_ASSERT_TRUE(g_mockRestApi.sendByUidRuleStateCommandCalled);
 
     g_mockRestApi.reset();
