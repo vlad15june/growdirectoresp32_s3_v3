@@ -1,5 +1,12 @@
 # Release Notes
 
+## Version 2.2.15 (2026-06-30)
+
+### Fixed
+- **Stuck "Deleting" Rule**: GDV1-3625 Fixed a rule remaining stuck in the "Deleting" state when the device's internet (HTTP) channel was down but the messaging channel was up; the device now confirms rule deletion over messaging first and falls back to internet, so the deletion completes either way.
+
+---
+
 ## Version 2.2.14 (2026-06-24)
 
 ### Changed
