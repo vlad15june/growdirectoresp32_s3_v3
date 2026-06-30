@@ -498,7 +498,7 @@ public:
                 if (freshness == FreshnessVerdict::STALE) {
                     transitionToSensorUnreachable(rule);
                 } else if (freshness == FreshnessVerdict::FRESH) {
-                    if (!maybeProtectiveShutdown(rule, now)) {
+                    if (!maybeProtectiveShutdown(rule, now) && !maybeStepProtectiveShutdown(rule, now)) {
                         executeRuleActions(rule);
                     }
                 }
@@ -1299,9 +1299,49 @@ private:
         return true;
     }
 
-    void triggerProtectiveShutdown(const Rule& rule, unsigned long elapsedSec) {
-        log("EVALUATE_RULES: PROTECTIVE_SHUTDOWN uid=%s deviceUid=%s timeToSetPoint=%d elapsed=%lu",
-            rule.uid.c_str(), rule.deviceUid.c_str(), rule.timeToSetPoint, elapsedSec);
+    bool maybeStepProtectiveShutdown(const Rule& rule, unsigned long now) {
+        if (!rule.protectiveShutdown) {
+            return false;
+        }
+        if (rule.ruleType != RuleType::STEP) {
+            return false;
+        }
+        if (rule.cyclesToSetPoint <= 0) {
+            return false;
+        }
+
+        Device* device = _deviceModel ? _deviceModel->getDeviceByUid(rule.deviceUid.c_str()) : nullptr;
+        if (!device || device->deviceType == DeviceTypeEnum::DEVICE_TYPE_ANALOG) {
+            return false;
+        }
+
+        if (device->ruleUid && std::string(device->ruleUid).length() > 0 &&
+            rule.uid != std::string(device->ruleUid)) {
+            return false;
+        }
+
+        DeviceDigitalOut* digitalDevice = static_cast<DeviceDigitalOut*>(device);
+        if (digitalDevice->currentCycle < rule.cyclesToSetPoint) {
+            return false;
+        }
+
+        triggerProtectiveShutdown(rule, 0, "time_reach");
+        return true;
+    }
+
+    void triggerProtectiveShutdown(const Rule& rule, unsigned long elapsedSec,
+                                   const char* source = "time_to_setpoint") {
+        Device* device = _deviceModel ? _deviceModel->getDeviceByUid(rule.deviceUid.c_str()) : nullptr;
+        DeviceDigitalOut* digitalDevice = nullptr;
+        int currentCycle = 0;
+        if (device && device->deviceType != DeviceTypeEnum::DEVICE_TYPE_ANALOG) {
+            digitalDevice = static_cast<DeviceDigitalOut*>(device);
+            currentCycle = digitalDevice->currentCycle;
+        }
+
+        log("EVALUATE_RULES: PROTECTIVE_SHUTDOWN uid=%s deviceUid=%s source=%s cycles=%d/%d timeToSetPoint=%d elapsed=%lu",
+            rule.uid.c_str(), rule.deviceUid.c_str(), source, currentCycle, rule.cyclesToSetPoint,
+            rule.timeToSetPoint, elapsedSec);
 
         if (_ruleRepository) {
             _ruleRepository->updateRuleError(rule.uid.c_str(), RuleState::ERROR,
@@ -1326,6 +1366,10 @@ private:
         off.sensorValueHigh = rule.valueHigh;
         off.switchedAt = sensorEventTimestamp();
         executeDeviceAction(rule.deviceUid, off);
+
+        if (digitalDevice) {
+            digitalDevice->currentCycle = 0;
+        }
 
         _ruleActiveStates.erase(rule.uid);
         _lastEvaluationResults.erase(rule.uid);
