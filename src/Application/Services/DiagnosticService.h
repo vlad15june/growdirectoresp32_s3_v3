@@ -38,6 +38,8 @@ private:
     IMqttManager *_mqttManager;
 
     static const int _maxCountOffline = 5;
+    static const unsigned long WIFI_OFFLINE_DEBOUNCE_MS = 30 * 1000;
+    unsigned long _wifiDownSince = 0;
     bool _mqttConnected;
     int _networkFails = 0;  // Track network failures
     DiagnosticsNetworkState _lastNetworkState = DIAGNOSTICS_NETWORK_STATE_OK;  // Track network state using enum
@@ -350,8 +352,20 @@ public:
         // Check for prolonged offline state and trigger automatic reboot if needed
         checkOfflineStateAndTriggerReboot();
 
+        unsigned long now = _arduinoAdapter ? _arduinoAdapter->millis() : 0;
+        bool wifiConnected = (_wifiAdapter != nullptr) ? _wifiAdapter->isConnected() : true;
+        if (wifiConnected)
+        {
+            _wifiDownSince = 0;
+        }
+        else if (_wifiDownSince == 0)
+        {
+            _wifiDownSince = now;
+        }
+        bool routerDown = (_wifiDownSince != 0) && (now - _wifiDownSince >= WIFI_OFFLINE_DEBOUNCE_MS);
+
         bool httpDown = (_restApiService ? _restApiService->getCountOffline() : 0) > _maxCountOffline;
-        bool offline = !_mqttConnected && httpDown;
+        bool offline = routerDown || (!_mqttConnected && httpDown);
 
         if (offline)
         {

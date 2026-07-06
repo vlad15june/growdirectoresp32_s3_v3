@@ -274,6 +274,24 @@ public:
 
     bool isConnected() override
     {
+        if (_connected)
+        {
+            bool clientConnected;
+            {
+                OptLock lock(_clientMutex);
+                clientConnected = _mqttClient.connected();
+            }
+            if (!clientConnected)
+            {
+                _connected = false;
+                log("MQTT: client reports disconnected, clearing connected flag");
+            }
+            else if (_wifiAdapter != nullptr && !_wifiAdapter->isConnected())
+            {
+                _connected = false;
+                log("MQTT: connection dropped (WiFi down), clearing connected flag");
+            }
+        }
         return _connected;
     }
 
@@ -358,6 +376,8 @@ public:
                 delete msg;
             }
         }
+
+        isConnected();
 
         if (!_connected && millis() >= _reconnectAt &&
             (_wifiAdapter == nullptr || _wifiAdapter->isConnected()))
