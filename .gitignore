@@ -24,3 +24,5 @@ test_scripts/module_logs_*.txt
 tickets/Description/.DS_Store
 test_scripts/.DS_Store
 doc/log-analysis/
+/Resources.md
+/.claude/skills/dev-assistant/state/
