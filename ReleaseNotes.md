@@ -1,5 +1,12 @@
 # Release Notes
 
+## Version 2.17.17 (2026-07-08)
+
+### Fixed
+- **Step Rule Final Cycle Completion**: GDV1-3650 Fixed step-based rules so the final step's active cycle now runs to completion before the protective shutdown triggers, instead of being cut short at the cycle limit.
+
+---
+
 ## Version 2.2.16 (2026-06-30)
 
 ### Fixed
