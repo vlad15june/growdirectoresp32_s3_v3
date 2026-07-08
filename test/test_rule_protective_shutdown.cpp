@@ -354,11 +354,51 @@ static void test_step_no_shutdown_below_cycle_cap(void) {
     TEST_ASSERT_FALSE(notifier.protectiveShutdownCalled);
 }
 
+static void test_step_no_shutdown_while_final_cycle_on_in_progress(void) {
+    MockRuleRepository repo;
+    repo.rules.push_back(makeStepProtectiveRule(true, 2));
+
+    DeviceDigitalOut device{};
+    device.deviceUid = "dev-1";
+    device.deviceType = DEVICE_TYPE_DIGITAL;
+    device.state = DEVICE_STATE_STEP_ON;
+    device.ruleUid = "u1";
+    device.cyclesToSetPoint = 2;
+    device.currentCycle = 2;
+    device.isRuleTurnOnDevice = true;
+    device.timeOn = 400000;
+    device.durationOn = 10000;
+    ProtectiveDeviceModel deviceModel;
+    deviceModel.device = &device;
+
+    MockSensorValueModel sensors;
+    sensors.values["sensor-1"] = 30.0f;
+    sensors.lastReadTimes["sensor-1"] = 400000;
+    MockArduinoAdapter arduino;
+    MockNTPTimeAdapter ntp;
+    ntp.setEpochTime(1700000000);
+    MockRuleStateNotifier notifier;
+
+    EvaluateRulesUseCase uc(&deviceModel, &repo, &arduino, &ntp, &sensors,
+                            nullptr, nullptr, &notifier);
+
+    arduino.setMillis(404000);
+    uc.loop();
+    TEST_ASSERT_FALSE(notifier.protectiveShutdownCalled);
+
+    device.state = DEVICE_STATE_STEP_WAITING;
+    arduino.setMillis(411000);
+    uc.loop();
+    TEST_ASSERT_TRUE(notifier.protectiveShutdownCalled);
+    TEST_ASSERT_EQUAL_INT(1, notifier.protectiveShutdownCount);
+}
+
 extern "C" void run_rule_protective_shutdown_tests(void) {
     RUN_TEST(test_protective_shutdown_triggers_after_time_to_setpoint);
     RUN_TEST(test_step_protective_shutdown_triggers_on_cycle_cap);
     RUN_TEST(test_step_no_shutdown_when_protective_disabled);
     RUN_TEST(test_step_no_shutdown_below_cycle_cap);
+    RUN_TEST(test_step_no_shutdown_while_final_cycle_on_in_progress);
     RUN_TEST(test_no_shutdown_when_protective_disabled);
     RUN_TEST(test_no_shutdown_when_time_to_setpoint_zero);
     RUN_TEST(test_gate_includes_rule_with_protective_config);

@@ -1325,6 +1325,15 @@ private:
             return false;
         }
 
+        if (device->state == DEVICE_STATE_REQUEST_STEP_ON) {
+            return false;
+        }
+        if (device->state == DEVICE_STATE_STEP_ON &&
+            now >= device->timeOn &&
+            (now - device->timeOn) < device->durationOn) {
+            return false;
+        }
+
         triggerProtectiveShutdown(rule, 0, "time_reach");
         return true;
     }
