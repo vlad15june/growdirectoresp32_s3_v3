@@ -362,6 +362,10 @@ public:
         if (!_connected && millis() >= _reconnectAt &&
             (_wifiAdapter == nullptr || _wifiAdapter->isConnected()))
         {
+            {
+                OptLock lock(_clientMutex);
+                _mqttClient.disconnect(true);
+            }
             connect();
             _reconnectAt = millis() + _reconnectInterval;
         }
