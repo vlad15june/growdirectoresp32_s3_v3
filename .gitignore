@@ -26,3 +26,4 @@ test_scripts/.DS_Store
 doc/log-analysis/
 /Resources.md
 /.claude/skills/dev-assistant/state/
+/.playwright-mcp/
