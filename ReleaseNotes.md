@@ -1,5 +1,12 @@
 # Release Notes
 
+## Version 2.17.18 (2026-07-09)
+
+### Added
+- **Wind Direction Between Rule**: GDV1-3700 Added a "between" comparison for sensor and step rules, letting rules trigger when a value (e.g. wind direction) falls within a configured range — including ranges that wrap around, such as a compass arc crossing due north.
+
+---
+
 ## Version 2.17.17 (2026-07-08)
 
 ### Fixed
