@@ -371,6 +371,8 @@ public:
                 rule.direction = RuleDirection::UP;
             else if (directionStr == "down")
                 rule.direction = RuleDirection::DOWN;
+            else if (directionStr == "between")
+                rule.direction = RuleDirection::BETWEEN;
 
             // Parse conditions
             rule.conditions.clear();
@@ -406,6 +408,8 @@ public:
                         condition.direction = RuleDirection::UP;
                     else if (condDirStr == "down")
                         condition.direction = RuleDirection::DOWN;
+                    else if (condDirStr == "between")
+                        condition.direction = RuleDirection::BETWEEN;
 
                     rule.conditions.push_back(condition);
                 }
@@ -616,6 +620,8 @@ public:
             // Direction
             if (rule.direction == RuleDirection::UP)
                 doc["direction"] = "up";
+            else if (rule.direction == RuleDirection::BETWEEN)
+                doc["direction"] = "between";
             else
                 doc["direction"] = "down";
 
@@ -645,6 +651,8 @@ public:
                 // Direction
                 if (cond.direction == RuleDirection::UP)
                     condObj["direction"] = "up";
+                else if (cond.direction == RuleDirection::BETWEEN)
+                    condObj["direction"] = "between";
                 else
                     condObj["direction"] = "down";
             }

@@ -12,6 +12,7 @@
 #include "Application/Services/Rules/RuleValidator.h"
 #include "Core/Domain/Data/Models/RuleEvaluationResult.h"
 #include "Core/Domain/Interfaces/Rules/IRuleStateNotifier.h"
+#include "Core/Utils/WindArc.h"
 #include <map>
 #include <set>
 #include <cstdarg>
@@ -24,6 +25,10 @@ enum class FreshnessVerdict { FRESH, STALE, WAITING };
 inline SensorVerdict evaluateSensorHysteresis(RuleDirection direction, double value, double valueLow, double valueHigh, bool previouslyOn) {
     if (direction == RuleDirection::UNKNOWN) {
         return SensorVerdict::INERT;
+    }
+
+    if (direction == RuleDirection::BETWEEN) {
+        return Utils::isInsideArc(value, valueLow, valueHigh) ? SensorVerdict::TURN_ON : SensorVerdict::TURN_OFF;
     }
 
     if (direction == RuleDirection::DOWN) {
@@ -894,6 +899,44 @@ private:
     }
 
     SensorVerdict evaluateSensorRule(const Rule& rule, bool committedOn) {
+        if (!rule.conditions.empty()) {
+            bool anyOn = false;
+            bool allOn = true;
+            for (const auto& cond : rule.conditions) {
+                bool condOn;
+                if (cond.sensorUids.empty()) {
+                    log("EVALUATE_RULES: SENSOR_COND uid=%s reason=no_sensor_uid on=0", rule.uid.c_str());
+                    condOn = false;
+                } else {
+                    double condValue = getSensorValue(cond.sensorUids[0]);
+                    SensorVerdict condVerdict = evaluateSensorHysteresis(cond.direction, condValue, cond.valueLow, cond.valueHigh, committedOn);
+                    switch (condVerdict) {
+                        case SensorVerdict::TURN_ON:
+                            condOn = true;
+                            break;
+                        case SensorVerdict::TURN_OFF:
+                        case SensorVerdict::INERT:
+                            condOn = false;
+                            break;
+                        case SensorVerdict::HOLD:
+                        default:
+                            condOn = committedOn;
+                            break;
+                    }
+                    log("EVALUATE_RULES: SENSOR_COND uid=%s sensor=%s dir=%s value=%.2f low=%.2f high=%.2f on=%d",
+                        rule.uid.c_str(), cond.sensorUids[0].c_str(), getRuleDirectionName(cond.direction),
+                        condValue, cond.valueLow, cond.valueHigh, condOn ? 1 : 0);
+                }
+                anyOn = anyOn || condOn;
+                allOn = allOn && condOn;
+            }
+            bool targetOn = rule.conditionOr ? anyOn : allOn;
+            log("EVALUATE_RULES: SENSOR_COND uid=%s mode=%s nConds=%d targetOn=%d",
+                rule.uid.c_str(), rule.conditionOr ? "or" : "and",
+                static_cast<int>(rule.conditions.size()), targetOn ? 1 : 0);
+            return targetOn ? SensorVerdict::TURN_ON : SensorVerdict::TURN_OFF;
+        }
+
         if (rule.sensorUid.empty()) {
             log("EVALUATE_RULES: SENSOR_EVAL inert uid=%s reason=no_sensor_uid", rule.uid.c_str());
             return SensorVerdict::INERT;
@@ -909,6 +952,22 @@ private:
             rule.valueLow, rule.valueHigh, committedOn ? 1 : 0,
             rule.sensorUid.c_str(), freshLast,
             freshAge, freshNow);
+
+        if (rule.direction == RuleDirection::BETWEEN) {
+            log("EVALUATE_RULES: SENSOR_EVAL_BETWEEN uid=%s value=%.2f low=%.2f high=%.2f wrap=%d",
+                rule.uid.c_str(), sensorValue, rule.valueLow, rule.valueHigh,
+                (rule.valueLow > rule.valueHigh) ? 1 : 0);
+
+            SensorVerdict verdict = evaluateSensorHysteresis(rule.direction, sensorValue, rule.valueLow, rule.valueHigh, committedOn);
+
+            if (verdict == SensorVerdict::TURN_ON) {
+                log("EVALUATE_RULES: SENSOR_EVAL_BETWEEN turn_on uid=%s value=%.2f", rule.uid.c_str(), sensorValue);
+            } else {
+                log("EVALUATE_RULES: SENSOR_EVAL_BETWEEN turn_off uid=%s value=%.2f", rule.uid.c_str(), sensorValue);
+            }
+
+            return verdict;
+        }
 
         return evaluateSensorHysteresis(rule.direction, sensorValue, rule.valueLow, rule.valueHigh, committedOn);
     }
@@ -1017,11 +1076,17 @@ private:
             bool anyTrue = false;
             bool allTrue = true;
             for (const auto& cond : rule.conditions) {
-                double mean = computeMean(rule.uid, cond.sensorUids);
-                double target = (cond.valueTarget != 0.0)
-                                ? cond.valueTarget
-                                : (cond.direction == RuleDirection::DOWN ? cond.valueHigh : cond.valueLow);
-                bool fires = conditionFires(mean, cond.direction, target);
+                bool fires;
+                if (cond.direction == RuleDirection::BETWEEN) {
+                    double value = cond.sensorUids.empty() ? 0.0 : getSensorValue(cond.sensorUids[0]);
+                    fires = !cond.sensorUids.empty() && Utils::isInsideArc(value, cond.valueLow, cond.valueHigh);
+                } else {
+                    double mean = computeMean(rule.uid, cond.sensorUids);
+                    double target = (cond.valueTarget != 0.0)
+                                    ? cond.valueTarget
+                                    : (cond.direction == RuleDirection::DOWN ? cond.valueHigh : cond.valueLow);
+                    fires = conditionFires(mean, cond.direction, target);
+                }
                 anyTrue = anyTrue || fires;
                 allTrue = allTrue && fires;
             }
@@ -1029,6 +1094,13 @@ private:
             log("EVALUATE_RULES: STEP_COND uid=%s mode=%s nConds=%d firing=%d",
                 rule.uid.c_str(), rule.conditionOr ? "or" : "and",
                 static_cast<int>(rule.conditions.size()), firing ? 1 : 0);
+            return firing;
+        }
+
+        if (rule.direction == RuleDirection::BETWEEN) {
+            double value = getSensorValue(rule.sensorUid);
+            bool firing = Utils::isInsideArc(value, rule.valueLow, rule.valueHigh);
+            log("EVALUATE_RULES: STEP_COND uid=%s mode=single firing=%d", rule.uid.c_str(), firing ? 1 : 0);
             return firing;
         }
 

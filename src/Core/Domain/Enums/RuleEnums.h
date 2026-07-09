@@ -19,7 +19,8 @@ enum class RuleType {
 enum class RuleDirection {
     UNKNOWN,
     UP,
-    DOWN
+    DOWN,
+    BETWEEN
 };
 
 // Utility function to get string representation of rule direction
@@ -29,6 +30,8 @@ inline const char* getRuleDirectionName(RuleDirection direction) {
             return "up";
         case RuleDirection::DOWN:
             return "down";
+        case RuleDirection::BETWEEN:
+            return "between";
         default:
             return "unknown";
     }
@@ -42,8 +45,10 @@ inline RuleDirection getRuleDirectionFromString(const char* directionStr) {
         return RuleDirection::UP;
     } else if (strcmp(directionStr, "down") == 0) {
         return RuleDirection::DOWN;
+    } else if (strcmp(directionStr, "between") == 0) {
+        return RuleDirection::BETWEEN;
     }
-    
+
     return RuleDirection::UNKNOWN;
 }
 

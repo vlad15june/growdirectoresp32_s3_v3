@@ -49,7 +49,7 @@ private:
         registerFeature(DebugFeatures::NET_DEBUG, "net", true, MqttLoggerMode::SerialOnly);
         registerFeature(DebugFeatures::CONTROL_DEBUG, "control", false, MqttLoggerMode::SerialOnly);
         registerFeature(DebugFeatures::RELAY_DRIVE_DEBUG, "relay_drive", true, MqttLoggerMode::MqttAndSerial);
-        registerFeature(DebugFeatures::RULE_DEBUG, "rule", true, MqttLoggerMode::SerialOnly);
+        registerFeature(DebugFeatures::RULE_DEBUG, "rule", true, MqttLoggerMode::MqttAndSerial);
         registerFeature(DebugFeatures::RULE_SYNC_DEBUG, "rule_sync", true, MqttLoggerMode::MqttAndSerial);
         registerFeature(DebugFeatures::RULE_REPOSITORY_DEBUG, "rule_repository", true, MqttLoggerMode::MqttAndSerial);
         registerFeature(DebugFeatures::RULE_ON_DEBUG, "rule_on", true, MqttLoggerMode::MqttAndSerial);

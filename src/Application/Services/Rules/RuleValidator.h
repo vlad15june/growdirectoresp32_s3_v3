@@ -116,21 +116,23 @@ public:
             return baseResult;
         }
         
-        if (rule.sensorUid.empty()) {
+        bool hasSingleSensor = !rule.sensorUid.empty();
+        bool hasConditionSensors = !rule.conditions.empty() && !rule.conditions[0].sensorUids.empty();
+        if (!hasSingleSensor && !hasConditionSensors) {
             log("RULE_VALIDATION: Sensor rule %s has no sensor UID", rule.uid.c_str());
-            return RuleValidationResult(false, "wrong_format", "Sensor rule must have sensor UID");
+            return RuleValidationResult(false, "wrong_format", "Sensor rule must have sensor UID or conditions");
         }
-        
+
         if (rule.valueLow == 0.0 && rule.valueHigh == 0.0) {
             log("RULE_VALIDATION: Sensor rule %s has no value thresholds", rule.uid.c_str());
             return RuleValidationResult(false, "wrong_format", "Sensor rule must have value thresholds");
         }
-        
+
         if (rule.direction == RuleDirection::UNKNOWN) {
             log("RULE_VALIDATION: Sensor rule %s has no direction", rule.uid.c_str());
             return RuleValidationResult(false, "wrong_format", "Sensor rule must have direction");
         }
-        
+
         return RuleValidationResult(true);
     }
 };
@@ -152,21 +154,26 @@ public:
             return RuleValidationResult(false, "wrong_format", "Step rule must have sensor UID");
         }
         
-        if (rule.valueTarget == 0.0) {
+        if (rule.direction == RuleDirection::BETWEEN) {
+            if (rule.valueLow == 0.0 && rule.valueHigh == 0.0) {
+                log("RULE_VALIDATION: Step rule %s has no value thresholds for between", rule.uid.c_str());
+                return RuleValidationResult(false, "wrong_format", "Step rule must have value thresholds for between");
+            }
+        } else if (rule.valueTarget == 0.0) {
             log("RULE_VALIDATION: Step rule %s has no target value", rule.uid.c_str());
             return RuleValidationResult(false, "wrong_format", "Step rule must have target value");
         }
-        
+
         if (rule.direction == RuleDirection::UNKNOWN) {
             log("RULE_VALIDATION: Step rule %s has no direction", rule.uid.c_str());
             return RuleValidationResult(false, "wrong_format", "Step rule must have direction");
         }
-        
+
         if (rule.workingTime <= 0 || rule.waitingTime <= 0) {
             log("RULE_VALIDATION: Step rule %s has invalid working/waiting time", rule.uid.c_str());
             return RuleValidationResult(false, "wrong_format", "Step rule must have valid working and waiting times");
         }
-        
+
         return RuleValidationResult(true);
     }
 };

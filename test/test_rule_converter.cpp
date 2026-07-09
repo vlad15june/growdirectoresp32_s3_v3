@@ -352,6 +352,33 @@ static const char* test_average_rule_json = R"({
     "daysOfMonth":[]
 })";
 
+// Sample sensor rule JSON with wind direction "between" operator
+static const char* test_between_rule_json = R"({
+    "sensorUid":"84:F7:03:FE:88:30.00.02",
+    "valueLow":292.5,
+    "valueHigh":67.5,
+    "direction":"between",
+    "conditions":[
+        {
+            "sensorUids":["84:F7:03:FE:88:30.00.02"],
+            "valueLow":292.5,
+            "valueHigh":67.5,
+            "direction":"between"
+        }
+    ],
+    "conditionOr":false,
+    "uid":"between-uid-1",
+    "version":1,
+    "deviceUid":"9C:13:9E:99:47:38.01",
+    "ruleType":"sensor",
+    "mode":"On",
+    "modeReason":null,
+    "protectiveShutdown":false,
+    "state":"Synchronized",
+    "daysOfWeek":[],
+    "daysOfMonth":[]
+})";
+
 // Sample unknown-type rule JSON
 static const char* test_unknown_rule_json = R"({
     "uid":"unk-uid-1",
@@ -419,6 +446,34 @@ void test_average_rule_roundtrip_json_converter(void) {
     TEST_ASSERT_EQUAL_FLOAT(26.0, rule2.valueHigh);
 }
 
+void test_between_rule_parse_json_converter(void) {
+    JsonConverter jsonConverter;
+    Rule rule;
+
+    TEST_ASSERT_TRUE(jsonConverter.ruleFromJson(test_between_rule_json, rule));
+
+    TEST_ASSERT_EQUAL(RuleType::SENSOR, rule.ruleType);
+    TEST_ASSERT_EQUAL(RuleDirection::BETWEEN, rule.direction);
+    TEST_ASSERT_EQUAL_FLOAT(292.5, rule.valueLow);
+    TEST_ASSERT_EQUAL_FLOAT(67.5, rule.valueHigh);
+    TEST_ASSERT_EQUAL(1, rule.conditions.size());
+    TEST_ASSERT_EQUAL(RuleDirection::BETWEEN, rule.conditions[0].direction);
+}
+
+void test_between_rule_roundtrip_json_converter(void) {
+    JsonConverter jsonConverter;
+    Rule rule;
+    TEST_ASSERT_TRUE(jsonConverter.ruleFromJson(test_between_rule_json, rule));
+
+    std::string serialized = jsonConverter.ruleToJson(rule);
+    TEST_ASSERT_TRUE(serialized.find("\"direction\":\"between\"") != std::string::npos);
+
+    Rule rule2;
+    TEST_ASSERT_TRUE(jsonConverter.ruleFromJson(serialized, rule2));
+    TEST_ASSERT_EQUAL(RuleDirection::BETWEEN, rule2.direction);
+    TEST_ASSERT_EQUAL(RuleDirection::BETWEEN, rule2.conditions[0].direction);
+}
+
 void test_unknown_rule_type_json_converter(void) {
     JsonConverter jsonConverter;
     Rule rule;
@@ -437,5 +492,7 @@ extern "C" void run_rule_converter_tests(void) {
     RUN_TEST(test_loop_rule_roundtrip_json_converter);
     RUN_TEST(test_average_rule_parse_json_converter);
     RUN_TEST(test_average_rule_roundtrip_json_converter);
+    RUN_TEST(test_between_rule_parse_json_converter);
+    RUN_TEST(test_between_rule_roundtrip_json_converter);
     RUN_TEST(test_unknown_rule_type_json_converter);
 }

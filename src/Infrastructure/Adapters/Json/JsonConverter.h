@@ -521,6 +521,8 @@ public:
             rule.direction = RuleDirection::UP;
         else if (directionStr == "down")
             rule.direction = RuleDirection::DOWN;
+        else if (directionStr == "between")
+            rule.direction = RuleDirection::BETWEEN;
 
         rule.valueTarget = extractDoubleValue(jsonStr, "valueTarget");
         rule.cyclesToSetPoint = extractIntValue(jsonStr, "cyclesToSetPoint");
@@ -563,6 +565,8 @@ public:
                 condition.direction = RuleDirection::UP;
             else if (condDirStr == "down")
                 condition.direction = RuleDirection::DOWN;
+            else if (condDirStr == "between")
+                condition.direction = RuleDirection::BETWEEN;
 
             rule.conditions.push_back(condition);
         }
@@ -687,6 +691,8 @@ public:
             oss << ",\"direction\":\"";
             if (rule.direction == RuleDirection::UP)
                 oss << "up";
+            else if (rule.direction == RuleDirection::BETWEEN)
+                oss << "between";
             else
                 oss << "down";
             oss << "\"";
@@ -722,6 +728,8 @@ public:
                 oss << ",\"direction\":\"";
                 if (cond.direction == RuleDirection::UP)
                     oss << "up";
+                else if (cond.direction == RuleDirection::BETWEEN)
+                    oss << "between";
                 else
                     oss << "down";
                 oss << "\"";

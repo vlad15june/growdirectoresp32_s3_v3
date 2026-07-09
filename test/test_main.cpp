@@ -21,6 +21,8 @@ extern "C" void run_rule_converter_tests(void);
 extern "C" void run_rule_phase2_sync_tests(void);
 extern "C" void run_rule_phase3_deletion_tests(void);
 extern "C" void run_rule_phase4_hysteresis_tests(void);
+extern "C" void run_rule_wind_between_tests(void);
+extern "C" void run_rule_condition_between_tests(void);
 extern "C" void run_rule_phase4_propagation_tests(void);
 extern "C" void run_rule_phase4_deactivation_tests(void);
 extern "C" void run_rule_phase5_delay_tests(void);
@@ -128,6 +130,10 @@ int main(void) {
     run_rule_phase3_deletion_tests();
 
     run_rule_phase4_hysteresis_tests();
+
+    run_rule_wind_between_tests();
+
+    run_rule_condition_between_tests();
 
     run_rule_phase4_propagation_tests();
 
