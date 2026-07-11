@@ -29,6 +29,7 @@
 #include "Core/Domain/UseCases/ModuleMode/OnChangeLocalIpUseCase.h"
 #include "Core/Domain/UseCases/ModuleMode/OnConnectivityRestoredUseCase.h"
 #include "Core/Domain/UseCases/ModuleMode/CheckModuleDeletionUseCase.h"
+#include "Core/Domain/UseCases/ModuleMode/CheckFirmwareUpdateOnStartupUseCase.h"
 #include "Core/Domain/UseCases/DeviceControl/ProcessDeviceStateUseCaseFactory.h"
 #include "Core/Domain/UseCases/DeviceControl/DeviceCommandExecutionUseCase.h"
 #include "Core/Domain/UseCases/ModuleCommand/ModuleCommandExecutionUseCase.h"
@@ -286,6 +287,12 @@ LedUseCases ledUseCases(&ledAdapter, &moduleConfig, &arduinoAdapter, &mqttLogger
 
 ModuleCommandExecutionUseCase moduleCommandExecutionUseCase(&mqttLogger, &debugSystem, &ntpTimeAdapter, &firmwareRemoteUpdate, &arduinoAdapter, &sensorRepository, &sensorTypeRepository, &sensorReader, &moduleConfig, &settings, &hybridApiService, &clearModuleDataService, &moduleStructure, &sensorValueModel, &wifiManager, &ledUseCases, &rawBusAccessAdapter, &checkModuleDeletionUseCase);
 
+CheckFirmwareUpdateOnStartupUseCase checkFirmwareUpdateOnStartupUseCase(
+    &hybridApiService,
+    &moduleCommandExecutionUseCase,
+    &mqttLogger,
+    &debugSystem);
+
 CommandService commandService(
     &deviceCommandExecutionUseCase,
     &moduleCommandExecutionUseCase,
@@ -464,7 +471,8 @@ ModuleSetupService moduleSetupService(
     &remoteSensorReceiver,
     &onConnectivityRestoredUseCase,
     &otaUpdateLog,
-    &checkModuleDeletionUseCase);
+    &checkModuleDeletionUseCase,
+    &checkFirmwareUpdateOnStartupUseCase);
 
 void initDependencies()
 {

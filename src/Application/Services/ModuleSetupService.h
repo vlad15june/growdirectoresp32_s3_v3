@@ -37,6 +37,7 @@
 #include "Core/Domain/Interfaces/Adapters/Sensors/IRemoteSensorReceiver.h"
 #include "Core/Domain/Interfaces/UseCases/IOnConnectivityRestoredUseCase.h"
 #include "Core/Domain/Interfaces/UseCases/ICheckModuleDeletionUseCase.h"
+#include "Core/Domain/Interfaces/UseCases/ICheckFirmwareUpdateOnStartupUseCase.h"
 #include <memory>
 #include <cstdarg>
 #include <cstdio>
@@ -85,6 +86,7 @@ private:
     IRemoteSensorReceiver *remoteSensorReceiver;
     IOnConnectivityRestoredUseCase *onConnectivityRestoredUseCase;
     IOtaUpdateLog *otaUpdateLog;
+    ICheckFirmwareUpdateOnStartupUseCase *checkFirmwareUpdateOnStartupUseCase;
 
     void log(const char *format, ...);
 
@@ -98,6 +100,7 @@ private:
     void UserReConfigModeConfigure();
     void ConfigureDoneModeConfigure();
     void checkModuleDeletionOnStartup();
+    bool checkFirmwareUpdateOnStartup();
     void clearAllFileLog();
     void clearStoreRules();
     void setupAP(bool isTestMode = false);
@@ -181,7 +184,8 @@ public:
         IRemoteSensorReceiver *remoteSensorReceiver = nullptr,
         IOnConnectivityRestoredUseCase *onConnectivityRestoredUseCase = nullptr,
         IOtaUpdateLog *otaUpdateLog = nullptr,
-        ICheckModuleDeletionUseCase *checkModuleDeletionUseCase = nullptr);
+        ICheckModuleDeletionUseCase *checkModuleDeletionUseCase = nullptr,
+        ICheckFirmwareUpdateOnStartupUseCase *checkFirmwareUpdateOnStartupUseCase = nullptr);
 
     void setupModule() override;
     std::unique_ptr<ILoopService> getLoopService() override;
@@ -219,7 +223,8 @@ inline ModuleSetupService::ModuleSetupService(
     IRemoteSensorReceiver *remoteSensorReceiver,
     IOnConnectivityRestoredUseCase *onConnectivityRestoredUseCase,
     IOtaUpdateLog *otaUpdateLog,
-    ICheckModuleDeletionUseCase *checkModuleDeletionUseCase) : logger(logger),
+    ICheckModuleDeletionUseCase *checkModuleDeletionUseCase,
+    ICheckFirmwareUpdateOnStartupUseCase *checkFirmwareUpdateOnStartupUseCase) : logger(logger),
                                                        debugSystem(debugSystem),
                                                        moduleConfig(moduleConfig),
                                                        ledAdapter(ledAdapter),
@@ -248,7 +253,8 @@ inline ModuleSetupService::ModuleSetupService(
                                                        remoteSensorReceiver(remoteSensorReceiver),
                                                        onConnectivityRestoredUseCase(onConnectivityRestoredUseCase),
                                                        otaUpdateLog(otaUpdateLog),
-                                                       checkModuleDeletionUseCase(checkModuleDeletionUseCase)
+                                                       checkModuleDeletionUseCase(checkModuleDeletionUseCase),
+                                                       checkFirmwareUpdateOnStartupUseCase(checkFirmwareUpdateOnStartupUseCase)
 {
 }
 
@@ -504,10 +510,23 @@ inline void ModuleSetupService::ConfigureDoneModeConfigure()
         (arduinoAdapter ? arduinoAdapter->millis() : 0) - ts);
 
     ts = arduinoAdapter ? arduinoAdapter->millis() : 0;
-    checkModuleDeletionOnStartup();
-    log("[%lu ms] SETUP: checkModuleDeletionOnStartup done (took %lu ms)",
+    bool updateApplied = checkFirmwareUpdateOnStartup();
+    log("[%lu ms] SETUP: checkFirmwareUpdateOnStartup done (took %lu ms)",
         arduinoAdapter ? arduinoAdapter->millis() : 0,
         (arduinoAdapter ? arduinoAdapter->millis() : 0) - ts);
+
+    if (updateApplied)
+    {
+        log("SETUP: update applied - skipping deletion check");
+    }
+    else
+    {
+        ts = arduinoAdapter ? arduinoAdapter->millis() : 0;
+        checkModuleDeletionOnStartup();
+        log("[%lu ms] SETUP: checkModuleDeletionOnStartup done (took %lu ms)",
+            arduinoAdapter ? arduinoAdapter->millis() : 0,
+            (arduinoAdapter ? arduinoAdapter->millis() : 0) - ts);
+    }
 
     ts = arduinoAdapter ? arduinoAdapter->millis() : 0;
     setupMqttConnection();
@@ -568,6 +587,19 @@ inline void ModuleSetupService::ConfigureDoneModeConfigure()
     log("[%lu ms] SETUP: ConfigureDoneModeConfigure done - module prepared for operation (took %lu ms)",
         arduinoAdapter ? arduinoAdapter->millis() : 0,
         (arduinoAdapter ? arduinoAdapter->millis() : 0) - t0);
+}
+
+inline bool ModuleSetupService::checkFirmwareUpdateOnStartup()
+{
+    if (!checkFirmwareUpdateOnStartupUseCase)
+    {
+        log("SETUP: firmware update check on startup not available");
+        return false;
+    }
+
+    bool updateApplied = checkFirmwareUpdateOnStartupUseCase->run();
+    log("SETUP: firmware update check on startup - applied: %s", updateApplied ? "true" : "false");
+    return updateApplied;
 }
 
 inline void ModuleSetupService::checkModuleDeletionOnStartup()

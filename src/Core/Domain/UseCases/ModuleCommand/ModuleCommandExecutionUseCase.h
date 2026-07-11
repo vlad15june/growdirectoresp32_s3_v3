@@ -132,6 +132,9 @@ public:
             {
                 status = ModuleCommandStatus::ERROR;
                 errorMessage = "Command is expired";
+                log(DebugFeatures::MODULE_COMMAND_DEBUG,
+                    "MODULE_COMMAND: command expired uid=%s createdAt=%s",
+                    moduleCommand.uid.c_str(), moduleCommand.createdAt.c_str());
             }
             else
             {
@@ -1147,9 +1150,7 @@ private:
             return true; // Allow command if time cannot be retrieved
         }
 
-        // TODO: Implement proper timestamp parsing (similar to CommandService)
-        // For now, just return true
-        return true;
+        return timeAdapter->isCommandTimeValid(createdDate.c_str(), commandMaxAgeSeconds);
     }
 
     /**

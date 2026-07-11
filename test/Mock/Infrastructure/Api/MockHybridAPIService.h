@@ -70,7 +70,8 @@ public:
     ApiPriority lastUpdateDataPriority = ApiPriority::UNDEFINED;
     ApiPriority lastCommandResultPriority = ApiPriority::UNDEFINED;
     ModuleCommandUpdateDto lastModuleCommandUpdate;
-    
+    std::vector<ModuleCommandUpdateDto> lastModuleCommandUpdates;
+
     // Statistics
     int restApiSendFailsValue = 0;
     int mqttApiSendFailsValue = 0;
@@ -128,7 +129,8 @@ public:
         lastCommandResultPriority = ApiPriority::UNDEFINED;
         lastRuleStateCommandPriority = ApiPriority::UNDEFINED;
         lastModuleCommandUpdate = ModuleCommandUpdateDto();
-        
+        lastModuleCommandUpdates.clear();
+
         restApiSendFailsValue = 0;
         mqttApiSendFailsValue = 0;
         apiSendFailRatioValue = 0.0f;
@@ -208,6 +210,7 @@ public:
     
     bool sendModuleCommandExecutionResult(const std::vector<ModuleCommandUpdateDto>& commandUpdates) override {
         sendModuleCommandExecutionResultCalled = true;
+        lastModuleCommandUpdates = commandUpdates;
         if (!commandUpdates.empty()) {
             lastModuleCommandUpdate = commandUpdates[0];
         }

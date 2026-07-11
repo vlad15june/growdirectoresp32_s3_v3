@@ -16,6 +16,11 @@
 #include "Mock/Infrastructure/Mqtt/MockMqttManager.h"
 #include "Mock/Infrastructure/Mqtt/MockMessageProcessor.h"
 #include "Mock/Application/Services/Devices/MockDeviceService.h"
+#include "Mock/Infrastructure/MockArduinoAdapter.h"
+#include "Mock/Application/MockClearModuleDataService.h"
+#include "Mock/UseCases/ModuleMode/MockCheckModuleDeletionUseCase.h"
+#include "Mock/UseCases/ModuleMode/MockCheckFirmwareUpdateOnStartupUseCase.h"
+#include "Core/Domain/Enums/ModuleModeEnum.h"
 
 // Helper class for tests
 class ModuleSetupServiceTestHelper {
@@ -1557,6 +1562,90 @@ static void test_handle_module_mode_does_not_set_no_scan_sensors_flag_when_butto
     module_setup_service_teardown();
 }
 
+static MockArduinoAdapter g_mockArduinoAdapter;
+static MockClearModuleDataService g_mockClearModuleDataService;
+static MockCheckModuleDeletionUseCase g_mockCheckModuleDeletionUseCase;
+static MockCheckFirmwareUpdateOnStartupUseCase g_mockCheckFirmwareUpdateOnStartupUseCase;
+
+static void build_service_with_deletion_fork(void) {
+    delete g_moduleSetupService;
+    g_moduleSetupService = new ModuleSetupService(
+        &g_mockLogger,
+        &g_mockDebugSystem,
+        &g_mockModuleConfig,
+        &g_mockLedAdapter,
+        nullptr,
+        &g_mockLedUseCases,
+        &g_mockButtonUseCases,
+        &g_mockWifiAdapter,
+        &g_mockWiFiManager,
+        &g_mockWebServerLauncher,
+        &g_mockLoopServiceFactory,
+        &g_mockMqttManager,
+        nullptr,
+        &g_mockDeviceService,
+        nullptr,
+        nullptr,
+        nullptr,
+        nullptr,
+        nullptr,
+        nullptr,
+        nullptr,
+        nullptr,
+        nullptr,
+        &g_mockClearModuleDataService,
+        &g_mockArduinoAdapter,
+        nullptr,
+        nullptr,
+        nullptr,
+        nullptr,
+        &g_mockCheckModuleDeletionUseCase,
+        &g_mockCheckFirmwareUpdateOnStartupUseCase);
+}
+
+static void test_configure_done_skips_deletion_when_update_applied() {
+    module_setup_service_setup();
+
+    g_mockArduinoAdapter = MockArduinoAdapter();
+    g_mockClearModuleDataService.reset();
+    g_mockCheckModuleDeletionUseCase.reset();
+    g_mockCheckFirmwareUpdateOnStartupUseCase.reset();
+
+    g_mockSettings.setConfigured(ModuleModeEnum::CONFIGURED_DONE);
+    g_mockSettings.setWasInitialSyncCompleted(1);
+    g_mockCheckFirmwareUpdateOnStartupUseCase.runReturnValue = true;
+
+    build_service_with_deletion_fork();
+    ModuleSetupServiceTestHelper::callConfigureDoneModeConfigure(g_moduleSetupService);
+
+    TEST_ASSERT_TRUE(g_mockCheckFirmwareUpdateOnStartupUseCase.runCalled);
+    TEST_ASSERT_FALSE(g_mockCheckModuleDeletionUseCase.evaluateCalled);
+
+    module_setup_service_teardown();
+}
+
+static void test_configure_done_runs_deletion_when_no_update() {
+    module_setup_service_setup();
+
+    g_mockArduinoAdapter = MockArduinoAdapter();
+    g_mockClearModuleDataService.reset();
+    g_mockCheckModuleDeletionUseCase.reset();
+    g_mockCheckFirmwareUpdateOnStartupUseCase.reset();
+
+    g_mockSettings.setConfigured(ModuleModeEnum::CONFIGURED_DONE);
+    g_mockSettings.setWasInitialSyncCompleted(1);
+    g_mockCheckFirmwareUpdateOnStartupUseCase.runReturnValue = false;
+    g_mockCheckModuleDeletionUseCase.evaluateReturnValue = ModuleDeletionStatusEnum::NOT_DELETED;
+
+    build_service_with_deletion_fork();
+    ModuleSetupServiceTestHelper::callConfigureDoneModeConfigure(g_moduleSetupService);
+
+    TEST_ASSERT_TRUE(g_mockCheckFirmwareUpdateOnStartupUseCase.runCalled);
+    TEST_ASSERT_TRUE(g_mockCheckModuleDeletionUseCase.evaluateCalled);
+
+    module_setup_service_teardown();
+}
+
 // Main test runner function
 extern "C" int run_module_setup_service_tests(void) {
     if (debug_file != nullptr) fprintf(debug_file, "\n----- Running ModuleSetupService Tests -----\n");
@@ -1615,6 +1704,9 @@ extern "C" int run_module_setup_service_tests(void) {
     // Button pressed -> noScanSensors flag tests
     RUN_TEST(test_handle_module_mode_sets_no_scan_sensors_flag_when_button_pressed);
     RUN_TEST(test_handle_module_mode_does_not_set_no_scan_sensors_flag_when_button_not_pressed);
+
+    RUN_TEST(test_configure_done_skips_deletion_when_update_applied);
+    RUN_TEST(test_configure_done_runs_deletion_when_no_update);
 
     if (debug_file != nullptr) fprintf(debug_file, "\n----- ModuleSetupService Tests Complete -----\n");
     

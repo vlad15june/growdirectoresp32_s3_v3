@@ -13,6 +13,10 @@ private:
     bool _isTimeSaved;
     bool _isTimeRestored;
     std::map<std::string, bool> _modifiedFields;
+    bool _commandTimeValidReturn = true;
+    bool _isCommandTimeValidCalled = false;
+    std::string _lastCommandTimeCreatedDate;
+    unsigned long _lastCommandTimeMaxAge = 0;
 
 public:
     MockNTPTimeAdapter() 
@@ -40,8 +44,10 @@ public:
     }
 
     bool isCommandTimeValid(const char* createdDate, unsigned long maxAgeSeconds) override {
-        // Default implementation that can be overridden in tests
-        return true;
+        _isCommandTimeValidCalled = true;
+        _lastCommandTimeCreatedDate = createdDate ? createdDate : "";
+        _lastCommandTimeMaxAge = maxAgeSeconds;
+        return _commandTimeValidReturn;
     }
 
     void saveTimeToStorage() override {
@@ -75,7 +81,20 @@ public:
     }
 
     void setCommandTimeValid(bool valid) {
+        _commandTimeValidReturn = valid;
         _modifiedFields["commandTimeValid"] = true;
+    }
+
+    bool wasCommandTimeValidCalled() const {
+        return _isCommandTimeValidCalled;
+    }
+
+    const std::string& getLastCommandTimeCreatedDate() const {
+        return _lastCommandTimeCreatedDate;
+    }
+
+    unsigned long getLastCommandTimeMaxAge() const {
+        return _lastCommandTimeMaxAge;
     }
 
     bool wasSetupCalled() const {
@@ -102,6 +121,10 @@ public:
         _isTimeSaved = false;
         _isTimeRestored = false;
         _modifiedFields.clear();
+        _commandTimeValidReturn = true;
+        _isCommandTimeValidCalled = false;
+        _lastCommandTimeCreatedDate.clear();
+        _lastCommandTimeMaxAge = 0;
     }
 };
 
