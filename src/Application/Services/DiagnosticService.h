@@ -114,6 +114,24 @@ private:
         _logger.println(DebugFeatures::SETUP_DEBUG, buffer, channel);
     }
 
+    void logOffline(const char *format, ...)
+    {
+        if (!_debugSystem.isFeatureEnabled(DebugFeatures::OFFLINE_INDICATION_DEBUG))
+        {
+            return;
+        }
+
+        char buffer[256];
+        va_list args;
+        va_start(args, format);
+        vsnprintf(buffer, sizeof(buffer), format, args);
+        va_end(args);
+
+        IDebugFeature *feature = _debugSystem.getFeature(DebugFeatures::OFFLINE_INDICATION_DEBUG);
+        MqttLoggerMode channel = feature ? feature->getLogChannel() : MqttLoggerMode::MqttAndSerial;
+        _logger.println(DebugFeatures::OFFLINE_INDICATION_DEBUG, buffer, channel);
+    }
+
     // Write board state to a file when network state changes
     void writeBoardStateToFile()
     {
@@ -467,6 +485,17 @@ public:
                 log("DIAG: Network state changed to OK");
             }
         }
+
+        logOffline("OFFLINE_INDICATION: decision offline=%d state=%s netFails=%d | routerDown=%d wifiConn=%d wifiDownSince=%lu | httpDown=%d countOffline=%d | mqttConn=%d",
+                   offline ? 1 : 0,
+                   _lastNetworkState == DIAGNOSTICS_NETWORK_STATE_ERROR ? "ERROR" : "OK",
+                   _networkFails,
+                   routerDown ? 1 : 0,
+                   wifiConnected ? 1 : 0,
+                   _wifiDownSince,
+                   httpDown ? 1 : 0,
+                   (_restApiService ? _restApiService->getCountOffline() : 0),
+                   _mqttConnected ? 1 : 0);
 
         if (_wifiAdapter != nullptr)
         {

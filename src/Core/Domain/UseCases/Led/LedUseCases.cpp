@@ -37,6 +37,24 @@ inline void LedUseCases::log(const char *format, ...)
     }
 }
 
+void LedUseCases::logOffline(const char *format, ...)
+{
+    if (logger == nullptr || debugSystem == nullptr || !debugSystem->isFeatureEnabled(DebugFeatures::OFFLINE_INDICATION_DEBUG))
+    {
+        return;
+    }
+
+    char buffer[160];
+    va_list args;
+    va_start(args, format);
+    vsnprintf(buffer, sizeof(buffer), format, args);
+    va_end(args);
+
+    IDebugFeature *feature = debugSystem->getFeature(DebugFeatures::OFFLINE_INDICATION_DEBUG);
+    MqttLoggerMode channel = feature ? feature->getLogChannel() : MqttLoggerMode::MqttAndSerial;
+    logger->println(DebugFeatures::OFFLINE_INDICATION_DEBUG, buffer, channel);
+}
+
 // Turn LEDs on during module load
 void LedUseCases::ledOnLoad()
 {
@@ -92,6 +110,20 @@ void LedUseCases::loop()
     uint8_t configStatus = settings->getIfConfigured();
     unsigned long currentTime = arduinoAdapter->millis();
     uint8_t ledsCount = moduleConfig->getLedsCount();
+
+    bool networkOffline = (networkStatusProvider != nullptr && networkStatusProvider->isNetworkOffline());
+    bool redNow = _blinking || (configStatus == ModuleModeEnum::CONFIGURED_DONE && networkOffline);
+    if (redNow && !_redReported)
+    {
+        _redReported = true;
+        logOffline("OFFLINE_INDICATION: RED-on reason=%s isNetworkOffline=%d configStatus=%u",
+                   _blinking ? "identify_blinking" : "network_offline", networkOffline ? 1 : 0, configStatus);
+    }
+    else if (!redNow && _redReported)
+    {
+        _redReported = false;
+        logOffline("OFFLINE_INDICATION: RED-off configStatus=%u", configStatus);
+    }
 
     if (_blinking)
     {

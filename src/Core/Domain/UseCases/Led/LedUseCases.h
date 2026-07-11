@@ -34,8 +34,10 @@ private:
     bool ledState = false;
 
     bool _blinking = false;
+    bool _redReported = false;
 
     void log(const char* format, ...);
+    void logOffline(const char* format, ...);
 
 public:
     // Constructor

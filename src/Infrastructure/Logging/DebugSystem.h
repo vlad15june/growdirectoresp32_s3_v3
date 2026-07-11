@@ -77,6 +77,7 @@ private:
         registerFeature(DebugFeatures::MQTT_CALLBACK_DEBUG, "mqtt_callback", true, MqttLoggerMode::SerialOnly);
         registerFeature(DebugFeatures::BUTTON_DEBUG, "button", true, MqttLoggerMode::MqttAndSerial);
         registerFeature(DebugFeatures::LED_DEBUG, "led", false, MqttLoggerMode::SerialOnly);
+        registerFeature(DebugFeatures::OFFLINE_INDICATION_DEBUG, "offline_indication", true, MqttLoggerMode::MqttAndSerial);
         registerFeature(DebugFeatures::SPIFFS_DEBUG, "spiffs", true, MqttLoggerMode::SerialOnly);
         registerFeature(DebugFeatures::UPDATE_FIRMWARE_DEBUG, "update_firmware", true, MqttLoggerMode::SerialOnly);
         registerFeature(DebugFeatures::LOOP_SERVICE_DEBUG, "loop_service", false, MqttLoggerMode::SerialOnly);
