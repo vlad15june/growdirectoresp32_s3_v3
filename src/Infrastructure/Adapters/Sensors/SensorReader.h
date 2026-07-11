@@ -207,6 +207,15 @@ public:
         }
     }
 
+    bool setModbusPortPower(int portIndex, bool on) override
+    {
+        if (!_modbusReader)
+        {
+            return false;
+        }
+        return on ? _modbusReader->powerOnPort(portIndex) : _modbusReader->powerOffPort(portIndex);
+    }
+
     void prepareSensorsForReading(const std::vector<SensorEntity>& sensors) override
     {
         bool hasModbus = false;

@@ -17,6 +17,7 @@
 #include "Core/Domain/Interfaces/Udp/IUdpManager.h"
 #include "Core/Domain/Interfaces/Adapters/Json/IJsonConverter.h"
 #include "Core/Domain/Interfaces/Mqtt/IMqttManager.h"
+#include "Core/Domain/UseCases/Sensors/SensorRecoveryUseCase.h"
 
 class SensorService : public ISensorService {
 private:
@@ -40,6 +41,8 @@ private:
     unsigned long lastSensorReadTime = 0;
     unsigned long lastSensorUpdateTime = 0;
     unsigned long lastUdpSendTime = 0;
+
+    SensorRecoveryUseCase _recovery;
     
     std::string generateSensorUid(const SensorEntity& sensor, const std::string& channelName = "") const;
     UpdateDto createSensorUpdateDto();

@@ -269,13 +269,45 @@ bool SensorService::readModbusSensors()
         if (!sensor.isActive)
             continue;
 
+        unsigned long now = arduinoAdapter->millis();
+        RecoveryPhase phaseBefore = _recovery.getPhase(sensor.pin);
+        RecoveryAction action = _recovery.decide(sensor.pin, now, sensor.uid);
+        RecoveryPhase phaseAfter = _recovery.getPhase(sensor.pin);
+
+        if (action == RecoveryAction::POWER_OFF)
+        {
+            sensorReader->setModbusPortPower(sensor.pin, false);
+            if (phaseBefore == RecoveryPhase::POLLING)
+                log("SensorService: RECOVERY retry port=%d uid=%s", sensor.pin, sensor.uid.c_str());
+            else
+                log("SensorService: RECOVERY power_off port=%d uid=%s", sensor.pin, sensor.uid.c_str());
+            _recovery.observe(sensor.uid, sensor.isError, now);
+            continue;
+        }
+
+        if (action == RecoveryAction::POWER_ON)
+        {
+            sensorReader->setModbusPortPower(sensor.pin, true);
+            log("SensorService: RECOVERY power_on port=%d uid=%s", sensor.pin, sensor.uid.c_str());
+            _recovery.observe(sensor.uid, sensor.isError, now);
+            continue;
+        }
+
+        if (phaseBefore == RecoveryPhase::POWER_ON_PHASE)
+            log("SensorService: RECOVERY polling_start port=%d uid=%s", sensor.pin, sensor.uid.c_str());
+
         log("SensorService: Reading Modbus sensor model %s address: %d",
             sensor.model.c_str(), sensor.modbusDeviceAddress);
 
-        if (!readSensor(sensor))
+        bool readOk = readSensor(sensor);
+        if (!readOk)
         {
             allSuccess = false;
         }
+        _recovery.observe(sensor.uid, !readOk, now);
+
+        if (phaseBefore == RecoveryPhase::POLLING && phaseAfter == RecoveryPhase::NORMAL)
+            log("SensorService: RECOVERY recovered port=%d uid=%s", sensor.pin, sensor.uid.c_str());
     }
 
     return allSuccess;

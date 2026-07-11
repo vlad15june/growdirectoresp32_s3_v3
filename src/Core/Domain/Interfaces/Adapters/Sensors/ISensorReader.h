@@ -55,6 +55,14 @@ public:
     virtual bool writeSensorAddress(const SensorEntity& sensor, int newAddress) = 0;
 
     virtual void prepareSensorsForReading(const std::vector<SensorEntity>& sensors) = 0;
+
+    /**
+     * @brief Actuate power on a single Modbus port
+     * @param portIndex Port index to actuate
+     * @param on true to power on, false to power off
+     * @return true if the underlying reader accepted the request, false otherwise
+     */
+    virtual bool setModbusPortPower(int portIndex, bool on) = 0;
 };
 
 #endif // I_SENSOR_READER_H
