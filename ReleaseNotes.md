@@ -1,5 +1,18 @@
 # Release Notes
 
+## Version 2.17.19 (2026-07-11)
+
+### Added
+- **Module-to-Module Reboot**: GDV1-3707 A module can now instruct another module on the same local network to reboot, with the requesting side receiving an accepted/error acknowledgement for the command.
+- **Automatic Recovery of Stuck Sensors**: GDV1-3715 When an RS485 sensor stays disconnected past a set threshold, the device now power-cycles that sensor's port and re-polls it, recovering the reading without manual intervention or a full module reboot.
+- **Firmware Update Applied Before Deletion at Boot**: GDV1-3708 On startup the device now pulls and applies any pending firmware update before running the module-deletion check, so a queued update is no longer lost to a factory reset.
+- **WiFi Self-Reconnect Without Reboot**: GDV1-3706 On losing its WiFi link the device now retries all saved networks on its own, instead of waiting for a timeout-driven reboot; retries are throttled while the link stays down and the reading/offline behavior is otherwise unchanged.
+
+### Fixed
+- **Offline Detection After Connection Loss**: GDV1-3661 Restored correct offline detection that had been broken by an earlier messaging refactor; the device now reliably detects a broker or router drop, starts reconnecting, and only reports offline after WiFi has been continuously down for 30 seconds so brief blips no longer flip the status indicator.
+
+---
+
 ## Version 2.17.18 (2026-07-09)
 
 ### Added
