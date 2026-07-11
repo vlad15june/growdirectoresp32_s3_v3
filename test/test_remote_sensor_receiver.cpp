@@ -2,6 +2,7 @@
 #include <string>
 
 #include "Infrastructure/Adapters/Sensors/RemoteSensors/RemoteSensorClient.h"
+#include "Infrastructure/Controllers/UDP/UdpInboundDispatcher.h"
 #include "Core/Domain/UseCases/Rules/EvaluateRulesUseCase.h"
 #include "Infrastructure/Adapters/Json/JsonConverter.h"
 #include "Application/DTOs/UpdateDto.h"
@@ -30,12 +31,16 @@ struct ReceiverFixture {
     MockArduinoAdapter arduinoAdapter;
     MockLogger logger;
     MockDebugSystem debugSystem;
+    UdpInboundDispatcher dispatcher;
     RemoteSensorReceiver receiver;
 
     ReceiverFixture()
-        : receiver(&udpManager, &mqttManager, &messageProcessor, &sensorValueModel,
+        : dispatcher(&udpManager, &logger, &debugSystem),
+          receiver(&udpManager, &dispatcher, &mqttManager, &messageProcessor, &sensorValueModel,
                    &ruleRepository, &sensorRepository, &jsonConverter, &arduinoAdapter,
-                   &logger, &debugSystem) {}
+                   &logger, &debugSystem) {
+        dispatcher.init();
+    }
 
     void emitMqtt(const std::string& topic, const std::string& payload) {
         ITopicHandler* handler = messageProcessor.lastAddedHandler;

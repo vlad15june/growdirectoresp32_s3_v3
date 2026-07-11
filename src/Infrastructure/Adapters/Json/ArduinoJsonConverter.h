@@ -2434,4 +2434,31 @@ public:
 
         return true;
     }
+
+    std::string remoteModuleCommandToJson(const std::string &command, const std::string &targetUid) override
+    {
+        DynamicJsonDocument doc(256);
+        doc["type"] = "module_command";
+        doc["command"] = command;
+        doc["targetUid"] = targetUid;
+
+        std::string output;
+        serializeJson(doc, output);
+        return output;
+    }
+
+    bool remoteModuleCommandFromJson(const std::string &json, std::string &outCommand, std::string &outTargetUid) override
+    {
+        DynamicJsonDocument doc(256);
+        DeserializationError error = deserializeJson(doc, json);
+        if (error)
+            return false;
+
+        if (!doc.containsKey("type") || std::string(doc["type"] | "") != "module_command")
+            return false;
+
+        outCommand = std::string(doc["command"] | "");
+        outTargetUid = std::string(doc["targetUid"] | "");
+        return true;
+    }
 };

@@ -2190,6 +2190,27 @@ private:
 
         return true;
     }
+
+    std::string remoteModuleCommandToJson(const std::string &command, const std::string &targetUid) override
+    {
+        std::ostringstream oss;
+        oss << "{";
+        oss << "\"type\":\"module_command\"";
+        oss << ",\"command\":\"" << command << "\"";
+        oss << ",\"targetUid\":\"" << targetUid << "\"";
+        oss << "}";
+        return oss.str();
+    }
+
+    bool remoteModuleCommandFromJson(const std::string &json, std::string &outCommand, std::string &outTargetUid) override
+    {
+        if (extractValue(json, "type") != "module_command")
+            return false;
+
+        outCommand = extractValue(json, "command");
+        outTargetUid = extractValue(json, "targetUid");
+        return true;
+    }
 };
 
 #endif // JSON_CONVERTER_H

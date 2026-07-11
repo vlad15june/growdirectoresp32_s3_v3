@@ -4,6 +4,7 @@
 #include "Core/Domain/Interfaces/Adapters/Sensors/IRemoteSensorReceiver.h"
 #include "Core/Domain/Interfaces/Udp/IUdpManager.h"
 #include "Core/Domain/Interfaces/Udp/IUdpController.h"
+#include "Core/Domain/Interfaces/Udp/IUdpInboundDispatcher.h"
 #include "Core/Domain/Interfaces/Mqtt/IMqttManager.h"
 #include "Core/Domain/Interfaces/Mqtt/IMessageProcessor.h"
 #include "Core/Domain/Data/Models/ISensorValueModel.h"
@@ -45,6 +46,7 @@ private:
     };
 
     IUdpManager* _udpManager;
+    IUdpInboundDispatcher* _dispatcher;
     IMqttManager* _mqttManager;
     IMessageProcessor* _messageProcessor;
     ISensorValueModel* _sensorValueModel;
@@ -160,6 +162,7 @@ private:
 public:
     RemoteSensorReceiver(
         IUdpManager* udpManager,
+        IUdpInboundDispatcher* dispatcher,
         IMqttManager* mqttManager,
         IMessageProcessor* messageProcessor,
         ISensorValueModel* sensorValueModel,
@@ -170,6 +173,7 @@ public:
         ILogger* logger,
         IDebugSystem* debugSystem)
         : _udpManager(udpManager),
+          _dispatcher(dispatcher),
           _mqttManager(mqttManager),
           _messageProcessor(messageProcessor),
           _sensorValueModel(sensorValueModel),
@@ -190,14 +194,11 @@ public:
         }
 
         bool udpReady = false;
-        if (_udpManager) {
-            IUdpController* controller = _udpManager->getController();
-            if (controller) {
-                controller->setPacketCallback([this](const UdpPacketData& packet) {
-                    onUdpPacket(packet);
-                });
-                udpReady = true;
-            }
+        if (_dispatcher) {
+            _dispatcher->addHandler([this](const UdpPacketData& packet) {
+                onUdpPacket(packet);
+            });
+            udpReady = true;
         }
 
         bool handlerReady = false;

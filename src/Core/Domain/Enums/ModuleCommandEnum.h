@@ -17,7 +17,8 @@ enum class ModuleCommandEnum {
     DELETE_MODULE,
     RAW_MODBUS_WRITE,
     RAW_MODBUS_READ,
-    RAW_SERIAL_WRITE
+    RAW_SERIAL_WRITE,
+    REBOOT_REMOTE_MODULE
 };
 
 // Utility function to get ModuleCommandEnum from string
@@ -48,6 +49,8 @@ inline ModuleCommandEnum getModuleCommandEnum(const std::string& commandStr) {
         return ModuleCommandEnum::RAW_MODBUS_READ;
     } else if (commandStr == "SerialWrite") {
         return ModuleCommandEnum::RAW_SERIAL_WRITE;
+    } else if (commandStr == "RebootRemoteModule") {
+        return ModuleCommandEnum::REBOOT_REMOTE_MODULE;
     }
     return ModuleCommandEnum::UNKNOWN;
 }
@@ -81,6 +84,8 @@ inline const char* getModuleCommandName(ModuleCommandEnum command) {
             return "ModbusRead";
         case ModuleCommandEnum::RAW_SERIAL_WRITE:
             return "SerialWrite";
+        case ModuleCommandEnum::REBOOT_REMOTE_MODULE:
+            return "RebootRemoteModule";
         case ModuleCommandEnum::UNKNOWN:
         default:
             return "Unknown";

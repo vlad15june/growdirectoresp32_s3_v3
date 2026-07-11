@@ -29,6 +29,8 @@
 #include "Core/Domain/Interfaces/Adapters/Json/IJsonConverter.h"
 #include "Core/Domain/Interfaces/BoardTesting/IBoardTest.h"
 #include "Core/Domain/Interfaces/Udp/IUdpManager.h"
+#include "Core/Domain/Interfaces/Udp/IUdpInboundDispatcher.h"
+#include "Core/Domain/Interfaces/Adapters/IRemoteModuleCommandReceiver.h"
 #include "Core/Domain/Interfaces/API/IHybridAPIService.h"
 #include "Core/Domain/Interfaces/IClearModuleDataService.h"
 #include "Core/Domain/Interfaces/Adapters/IArduinoAdapter.h"
@@ -87,6 +89,8 @@ private:
     IOnConnectivityRestoredUseCase *onConnectivityRestoredUseCase;
     IOtaUpdateLog *otaUpdateLog;
     ICheckFirmwareUpdateOnStartupUseCase *checkFirmwareUpdateOnStartupUseCase;
+    IUdpInboundDispatcher *udpInboundDispatcher;
+    IRemoteModuleCommandReceiver *remoteModuleCommandReceiver;
 
     void log(const char *format, ...);
 
@@ -185,7 +189,9 @@ public:
         IOnConnectivityRestoredUseCase *onConnectivityRestoredUseCase = nullptr,
         IOtaUpdateLog *otaUpdateLog = nullptr,
         ICheckModuleDeletionUseCase *checkModuleDeletionUseCase = nullptr,
-        ICheckFirmwareUpdateOnStartupUseCase *checkFirmwareUpdateOnStartupUseCase = nullptr);
+        ICheckFirmwareUpdateOnStartupUseCase *checkFirmwareUpdateOnStartupUseCase = nullptr,
+        IUdpInboundDispatcher *udpInboundDispatcher = nullptr,
+        IRemoteModuleCommandReceiver *remoteModuleCommandReceiver = nullptr);
 
     void setupModule() override;
     std::unique_ptr<ILoopService> getLoopService() override;
@@ -224,7 +230,9 @@ inline ModuleSetupService::ModuleSetupService(
     IOnConnectivityRestoredUseCase *onConnectivityRestoredUseCase,
     IOtaUpdateLog *otaUpdateLog,
     ICheckModuleDeletionUseCase *checkModuleDeletionUseCase,
-    ICheckFirmwareUpdateOnStartupUseCase *checkFirmwareUpdateOnStartupUseCase) : logger(logger),
+    ICheckFirmwareUpdateOnStartupUseCase *checkFirmwareUpdateOnStartupUseCase,
+    IUdpInboundDispatcher *udpInboundDispatcher,
+    IRemoteModuleCommandReceiver *remoteModuleCommandReceiver) : logger(logger),
                                                        debugSystem(debugSystem),
                                                        moduleConfig(moduleConfig),
                                                        ledAdapter(ledAdapter),
@@ -254,7 +262,9 @@ inline ModuleSetupService::ModuleSetupService(
                                                        onConnectivityRestoredUseCase(onConnectivityRestoredUseCase),
                                                        otaUpdateLog(otaUpdateLog),
                                                        checkModuleDeletionUseCase(checkModuleDeletionUseCase),
-                                                       checkFirmwareUpdateOnStartupUseCase(checkFirmwareUpdateOnStartupUseCase)
+                                                       checkFirmwareUpdateOnStartupUseCase(checkFirmwareUpdateOnStartupUseCase),
+                                                       udpInboundDispatcher(udpInboundDispatcher),
+                                                       remoteModuleCommandReceiver(remoteModuleCommandReceiver)
 {
 }
 
@@ -961,6 +971,18 @@ inline void ModuleSetupService::setupUdp()
     else
     {
         log("SETUP: Failed to initialize UDP on port %d", udpPort);
+    }
+
+    if (udpInboundDispatcher)
+    {
+        udpInboundDispatcher->init();
+        log("SETUP: UDP inbound dispatcher initialized");
+    }
+
+    if (remoteModuleCommandReceiver)
+    {
+        remoteModuleCommandReceiver->init();
+        log("SETUP: Remote module command receiver initialized");
     }
 }
 

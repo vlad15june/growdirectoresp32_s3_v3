@@ -42,6 +42,7 @@ private:
         registerFeature(DebugFeatures::REMOTE_SENSOR_RECEIVE_DEBUG, "remote_sensor_receive", true, MqttLoggerMode::SerialOnly);
         registerFeature(DebugFeatures::UDP_RECEIVE_DEBUG, "udp_receive", false, MqttLoggerMode::SerialOnly);
         registerFeature(DebugFeatures::UDP_SEND_DEBUG, "udp_send", false, MqttLoggerMode::SerialOnly);
+        registerFeature(DebugFeatures::MODULE_UDP_COMMAND_DEBUG, "module_udp_command", true, MqttLoggerMode::MqttAndSerial);
         registerFeature(DebugFeatures::WIFI_DEBUG, "wifi", true, MqttLoggerMode::SerialOnly);
         registerFeature(DebugFeatures::HISTORY_DEBUG, "history", false, MqttLoggerMode::SerialOnly);
         registerFeature(DebugFeatures::TIME_DEBUG, "time", false, MqttLoggerMode::SerialOnly);

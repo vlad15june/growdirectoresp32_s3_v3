@@ -363,6 +363,11 @@ private:
             return processRawModuleCommand(command);
         }
 
+        if (getModuleCommandEnum(command.command) == ModuleCommandEnum::REBOOT_REMOTE_MODULE)
+        {
+            return processRawModuleCommand(command);
+        }
+
         if (moduleCommandUseCase)
         {
             return moduleCommandUseCase->execute(command.command, command.options, command.commandUid, command.createdAt);

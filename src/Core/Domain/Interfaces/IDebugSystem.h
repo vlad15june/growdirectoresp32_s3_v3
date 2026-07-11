@@ -52,6 +52,7 @@ namespace DebugFeatures {
     // Network communication debug features
     constexpr const char* UDP_RECEIVE_DEBUG = "UDP_RECEIVE";
     constexpr const char* UDP_SEND_DEBUG = "UDP_SEND";
+    constexpr const char* MODULE_UDP_COMMAND_DEBUG = "MODULE_UDP_COMMAND";
     constexpr const char* WIFI_DEBUG = "WIFI";
     
     // MQTT debug features

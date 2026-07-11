@@ -21,7 +21,10 @@
 #include "Infrastructure/Controllers/UDP/UdpController.h"
 #include "Infrastructure/Controllers/UDP/UdpSender.h"
 #include "Infrastructure/Controllers/UDP/UpdManager.h"
+#include "Infrastructure/Controllers/UDP/UdpInboundDispatcher.h"
 #include "Core/Domain/Interfaces/Udp/IUdpManager.h"
+#include "Infrastructure/Controllers/UDP/RemoteModuleCommandSender.h"
+#include "Infrastructure/Controllers/UDP/RemoteModuleCommandReceiver.h"
 
 #include "Core/Domain/UseCases/Led/LedUseCases.h"
 #include "Core/Domain/UseCases/Buttons/ButtonUseCases.h"
@@ -285,7 +288,15 @@ DiagnosticService diagnosticService(
 
 LedUseCases ledUseCases(&ledAdapter, &moduleConfig, &arduinoAdapter, &mqttLogger, &debugSystem, &deviceModel, &diagnosticService);
 
-ModuleCommandExecutionUseCase moduleCommandExecutionUseCase(&mqttLogger, &debugSystem, &ntpTimeAdapter, &firmwareRemoteUpdate, &arduinoAdapter, &sensorRepository, &sensorTypeRepository, &sensorReader, &moduleConfig, &settings, &hybridApiService, &clearModuleDataService, &moduleStructure, &sensorValueModel, &wifiManager, &ledUseCases, &rawBusAccessAdapter, &checkModuleDeletionUseCase);
+UdpManager udpManager(&mqttLogger, &debugSystem);
+
+UdpInboundDispatcher udpInboundDispatcher(&udpManager, &mqttLogger, &debugSystem);
+
+RemoteModuleCommandSender remoteModuleCommandSender(&udpManager, &jsonConverter, &mqttLogger, &debugSystem);
+
+RemoteModuleCommandReceiver remoteModuleCommandReceiver(&udpInboundDispatcher, &moduleConfig, &settings, &jsonConverter, &mqttLogger, &debugSystem);
+
+ModuleCommandExecutionUseCase moduleCommandExecutionUseCase(&mqttLogger, &debugSystem, &ntpTimeAdapter, &firmwareRemoteUpdate, &arduinoAdapter, &sensorRepository, &sensorTypeRepository, &sensorReader, &moduleConfig, &settings, &hybridApiService, &clearModuleDataService, &moduleStructure, &sensorValueModel, &wifiManager, &ledUseCases, &rawBusAccessAdapter, &checkModuleDeletionUseCase, &remoteModuleCommandSender);
 
 CheckFirmwareUpdateOnStartupUseCase checkFirmwareUpdateOnStartupUseCase(
     &hybridApiService,
@@ -392,8 +403,6 @@ BoardTest boardTest(
     &arduinoAdapter,
     &wifiAdapter);
 
-UdpManager udpManager(&mqttLogger, &debugSystem);
-
 SensorService sensorService(
     &moduleConfig,
     &moduleStructure,
@@ -411,6 +420,7 @@ SensorService sensorService(
 
 RemoteSensorReceiver remoteSensorReceiver(
     &udpManager,
+    &udpInboundDispatcher,
     &mqttManager,
     &messageProcessor,
     &sensorValueModel,
@@ -472,7 +482,9 @@ ModuleSetupService moduleSetupService(
     &onConnectivityRestoredUseCase,
     &otaUpdateLog,
     &checkModuleDeletionUseCase,
-    &checkFirmwareUpdateOnStartupUseCase);
+    &checkFirmwareUpdateOnStartupUseCase,
+    &udpInboundDispatcher,
+    &remoteModuleCommandReceiver);
 
 void initDependencies()
 {

@@ -16,6 +16,7 @@
 #include "Core/Domain/Interfaces/UseCases/ILedUseCases.h"
 #include "Core/Domain/Interfaces/UseCases/ICheckModuleDeletionUseCase.h"
 #include "Core/Domain/Interfaces/Adapters/Sensors/IRawBusAccess.h"
+#include "Core/Domain/Interfaces/Udp/IRemoteModuleCommandSender.h"
 #include "Core/Utils/HexCodec.h"
 #include "Core/Domain/Data/Entities/Sensor/Sensor.h"
 #include "Core/Domain/Data/Models/ModuleStructure.h"
@@ -54,14 +55,17 @@ private:
     ILedUseCases *ledUseCases;
     IRawBusAccess *rawBus;
     ICheckModuleDeletionUseCase *checkModuleDeletionUseCase;
+    IRemoteModuleCommandSender *remoteModuleCommandSender = nullptr;
     static const unsigned long commandMaxAgeSeconds = 300;
     static const unsigned long rawReadTimeoutMs = 1000;
 
 public:
-    ModuleCommandExecutionUseCase(ILogger *logger = nullptr, IDebugSystem *debugSystem = nullptr, INTPTimeAdapter *timeAdapter = nullptr, IFirmwareRemoteUpdate *firmwareUpdater = nullptr, IArduinoAdapter *arduinoAdapter = nullptr, ISensorRepository *sensorRepository = nullptr, ISensorTypeRepository *sensorTypeRepository = nullptr, ISensorReader *sensorReader = nullptr, IModuleConfig *moduleConfig = nullptr, ISettings *settings = nullptr, IHybridAPIService *hybridApiService = nullptr, IClearModuleDataService *clearModuleDataService = nullptr, ModuleStructure *moduleStructure = nullptr, ISensorValueModel *sensorValueModel = nullptr, IWifiManager *wifiManager = nullptr, ILedUseCases *ledUseCases = nullptr, IRawBusAccess *rawBus = nullptr, ICheckModuleDeletionUseCase *checkModuleDeletionUseCase = nullptr)
-        : logger(logger), debugSystem(debugSystem), timeAdapter(timeAdapter), firmwareUpdater(firmwareUpdater), arduinoAdapter(arduinoAdapter), sensorRepository(sensorRepository), sensorTypeRepository(sensorTypeRepository), sensorReader(sensorReader), moduleConfig(moduleConfig), settings(settings), hybridApiService(hybridApiService), clearModuleDataService(clearModuleDataService), moduleStructure(moduleStructure), sensorValueModel(sensorValueModel), wifiManager(wifiManager), ledUseCases(ledUseCases), rawBus(rawBus), checkModuleDeletionUseCase(checkModuleDeletionUseCase) {}
+    ModuleCommandExecutionUseCase(ILogger *logger = nullptr, IDebugSystem *debugSystem = nullptr, INTPTimeAdapter *timeAdapter = nullptr, IFirmwareRemoteUpdate *firmwareUpdater = nullptr, IArduinoAdapter *arduinoAdapter = nullptr, ISensorRepository *sensorRepository = nullptr, ISensorTypeRepository *sensorTypeRepository = nullptr, ISensorReader *sensorReader = nullptr, IModuleConfig *moduleConfig = nullptr, ISettings *settings = nullptr, IHybridAPIService *hybridApiService = nullptr, IClearModuleDataService *clearModuleDataService = nullptr, ModuleStructure *moduleStructure = nullptr, ISensorValueModel *sensorValueModel = nullptr, IWifiManager *wifiManager = nullptr, ILedUseCases *ledUseCases = nullptr, IRawBusAccess *rawBus = nullptr, ICheckModuleDeletionUseCase *checkModuleDeletionUseCase = nullptr, IRemoteModuleCommandSender *remoteModuleCommandSender = nullptr)
+        : logger(logger), debugSystem(debugSystem), timeAdapter(timeAdapter), firmwareUpdater(firmwareUpdater), arduinoAdapter(arduinoAdapter), sensorRepository(sensorRepository), sensorTypeRepository(sensorTypeRepository), sensorReader(sensorReader), moduleConfig(moduleConfig), settings(settings), hybridApiService(hybridApiService), clearModuleDataService(clearModuleDataService), moduleStructure(moduleStructure), sensorValueModel(sensorValueModel), wifiManager(wifiManager), ledUseCases(ledUseCases), rawBus(rawBus), checkModuleDeletionUseCase(checkModuleDeletionUseCase), remoteModuleCommandSender(remoteModuleCommandSender) {}
     
     virtual ~ModuleCommandExecutionUseCase() = default;
+
+    void setRemoteModuleCommandSender(IRemoteModuleCommandSender* sender) { remoteModuleCommandSender = sender; }
 
     /**
      * @brief Execute module commands from JSON options
@@ -247,6 +251,8 @@ public:
                 return handleModbusRead(options);
             case ModuleCommandEnum::RAW_SERIAL_WRITE:
                 return handleSerialWrite(options);
+            case ModuleCommandEnum::REBOOT_REMOTE_MODULE:
+                return handleRebootRemoteModule(options);
             default:
                 return RawBusCommandResult(ModuleCommandStatus::ERROR, "Unknown raw command", "", false, 0);
         }
@@ -1320,6 +1326,33 @@ private:
             }
         }
         return 0;
+    }
+
+    RawBusCommandResult handleRebootRemoteModule(const std::string &options)
+    {
+        std::string targetUid = extractJsonValue(options, "targetUid");
+        log(DebugFeatures::MODULE_COMMAND_DEBUG, "REBOOT_REMOTE: send targetUid=%s", targetUid.c_str());
+
+        if (targetUid.empty())
+        {
+            log(DebugFeatures::MODULE_COMMAND_DEBUG, "REBOOT_REMOTE: reject empty targetUid");
+            return RawBusCommandResult(ModuleCommandStatus::ERROR, "Empty targetUid", "", false, 0);
+        }
+
+        if (remoteModuleCommandSender == nullptr)
+        {
+            log(DebugFeatures::MODULE_COMMAND_DEBUG, "REBOOT_REMOTE: sender not available");
+            return RawBusCommandResult(ModuleCommandStatus::ERROR, "Sender not available", "", false, 0);
+        }
+
+        bool ok = remoteModuleCommandSender->sendReboot(targetUid);
+        log(DebugFeatures::MODULE_COMMAND_DEBUG, "REBOOT_REMOTE: result targetUid=%s ok=%d", targetUid.c_str(), ok ? 1 : 0);
+
+        if (ok)
+        {
+            return RawBusCommandResult(ModuleCommandStatus::DONE, "", "", false, 0);
+        }
+        return RawBusCommandResult(ModuleCommandStatus::ERROR, "UDP send failed", "", false, 0);
     }
 
     RawBusCommandResult handleModbusWrite(const std::string &options)

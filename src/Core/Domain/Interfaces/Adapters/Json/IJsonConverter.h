@@ -70,6 +70,8 @@ public:
     virtual bool wifiNetworksFromJson(const std::string &jsonStr, std::vector<WifiNetworkEntry> &networks) = 0;
     virtual std::string wifiNetworksToJson(const std::vector<WifiNetworkEntry> &networks) = 0;
     virtual bool sensorValuesFromUpdateJson(const std::string &json, std::vector<std::pair<std::string, float>> &out) = 0;
+    virtual std::string remoteModuleCommandToJson(const std::string &command, const std::string &targetUid) = 0;
+    virtual bool remoteModuleCommandFromJson(const std::string &json, std::string &outCommand, std::string &outTargetUid) = 0;
     virtual ~IJsonConverter() = default;
 };
 
