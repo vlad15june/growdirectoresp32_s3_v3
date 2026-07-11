@@ -46,6 +46,7 @@ extern "C" void run_rule_workflow_phase1_tests(void);
 extern "C" void run_rule_schedule_periods_tests(void);
 extern "C" void run_rule_completion_fields_tests(void);
 extern "C" void run_ota_update_log_tests(void);
+extern "C" int run_wifi_self_reconnect_tests(void);
 
 void setUp(void) {
     // set stuff up here
@@ -194,6 +195,9 @@ int main(void) {
     run_rule_completion_fields_tests();
 
     run_ota_update_log_tests();
+
+    // Run tests for WiFi self-reconnect (GDV1-3706)
+    run_wifi_self_reconnect_tests();
 
     return UNITY_END();
 }

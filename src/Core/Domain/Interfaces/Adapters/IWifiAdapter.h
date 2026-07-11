@@ -16,6 +16,7 @@ public:
     // WiFi station functionality
     virtual bool connect(const char* ssid, const char* password, unsigned long timeout = 60000) = 0;
     virtual bool disconnect() = 0;
+    virtual bool reconnect() = 0;
     virtual bool isConnected() = 0;
     
     // Multi-network functionality

@@ -210,6 +210,33 @@ bool WifiAdapter::disconnect()
     return result;
 }
 
+bool WifiAdapter::reconnect()
+{
+    log("Reconnect requested");
+
+    WiFi.disconnect();
+
+    const unsigned long timeout = 60000;
+    unsigned long startTime = millis();
+    while (wifiMulti.run() != WL_CONNECTED && millis() - startTime < timeout)
+    {
+        delay(100);
+    }
+
+    bool connected = WiFi.status() == WL_CONNECTED;
+
+    if (connected)
+    {
+        log("Reconnect succeeded: %s, IP: %s", WiFi.SSID().c_str(), getLocalIP());
+    }
+    else
+    {
+        log("Reconnect failed to connect to any network");
+    }
+
+    return connected;
+}
+
 bool WifiAdapter::isConnected()
 {
     return WiFi.status() == WL_CONNECTED;

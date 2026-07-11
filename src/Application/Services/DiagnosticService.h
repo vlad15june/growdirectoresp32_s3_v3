@@ -59,6 +59,10 @@ private:
     static const unsigned long OFFLINE_RESET_THRESHOLD_SENSOR_MS = 15 * 60 * 1000; // 15 minutes for sensor directors
     static const unsigned long OFFLINE_RESET_THRESHOLD_DEVICE_MS = 4 * 60 * 60 * 1000; // 4 hours for other modules
 
+    bool _wifiWasConnected = true;
+    unsigned long _wifiLastReconnectAttempt = 0;
+    static const unsigned long WIFI_RECONNECT_RETRY_INTERVAL_MS = 10 * 60 * 1000;
+
     unsigned long calculateFailsInHour()
     {
         unsigned long totalFails = 0;
@@ -90,6 +94,24 @@ private:
         va_end(args);
 
         _logger.println(DebugFeatures::DIAGNOSTIC_DEBUG, buffer);
+    }
+
+    void logSetup(const char *format, ...)
+    {
+        if (!_debugSystem.isFeatureEnabled(DebugFeatures::SETUP_DEBUG))
+        {
+            return;
+        }
+
+        char buffer[256];
+        va_list args;
+        va_start(args, format);
+        vsnprintf(buffer, sizeof(buffer), format, args);
+        va_end(args);
+
+        IDebugFeature *feature = _debugSystem.getFeature(DebugFeatures::SETUP_DEBUG);
+        MqttLoggerMode channel = feature ? feature->getLogChannel() : MqttLoggerMode::MqttAndSerial;
+        _logger.println(DebugFeatures::SETUP_DEBUG, buffer, channel);
     }
 
     // Write board state to a file when network state changes
@@ -279,6 +301,53 @@ private:
         }
     }
 
+    void checkWifiConnectionAndReconnect()
+    {
+        if (_wifiAdapter == nullptr)
+        {
+            return;
+        }
+
+        if (_wifiAdapter->isAccessPointActive())
+        {
+            logSetup("WIFI_RECONNECT: skip (access point active)");
+            return;
+        }
+
+        bool connected = _wifiAdapter->isConnected();
+        unsigned long now = _arduinoAdapter ? _arduinoAdapter->millis() : 0;
+
+        if (connected)
+        {
+            if (!_wifiWasConnected)
+            {
+                logSetup("WIFI_RECONNECT: link restored");
+            }
+            _wifiWasConnected = true;
+            return;
+        }
+
+        if (_wifiWasConnected)
+        {
+            bool result = _wifiAdapter->reconnect();
+            _wifiLastReconnectAttempt = now;
+            _wifiWasConnected = false;
+            logSetup("WIFI_RECONNECT: edge down->reconnect result=%d", result ? 1 : 0);
+        }
+        else if (now - _wifiLastReconnectAttempt >= WIFI_RECONNECT_RETRY_INTERVAL_MS)
+        {
+            unsigned long elapsed = now - _wifiLastReconnectAttempt;
+            bool result = _wifiAdapter->reconnect();
+            _wifiLastReconnectAttempt = now;
+            logSetup("WIFI_RECONNECT: retry after %lu ms down->reconnect result=%d", elapsed, result ? 1 : 0);
+        }
+        else
+        {
+            unsigned long remaining = WIFI_RECONNECT_RETRY_INTERVAL_MS - (now - _wifiLastReconnectAttempt);
+            logSetup("WIFI_RECONNECT: still down, next retry in %lu ms", remaining);
+        }
+    }
+
 public:
     DiagnosticService(
         IRestAPIService *restApiService,
@@ -351,6 +420,9 @@ public:
 
         // Check for prolonged offline state and trigger automatic reboot if needed
         checkOfflineStateAndTriggerReboot();
+
+        // Catch WiFi link-down edge and self-reconnect (no reboot, throttled)
+        checkWifiConnectionAndReconnect();
 
         unsigned long now = _arduinoAdapter ? _arduinoAdapter->millis() : 0;
         bool wifiConnected = (_wifiAdapter != nullptr) ? _wifiAdapter->isConnected() : true;

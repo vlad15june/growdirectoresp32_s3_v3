@@ -15,6 +15,9 @@ public:
     bool isAccessPointActiveCalled = false;
     bool connectCalled = false;
     bool disconnectCalled = false;
+    bool reconnectCalled = false;
+    int reconnectCallCount = 0;
+    bool reconnectSuccess = true;
     bool isConnectedCalled = false;
     bool getLocalIPCalled = false;
     bool getMACAddressCalled = false;
@@ -59,6 +62,9 @@ public:
         isAccessPointActiveCalled = false;
         connectCalled = false;
         disconnectCalled = false;
+        reconnectCalled = false;
+        reconnectCallCount = 0;
+        reconnectSuccess = true;
         isConnectedCalled = false;
         getLocalIPCalled = false;
         getMACAddressCalled = false;
@@ -150,6 +156,15 @@ public:
         disconnectCalled = true;
         connected = false;
         return true;
+    }
+
+    bool reconnect() override {
+        reconnectCalled = true;
+        reconnectCallCount++;
+        if (reconnectSuccess) {
+            connected = true;
+        }
+        return connected;
     }
     
     bool isConnected() override {

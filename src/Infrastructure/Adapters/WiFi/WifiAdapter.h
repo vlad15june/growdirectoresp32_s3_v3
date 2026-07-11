@@ -21,6 +21,7 @@ public:
     // WiFi station functionality
     bool connect(const char* ssid, const char* password, unsigned long timeout = 20000) override;
     bool disconnect() override;
+    bool reconnect() override;
     bool isConnected() override;
     
     // Multi-network functionality
