@@ -87,14 +87,14 @@ void SensorService::loop()
 
     if (currentTime - lastSensorReadTime >= SENSOR_READ_INTERVAL)
     {
-        log("SensorService: Reading all sensors");
+        logVerbose("SensorService: Reading all sensors");
         readAllSensors();
         lastSensorReadTime = currentTime;
     }
 
     if (hybridApiService && (currentTime - lastSensorUpdateTime >= SENSOR_UPDATE_INTERVAL))
     {
-        log("SensorService: Sending sensor update to server");
+        logVerbose("SensorService: Sending sensor update to server");
         UpdateDto updateDto = createSensorUpdateDto();
 
         hybridApiService->sendModuleUpdateData(updateDto);
@@ -103,7 +103,7 @@ void SensorService::loop()
 
     if (udpManager && (currentTime - lastUdpSendTime >= UDP_SEND_INTERVAL))
     {
-        log("SensorService: Sending sensor update via UDP");
+        logVerbose("SensorService: Sending sensor update via UDP");
         UpdateDto updateDto = createSensorUpdateDto();
 
         sendUpdateViaUdp(updateDto);
@@ -161,13 +161,23 @@ bool SensorService::readSensor(SensorEntity sensor)
         std::map<std::string, float> channelValues;
         if (sensorReader->readMultiChannelSensor(sensor, channelValues))
         {
+            std::string values;
             for (const auto &pair : channelValues)
             {
                 sensorValueModel->setChannelValue(sensor.uid, pair.first, pair.second);
+                std::string ch = pair.first;
+                size_t dot = ch.find_last_of('.');
+                if (dot != std::string::npos)
+                {
+                    ch = ch.substr(dot + 1);
+                }
+                char item[48];
+                snprintf(item, sizeof(item), "%s=%.2f ", ch.c_str(), pair.second);
+                values += item;
             }
             sensorValueModel->setLastReadTime(sensor.uid, currentTime);
             sensorRepository->updateSensorStatus(sensor.uid.c_str(), true, false);
-            log("SensorService: Read multi-channel sensor %s", sensor.uid.c_str());
+            log("SensorService: Read %s addr=%d %s: %s", sensor.model.c_str(), sensor.modbusDeviceAddress, sensor.uid.c_str(), values.c_str());
             return true;
         }
         else
@@ -254,7 +264,7 @@ bool SensorService::readI2CSensors()
 bool SensorService::readModbusSensors()
 {
     auto modbusSensors = sensorRepository->getModbusSensors();
-    log("SensorService: Found %zu Modbus sensors", modbusSensors.size());
+    logVerbose("SensorService: Found %zu Modbus sensors", modbusSensors.size());
     if (modbusSensors.empty())
     {
         return true; // No sensors to read, consider it successful
@@ -296,7 +306,7 @@ bool SensorService::readModbusSensors()
         if (phaseBefore == RecoveryPhase::POWER_ON_PHASE)
             log("SensorService: RECOVERY polling_start port=%d uid=%s", sensor.pin, sensor.uid.c_str());
 
-        log("SensorService: Reading Modbus sensor model %s address: %d",
+        logVerbose("SensorService: Reading Modbus sensor model %s address: %d",
             sensor.model.c_str(), sensor.modbusDeviceAddress);
 
         bool readOk = readSensor(sensor);
@@ -416,7 +426,7 @@ void SensorService::sendUpdateViaUdp(const UpdateDto &updateDto)
 
         if (sender->sendMulticast(jsonString.c_str(), multicastIP, port))
         {
-            log("SensorService: Successfully sent sensor data via UDP multicast to %s:%d", multicastIP, port);
+            logVerbose("SensorService: Successfully sent sensor data via UDP multicast to %s:%d", multicastIP, port);
         }
         else
         {
@@ -425,7 +435,7 @@ void SensorService::sendUpdateViaUdp(const UpdateDto &updateDto)
             // Fallback to broadcast
             if (sender->sendBroadcast(jsonString.c_str(), port))
             {
-                log("SensorService: Successfully sent sensor data via UDP broadcast on port %d", port);
+                logVerbose("SensorService: Successfully sent sensor data via UDP broadcast on port %d", port);
             }
             else
             {

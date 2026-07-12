@@ -172,7 +172,7 @@ public:
                 {
                     std::string uid = sensor.uid + "." + (registerConfig.channel < 10 ? "0" : "") + std::to_string(registerConfig.channel);
                     channelValues[uid] = value;
-                    log("SensorReader: Read modbus channel %s, value: %.2f on port %d", registerConfig.channelName.c_str(), value, portIndex);
+                    logVerbose("SensorReader: Read modbus channel %s, value: %.2f on port %d", registerConfig.channelName.c_str(), value, portIndex);
                 }
                 else
                 {
@@ -652,6 +652,28 @@ private:
             else
             {
                 _logger->println(DebugFeatures::SETUP_SENSOR_DEBUG, buffer);
+            }
+        }
+    }
+
+    void logVerbose(const char* format, ...)
+    {
+        if (_debugSystem && _logger)
+        {
+            char buffer[256];
+            va_list args;
+            va_start(args, format);
+            vsnprintf(buffer, sizeof(buffer), format, args);
+            va_end(args);
+
+            IDebugFeature* feature = _debugSystem->getFeature(DebugFeatures::SENSOR_VERBOSE_DEBUG);
+            if (feature)
+            {
+                _logger->println(DebugFeatures::SENSOR_VERBOSE_DEBUG, buffer, feature->getLogChannel());
+            }
+            else
+            {
+                _logger->println(DebugFeatures::SENSOR_VERBOSE_DEBUG, buffer);
             }
         }
     }

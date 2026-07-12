@@ -55,7 +55,6 @@ private:
         std::string targetUid;
         if (!_jsonConverter || !_jsonConverter->remoteModuleCommandFromJson(payload, command, targetUid))
         {
-            log("MODULE_UDP_CMD: drop (not a module command)");
             return;
         }
 

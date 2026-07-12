@@ -41,6 +41,14 @@ private:
     bool _configured;
     std::set<String> _subscribedTopics;
 
+    enum class ConnState { Idle, Closing, Connecting };
+    ConnState _connState = ConnState::Idle;
+    uint32_t _closeStartedAt = 0;
+    uint32_t _connectStartedAt = 0;
+    volatile bool _disconnectEvent = false;
+    static const uint32_t CLOSE_GRACE_MS = 2000;
+    static const uint32_t CONNECT_TIMEOUT_MS = 10000;
+
     std::recursive_mutex *_clientMutex;
 
     struct MqttMessage {
@@ -121,6 +129,7 @@ private:
     {
         _connected = false;
         _mqttFails++;
+        _disconnectEvent = true;
         if (_reconnectInterval < 30000)
         {
             _reconnectInterval = _reconnectInterval * 2;
@@ -182,6 +191,62 @@ private:
             _assemblyBuf.shrink_to_fit();
             _assemblyTotal = 0;
             _assemblyTopic = "";
+        }
+    }
+
+    void serviceReconnect()
+    {
+        bool wifiOk = (_wifiAdapter != nullptr && _wifiAdapter->isConnected());
+
+        if (_connected || !wifiOk)
+        {
+            _connState = ConnState::Idle;
+            return;
+        }
+
+        uint32_t now = millis();
+
+        switch (_connState)
+        {
+            case ConnState::Idle:
+                if (now >= _reconnectAt)
+                {
+                    _disconnectEvent = false;
+                    {
+                        OptLock lock(_clientMutex);
+                        _mqttClient.disconnect(true);
+                    }
+                    _closeStartedAt = now;
+                    _connState = ConnState::Closing;
+                    log("MQTT: reconnect - tearing down stale socket");
+                }
+                break;
+
+            case ConnState::Closing:
+                if (_disconnectEvent || now - _closeStartedAt >= CLOSE_GRACE_MS)
+                {
+                    _disconnectEvent = false;
+                    if (!connect())
+                    {
+                        _connState = ConnState::Idle;
+                        _reconnectAt = now + _reconnectInterval;
+                    }
+                }
+                break;
+
+            case ConnState::Connecting:
+                if (_disconnectEvent)
+                {
+                    _disconnectEvent = false;
+                    _connState = ConnState::Idle;
+                }
+                else if (now - _connectStartedAt >= CONNECT_TIMEOUT_MS)
+                {
+                    _connState = ConnState::Idle;
+                    _reconnectAt = now + _reconnectInterval;
+                    log("MQTT: connect timed out, will retry in %ums", _reconnectInterval);
+                }
+                break;
         }
     }
 
@@ -259,8 +324,11 @@ public:
         }
 
         OptLock lock(_clientMutex);
+        _disconnectEvent = false;
         _mqttClient.connect();
         _lastReconnectAttempt = millis();
+        _connectStartedAt = _lastReconnectAttempt;
+        _connState = ConnState::Connecting;
         log("MQTT: connect requested");
         return true;
     }
@@ -379,16 +447,7 @@ public:
 
         isConnected();
 
-        if (!_connected && millis() >= _reconnectAt &&
-            (_wifiAdapter == nullptr || _wifiAdapter->isConnected()))
-        {
-            {
-                OptLock lock(_clientMutex);
-                _mqttClient.disconnect(true);
-            }
-            connect();
-            _reconnectAt = millis() + _reconnectInterval;
-        }
+        serviceReconnect();
     }
 
     void setMessageProcessor(IMessageProcessor *processor) override

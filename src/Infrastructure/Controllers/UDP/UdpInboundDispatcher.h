@@ -35,7 +35,6 @@ private:
     }
 
     void dispatch(const UdpPacketData& packet) {
-        log("MODULE_UDP_CMD: packet len=%zu handlers=%zu", packet.length, _handlers.size());
         for (const auto& handler : _handlers) {
             if (handler) {
                 handler(packet);

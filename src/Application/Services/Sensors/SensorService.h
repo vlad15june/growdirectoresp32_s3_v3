@@ -72,7 +72,29 @@ private:
             }
         }
     }
-    
+
+    void logVerbose(const char* format, ...)
+    {
+        if (logger != nullptr && debugSystem != nullptr && debugSystem->isFeatureEnabled(DebugFeatures::SENSOR_VERBOSE_DEBUG))
+        {
+            char buffer[128];
+            va_list args;
+            va_start(args, format);
+            vsnprintf(buffer, sizeof(buffer), format, args);
+            va_end(args);
+
+            IDebugFeature* feature = debugSystem->getFeature(DebugFeatures::SENSOR_VERBOSE_DEBUG);
+            if (feature)
+            {
+                logger->println(DebugFeatures::SENSOR_VERBOSE_DEBUG, buffer, feature->getLogChannel());
+            }
+            else
+            {
+                logger->println(DebugFeatures::SENSOR_VERBOSE_DEBUG, buffer);
+            }
+        }
+    }
+
 public:
     SensorService(IModuleConfig* moduleConfig, 
                   ModuleStructure* moduleStructure,

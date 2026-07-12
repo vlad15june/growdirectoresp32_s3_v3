@@ -74,8 +74,8 @@ public:
 
         uint8_t response[64];
         int bytesRead = modbus->readAvailable(response, sizeof(response));
-        log("ModbusSensorReader: Read %d bytes from device %d on port %d", bytesRead, deviceAddress, portIndex);
-        
+        logVerbose("ModbusSensorReader: Read %d bytes from device %d on port %d", bytesRead, deviceAddress, portIndex);
+
         #ifdef DEBUG_LOGGING_CODE_ON
         if (bytesRead > 0 && _debugSystem && _logger) {
             char hexBuffer[256] = "";
@@ -84,7 +84,7 @@ public:
                 snprintf(temp, sizeof(temp), "%02X ", response[i]);
                 strcat(hexBuffer, temp);
             }
-            log("ModbusSensorReader: Raw bytes: %s", hexBuffer);
+            log("ModbusSensorReader: Raw bytes ch=%s(%d) dev=%d port=%d: %s", config.channelName.c_str(), config.channel, deviceAddress, portIndex, hexBuffer);
         }
         #endif
 
@@ -104,7 +104,7 @@ public:
                 }
 
                 outValue = rawValue * config.multiplier + config.offset;
-                log("ModbusSensorReader: Read value %.2f from device %d on port %d", outValue, deviceAddress, portIndex);
+                logVerbose("ModbusSensorReader: Read value %.2f from device %d on port %d", outValue, deviceAddress, portIndex);
                 return true;
             }
         }
@@ -638,6 +638,28 @@ private:
             else
             {
                 _logger->println(DebugFeatures::SETUP_SENSOR_DEBUG, buffer);
+            }
+        }
+    }
+
+    void logVerbose(const char* format, ...)
+    {
+        if (_debugSystem && _logger)
+        {
+            char buffer[256];
+            va_list args;
+            va_start(args, format);
+            vsnprintf(buffer, sizeof(buffer), format, args);
+            va_end(args);
+
+            IDebugFeature* feature = _debugSystem->getFeature(DebugFeatures::SENSOR_VERBOSE_DEBUG);
+            if (feature)
+            {
+                _logger->println(DebugFeatures::SENSOR_VERBOSE_DEBUG, buffer, feature->getLogChannel());
+            }
+            else
+            {
+                _logger->println(DebugFeatures::SENSOR_VERBOSE_DEBUG, buffer);
             }
         }
     }
