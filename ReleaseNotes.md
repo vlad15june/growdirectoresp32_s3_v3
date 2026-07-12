@@ -1,5 +1,16 @@
 # Release Notes
 
+## Version 2.17.20 (2026-07-12)
+
+### Added
+- **Offline Indication Diagnostics**: The system now records why a module's status light turns red and when it decides it is offline — distinguishing loss of router/Wi-Fi connectivity from loss of the server/broker link — so the cause of an offline or red module is visible in field diagnostics.
+
+### Changed
+- **More Reliable Broker Reconnection**: The procedure for reconnecting to the message broker after a network interruption was reworked to fully close a stale connection before opening a new one, with a grace period and a connection timeout, so a module recovers its broker link more dependably.
+- **Reduced Diagnostic Log Noise**: Routine per-reading sensor traces and per-packet local-network messages are no longer sent to the central log stream; the retained sensor read record now includes the sensor model, address, and measured values for easier field troubleshooting.
+
+---
+
 ## Version 2.17.19 (2026-07-11)
 
 ### Added
