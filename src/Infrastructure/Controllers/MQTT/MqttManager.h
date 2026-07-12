@@ -7,6 +7,7 @@
 #include <set>
 #include <vector>
 #include <mutex>
+#include <string>
 #include "freertos/FreeRTOS.h"
 #include "freertos/queue.h"
 #include "freertos/task.h"
@@ -30,7 +31,7 @@ private:
     IWifiAdapter *_wifiAdapter;
     IPAddress _broker;
     uint16_t _port;
-    const char *_clientId;
+    std::string _clientId;
     const char *_username;
     const char *_password;
     bool _cleanSession;
@@ -100,9 +101,9 @@ private:
         {
             _mqttClient.setCredentials(_username, _password);
         }
-        if (_clientId != nullptr)
+        if (!_clientId.empty())
         {
-            _mqttClient.setClientId(_clientId);
+            _mqttClient.setClientId(_clientId.c_str());
         }
         _mqttClient.setKeepAlive(30);
         _mqttClient.setCleanSession(_cleanSession);
@@ -315,7 +316,7 @@ public:
                                                        _wifiAdapter(wifiAdapter),
                                                        _broker(broker),
                                                        _port(port),
-                                                       _clientId(clientId),
+                                                       _clientId(clientId != nullptr ? clientId : ""),
                                                        _username(username),
                                                        _password(password),
                                                        _cleanSession(cleanSession),
@@ -359,23 +360,26 @@ public:
     bool connect() override
     {
         configureClient();
-        ensureRecoveryTask();
         log("MQTT: connect() entry wifi=%d state=%d fails=%d",
             (_wifiAdapter != nullptr) ? (_wifiAdapter->isConnected() ? 1 : 0) : -1, static_cast<int>(_connState), _mqttFails);
 
         if (_wifiAdapter != nullptr && !_wifiAdapter->isConnected())
         {
             log("MQTT: WiFi not connected, connect deferred");
+            ensureRecoveryTask();
             return false;
         }
 
-        OptLock lock(_clientMutex);
-        _disconnectEvent = false;
-        _mqttClient.connect();
-        _lastReconnectAttempt = millis();
-        _connectStartedAt = _lastReconnectAttempt;
-        _connState = ConnState::Connecting;
-        log("MQTT: connect requested to %s:%u clientId=%s", _broker.toString().c_str(), _port, _clientId ? _clientId : "null");
+        {
+            OptLock lock(_clientMutex);
+            _disconnectEvent = false;
+            _connState = ConnState::Connecting;
+            _connectStartedAt = millis();
+            _lastReconnectAttempt = _connectStartedAt;
+            _mqttClient.connect();
+        }
+        log("MQTT: connect requested to %s:%u clientId=%s", _broker.toString().c_str(), _port, _clientId.c_str());
+        ensureRecoveryTask();
         return true;
     }
 
@@ -535,17 +539,17 @@ public:
 
     const char *getClientId() const override
     {
-        return _clientId;
+        return _clientId.c_str();
     }
 
     void setClientId(const char *clientId) override
     {
-        _clientId = clientId;
-        if (_configured && _clientId != nullptr)
+        _clientId = (clientId != nullptr) ? clientId : "";
+        if (_configured && !_clientId.empty())
         {
-            _mqttClient.setClientId(_clientId);
+            _mqttClient.setClientId(_clientId.c_str());
         }
-        log("MQTT client ID set to: %s", clientId);
+        log("MQTT: client ID set to: %s", _clientId.c_str());
     }
 };
 
