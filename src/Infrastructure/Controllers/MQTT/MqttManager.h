@@ -82,7 +82,9 @@ private:
             vsnprintf(buffer, sizeof(buffer), format, args);
             va_end(args);
 
-            _logger->println(buffer);
+            IDebugFeature *feature = _debugSystem->getFeature(DebugFeatures::MQTT_DEBUG);
+            _logger->println(DebugFeatures::MQTT_DEBUG, buffer,
+                             feature ? feature->getLogChannel() : MqttLoggerMode::SerialOnly);
         }
     }
 
@@ -112,6 +114,7 @@ private:
             onMqttMessage(topic, payload, len, index, total);
         });
 
+        log("MQTT: client configured broker=%s:%u cleanSession=%d", _broker.toString().c_str(), _port, _cleanSession ? 1 : 0);
         _configured = true;
     }
 
@@ -120,7 +123,7 @@ private:
         _connected = true;
         _mqttFails = 0;
         _reconnectInterval = 5000;
-        log("MQTT: connected (sessionPresent=%d)", sessionPresent ? 1 : 0);
+        log("MQTT: connected (sessionPresent=%d), resubscribing %d topics", sessionPresent ? 1 : 0, static_cast<int>(_subscribedTopics.size()));
 
         OptLock lock(_clientMutex);
         for (const auto &topic : _subscribedTopics)
@@ -154,6 +157,7 @@ private:
 
         if (xQueueSend(_messageQueue, &msg, 0) != pdTRUE)
         {
+            log("MQTT: inbound queue full, dropping topic=%s", topic.c_str());
             delete msg;
         }
     }
@@ -215,10 +219,17 @@ private:
 
     void recoveryTaskRun()
     {
+        log("MQTT: recovery task running on core %d", xPortGetCoreID());
+        uint32_t beats = 0;
         for (;;)
         {
             isConnected();
             serviceReconnect();
+            if ((beats++ % 25) == 0)
+            {
+                log("MQTT: task heartbeat connected=%d state=%d fails=%d interval=%ums",
+                    _connected ? 1 : 0, static_cast<int>(_connState), _mqttFails, _reconnectInterval);
+            }
             vTaskDelay(pdMS_TO_TICKS(RECOVERY_INTERVAL_MS));
         }
     }
@@ -254,11 +265,13 @@ private:
             case ConnState::Closing:
                 if (_disconnectEvent || now - _closeStartedAt >= CLOSE_GRACE_MS)
                 {
+                    log("MQTT: close settled (event=%d), issuing connect", _disconnectEvent ? 1 : 0);
                     _disconnectEvent = false;
                     if (!connect())
                     {
                         _connState = ConnState::Idle;
                         _reconnectAt = now + _reconnectInterval;
+                        log("MQTT: connect refused (wifi down), back to idle");
                     }
                 }
                 break;
@@ -268,6 +281,7 @@ private:
                 {
                     _disconnectEvent = false;
                     _connState = ConnState::Idle;
+                    log("MQTT: connect attempt failed during CONNECTING, back to idle");
                 }
                 else if (now - _connectStartedAt >= CONNECT_TIMEOUT_MS)
                 {
@@ -346,6 +360,8 @@ public:
     {
         configureClient();
         ensureRecoveryTask();
+        log("MQTT: connect() entry wifi=%d state=%d fails=%d",
+            (_wifiAdapter != nullptr) ? (_wifiAdapter->isConnected() ? 1 : 0) : -1, static_cast<int>(_connState), _mqttFails);
 
         if (_wifiAdapter != nullptr && !_wifiAdapter->isConnected())
         {
@@ -359,7 +375,7 @@ public:
         _lastReconnectAttempt = millis();
         _connectStartedAt = _lastReconnectAttempt;
         _connState = ConnState::Connecting;
-        log("MQTT: connect requested");
+        log("MQTT: connect requested to %s:%u clientId=%s", _broker.toString().c_str(), _port, _clientId ? _clientId : "null");
         return true;
     }
 
@@ -447,6 +463,7 @@ public:
     {
         if (!_connected)
         {
+            log("MQTT: publish dropped (not connected): %s", topic);
             return false;
         }
 
@@ -467,6 +484,7 @@ public:
         {
             if (msg != nullptr)
             {
+                log("MQTT: dispatching inbound topic=%s size=%u", msg->topic.c_str(), static_cast<unsigned>(msg->payload.size()));
                 if (_messageProcessor != nullptr)
                 {
                     _messageProcessor->processMessage(msg->topic.c_str(), msg->payload.data(), msg->payload.size());
