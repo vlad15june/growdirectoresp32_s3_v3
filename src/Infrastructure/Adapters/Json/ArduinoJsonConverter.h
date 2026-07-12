@@ -411,6 +411,9 @@ public:
                     else if (condDirStr == "between")
                         condition.direction = RuleDirection::BETWEEN;
 
+                    std::string condJoinOpStr = condObj["joinOp"] | "";
+                    condition.joinOp = getRuleJoinOpFromString(condJoinOpStr.c_str());
+
                     rule.conditions.push_back(condition);
                 }
             }
@@ -655,6 +658,9 @@ public:
                     condObj["direction"] = "between";
                 else
                     condObj["direction"] = "down";
+
+                if (cond.joinOp != RuleJoinOp::UNSET)
+                    condObj["joinOp"] = getRuleJoinOpName(cond.joinOp);
             }
 
             doc["conditionOr"] = rule.conditionOr;

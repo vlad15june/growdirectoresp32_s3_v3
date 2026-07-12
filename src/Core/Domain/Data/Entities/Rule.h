@@ -17,6 +17,7 @@ public:
     double valueLow = 0.0;        // Used in sensor rules
     double valueHigh = 0.0;       // Used in sensor rules
     RuleDirection direction;
+    RuleJoinOp joinOp = RuleJoinOp::UNSET;
 };
 
 class ScheduleItem {

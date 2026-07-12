@@ -481,6 +481,90 @@ void test_unknown_rule_type_json_converter(void) {
     TEST_ASSERT_EQUAL(RuleType::UNKNOWN, rule.ruleType);
 }
 
+void test_rule_joinop_roundtrip_json_converter(void) {
+    JsonConverter jsonConverter;
+
+    Rule rule;
+    rule.uid = "dnf-rule-1";
+    rule.ruleType = RuleType::SENSOR;
+    rule.direction = RuleDirection::UP;
+
+    RuleCondition c0;
+    c0.sensorUids.push_back("A");
+    c0.valueLow = 10.0;
+    c0.valueHigh = 20.0;
+    c0.direction = RuleDirection::UP;
+    c0.joinOp = RuleJoinOp::UNSET;
+
+    RuleCondition c1;
+    c1.sensorUids.push_back("B");
+    c1.valueLow = 30.0;
+    c1.valueHigh = 40.0;
+    c1.direction = RuleDirection::DOWN;
+    c1.joinOp = RuleJoinOp::AND;
+
+    RuleCondition c2;
+    c2.sensorUids.push_back("C");
+    c2.valueLow = 50.0;
+    c2.valueHigh = 60.0;
+    c2.direction = RuleDirection::UP;
+    c2.joinOp = RuleJoinOp::OR;
+
+    rule.conditions.push_back(c0);
+    rule.conditions.push_back(c1);
+    rule.conditions.push_back(c2);
+
+    std::string json = jsonConverter.ruleToJson(rule);
+
+    TEST_ASSERT_TRUE(json.find("\"joinOp\":\"and\"") != std::string::npos);
+    TEST_ASSERT_TRUE(json.find("\"joinOp\":\"or\"") != std::string::npos);
+
+    Rule rule2;
+    TEST_ASSERT_TRUE(jsonConverter.ruleFromJson(json, rule2));
+    TEST_ASSERT_EQUAL(3, rule2.conditions.size());
+    TEST_ASSERT_EQUAL(RuleJoinOp::UNSET, rule2.conditions[0].joinOp);
+    TEST_ASSERT_EQUAL(RuleJoinOp::AND, rule2.conditions[1].joinOp);
+    TEST_ASSERT_EQUAL(RuleJoinOp::OR, rule2.conditions[2].joinOp);
+
+    std::string json2 = jsonConverter.ruleToJson(rule2);
+    TEST_ASSERT_TRUE(json2.find("\"joinOp\":\"and\"") != std::string::npos);
+    TEST_ASSERT_TRUE(json2.find("\"joinOp\":\"or\"") != std::string::npos);
+
+    Rule rule3;
+    TEST_ASSERT_TRUE(jsonConverter.ruleFromJson(json2, rule3));
+    TEST_ASSERT_EQUAL(RuleJoinOp::UNSET, rule3.conditions[0].joinOp);
+    TEST_ASSERT_EQUAL(RuleJoinOp::AND, rule3.conditions[1].joinOp);
+    TEST_ASSERT_EQUAL(RuleJoinOp::OR, rule3.conditions[2].joinOp);
+}
+
+void test_rule_joinop_unset_not_serialized_json_converter(void) {
+    JsonConverter jsonConverter;
+
+    Rule rule;
+    rule.uid = "dnf-rule-2";
+    rule.ruleType = RuleType::SENSOR;
+    rule.direction = RuleDirection::UP;
+
+    RuleCondition c0;
+    c0.sensorUids.push_back("A");
+    c0.direction = RuleDirection::UP;
+
+    RuleCondition c1;
+    c1.sensorUids.push_back("B");
+    c1.direction = RuleDirection::UP;
+
+    rule.conditions.push_back(c0);
+    rule.conditions.push_back(c1);
+
+    std::string json = jsonConverter.ruleToJson(rule);
+    TEST_ASSERT_TRUE(json.find("joinOp") == std::string::npos);
+
+    Rule rule2;
+    TEST_ASSERT_TRUE(jsonConverter.ruleFromJson(json, rule2));
+    TEST_ASSERT_EQUAL(RuleJoinOp::UNSET, rule2.conditions[0].joinOp);
+    TEST_ASSERT_EQUAL(RuleJoinOp::UNSET, rule2.conditions[1].joinOp);
+}
+
 extern "C" void run_rule_converter_tests(void) {
     RUN_TEST(test_step_rule_parse_json_converter);
     RUN_TEST(test_sensor_rule_parse_json_converter);
@@ -495,4 +579,6 @@ extern "C" void run_rule_converter_tests(void) {
     RUN_TEST(test_between_rule_parse_json_converter);
     RUN_TEST(test_between_rule_roundtrip_json_converter);
     RUN_TEST(test_unknown_rule_type_json_converter);
+    RUN_TEST(test_rule_joinop_roundtrip_json_converter);
+    RUN_TEST(test_rule_joinop_unset_not_serialized_json_converter);
 }

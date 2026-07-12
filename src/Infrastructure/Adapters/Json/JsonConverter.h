@@ -568,6 +568,8 @@ public:
             else if (condDirStr == "between")
                 condition.direction = RuleDirection::BETWEEN;
 
+            condition.joinOp = getRuleJoinOpFromString(extractValue(conditionStr, "joinOp").c_str());
+
             rule.conditions.push_back(condition);
         }
 
@@ -733,6 +735,9 @@ public:
                 else
                     oss << "down";
                 oss << "\"";
+
+                if (cond.joinOp != RuleJoinOp::UNSET)
+                    oss << ",\"joinOp\":\"" << getRuleJoinOpName(cond.joinOp) << "\"";
 
                 oss << "}";
                 if (i + 1 < rule.conditions.size())
