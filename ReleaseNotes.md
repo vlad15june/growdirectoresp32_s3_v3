@@ -1,5 +1,12 @@
 # Release Notes
 
+## Version 2.17.21 (2026-07-12)
+
+### Fixed
+- **MQTT Auto-Recovery During Startup**: Fixed an issue where the device could stay disconnected from the server for up to ~10 minutes after a connection drop that happened while the device was busy (for example, during startup). The connection now heals itself automatically and continuously, independent of the device's normal operating cycle.
+
+---
+
 ## Version 2.17.20 (2026-07-12)
 
 ### Added
