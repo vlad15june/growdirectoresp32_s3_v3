@@ -9,6 +9,7 @@
 #include <mutex>
 #include "freertos/FreeRTOS.h"
 #include "freertos/queue.h"
+#include "freertos/task.h"
 #include "Core/Domain/Interfaces/ILogger.h"
 #include "Core/Domain/Interfaces/IDebugSystem.h"
 #include "Core/Domain/Interfaces/Mqtt/IMessageProcessor.h"
@@ -48,6 +49,9 @@ private:
     volatile bool _disconnectEvent = false;
     static const uint32_t CLOSE_GRACE_MS = 2000;
     static const uint32_t CONNECT_TIMEOUT_MS = 10000;
+
+    TaskHandle_t _recoveryTask = nullptr;
+    static const uint32_t RECOVERY_INTERVAL_MS = 200;
 
     std::recursive_mutex *_clientMutex;
 
@@ -194,6 +198,31 @@ private:
         }
     }
 
+    void ensureRecoveryTask()
+    {
+        if (_recoveryTask != nullptr)
+        {
+            return;
+        }
+        xTaskCreatePinnedToCore(recoveryTaskTrampoline, "MqttRecovery", 4096, this, 1, &_recoveryTask, 0);
+        log("MQTT: recovery task started");
+    }
+
+    static void recoveryTaskTrampoline(void *arg)
+    {
+        static_cast<MqttManager *>(arg)->recoveryTaskRun();
+    }
+
+    void recoveryTaskRun()
+    {
+        for (;;)
+        {
+            isConnected();
+            serviceReconnect();
+            vTaskDelay(pdMS_TO_TICKS(RECOVERY_INTERVAL_MS));
+        }
+    }
+
     void serviceReconnect()
     {
         bool wifiOk = (_wifiAdapter != nullptr && _wifiAdapter->isConnected());
@@ -316,6 +345,7 @@ public:
     bool connect() override
     {
         configureClient();
+        ensureRecoveryTask();
 
         if (_wifiAdapter != nullptr && !_wifiAdapter->isConnected())
         {
@@ -444,10 +474,6 @@ public:
                 delete msg;
             }
         }
-
-        isConnected();
-
-        serviceReconnect();
     }
 
     void setMessageProcessor(IMessageProcessor *processor) override
