@@ -71,6 +71,8 @@ public:
             return false;
         }
 
+        _hybridApiService->init();
+
         std::vector<ModuleCommandDto> commands = _hybridApiService->getModuleCommand();
 
         if (commands.empty())
