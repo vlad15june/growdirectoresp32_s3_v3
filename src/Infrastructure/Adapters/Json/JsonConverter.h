@@ -895,7 +895,8 @@ public:
 
                 if (!device.isRuleTurnOnDevice && device.state != "delay_on")
                 {
-                    oss << ",\"ruleSensorStopAt\":\"" << device.ruleSensorStopAt << "\"";
+                    if (!device.ruleSensorStopAt.empty())
+                        oss << ",\"ruleSensorStopAt\":\"" << device.ruleSensorStopAt << "\"";
                     oss << ",\"ruleSensorValueStop\":" << device.ruleSensorValueStop;
                     oss << ",\"ruleStopReason\":\"" << device.ruleStopReason << "\"";
                 }

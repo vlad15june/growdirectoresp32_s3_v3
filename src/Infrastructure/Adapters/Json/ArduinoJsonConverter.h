@@ -856,7 +856,8 @@ public:
 
                 if (!device.isRuleTurnOnDevice && device.state != "delay_on")
                 {
-                    deviceObj["ruleSensorStopAt"] = device.ruleSensorStopAt;
+                    if (!device.ruleSensorStopAt.empty())
+                        deviceObj["ruleSensorStopAt"] = device.ruleSensorStopAt;
                     deviceObj["ruleSensorValueStop"] = device.ruleSensorValueStop;
                     deviceObj["ruleStopReason"] = device.ruleStopReason;
                 }
