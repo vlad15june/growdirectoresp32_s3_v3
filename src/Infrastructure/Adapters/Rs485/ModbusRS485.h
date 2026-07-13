@@ -30,7 +30,9 @@ public:
     void begin(unsigned long baud) override
     {
         _port.begin(baud, _config, _rxPin, _txPin);
-        Serial.printf("[%s] Initialized at %lu baud\n", _portName, baud);
+        _port.setPins(_rxPin, _txPin, -1, _controlPin);
+        _port.setMode(UART_MODE_RS485_HALF_DUPLEX);
+        Serial.printf("[%s] Initialized at %lu baud (RS485 half-duplex Auto-RTS on pin %d)\n", _portName, baud, _controlPin);
     }
 
     uint16_t calculateCRC(uint8_t *data, uint8_t length) override
@@ -57,7 +59,6 @@ public:
 
     void sendData(uint8_t *data, uint8_t length) override
     {
-        _arduino.digitalWrite(_controlPin, _arduino.getDigitalHigh());
         _arduino.digitalWrite(_sensorPowerPin, _arduino.getDigitalHigh());
         _arduino.delay(100);
 
@@ -69,8 +70,6 @@ public:
         }
         _port.flush();
         Serial.println(" | Request sent.");
-
-        _arduino.digitalWrite(_controlPin, _arduino.getDigitalLow());
     }
 
     int readAvailable(uint8_t *buffer, size_t maxLength) override
