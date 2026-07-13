@@ -1,5 +1,16 @@
 # Release Notes
 
+## Version 2.17.22 (2026-07-13)
+
+### Added
+- **Firmware Update Check on Boot**: GDV1-3708 The device now retrieves any pending firmware-update command from the server at startup — before it evaluates whether to remove its own configuration, and after the server connection is initialized — so a firmware update issued while the device was offline is reliably picked up and applied on the next boot.
+- **MQTT Connection Diagnostics**: Added detailed diagnostic logging around connecting and reconnecting to the message broker, making it easier to troubleshoot connection and reconnection issues in the field.
+
+### Fixed
+- **MQTT Reconnect Flapping**: Fixed an issue where the device could repeatedly disconnect and reconnect to the server because of a corrupted client identifier, causing an unstable broker connection.
+
+---
+
 ## Version 2.17.21 (2026-07-12)
 
 ### Fixed
