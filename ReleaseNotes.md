@@ -1,5 +1,12 @@
 # Release Notes
 
+## Version 2.17.23 (2026-07-13)
+
+### Fixed
+- **RS485 Sensor Reliability Across Boards**: Fixed an issue where wired RS485 sensors could stay silent and fail to respond on some device boards while working on others. The last part of each outgoing request could be corrupted due to timing during the switch between sending and receiving, so the sensor never got a valid request; communication is now handled so that requests are always transmitted intact.
+
+---
+
 ## Version 2.17.22 (2026-07-13)
 
 ### Added
