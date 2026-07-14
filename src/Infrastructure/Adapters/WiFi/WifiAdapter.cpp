@@ -147,6 +147,21 @@ bool WifiAdapter::addNetwork(const char *ssid, const char *password)
 
     log("Adding WiFi network: %s", ssid);
     wifiMulti.addAP(ssid, password);
+
+    bool alreadyKnown = false;
+    for (const auto& known : knownSsids)
+    {
+        if (known == ssid)
+        {
+            alreadyKnown = true;
+            break;
+        }
+    }
+    if (!alreadyKnown)
+    {
+        knownSsids.push_back(ssid);
+    }
+
     return true;
 }
 
@@ -212,9 +227,21 @@ bool WifiAdapter::disconnect()
 
 bool WifiAdapter::reconnect()
 {
-    log("Reconnect requested");
+    log("WIFI: Reconnect requested, restarting radio");
 
-    WiFi.disconnect();
+    if (apActive)
+    {
+        WiFi.disconnect(false);
+        WiFi.mode(WIFI_AP_STA);
+    }
+    else
+    {
+        WiFi.disconnect(true);
+        WiFi.mode(WIFI_OFF);
+        delay(100);
+        WiFi.mode(WIFI_STA);
+    }
+    delay(100);
 
     const unsigned long timeout = 60000;
     unsigned long startTime = millis();
@@ -227,14 +254,47 @@ bool WifiAdapter::reconnect()
 
     if (connected)
     {
-        log("Reconnect succeeded: %s, IP: %s", WiFi.SSID().c_str(), getLocalIP());
+        log("WIFI: Reconnect succeeded: %s, IP: %s, rssi=%d", WiFi.SSID().c_str(), getLocalIP(), WiFi.RSSI());
     }
     else
     {
-        log("Reconnect failed to connect to any network");
+        log("WIFI: Reconnect failed to connect to any network");
+        logKnownNetworks();
+        logNearbyNetworks();
     }
 
     return connected;
+}
+
+void WifiAdapter::logKnownNetworks()
+{
+    if (knownSsids.empty())
+    {
+        log("WIFI: No configured networks to connect to");
+        return;
+    }
+    for (size_t i = 0; i < knownSsids.size(); i++)
+    {
+        log("WIFI: Configured target SSID: %s", knownSsids[i].c_str());
+    }
+}
+
+void WifiAdapter::logNearbyNetworks()
+{
+    int found = WiFi.scanNetworks();
+    if (found <= 0)
+    {
+        log("WIFI: Scan found no networks in range");
+        WiFi.scanDelete();
+        return;
+    }
+
+    log("WIFI: Scan found %d networks in range:", found);
+    for (int i = 0; i < found; i++)
+    {
+        log("WIFI:   [%d] %s rssi=%d ch=%d", i, WiFi.SSID(i).c_str(), WiFi.RSSI(i), WiFi.channel(i));
+    }
+    WiFi.scanDelete();
 }
 
 bool WifiAdapter::isConnected()

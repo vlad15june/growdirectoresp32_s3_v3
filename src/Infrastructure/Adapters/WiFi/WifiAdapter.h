@@ -3,6 +3,8 @@
 
 #include <WiFi.h>
 #include <WiFiMulti.h>
+#include <vector>
+#include <string>
 #include "Core/Domain/Interfaces/Adapters/IWifiAdapter.h"
 #include "Core/Domain/Interfaces/ILogger.h"
 #include "Core/Domain/Interfaces/IDebugSystem.h"
@@ -55,11 +57,14 @@ private:
     char ssidBuffer[33];      // Buffer to store SSID string (max 32 chars + null terminator)
     bool apActive;            // Flag to track if AP is active
     WiFiMulti& wifiMulti;     // Reference to WiFiMulti instance
+    std::vector<std::string> knownSsids;
     ILogger* logger;
     IDebugSystem* debugSystem;
     static ILogger* apEventLogger;
 
     void log(const char* format, ...);
+    void logKnownNetworks();
+    void logNearbyNetworks();
     static void apEventCallback(WiFiEvent_t event, WiFiEventInfo_t info);
 };
 
