@@ -52,6 +52,35 @@ inline RuleDirection getRuleDirectionFromString(const char* directionStr) {
     return RuleDirection::UNKNOWN;
 }
 
+enum class RuleJoinOp {
+    UNSET,
+    AND,
+    OR
+};
+
+inline const char* getRuleJoinOpName(RuleJoinOp joinOp) {
+    switch (joinOp) {
+        case RuleJoinOp::AND:
+            return "and";
+        case RuleJoinOp::OR:
+            return "or";
+        default:
+            return "";
+    }
+}
+
+inline RuleJoinOp getRuleJoinOpFromString(const char* joinOpStr) {
+    if (!joinOpStr) return RuleJoinOp::UNSET;
+
+    if (strcmp(joinOpStr, "and") == 0) {
+        return RuleJoinOp::AND;
+    } else if (strcmp(joinOpStr, "or") == 0) {
+        return RuleJoinOp::OR;
+    }
+
+    return RuleJoinOp::UNSET;
+}
+
 enum class RuleMode {
     ON,
     OFF,

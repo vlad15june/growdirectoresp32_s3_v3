@@ -50,6 +50,51 @@ inline SensorVerdict evaluateSensorHysteresis(RuleDirection direction, double va
     return SensorVerdict::HOLD;
 }
 
+inline bool combineConditionsDnf(const std::vector<RuleCondition>& conditions,
+                                 const std::vector<bool>& condFired,
+                                 bool conditionOr) {
+    bool hasJoinOp = false;
+    for (size_t i = 1; i < conditions.size(); ++i) {
+        if (conditions[i].joinOp != RuleJoinOp::UNSET) {
+            hasJoinOp = true;
+            break;
+        }
+    }
+
+    if (!hasJoinOp) {
+        if (condFired.empty()) {
+            return false;
+        }
+        if (conditionOr) {
+            for (bool f : condFired) {
+                if (f) return true;
+            }
+            return false;
+        }
+        for (bool f : condFired) {
+            if (!f) return false;
+        }
+        return true;
+    }
+
+    bool result = false;
+    bool group = true;
+    for (size_t i = 0; i < condFired.size(); ++i) {
+        bool f = condFired[i];
+        RuleJoinOp op = (i == 0) ? RuleJoinOp::UNSET : conditions[i].joinOp;
+        if (i == 0) {
+            group = f;
+        } else if (op == RuleJoinOp::OR) {
+            result = result || group;
+            group = f;
+        } else {
+            group = group && f;
+        }
+    }
+    result = result || group;
+    return result;
+}
+
 struct DelayDecision {
     DeviceStateEnum newState;
     const char* ruleStopReason;
@@ -175,6 +220,30 @@ private:
             va_end(args);
             _logger->println(DebugFeatures::RULE_DEBUG, buffer, MqttLoggerMode::SerialOnly);
         }
+    }
+
+    static bool conditionsHaveJoinOp(const std::vector<RuleCondition>& conditions) {
+        for (size_t i = 1; i < conditions.size(); ++i) {
+            if (conditions[i].joinOp != RuleJoinOp::UNSET) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    static std::string conditionsOpsString(const std::vector<RuleCondition>& conditions) {
+        std::string ops;
+        for (size_t i = 0; i < conditions.size(); ++i) {
+            if (i > 0) {
+                ops += ",";
+            }
+            if (i == 0 || conditions[i].joinOp == RuleJoinOp::UNSET) {
+                ops += "-";
+            } else {
+                ops += getRuleJoinOpName(conditions[i].joinOp);
+            }
+        }
+        return ops;
     }
 
     void purgeDeletingRules() {
@@ -900,8 +969,8 @@ private:
 
     SensorVerdict evaluateSensorRule(const Rule& rule, bool committedOn) {
         if (!rule.conditions.empty()) {
-            bool anyOn = false;
-            bool allOn = true;
+            std::vector<bool> condFired;
+            condFired.reserve(rule.conditions.size());
             for (const auto& cond : rule.conditions) {
                 bool condOn;
                 if (cond.sensorUids.empty()) {
@@ -927,12 +996,13 @@ private:
                         rule.uid.c_str(), cond.sensorUids[0].c_str(), getRuleDirectionName(cond.direction),
                         condValue, cond.valueLow, cond.valueHigh, condOn ? 1 : 0);
                 }
-                anyOn = anyOn || condOn;
-                allOn = allOn && condOn;
+                condFired.push_back(condOn);
             }
-            bool targetOn = rule.conditionOr ? anyOn : allOn;
-            log("EVALUATE_RULES: SENSOR_COND uid=%s mode=%s nConds=%d targetOn=%d",
-                rule.uid.c_str(), rule.conditionOr ? "or" : "and",
+            bool targetOn = combineConditionsDnf(rule.conditions, condFired, rule.conditionOr);
+            log("EVALUATE_RULES: SENSOR_COND uid=%s mode=%s ops=%s nConds=%d targetOn=%d",
+                rule.uid.c_str(),
+                conditionsHaveJoinOp(rule.conditions) ? "dnf" : "legacy",
+                conditionsOpsString(rule.conditions).c_str(),
                 static_cast<int>(rule.conditions.size()), targetOn ? 1 : 0);
             return targetOn ? SensorVerdict::TURN_ON : SensorVerdict::TURN_OFF;
         }
@@ -1073,8 +1143,8 @@ private:
 
     bool evaluateConditionSet(const Rule& rule) {
         if (!rule.conditions.empty()) {
-            bool anyTrue = false;
-            bool allTrue = true;
+            std::vector<bool> condFired;
+            condFired.reserve(rule.conditions.size());
             for (const auto& cond : rule.conditions) {
                 bool fires;
                 if (cond.direction == RuleDirection::BETWEEN) {
@@ -1087,12 +1157,13 @@ private:
                                     : (cond.direction == RuleDirection::DOWN ? cond.valueHigh : cond.valueLow);
                     fires = conditionFires(mean, cond.direction, target);
                 }
-                anyTrue = anyTrue || fires;
-                allTrue = allTrue && fires;
+                condFired.push_back(fires);
             }
-            bool firing = rule.conditionOr ? anyTrue : allTrue;
-            log("EVALUATE_RULES: STEP_COND uid=%s mode=%s nConds=%d firing=%d",
-                rule.uid.c_str(), rule.conditionOr ? "or" : "and",
+            bool firing = combineConditionsDnf(rule.conditions, condFired, rule.conditionOr);
+            log("EVALUATE_RULES: STEP_COND uid=%s mode=%s ops=%s nConds=%d firing=%d",
+                rule.uid.c_str(),
+                conditionsHaveJoinOp(rule.conditions) ? "dnf" : "legacy",
+                conditionsOpsString(rule.conditions).c_str(),
                 static_cast<int>(rule.conditions.size()), firing ? 1 : 0);
             return firing;
         }
