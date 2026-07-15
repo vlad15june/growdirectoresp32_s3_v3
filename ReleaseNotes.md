@@ -1,5 +1,17 @@
 # Release Notes
 
+## Version 2.17.24 (2026-07-15)
+
+### Added
+- **Mixed AND/OR Logic in Rules**: GDV1-3717 Rules that combine several conditions can now mix AND and OR between individual conditions, instead of applying a single all-or-any choice to the whole rule, allowing more flexible automation logic. Existing rules keep behaving exactly as before.
+
+### Fixed
+- **Disconnected Shared Sensor No Longer Forces Relay On**: GDV1-3725 Fixed a bug where a shared sensor from another module reporting itself as disconnected was treated as a zero reading. For range-based rules whose range includes zero this could keep the connected equipment switched on and prevent the sensor-unreachable protection from ever activating. A disconnected shared sensor now keeps its last valid value and correctly triggers unreachable protection over time.
+- **More Reliable Wi-Fi Recovery After Link Loss**: Fixed an issue where the device could lose its Wi-Fi connection and fail to see its access point again without a reboot. On connection loss the device now fully restarts its radio to recover automatically, and records which networks it sees for field diagnostics.
+- **Empty Rule Stop Time No Longer Reported**: Fixed the device status sent to the server so it no longer includes an empty sensor-based rule stop time, avoiding malformed data in the update.
+
+---
+
 ## Version 2.17.23 (2026-07-13)
 
 ### Fixed
