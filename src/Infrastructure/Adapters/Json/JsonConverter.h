@@ -2166,7 +2166,7 @@ private:
         return oss.str();
     }
 
-    bool sensorValuesFromUpdateJson(const std::string &json, std::vector<std::pair<std::string, float>> &out) override
+    bool sensorValuesFromUpdateJson(const std::string &json, std::vector<RemoteSensorValue> &out) override
     {
         std::string sensorsArr = extractArray(json, "sensors");
         if (sensorsArr.empty())
@@ -2185,8 +2185,11 @@ private:
             if (sensorStr.find("\"value\"") == std::string::npos)
                 continue;
 
-            float value = static_cast<float>(extractDoubleValue(sensorStr, "value"));
-            out.push_back(std::make_pair(uid, value));
+            RemoteSensorValue item;
+            item.uid = uid;
+            item.value = static_cast<float>(extractDoubleValue(sensorStr, "value"));
+            item.state = extractValue(sensorStr, "state");
+            out.push_back(item);
         }
 
         return true;

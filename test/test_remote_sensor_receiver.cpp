@@ -107,6 +107,26 @@ static void test_mqtt_write(void) {
     TEST_ASSERT_EQUAL_FLOAT(25.4f, f.sensorValueModel.values["84:F7:03:FE:88:2C.00.01"]);
 }
 
+static void test_disconnected_sensor_skipped(void) {
+    ReceiverFixture f;
+    f.arduinoAdapter.currentMillis = 5000;
+    f.receiver.init();
+
+    const char* payload =
+        "{\"GrowdirectorUid\":\"84:F7:03:FE:88:2C\",\"email\":\"x\",\"millis\":1,"
+        "\"devices\":[],\"sensors\":["
+        "{\"uid\":\"84:F7:03:FE:88:2C.00.01\",\"value\":0,\"state\":\"disconnected\"},"
+        "{\"uid\":\"84:F7:03:FE:88:2C.00.02\",\"value\":12.5,\"state\":\"online\"}]}";
+
+    f.emitMqtt("hardware/update/84:F7:03:FE:88:2C", payload);
+
+    TEST_ASSERT_EQUAL_INT(1, f.sensorValueModel.setSensorValueCallCount);
+    TEST_ASSERT_EQUAL_INT(1, f.sensorValueModel.setLastReadTimeCallCount);
+    TEST_ASSERT_EQUAL_FLOAT(12.5f, f.sensorValueModel.values["84:F7:03:FE:88:2C.00.02"]);
+    TEST_ASSERT_EQUAL_INT(0, static_cast<int>(f.sensorValueModel.values.count("84:F7:03:FE:88:2C.00.01")));
+    TEST_ASSERT_EQUAL_INT(0, static_cast<int>(f.sensorValueModel.lastReadTimes.count("84:F7:03:FE:88:2C.00.01")));
+}
+
 static void test_last_read_time_stamped(void) {
     ReceiverFixture f;
     f.arduinoAdapter.currentMillis = 41230;
@@ -239,21 +259,22 @@ static void test_parser_round_trip(void) {
 
     std::string json = converter.updateToJson(dto);
 
-    std::vector<std::pair<std::string, float>> pairs;
+    std::vector<RemoteSensorValue> pairs;
     bool ok = converter.sensorValuesFromUpdateJson(json, pairs);
 
     TEST_ASSERT_TRUE(ok);
     TEST_ASSERT_EQUAL_INT(2, static_cast<int>(pairs.size()));
-    TEST_ASSERT_EQUAL_STRING("84:F7:03:FE:88:2C.00.01", pairs[0].first.c_str());
-    TEST_ASSERT_EQUAL_FLOAT(25.4f, pairs[0].second);
-    TEST_ASSERT_EQUAL_STRING("84:F7:03:FE:88:2C.00.02", pairs[1].first.c_str());
-    TEST_ASSERT_EQUAL_FLOAT(12.5f, pairs[1].second);
+    TEST_ASSERT_EQUAL_STRING("84:F7:03:FE:88:2C.00.01", pairs[0].uid.c_str());
+    TEST_ASSERT_EQUAL_FLOAT(25.4f, pairs[0].value);
+    TEST_ASSERT_EQUAL_STRING("online", pairs[0].state.c_str());
+    TEST_ASSERT_EQUAL_STRING("84:F7:03:FE:88:2C.00.02", pairs[1].uid.c_str());
+    TEST_ASSERT_EQUAL_FLOAT(12.5f, pairs[1].value);
 }
 
 static void test_parser_rejects_non_sensor(void) {
     JsonConverter converterImpl;
     IJsonConverter& converter = converterImpl;
-    std::vector<std::pair<std::string, float>> pairs;
+    std::vector<RemoteSensorValue> pairs;
 
     TEST_ASSERT_FALSE(converter.sensorValuesFromUpdateJson("{\"devices\":[]}", pairs));
     TEST_ASSERT_FALSE(converter.sensorValuesFromUpdateJson("not json", pairs));
@@ -301,6 +322,7 @@ extern "C" void run_remote_sensor_tests(void) {
     RUN_TEST(test_evaluator_reads_real_value);
     RUN_TEST(test_udp_write);
     RUN_TEST(test_mqtt_write);
+    RUN_TEST(test_disconnected_sensor_skipped);
     RUN_TEST(test_last_read_time_stamped);
     RUN_TEST(test_reconcile_subscribe_idempotent);
     RUN_TEST(test_reconcile_unsubscribe);

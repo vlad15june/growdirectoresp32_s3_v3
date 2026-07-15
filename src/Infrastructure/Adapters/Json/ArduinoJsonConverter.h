@@ -2404,7 +2404,7 @@ public:
         return output;
     }
 
-    bool sensorValuesFromUpdateJson(const std::string &json, std::vector<std::pair<std::string, float>> &out) override
+    bool sensorValuesFromUpdateJson(const std::string &json, std::vector<RemoteSensorValue> &out) override
     {
         DynamicJsonDocument doc(8192);
         DeserializationError error = deserializeJson(doc, json);
@@ -2430,7 +2430,11 @@ public:
             if (!sensor["value"].is<float>() && !sensor["value"].is<int>())
                 continue;
 
-            out.push_back(std::make_pair(std::string(uid), sensor["value"].as<float>()));
+            RemoteSensorValue item;
+            item.uid = std::string(uid);
+            item.value = sensor["value"].as<float>();
+            item.state = sensor["state"] | "";
+            out.push_back(item);
         }
 
         return true;

@@ -126,20 +126,24 @@ private:
     }
 
     void writeSensorsFromPayload(const std::string& payload) {
-        std::vector<std::pair<std::string, float>> pairs;
-        if (!_jsonConverter || !_jsonConverter->sensorValuesFromUpdateJson(payload, pairs)) {
+        std::vector<RemoteSensorValue> sensors;
+        if (!_jsonConverter || !_jsonConverter->sensorValuesFromUpdateJson(payload, sensors)) {
             const char* reason = looksLikeJsonObject(payload) ? "no_sensors_array" : "parse_error";
             logSerial("drop reason=%s len=%d", reason, static_cast<int>(payload.size()));
             return;
         }
 
         uint32_t now = _arduinoAdapter ? _arduinoAdapter->millis() : 0;
-        for (const auto& pair : pairs) {
-            if (_sensorValueModel) {
-                _sensorValueModel->setSensorValue(pair.first, pair.second);
-                _sensorValueModel->setLastReadTime(pair.first, now);
+        for (const auto& sensor : sensors) {
+            if (sensor.state == "disconnected") {
+                log("skip sensorUid=%s reason=disconnected", sensor.uid.c_str());
+                continue;
             }
-            log("write sensorUid=%s value=%.2f lastReadTime=%u", pair.first.c_str(), pair.second, now);
+            if (_sensorValueModel) {
+                _sensorValueModel->setSensorValue(sensor.uid, sensor.value);
+                _sensorValueModel->setLastReadTime(sensor.uid, now);
+            }
+            log("write sensorUid=%s value=%.2f lastReadTime=%u", sensor.uid.c_str(), sensor.value, now);
         }
     }
 
