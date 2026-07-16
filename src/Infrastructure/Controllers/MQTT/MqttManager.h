@@ -39,6 +39,8 @@ private:
     uint32_t _reconnectInterval;
     uint32_t _reconnectAt;
     int _mqttFails;
+    int _consecutivePublishFails = 0;
+    static const int PUBLISH_FAIL_RECONNECT_THRESHOLD = 10;
     volatile bool _connected;
     bool _configured;
     std::set<String> _subscribedTopics;
@@ -123,6 +125,7 @@ private:
     {
         _connected = true;
         _mqttFails = 0;
+        _consecutivePublishFails = 0;
         _reconnectInterval = 5000;
         log("MQTT: connected (sessionPresent=%d), resubscribing %d topics", sessionPresent ? 1 : 0, static_cast<int>(_subscribedTopics.size()));
 
@@ -475,9 +478,19 @@ public:
         uint16_t packetId = _mqttClient.publish(topic, 0, false, payload);
         if (packetId == 0)
         {
-            log("Failed to publish to topic: %s", topic);
+            _consecutivePublishFails++;
+            log("Failed to publish to topic: %s (consecutive fails: %d)", topic, _consecutivePublishFails);
+            if (_consecutivePublishFails >= PUBLISH_FAIL_RECONNECT_THRESHOLD)
+            {
+                log("MQTT: %d consecutive publish failures, forcing reconnect", _consecutivePublishFails);
+                _consecutivePublishFails = 0;
+                _connected = false;
+                _disconnectEvent = false;
+                _reconnectAt = millis();
+            }
             return false;
         }
+        _consecutivePublishFails = 0;
         return true;
     }
 
