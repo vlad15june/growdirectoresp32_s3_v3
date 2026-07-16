@@ -618,13 +618,18 @@ public:
         }
     }
 
-    std::vector<DeviceCommandDto> getDeviceCommand() override
+    std::vector<DeviceCommandDto> getDeviceCommand(bool* httpFailed = nullptr) override
     {
         std::vector<DeviceCommandDto> commands;
-        
+
+        if (httpFailed != nullptr)
+            *httpFailed = false;
+
         if (_moduleConfig == nullptr || _settings == nullptr)
         {
             log("NET: getDeviceCommand - ModuleConfig or Settings not available");
+            if (httpFailed != nullptr)
+                *httpFailed = true;
             return commands;
         }
 
@@ -682,9 +687,13 @@ public:
         else
         {
             if (httpResponseCode != 200)
+            {
                 trackApiSendFailure();
+                if (httpFailed != nullptr)
+                    *httpFailed = true;
+            }
         }
-        
+
         return commands;
     }
 

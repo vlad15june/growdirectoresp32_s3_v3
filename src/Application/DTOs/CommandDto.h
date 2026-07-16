@@ -17,6 +17,12 @@ public:
     std::string deviceUid;      // Device unique identifier
     int commandId;              // Command ID
     std::string requestedState; // Requested state (on/off)
+    bool needToSwitchBack;
+    int secondsToSwitchBack;
+    int analogControlPinValue;
+    std::string switchType;
+    std::string createdDate;
+    std::string status;
 
     // RuleCommandNotification fields
     std::string ruleUid;      // Rule unique identifier
@@ -33,7 +39,7 @@ public:
     std::string model;      // Model identifier (atlas_ph_v1, modbus_soil_sensor_v1, etc.)
     std::string options;    // JSON string containing sensor configuration options
 
-    CommandDto() : commandId(0) {}
+    CommandDto() : commandId(0), needToSwitchBack(false), secondsToSwitchBack(0), analogControlPinValue(0) {}
 
     // Helper methods to determine command type
     bool isDeviceCommand() const { return type == "DeviceCommandNotification"; }

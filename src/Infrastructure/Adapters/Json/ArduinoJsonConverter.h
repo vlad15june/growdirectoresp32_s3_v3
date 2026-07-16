@@ -961,6 +961,12 @@ public:
             commandDto.deviceUid = doc["deviceUid"] | "";
             commandDto.commandId = doc["commandId"] | 0;
             commandDto.requestedState = doc["requestedState"] | "";
+            commandDto.needToSwitchBack = doc["needToSwitchBack"] | false;
+            commandDto.secondsToSwitchBack = doc["secondsToSwitchBack"] | 0;
+            commandDto.analogControlPinValue = doc["analogControlPinValue"] | 0;
+            commandDto.switchType = doc["switchType"] | "";
+            commandDto.createdDate = doc["createdDate"] | "";
+            commandDto.status = doc["status"] | "";
         }
 
         // RuleCommandNotification fields
@@ -1056,6 +1062,12 @@ public:
             doc["deviceUid"] = commandDto.deviceUid;
             doc["commandId"] = commandDto.commandId;
             doc["requestedState"] = commandDto.requestedState;
+            doc["needToSwitchBack"] = commandDto.needToSwitchBack;
+            doc["secondsToSwitchBack"] = commandDto.secondsToSwitchBack;
+            doc["analogControlPinValue"] = commandDto.analogControlPinValue;
+            doc["switchType"] = commandDto.switchType;
+            doc["createdDate"] = commandDto.createdDate;
+            doc["status"] = commandDto.status;
         }
 
         // RuleCommandNotification fields

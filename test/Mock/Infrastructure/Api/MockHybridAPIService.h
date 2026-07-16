@@ -248,8 +248,12 @@ public:
         return sendRawIoResultReturnValue;
     }
     
-    std::vector<DeviceCommandDto> getDeviceCommand() override {
+    bool getDeviceCommandHttpFailed = false;
+
+    std::vector<DeviceCommandDto> getDeviceCommand(bool* httpFailed = nullptr) override {
         getDeviceCommandCalled = true;
+        if (httpFailed != nullptr)
+            *httpFailed = getDeviceCommandHttpFailed;
         return deviceCommandsReturnValue;
     }
     

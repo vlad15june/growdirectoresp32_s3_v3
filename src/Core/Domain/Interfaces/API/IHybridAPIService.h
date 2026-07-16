@@ -156,7 +156,7 @@ public:
      * Get device commands from the server (REST only)
      * @return vector of DeviceCommandDto containing the command details, empty if no commands or error
      */
-    virtual std::vector<DeviceCommandDto> getDeviceCommand() = 0;
+    virtual std::vector<DeviceCommandDto> getDeviceCommand(bool* httpFailed = nullptr) = 0;
     
     /**
      * Get rule list from the server (REST only)

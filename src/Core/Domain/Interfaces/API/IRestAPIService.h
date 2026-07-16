@@ -33,7 +33,7 @@ public:
      * @brief Get pending device commands from server
      * @return vector of DeviceCommandDto containing the command details, empty if no commands or error
      */
-    virtual std::vector<DeviceCommandDto> getDeviceCommand() = 0;
+    virtual std::vector<DeviceCommandDto> getDeviceCommand(bool* httpFailed = nullptr) = 0;
     
     /**
      * @brief Get rule list from server

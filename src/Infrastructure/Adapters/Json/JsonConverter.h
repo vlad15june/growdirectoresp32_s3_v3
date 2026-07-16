@@ -1000,6 +1000,12 @@ public:
             commandDto.deviceUid = extractValue(jsonStr, "deviceUid");
             commandDto.commandId = extractIntValue(jsonStr, "commandId");
             commandDto.requestedState = extractValue(jsonStr, "requestedState");
+            commandDto.needToSwitchBack = extractBoolValue(jsonStr, "needToSwitchBack");
+            commandDto.secondsToSwitchBack = extractIntValue(jsonStr, "secondsToSwitchBack");
+            commandDto.analogControlPinValue = extractIntValue(jsonStr, "analogControlPinValue");
+            commandDto.switchType = extractValue(jsonStr, "switchType");
+            commandDto.createdDate = extractValue(jsonStr, "createdDate");
+            commandDto.status = extractValue(jsonStr, "status");
         }
 
         // RuleCommandNotification fields
@@ -1092,6 +1098,12 @@ public:
             oss << ",\"deviceUid\":\"" << commandDto.deviceUid << "\"";
             oss << ",\"commandId\":" << commandDto.commandId;
             oss << ",\"requestedState\":\"" << commandDto.requestedState << "\"";
+            oss << ",\"needToSwitchBack\":" << (commandDto.needToSwitchBack ? "true" : "false");
+            oss << ",\"secondsToSwitchBack\":" << commandDto.secondsToSwitchBack;
+            oss << ",\"analogControlPinValue\":" << commandDto.analogControlPinValue;
+            oss << ",\"switchType\":\"" << commandDto.switchType << "\"";
+            oss << ",\"createdDate\":\"" << commandDto.createdDate << "\"";
+            oss << ",\"status\":\"" << commandDto.status << "\"";
         }
 
         // RuleCommandNotification fields

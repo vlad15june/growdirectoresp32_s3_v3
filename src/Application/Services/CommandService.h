@@ -158,12 +158,34 @@ private:
             return false;
         }
 
-        std::vector<DeviceCommandDto> deviceCommands = hybridApiService->getDeviceCommand();
+        bool httpFailed = false;
+        std::vector<DeviceCommandDto> deviceCommands = hybridApiService->getDeviceCommand(&httpFailed);
         if (deviceCommands.empty())
         {
-            log(DebugFeatures::DEVICE_COMMAND_DEBUG,
-                "CommandService: No device commands received from server");
-            return true;
+            if (httpFailed && !command.deviceUid.empty())
+            {
+                DeviceCommandDto fallback;
+                fallback.uid = command.deviceUid;
+                fallback.requestedState = command.requestedState;
+                fallback.id = command.commandId;
+                fallback.needToSwitchBack = command.needToSwitchBack;
+                fallback.secondsToSwitchBack = command.secondsToSwitchBack;
+                fallback.analogControlPinValue = command.analogControlPinValue;
+                fallback.switchType = command.switchType;
+                fallback.status = command.status;
+                fallback.createdDate = command.createdDate;
+                deviceCommands.push_back(fallback);
+
+                log(DebugFeatures::DEVICE_COMMAND_DEBUG,
+                    "CommandService: HTTP unavailable, executing device command from MQTT payload - deviceUid: %s, state: %s, commandId: %d",
+                    fallback.uid.c_str(), fallback.requestedState.c_str(), fallback.id);
+            }
+            else
+            {
+                log(DebugFeatures::DEVICE_COMMAND_DEBUG,
+                    "CommandService: No device commands received from server");
+                return true;
+            }
         }
 
         log(DebugFeatures::DEVICE_COMMAND_DEBUG,

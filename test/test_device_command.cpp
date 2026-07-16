@@ -3,7 +3,9 @@
 
 #include "Infrastructure/Adapters/Json/JsonConverter.h"
 #include "Application/DTOs/DeviceCommandUpdateDto.h"
+#include "Application/DTOs/CommandDto.h"
 #include "Application/DTOs/UpdateDto.h"
+#include "Application/Services/CommandService.h"
 #include "Core/Domain/UseCases/DeviceControl/DeviceCommandExecutionUseCase.h"
 #include "Application/Services/Devices/DeviceService.cpp"
 #include "Core/Domain/Data/Models/DeviceModel.h"
@@ -329,7 +331,90 @@ static void test_rule_off_update_carries_stop_reason(void) {
     TEST_ASSERT_TRUE(json2.find("\"ruleUid\"") == std::string::npos);
 }
 
+static void test_fallback_executes_from_mqtt_when_http_failed(void) {
+    ModuleStructure ms;
+    Node node;
+    node.relays.push_back(Relay("9C:13:9E:99:47:38.00", 1));
+    ms.nodes.push_back(node);
+
+    MockModuleConfig moduleConfig;
+    DeviceModel deviceModel(&moduleConfig, &ms);
+    DeviceDigitalOut* device = new DeviceDigitalOut();
+    device->deviceUid = "9C:13:9E:99:47:38.00";
+    device->deviceType = DEVICE_TYPE_DIGITAL;
+    device->state = DEVICE_STATE_OFF;
+    device->durationOn = 0;
+    device->needToSwitchBack = false;
+    deviceModel.addDevice(device);
+
+    MockArduinoAdapter arduino;
+    arduino.currentMillis = 1000;
+    MockLogger logger;
+    MockDebugSystem debug;
+    MockHybridAPIService hybrid;
+    hybrid.getDeviceCommandHttpFailed = true;
+
+    DeviceCommandExecutionUseCase uc(&deviceModel, &arduino, &ms, &logger, &debug, &moduleConfig);
+    CommandService svc(&uc, nullptr, nullptr, &hybrid, &ms, &logger, &debug);
+
+    CommandDto cmd;
+    cmd.type = "DeviceCommandNotification";
+    cmd.deviceUid = "9C:13:9E:99:47:38.00";
+    cmd.requestedState = "on";
+    cmd.commandId = 4475;
+    cmd.needToSwitchBack = true;
+    cmd.secondsToSwitchBack = 60;
+
+    bool ok = svc.process(cmd);
+
+    TEST_ASSERT_TRUE(ok);
+    TEST_ASSERT_EQUAL(DEVICE_STATE_ON, device->state);
+    TEST_ASSERT_EQUAL_INT(4475, device->commandId);
+    TEST_ASSERT_TRUE(device->needToSwitchBack);
+    TEST_ASSERT_EQUAL_UINT32(60000, device->durationOn);
+    TEST_ASSERT_TRUE(hybrid.sendDeviceCommandExecutionResultCalled);
+}
+
+static void test_no_fallback_when_http_ok_and_empty(void) {
+    ModuleStructure ms;
+    Node node;
+    node.relays.push_back(Relay("9C:13:9E:99:47:38.00", 1));
+    ms.nodes.push_back(node);
+
+    MockModuleConfig moduleConfig;
+    DeviceModel deviceModel(&moduleConfig, &ms);
+    DeviceDigitalOut* device = new DeviceDigitalOut();
+    device->deviceUid = "9C:13:9E:99:47:38.00";
+    device->deviceType = DEVICE_TYPE_DIGITAL;
+    device->state = DEVICE_STATE_OFF;
+    deviceModel.addDevice(device);
+
+    MockArduinoAdapter arduino;
+    arduino.currentMillis = 1000;
+    MockLogger logger;
+    MockDebugSystem debug;
+    MockHybridAPIService hybrid;
+    hybrid.getDeviceCommandHttpFailed = false;
+
+    DeviceCommandExecutionUseCase uc(&deviceModel, &arduino, &ms, &logger, &debug, &moduleConfig);
+    CommandService svc(&uc, nullptr, nullptr, &hybrid, &ms, &logger, &debug);
+
+    CommandDto cmd;
+    cmd.type = "DeviceCommandNotification";
+    cmd.deviceUid = "9C:13:9E:99:47:38.00";
+    cmd.requestedState = "on";
+    cmd.commandId = 4475;
+
+    bool ok = svc.process(cmd);
+
+    TEST_ASSERT_TRUE(ok);
+    TEST_ASSERT_EQUAL(DEVICE_STATE_OFF, device->state);
+    TEST_ASSERT_FALSE(hybrid.sendDeviceCommandExecutionResultCalled);
+}
+
 extern "C" void run_device_command_tests(void) {
+    RUN_TEST(test_fallback_executes_from_mqtt_when_http_failed);
+    RUN_TEST(test_no_fallback_when_http_ok_and_empty);
     RUN_TEST(test_rule_off_update_carries_stop_reason);
     RUN_TEST(test_device_command_ack_is_array_with_timestamp);
     RUN_TEST(test_device_command_ack_omits_empty_timestamp);
