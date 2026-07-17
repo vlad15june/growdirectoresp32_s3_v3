@@ -762,6 +762,8 @@ public:
         if (rule.isStepRule())
         {
             oss << ",\"valueTarget\":" << rule.valueTarget;
+            oss << ",\"valueLow\":" << rule.valueLow;
+            oss << ",\"valueHigh\":" << rule.valueHigh;
 
             if (rule.cyclesToSetPoint > 0)
                 oss << ",\"cyclesToSetPoint\":" << rule.cyclesToSetPoint;

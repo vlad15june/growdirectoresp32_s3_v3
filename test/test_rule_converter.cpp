@@ -38,6 +38,29 @@ static const char* test_step_rule_json = R"({
     "daysOfMonth":[]
 })";
 
+// Sample step rule JSON with "between" direction (GDV1-3730)
+static const char* test_step_between_rule_json = R"({
+    "sensorUid":"84:F7:03:D7:8E:60.00.01",
+    "valueLow":45,
+    "valueHigh":135,
+    "valueTarget":0,
+    "cyclesToSetPoint":null,
+    "direction":"between",
+    "workingTime":60,
+    "waitingTime":600,
+    "uid":"aa11bb22-cc33-dd44-ee55-ff6677889900",
+    "version":1,
+    "deviceUid":"7C:DF:A1:96:B4:94.01",
+    "ruleType":"step",
+    "isRuleOn":false,
+    "mode":"Off",
+    "modeReason":null,
+    "protectiveShutdown":false,
+    "state":"Synchronized",
+    "daysOfWeek":[],
+    "daysOfMonth":[]
+})";
+
 // Sample sensor rule JSON
 static const char* test_sensor_rule_json = R"({
     "sensorUid":"84:F7:03:FE:88:30.00.01",
@@ -266,6 +289,36 @@ void test_rule_roundtrip_json_converter(void) {
     TEST_ASSERT_EQUAL(rule.workingTime, rule2.workingTime);
     TEST_ASSERT_EQUAL(rule.waitingTime, rule2.waitingTime);
     TEST_ASSERT_EQUAL(rule.conditions.size(), rule2.conditions.size());
+}
+
+void test_step_between_rule_parse_json_converter(void) {
+    JsonConverter jsonConverter;
+    Rule rule;
+
+    TEST_ASSERT_TRUE(jsonConverter.ruleFromJson(test_step_between_rule_json, rule));
+
+    TEST_ASSERT_EQUAL(RuleType::STEP, rule.ruleType);
+    TEST_ASSERT_EQUAL(RuleDirection::BETWEEN, rule.direction);
+    TEST_ASSERT_EQUAL_FLOAT(45.0, rule.valueLow);
+    TEST_ASSERT_EQUAL_FLOAT(135.0, rule.valueHigh);
+    TEST_ASSERT_EQUAL(60, rule.workingTime);
+    TEST_ASSERT_EQUAL(600, rule.waitingTime);
+}
+
+void test_step_between_rule_roundtrip_json_converter(void) {
+    JsonConverter jsonConverter;
+    Rule rule;
+
+    TEST_ASSERT_TRUE(jsonConverter.ruleFromJson(test_step_between_rule_json, rule));
+    std::string stepJson = jsonConverter.ruleToJson(rule);
+
+    Rule rule2;
+    TEST_ASSERT_TRUE(jsonConverter.ruleFromJson(stepJson, rule2));
+
+    TEST_ASSERT_EQUAL(RuleType::STEP, rule2.ruleType);
+    TEST_ASSERT_EQUAL(RuleDirection::BETWEEN, rule2.direction);
+    TEST_ASSERT_EQUAL_FLOAT(rule.valueLow, rule2.valueLow);
+    TEST_ASSERT_EQUAL_FLOAT(rule.valueHigh, rule2.valueHigh);
 }
 
 void test_rule_array_parse_json_converter(void) {
@@ -567,6 +620,8 @@ void test_rule_joinop_unset_not_serialized_json_converter(void) {
 
 extern "C" void run_rule_converter_tests(void) {
     RUN_TEST(test_step_rule_parse_json_converter);
+    RUN_TEST(test_step_between_rule_parse_json_converter);
+    RUN_TEST(test_step_between_rule_roundtrip_json_converter);
     RUN_TEST(test_sensor_rule_parse_json_converter);
     RUN_TEST(test_schedule_rule_parse_json_converter);
     RUN_TEST(test_rule_roundtrip_json_converter);

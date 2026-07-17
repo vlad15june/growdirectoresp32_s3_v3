@@ -443,6 +443,8 @@ public:
         if (rule.isStepRule())
         {
             rule.valueTarget = doc["valueTarget"] | 0.0;
+            rule.valueLow = doc["valueLow"] | 0.0;
+            rule.valueHigh = doc["valueHigh"] | 0.0;
 
             if (doc.containsKey("cyclesToSetPoint") && !doc["cyclesToSetPoint"].isNull())
             {
@@ -688,6 +690,8 @@ public:
         if (rule.isStepRule())
         {
             doc["valueTarget"] = rule.valueTarget;
+            doc["valueLow"] = rule.valueLow;
+            doc["valueHigh"] = rule.valueHigh;
 
             if (rule.cyclesToSetPoint > 0)
             {
