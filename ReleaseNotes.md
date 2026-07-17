@@ -1,5 +1,14 @@
 # Release Notes
 
+## Version 2.17.25 (2026-07-17)
+
+### Fixed
+- **Step Rule Range Values Preserved**: GDV1-3730 Fixed a bug where the low and high boundary values of a step (dosing) rule configured with a range were lost when the rule was saved and reloaded, so the rule no longer worked as configured after a restart. Both boundaries are now retained correctly.
+- **Device Command Executes When Server Is Unreachable**: GDV1-3677 Fixed a case where a device on/off command could be missed when the device was notified of it but could not reach the server over HTTP to fetch its details. The device now acts on the command details delivered with the notification itself, so the command is still carried out.
+- **Recovery From Silently Dead Server Connection**: Fixed a situation where the device kept trying to send data over a server connection that looked alive but was actually dead. After several consecutive failed sends the device now forces a reconnection instead of trusting the stale connection.
+
+---
+
 ## Version 2.17.24 (2026-07-15)
 
 ### Added
