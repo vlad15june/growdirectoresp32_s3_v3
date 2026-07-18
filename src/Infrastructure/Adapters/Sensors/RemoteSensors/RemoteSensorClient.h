@@ -243,8 +243,8 @@ public:
             if (!rule.sensorUid.empty()) {
                 ruleSensorUids.push_back(rule.sensorUid);
             }
-            if (rule.ruleType == RuleType::AVERAGE_SENSOR && !rule.conditions.empty()) {
-                for (const auto& uid : rule.conditions[0].sensorUids) {
+            for (const auto& condition : rule.conditions) {
+                for (const auto& uid : condition.sensorUids) {
                     if (!uid.empty()) {
                         ruleSensorUids.push_back(uid);
                     }

@@ -63,6 +63,23 @@ static Rule makeRemoteSensorRule(const std::string& uid, const std::string& sens
     return rule;
 }
 
+static Rule makeConditionRule(const std::string& uid, RuleType type,
+                              const std::vector<std::string>& conditionSensorUids) {
+    Rule rule;
+    rule.uid = uid;
+    rule.deviceUid = "device-1";
+    rule.ruleType = type;
+    rule.mode = RuleMode::ON;
+    for (const auto& sensorUid : conditionSensorUids) {
+        RuleCondition cond;
+        cond.sensorUids.push_back(sensorUid);
+        cond.valueLow = 10.0;
+        cond.valueHigh = 30.0;
+        rule.conditions.push_back(cond);
+    }
+    return rule;
+}
+
 static const char* kSingleSensorPayload =
     "{\"GrowdirectorUid\":\"84:F7:03:FE:88:2C\",\"email\":\"x\",\"millis\":1,"
     "\"devices\":[],\"sensors\":[{\"uid\":\"84:F7:03:FE:88:2C.00.01\",\"value\":25.40,\"state\":\"online\"}]}";
@@ -303,6 +320,52 @@ static void test_notification_hook(void) {
     TEST_ASSERT_EQUAL_INT(1, receiver.onRuleSetChangedCallCount);
 }
 
+static void test_condition_sensor_subscribed_non_average(void) {
+    ReceiverFixture f;
+    f.arduinoAdapter.currentMillis = 20000;
+    f.ruleRepository.rules.push_back(
+        makeConditionRule("r1", RuleType::SENSOR, {"84:F7:03:FE:88:2C.00.01"}));
+    f.receiver.init();
+
+    TEST_ASSERT_EQUAL_INT(1, f.mqttManager.subscribeCallCount);
+    TEST_ASSERT_EQUAL_STRING("hardware/update/84:F7:03:FE:88:2C", f.mqttManager.lastSubscribeTopic.c_str());
+}
+
+static void test_multiple_conditions_distinct_modules(void) {
+    ReceiverFixture f;
+    f.arduinoAdapter.currentMillis = 20000;
+    f.ruleRepository.rules.push_back(
+        makeConditionRule("r1", RuleType::STEP,
+                          {"84:F7:03:FE:88:2C.00.01", "11:22:33:44:55:66.00.02"}));
+    f.receiver.init();
+
+    TEST_ASSERT_EQUAL_INT(2, f.mqttManager.subscribeCallCount);
+}
+
+static void test_average_sensor_reads_all_conditions(void) {
+    ReceiverFixture f;
+    f.arduinoAdapter.currentMillis = 20000;
+    f.ruleRepository.rules.push_back(
+        makeConditionRule("r1", RuleType::AVERAGE_SENSOR,
+                          {"84:F7:03:FE:88:2C.00.01", "11:22:33:44:55:66.00.02"}));
+    f.receiver.init();
+
+    TEST_ASSERT_EQUAL_INT(2, f.mqttManager.subscribeCallCount);
+}
+
+static void test_local_condition_sensor_not_subscribed(void) {
+    ReceiverFixture f;
+    f.arduinoAdapter.currentMillis = 20000;
+    SensorEntity local;
+    local.uid = "11:22:33:44:55:66.00";
+    f.sensorRepository.sensors.push_back(local);
+    f.ruleRepository.rules.push_back(
+        makeConditionRule("r1", RuleType::SENSOR, {"11:22:33:44:55:66.00.02"}));
+    f.receiver.init();
+
+    TEST_ASSERT_EQUAL_INT(0, f.mqttManager.subscribeCallCount);
+}
+
 static void test_logging_records(void) {
     ReceiverFixture f;
     f.arduinoAdapter.currentMillis = 20000;
@@ -329,6 +392,10 @@ extern "C" void run_remote_sensor_tests(void) {
     RUN_TEST(test_boot_delay_gate);
     RUN_TEST(test_local_sensor_not_subscribed);
     RUN_TEST(test_owner_derivation);
+    RUN_TEST(test_condition_sensor_subscribed_non_average);
+    RUN_TEST(test_multiple_conditions_distinct_modules);
+    RUN_TEST(test_average_sensor_reads_all_conditions);
+    RUN_TEST(test_local_condition_sensor_not_subscribed);
     RUN_TEST(test_subscription_cap);
     RUN_TEST(test_bad_payload_dropped);
     RUN_TEST(test_multi_channel_flattened);
