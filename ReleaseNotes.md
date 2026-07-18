@@ -1,5 +1,12 @@
 # Release Notes
 
+## Version 2.17.26 (2026-07-18)
+
+### Fixed
+- **Shared Sensors Work Across All Rule Types and Conditions**: Fixed a bug where rules relying on sensors from another module received those cross-module values only in one specific rule type and only from the first condition. In other rule types and in additional conditions the referenced shared sensors were never subscribed, so their values never arrived and the rule could not react to them. All conditions across all rule types now receive their shared sensor values correctly.
+
+---
+
 ## Version 2.17.25 (2026-07-17)
 
 ### Fixed
