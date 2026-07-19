@@ -1,5 +1,16 @@
 # Release Notes
 
+## Version 2.17.27 (2026-07-19)
+
+### Changed
+- **Gentler Recovery From Prolonged Server Loss**: When the connection to the server (messaging or data) stays down for more than about ten minutes, the device now restarts its Wi-Fi connection to recover, instead of performing a full reboot. A full reboot remains only as a last resort when the device is completely offline.
+
+### Fixed
+- **Reliable Secure Server Connections Over Long Runtimes**: Fixed a problem where the device could progressively fail to open secure connections to the server after running for a long time, because repeated large temporary memory allocations fragmented the limited memory on boards without extra memory. Memory for secure connections and for processing server messages is now reused from fixed pools, keeping the link stable over long uptimes.
+- **Memory Leak in Incoming Message Handling**: Fixed a memory leak where the buffer holding each incoming server message was not released, slowly consuming the device's memory during operation and contributing to the connection failures above.
+
+---
+
 ## Version 2.17.26 (2026-07-18)
 
 ### Fixed
