@@ -59,6 +59,11 @@ private:
     static const unsigned long OFFLINE_RESET_THRESHOLD_SENSOR_MS = 15 * 60 * 1000; // 15 minutes for sensor directors
     static const unsigned long OFFLINE_RESET_THRESHOLD_DEVICE_MS = 4 * 60 * 60 * 1000; // 4 hours for other modules
 
+    unsigned long _httpDownSince = 0;
+    static const unsigned long HTTP_DOWN_THRESHOLD_MS = 10 * 60 * 1000;
+    unsigned long _lastChannelReconnectTime = 0;
+    static const unsigned long CHANNEL_RECONNECT_THROTTLE_MS = 10 * 60 * 1000;
+
     bool _wifiWasConnected = true;
     unsigned long _wifiLastReconnectAttempt = 0;
     static const unsigned long WIFI_RECONNECT_RETRY_INTERVAL_MS = 10 * 60 * 1000;
@@ -144,8 +149,33 @@ private:
         log("DIAG: Board state recorded");
     }
 
-    // Check MQTT connection and trigger restart if disconnected for too long
-    void checkMqttConnectionAndTriggerRestart()
+    bool triggerWifiReconnect(const char *reason)
+    {
+        if (_wifiAdapter == nullptr || _arduinoAdapter == nullptr)
+        {
+            return false;
+        }
+
+        if (!_wifiAdapter->isConnected())
+        {
+            return false;
+        }
+
+        unsigned long now = _arduinoAdapter->millis();
+        if (_lastChannelReconnectTime != 0 && now - _lastChannelReconnectTime < CHANNEL_RECONNECT_THROTTLE_MS)
+        {
+            log("DIAG: %s - WiFi reconnect throttled", reason);
+            return false;
+        }
+
+        log("DIAG: %s - reconnecting WiFi to recover network stack (no reboot)", reason);
+        _lastChannelReconnectTime = now;
+        bool result = _wifiAdapter->reconnect();
+        log("DIAG: WiFi reconnect result=%d", result ? 1 : 0);
+        return true;
+    }
+
+    void checkMqttConnectionAndReconnect()
     {
         if (_mqttManager == nullptr || _arduinoAdapter == nullptr)
         {
@@ -157,61 +187,73 @@ private:
 
         if (!currentlyConnected)
         {
-            // MQTT is disconnected
             if (_mqttWasConnected || _mqttLastDisconnectedTime == 0)
             {
-                // Just disconnected, or booted while already disconnected - start tracking
                 _mqttLastDisconnectedTime = currentTime;
                 _mqttWasConnected = false;
                 log("DIAG: MQTT disconnected, starting timer");
             }
             else
             {
-                // Already disconnected, check if threshold exceeded
                 unsigned long disconnectDuration = currentTime - _mqttLastDisconnectedTime;
-                
+
                 if (disconnectDuration >= MQTT_DISCONNECT_THRESHOLD_MS)
                 {
-                    log("DIAG: MQTT disconnected for %lu ms (>10 min), triggering module restart", disconnectDuration);
-                    
-                    // Get settings and moduleConfig to trigger restart
-                    ISettings *settings = _moduleConfig ? _moduleConfig->getSettings() : nullptr;
-                    
-                    if (settings != nullptr && _moduleConfig != nullptr)
-                    {
-                        // Set no scan sensors flag
-                        settings->setNoScanSensors(1);
-                        
-                        // Set boot type to technical
-                        settings->setBootType(BOOT_TYPE_TECHNICAL);
-                        
-                        // Request module restart
-                        _moduleConfig->setRequestedModuleMode(CONFIGURED_NEED_RESTART);
-                        
-                        log("DIAG: Module restart triggered due to MQTT disconnection");
-                    }
-                    else
-                    {
-                        log("DIAG: ERROR - Cannot trigger restart, settings or moduleConfig not available");
-                    }
-                    
-                    // Reset timer to avoid repeated restart attempts
+                    log("DIAG: MQTT disconnected for %lu ms (>10 min)", disconnectDuration);
+                    triggerWifiReconnect("MQTT down >10 min");
                     _mqttLastDisconnectedTime = currentTime;
                 }
             }
         }
         else
         {
-            // MQTT is connected
             if (!_mqttWasConnected && _mqttLastDisconnectedTime > 0)
             {
-                // Just reconnected
                 unsigned long disconnectDuration = currentTime - _mqttLastDisconnectedTime;
                 log("DIAG: MQTT reconnected after %lu ms", disconnectDuration);
             }
-            
+
             _mqttWasConnected = true;
-            _mqttLastDisconnectedTime = 0; // Reset timer when connected
+            _mqttLastDisconnectedTime = 0;
+        }
+    }
+
+    void checkHttpConnectionAndReconnect()
+    {
+        if (_restApiService == nullptr || _arduinoAdapter == nullptr)
+        {
+            return;
+        }
+
+        unsigned long currentTime = _arduinoAdapter->millis();
+        bool httpDown = _restApiService->getCountOffline() > _maxCountOffline;
+
+        if (httpDown)
+        {
+            if (_httpDownSince == 0)
+            {
+                _httpDownSince = currentTime;
+                log("DIAG: HTTP down, starting timer");
+            }
+            else
+            {
+                unsigned long downDuration = currentTime - _httpDownSince;
+
+                if (downDuration >= HTTP_DOWN_THRESHOLD_MS)
+                {
+                    log("DIAG: HTTP down for %lu ms (>10 min)", downDuration);
+                    triggerWifiReconnect("HTTP down >10 min");
+                    _httpDownSince = currentTime;
+                }
+            }
+        }
+        else
+        {
+            if (_httpDownSince > 0)
+            {
+                log("DIAG: HTTP recovered after %lu ms", currentTime - _httpDownSince);
+            }
+            _httpDownSince = 0;
         }
     }
 
@@ -433,10 +475,10 @@ public:
             _mqttConnected = _mqttManager->isConnected();
         }
 
-        // Track MQTT disconnection time and trigger restart if needed
-        checkMqttConnectionAndTriggerRestart();
+        checkMqttConnectionAndReconnect();
 
-        // Check for prolonged offline state and trigger automatic reboot if needed
+        checkHttpConnectionAndReconnect();
+
         checkOfflineStateAndTriggerReboot();
 
         // Catch WiFi link-down edge and self-reconnect (no reboot, throttled)
