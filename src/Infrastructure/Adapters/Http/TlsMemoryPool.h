@@ -24,7 +24,7 @@ public:
 private:
     static const size_t kSlotSize = 18432;
     static const size_t kMinPooled = 12288;
-    static const int kSlotCount = 3;
+    static const int kSlotCount = 2;
 
     struct Slot
     {

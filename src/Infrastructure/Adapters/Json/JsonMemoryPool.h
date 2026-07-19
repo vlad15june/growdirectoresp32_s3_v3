@@ -134,7 +134,7 @@ public:
 
 private:
     static const size_t kMinPooled = 4096;
-    static const int kSlotCount = 6;
+    static const int kSlotCount = 4;
 
     struct Slot
     {
@@ -145,10 +145,8 @@ private:
 
     uint8_t _buf16384[16384];
     uint8_t _buf8192a[8192];
-    uint8_t _buf8192b[8192];
     uint8_t _buf4096a[4096];
     uint8_t _buf4096b[4096];
-    uint8_t _buf4096c[4096];
     Slot _slots[kSlotCount];
     portMUX_TYPE _mux;
 
@@ -156,10 +154,8 @@ private:
     {
         _slots[0] = {_buf16384, 16384, false};
         _slots[1] = {_buf8192a, 8192, false};
-        _slots[2] = {_buf8192b, 8192, false};
-        _slots[3] = {_buf4096a, 4096, false};
-        _slots[4] = {_buf4096b, 4096, false};
-        _slots[5] = {_buf4096c, 4096, false};
+        _slots[2] = {_buf4096a, 4096, false};
+        _slots[3] = {_buf4096b, 4096, false};
     }
 
     int slotIndexOf(void *p)

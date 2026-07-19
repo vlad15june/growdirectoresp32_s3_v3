@@ -546,7 +546,7 @@ public:
             return;
         }
 
-        log("EVALUATE_RULES: Starting rule evaluation cycle at %lu ms, last= %lu, elapsed= %lu", now, _lastEvaluationTime, elapsed);
+        logSerial("EVALUATE_RULES: Starting rule evaluation cycle at %lu ms, last= %lu, elapsed= %lu", now, _lastEvaluationTime, elapsed);
         
         _lastEvaluationTime = now;
         
@@ -560,7 +560,7 @@ public:
         // Get active rules from repository
         std::vector<Rule> activeRules = _ruleRepository->getActiveRules();
         
-        log("EVALUATE_RULES: Starting rule evaluation cycle - %d active rules", 
+        logSerial("EVALUATE_RULES: Starting rule evaluation cycle - %d active rules",
             static_cast<int>(activeRules.size()));
         
         // Evaluate all active rules
@@ -589,7 +589,7 @@ public:
     }
 
     RuleEvaluationResult evaluateRule(const Rule& rule) override {
-        log("EVALUATE_RULES: Evaluating rule %s", rule.uid.c_str());
+        logSerial("EVALUATE_RULES: Evaluating rule %s", rule.uid.c_str());
         
         // Create result with basic rule information
         RuleEvaluationResult result(rule.uid, rule.ruleType, rule.version);
@@ -735,13 +735,13 @@ public:
             _ruleLastEvaluated[rule.uid] = _arduinoAdapter->millis();
         }
         
-        log("EVALUATE_RULES: Rule %s condition %s, state: %s", 
+        logSerial("EVALUATE_RULES: Rule %s condition %s, state: %s",
             rule.uid.c_str(), conditionMet ? "MET" : "NOT MET", getDeviceStateName(result.state));
         return result;
     }
 
     bool executeRuleActions(const Rule& rule) override {
-        log("EVALUATE_RULES: Executing actions for rule %s", rule.uid.c_str());
+        logSerial("EVALUATE_RULES: Executing actions for rule %s", rule.uid.c_str());
         
         RuleEvaluationResult currentState = _ruleActiveStates[rule.uid];
         RuleEvaluationResult evaluationResult = evaluateRule(rule);
@@ -974,7 +974,7 @@ private:
             for (const auto& cond : rule.conditions) {
                 bool condOn;
                 if (cond.sensorUids.empty()) {
-                    log("EVALUATE_RULES: SENSOR_COND uid=%s reason=no_sensor_uid on=0", rule.uid.c_str());
+                    logSerial("EVALUATE_RULES: SENSOR_COND uid=%s reason=no_sensor_uid on=0", rule.uid.c_str());
                     condOn = false;
                 } else {
                     double condValue = getSensorValue(cond.sensorUids[0]);
@@ -992,14 +992,14 @@ private:
                             condOn = committedOn;
                             break;
                     }
-                    log("EVALUATE_RULES: SENSOR_COND uid=%s sensor=%s dir=%s value=%.2f low=%.2f high=%.2f on=%d",
+                    logSerial("EVALUATE_RULES: SENSOR_COND uid=%s sensor=%s dir=%s value=%.2f low=%.2f high=%.2f on=%d",
                         rule.uid.c_str(), cond.sensorUids[0].c_str(), getRuleDirectionName(cond.direction),
                         condValue, cond.valueLow, cond.valueHigh, condOn ? 1 : 0);
                 }
                 condFired.push_back(condOn);
             }
             bool targetOn = combineConditionsDnf(rule.conditions, condFired, rule.conditionOr);
-            log("EVALUATE_RULES: SENSOR_COND uid=%s mode=%s ops=%s nConds=%d targetOn=%d",
+            logSerial("EVALUATE_RULES: SENSOR_COND uid=%s mode=%s ops=%s nConds=%d targetOn=%d",
                 rule.uid.c_str(),
                 conditionsHaveJoinOp(rule.conditions) ? "dnf" : "legacy",
                 conditionsOpsString(rule.conditions).c_str(),
@@ -1127,7 +1127,7 @@ private:
             count++;
         }
         double mean = count > 0 ? sum / count : 0.0;
-        log("EVALUATE_RULES: AVG_MEAN uid=%s n=%d mean=%.2f", ruleUid.c_str(), count, mean);
+        logSerial("EVALUATE_RULES: AVG_MEAN uid=%s n=%d mean=%.2f", ruleUid.c_str(), count, mean);
         return mean;
     }
 
@@ -1160,7 +1160,7 @@ private:
                 condFired.push_back(fires);
             }
             bool firing = combineConditionsDnf(rule.conditions, condFired, rule.conditionOr);
-            log("EVALUATE_RULES: STEP_COND uid=%s mode=%s ops=%s nConds=%d firing=%d",
+            logSerial("EVALUATE_RULES: STEP_COND uid=%s mode=%s ops=%s nConds=%d firing=%d",
                 rule.uid.c_str(),
                 conditionsHaveJoinOp(rule.conditions) ? "dnf" : "legacy",
                 conditionsOpsString(rule.conditions).c_str(),
@@ -1171,13 +1171,13 @@ private:
         if (rule.direction == RuleDirection::BETWEEN) {
             double value = getSensorValue(rule.sensorUid);
             bool firing = Utils::isInsideArc(value, rule.valueLow, rule.valueHigh);
-            log("EVALUATE_RULES: STEP_COND uid=%s mode=single firing=%d", rule.uid.c_str(), firing ? 1 : 0);
+            logSerial("EVALUATE_RULES: STEP_COND uid=%s mode=single firing=%d", rule.uid.c_str(), firing ? 1 : 0);
             return firing;
         }
 
         double value = getSensorValue(rule.sensorUid);
         bool firing = conditionFires(value, rule.direction, rule.valueTarget);
-        log("EVALUATE_RULES: STEP_COND uid=%s mode=single firing=%d", rule.uid.c_str(), firing ? 1 : 0);
+        logSerial("EVALUATE_RULES: STEP_COND uid=%s mode=single firing=%d", rule.uid.c_str(), firing ? 1 : 0);
         return firing;
     }
 
