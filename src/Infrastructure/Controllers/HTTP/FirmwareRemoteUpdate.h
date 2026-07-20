@@ -207,7 +207,11 @@ public:
         otaWrite("UPDATE OK -> reboot to new firmware");
         _httpClient->end();
         putUpdateStatus(FIRMWARE_UPDATE_STATE_DONE);
-        
+
         return true;
+    }
+
+    bool isUpdateInProgress() override {
+        return Update.isRunning();
     }
 };

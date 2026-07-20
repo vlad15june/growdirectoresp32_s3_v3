@@ -46,6 +46,7 @@ private:
     static const int EEPROM_NO_SCAN_SENSORS = 552;
     static const int EEPROM_WAS_INITIAL_SYNC_COMPLETED = 556;
     static const int EEPROM_NEED_CLEAR_SPIFFS = 558;
+    static const int EEPROM_PREVENTIVE_RESTART_DAY = 560;
 
     void log(const char *format, ...)
     {
@@ -384,6 +385,18 @@ public:
     {
         log("SETTINGS: needClearSpiffs = %d", needClear);
         _eeprom.writeByte(EEPROM_NEED_CLEAR_SPIFFS, needClear);
+        _eeprom.commit();
+    }
+
+    uint8_t getLastPreventiveRestartDay() override
+    {
+        return _eeprom.readByte(EEPROM_PREVENTIVE_RESTART_DAY);
+    }
+
+    void setLastPreventiveRestartDay(uint8_t day) override
+    {
+        log("SETTINGS: lastPreventiveRestartDay = %d", day);
+        _eeprom.writeByte(EEPROM_PREVENTIVE_RESTART_DAY, day);
         _eeprom.commit();
     }
 };

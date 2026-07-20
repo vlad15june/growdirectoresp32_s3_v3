@@ -51,6 +51,7 @@ extern "C" int run_check_firmware_update_on_startup_tests(void);
 extern "C" int run_sensor_recovery_tests(void);
 extern "C" void run_module_to_module_reboot_tests(void);
 extern "C" void run_rule_dnf_combine_tests(void);
+extern "C" int run_preventive_restart_use_case_tests(void);
 
 void setUp(void) {
     // set stuff up here
@@ -213,6 +214,9 @@ int main(void) {
 
     // Run tests for DNF AND/OR condition combining (GDV1-3717)
     run_rule_dnf_combine_tests();
+
+    // Run tests for nightly preventive restart
+    run_preventive_restart_use_case_tests();
 
     return UNITY_END();
 }

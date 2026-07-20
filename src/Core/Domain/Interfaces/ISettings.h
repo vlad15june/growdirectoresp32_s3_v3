@@ -88,6 +88,10 @@ public:
     // Pending SPIFFS clear flag (set by clearAllData, consumed on next boot)
     virtual uint8_t getNeedClearSpiffs() = 0;
     virtual void setNeedClearSpiffs(uint8_t needClear) = 0;
+
+    // Day of month of the last preventive nightly restart (matches legacy address 560)
+    virtual uint8_t getLastPreventiveRestartDay() = 0;
+    virtual void setLastPreventiveRestartDay(uint8_t day) = 0;
 };
 
 // Default implementation of destructor

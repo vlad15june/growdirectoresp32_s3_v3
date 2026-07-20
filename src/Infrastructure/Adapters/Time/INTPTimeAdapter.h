@@ -27,7 +27,10 @@ public:
     
     // Restore time from persistent storage
     virtual void restoreTimeFromStorage() = 0;
-    
+
+    // Get current local time as struct tm
+    virtual bool getLocalTime(struct tm* out) = 0;
+
     // Force immediate NTP synchronization
     virtual void forceSyncTime() = 0;
     

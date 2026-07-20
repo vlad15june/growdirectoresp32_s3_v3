@@ -47,6 +47,7 @@ private:
     IBoardTest* boardTest;
     IOtaUpdateLog* otaUpdateLog = nullptr;
     IBootEventLog* bootEventLog = nullptr;
+    IBootEventLog* restartEventLog = nullptr;
 
 public:
     LoopServiceFactory(
@@ -118,6 +119,7 @@ public:
                 configDoneService->setRuleService(ruleService);
                 configDoneService->setOtaUpdateLog(otaUpdateLog);
                 configDoneService->setBootEventLog(bootEventLog);
+                configDoneService->setRestartEventLog(restartEventLog);
 
                 // Then assign to the service unique_ptr
                 service = std::unique_ptr<LoopServiceBase>(configDoneService);
@@ -189,6 +191,10 @@ public:
 
     void setBootEventLog(IBootEventLog* bootLog) {
         this->bootEventLog = bootLog;
+    }
+
+    void setRestartEventLog(IBootEventLog* restartLog) {
+        this->restartEventLog = restartLog;
     }
 };
 

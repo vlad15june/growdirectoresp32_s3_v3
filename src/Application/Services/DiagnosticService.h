@@ -14,6 +14,7 @@
 #include "Infrastructure/Adapters/Time/INTPTimeAdapter.h"
 #include "Core/Domain/Enums/BootTypeEnum.h"
 #include "Core/Domain/Enums/ModuleModeEnum.h"
+#include "Core/Domain/UseCases/Diagnostics/PreventiveRestartUseCase.h"
 #include <cstdarg>
 #include <cstdio>
 
@@ -36,6 +37,7 @@ private:
     INTPTimeAdapter *_timeAdapter;
     IArduinoAdapter *_arduinoAdapter;
     IMqttManager *_mqttManager;
+    PreventiveRestartUseCase *_preventiveRestartUseCase;
 
     static const int _maxCountOffline = 5;
     static const unsigned long WIFI_OFFLINE_DEBOUNCE_MS = 30 * 1000;
@@ -419,7 +421,8 @@ public:
         INTPTimeAdapter *timeAdapter = nullptr,
         IArduinoAdapter *arduinoAdapter = nullptr,
         IMqttManager *mqttManager = nullptr,
-        IHybridAPIService *hybridApiService = nullptr) // Added hybrid API service parameter
+        IHybridAPIService *hybridApiService = nullptr, // Added hybrid API service parameter
+        PreventiveRestartUseCase *preventiveRestartUseCase = nullptr)
         : _restApiService(restApiService),
           _hybridApiService(hybridApiService),
           _moduleConfig(moduleConfig),
@@ -430,6 +433,7 @@ public:
           _timeAdapter(timeAdapter),
           _arduinoAdapter(arduinoAdapter),
           _mqttManager(mqttManager),
+          _preventiveRestartUseCase(preventiveRestartUseCase),
           _mqttConnected(false),
           _failsHistoryIndex(0),
           _mqttLastDisconnectedTime(0),
@@ -483,6 +487,12 @@ public:
 
         // Catch WiFi link-down edge and self-reconnect (no reboot, throttled)
         checkWifiConnectionAndReconnect();
+
+        // Nightly preventive restart check
+        if (_preventiveRestartUseCase != nullptr)
+        {
+            _preventiveRestartUseCase->perform();
+        }
 
         unsigned long now = _arduinoAdapter ? _arduinoAdapter->millis() : 0;
         bool wifiConnected = (_wifiAdapter != nullptr) ? _wifiAdapter->isConnected() : true;
