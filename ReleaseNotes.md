@@ -1,5 +1,12 @@
 # Release Notes
 
+## Version 2.17.28 (2026-07-20)
+
+### Fixed
+- **Build Reliability**: Fixed a build issue that prevented the firmware from compiling in the automated build environment, so the release can be produced reliably. No change to device behavior.
+
+---
+
 ## Version 2.17.27 (2026-07-19)
 
 ### Changed
