@@ -7,7 +7,7 @@
 #include <T67XX.h>
 #include "globals.h"
 #include "Infrastructure/Adapters/ExternalWDT/ExternalWDT.h"
-#include "Infrastructure/Adapters/HTTP/TlsMemoryPool.h"
+#include "Infrastructure/Adapters/Http/TlsMemoryPool.h"
 #include "esp_task_wdt.h"
 
 // Global loop service instance
