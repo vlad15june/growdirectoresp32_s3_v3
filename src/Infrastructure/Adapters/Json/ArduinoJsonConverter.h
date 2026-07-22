@@ -487,15 +487,16 @@ public:
             rule.timeToSetPoint = doc["timeToSetPoint"] | 0;
             rule.isAdvanced = doc["isAdvanced"] | false;
 
-            // TODO: These should handle time conversion properly
             if (doc.containsKey("startDayTime"))
             {
-                rule.startDayTime = 0; // Should convert ISO time string
+                std::string startDayTimeStr = doc["startDayTime"] | "";
+                rule.startDayTime = parseISOTimeToTimeT(startDayTimeStr);
             }
 
             if (doc.containsKey("endDayTime"))
             {
-                rule.endDayTime = 0; // Should convert ISO time string
+                std::string endDayTimeStr = doc["endDayTime"] | "";
+                rule.endDayTime = parseISOTimeToTimeT(endDayTimeStr);
             }
 
             // Parse advanced rule values
@@ -742,9 +743,8 @@ public:
             doc["timeToSetPoint"] = rule.timeToSetPoint;
             doc["isAdvanced"] = rule.isAdvanced;
 
-            // TODO: Format time properly to ISO standard
-            doc["startDayTime"] = "";
-            doc["endDayTime"] = "";
+            doc["startDayTime"] = timeToISOString(rule.startDayTime);
+            doc["endDayTime"] = timeToISOString(rule.endDayTime);
 
             // Advanced rule values
             JsonArray advancedValuesArr = doc.createNestedArray("advancedRuleValues");

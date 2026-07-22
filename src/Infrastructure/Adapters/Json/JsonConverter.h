@@ -534,6 +534,11 @@ public:
         rule.timeToSetPoint = extractIntValue(jsonStr, "timeToSetPoint");
         rule.isAdvanced = jsonStr.find("\"isAdvanced\":true") != std::string::npos;
 
+        std::string startDayTimeStr = extractValue(jsonStr, "startDayTime");
+        rule.startDayTime = parseISOTimeToTimeT(startDayTimeStr);
+        std::string endDayTimeStr = extractValue(jsonStr, "endDayTime");
+        rule.endDayTime = parseISOTimeToTimeT(endDayTimeStr);
+
         // Parse conditions
         std::string conditionsArr = extractArray(jsonStr, "conditions");
         auto conditionObjs = splitObjects(conditionsArr);
@@ -805,9 +810,8 @@ public:
             oss << ",\"timeToSetPoint\":" << rule.timeToSetPoint;
             oss << ",\"isAdvanced\":" << (rule.isAdvanced ? "true" : "false");
 
-            // These should be properly formatted to ISO standard
-            oss << ",\"startDayTime\":\"" << rule.startDayTime << "\"";
-            oss << ",\"endDayTime\":\"" << rule.endDayTime << "\"";
+            oss << ",\"startDayTime\":\"" << timeToISOString(rule.startDayTime) << "\"";
+            oss << ",\"endDayTime\":\"" << timeToISOString(rule.endDayTime) << "\"";
 
             oss << ",\"advancedRuleValues\":[]"; // Empty for now
         }

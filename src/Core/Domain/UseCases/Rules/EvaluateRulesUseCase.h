@@ -611,7 +611,11 @@ public:
             result.ruleStopReason = validationResult.errorMessage;
             return result;
         }
-        
+
+        if (!isRuleActiveNow(rule, result)) {
+            return result;
+        }
+
         // Fill sensor information
         if (!rule.sensorUid.empty()) {
             result.sensorUid = rule.sensorUid;
@@ -780,6 +784,74 @@ public:
     }
 
 private:
+    bool isRuleActiveNow(const Rule& rule, RuleEvaluationResult& result) {
+        bool hasWindow = (rule.startDayTime != 0 || rule.endDayTime != 0);
+        bool hasDays = (!rule.daysOfWeek.empty() || !rule.daysOfMonth.empty());
+        if (!hasWindow && !hasDays) {
+            return true;
+        }
+
+        if (!_ntpTimeAdapter) {
+            log("EVALUATE_RULES: NTP time adapter not available for activity window of rule %s", rule.uid.c_str());
+            result.state = DEVICE_STATE_OFF;
+            result.isRuleTurnOnDevice = false;
+            result.ruleStopReason = "time_not_available_error";
+            return false;
+        }
+
+        time_t currentTime = _ntpTimeAdapter->getEpochTime();
+        struct tm timeinfo;
+        if (!gmtime_r(&currentTime, &timeinfo)) {
+            log("EVALUATE_RULES: Failed to get current time for activity window of rule %s", rule.uid.c_str());
+            result.state = DEVICE_STATE_OFF;
+            result.isRuleTurnOnDevice = false;
+            result.ruleStopReason = "time_not_available_error";
+            return false;
+        }
+
+        if (hasWindow) {
+            long nowSec = timeinfo.tm_hour * 3600 + timeinfo.tm_min * 60 + timeinfo.tm_sec;
+            long startSec = static_cast<long>(rule.startDayTime);
+            long endSec = static_cast<long>(rule.endDayTime);
+            bool windowOpen;
+            if (endSec >= startSec) {
+                windowOpen = (nowSec >= startSec && nowSec <= endSec);
+            } else {
+                windowOpen = (nowSec >= startSec || nowSec <= endSec);
+            }
+            if (!windowOpen) {
+                log("EVALUATE_RULES: Rule %s outside operation time window (now=%ld start=%ld end=%ld)",
+                    rule.uid.c_str(), nowSec, startSec, endSec);
+                result.state = DEVICE_STATE_OFF;
+                result.isRuleTurnOnDevice = false;
+                result.ruleStopReason = "time_reach";
+                return false;
+            }
+        }
+
+        if (hasDays) {
+            bool dayMatches = false;
+            for (int day : rule.daysOfWeek) {
+                if (day == timeinfo.tm_wday) { dayMatches = true; break; }
+            }
+            if (!dayMatches) {
+                for (int day : rule.daysOfMonth) {
+                    if (day == timeinfo.tm_mday) { dayMatches = true; break; }
+                }
+            }
+            if (!dayMatches) {
+                log("EVALUATE_RULES: Rule %s not active on current day (wday=%d mday=%d)",
+                    rule.uid.c_str(), timeinfo.tm_wday, timeinfo.tm_mday);
+                result.state = DEVICE_STATE_OFF;
+                result.isRuleTurnOnDevice = false;
+                result.ruleStopReason = "rule_off_by_date";
+                return false;
+            }
+        }
+
+        return true;
+    }
+
     RuleEvaluationResult evaluateScheduleRule(const Rule& rule, RuleEvaluationResult& result) {
         log("EVALUATE_RULES: Evaluating schedule rule %s", rule.uid.c_str());
         
