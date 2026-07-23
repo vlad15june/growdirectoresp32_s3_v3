@@ -1,5 +1,12 @@
 # Release Notes
 
+## Version 2.17.30 (2026-07-23)
+
+### Fixed
+- **Build Reliability**: Fixed a build issue where the automated build environment could not find a required time library, so the release can be produced reliably. No change to device behavior.
+
+---
+
 ## Version 2.17.29 (2026-07-22)
 
 ### Fixed
