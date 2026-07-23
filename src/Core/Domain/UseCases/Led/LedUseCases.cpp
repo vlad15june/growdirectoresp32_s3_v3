@@ -59,7 +59,7 @@ void LedUseCases::logOffline(const char *format, ...)
 void LedUseCases::ledOnLoad()
 {
     log("Setting all yellow LEDs on during module load");
-    ledAdapter->setYellowLedOn(0);
+    ledAdapter->setAllYellowLedOn();
 }
 
 // Turn LEDs off during module unload
@@ -239,24 +239,9 @@ void LedUseCases::loop()
                 break;
             }
 
-            if (currentTime - lastBlinkTime > (ledState ? BLINK_SLOW_ON_TIME : BLINK_SLOW_OFF_TIME))
-            {
-                lastBlinkTime = currentTime;
-                ledState = !ledState;
-
-                ledAdapter->setAllGreenLedOff();
-
-                if (ledState)
-                {
-                    ledAdapter->setAllRedLedOn();
-                }
-                else
-                {
-                    ledAdapter->setAllRedLedOff();
-                }
-
-                log("CONFIGURED_DONE offline: Red LED blink state: %s", ledState ? "ON" : "OFF");
-            }
+            ledAdapter->setAllGreenLedOff();
+            ledAdapter->setAllRedLedOn();
+            log("CONFIGURED_DONE offline: solid red (no server connection)");
             break;
         }
 
