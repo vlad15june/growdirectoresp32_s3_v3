@@ -77,7 +77,7 @@ void test_preventive_restart_triggers_when_safe() {
     setupUseCase();
 
     g_moduleConfig.setRequestedModuleMode(CONFIGURED_DONE);
-    setTime(2, 14, 15);
+    setTime(13, 30, 15);
 
     g_device.deviceUid = "relay_1";
     g_device.state = DEVICE_STATE_OFF;
@@ -92,12 +92,30 @@ void test_preventive_restart_triggers_when_safe() {
     TEST_ASSERT_EQUAL_INT(1, static_cast<int>(g_restartEventLog.getMessages().size()));
 }
 
+void test_preventive_restart_triggers_at_window_end() {
+    resetAll();
+    setupUseCase();
+
+    g_moduleConfig.setRequestedModuleMode(CONFIGURED_DONE);
+    setTime(14, 29, 15);
+
+    g_device.deviceUid = "relay_1";
+    g_device.state = DEVICE_STATE_OFF;
+    g_deviceModel.addDevice(&g_device);
+
+    g_useCase->perform();
+
+    TEST_ASSERT_EQUAL_UINT8(15, g_settings.getLastPreventiveRestartDay());
+    TEST_ASSERT_EQUAL_INT(CONFIGURED_NEED_RESTART, g_moduleConfig.getRequestedModuleMode());
+    TEST_ASSERT_EQUAL_UINT8(BOOT_TYPE_TECHNICAL, g_settings.getBootType());
+}
+
 void test_preventive_restart_skipped_outside_window() {
     resetAll();
     setupUseCase();
 
     g_moduleConfig.setRequestedModuleMode(CONFIGURED_DONE);
-    setTime(3, 14, 15);
+    setTime(14, 30, 15);
 
     g_device.deviceUid = "relay_1";
     g_device.state = DEVICE_STATE_OFF;
@@ -116,7 +134,7 @@ void test_preventive_restart_skipped_already_today() {
 
     g_moduleConfig.setRequestedModuleMode(CONFIGURED_DONE);
     g_settings.setLastPreventiveRestartDay(15);
-    setTime(2, 30, 15);
+    setTime(13, 30, 15);
 
     g_device.deviceUid = "relay_1";
     g_device.state = DEVICE_STATE_OFF;
@@ -133,7 +151,7 @@ void test_preventive_restart_skipped_device_on() {
     setupUseCase();
 
     g_moduleConfig.setRequestedModuleMode(CONFIGURED_DONE);
-    setTime(2, 30, 15);
+    setTime(13, 30, 15);
 
     g_device.deviceUid = "relay_1";
     g_device.state = DEVICE_STATE_ON;
@@ -150,7 +168,7 @@ void test_preventive_restart_skipped_rule_starts_soon() {
     setupUseCase();
 
     g_moduleConfig.setRequestedModuleMode(CONFIGURED_DONE);
-    setTime(2, 14, 15);
+    setTime(13, 30, 15);
 
     g_device.deviceUid = "relay_1";
     g_device.state = DEVICE_STATE_OFF;
@@ -170,7 +188,7 @@ void test_preventive_restart_skipped_ota_in_progress() {
     setupUseCase();
 
     g_moduleConfig.setRequestedModuleMode(CONFIGURED_DONE);
-    setTime(2, 14, 15);
+    setTime(13, 30, 15);
 
     g_device.deviceUid = "relay_1";
     g_device.state = DEVICE_STATE_OFF;
@@ -189,7 +207,7 @@ void test_preventive_restart_skipped_not_configured() {
     setupUseCase();
 
     g_moduleConfig.setRequestedModuleMode(USER_CAN_CONFIGURE);
-    setTime(2, 14, 15);
+    setTime(13, 30, 15);
 
     g_device.deviceUid = "relay_1";
     g_device.state = DEVICE_STATE_OFF;
@@ -205,6 +223,7 @@ extern "C" int run_preventive_restart_use_case_tests() {
     UNITY_BEGIN();
 
     RUN_TEST(test_preventive_restart_triggers_when_safe);
+    RUN_TEST(test_preventive_restart_triggers_at_window_end);
     RUN_TEST(test_preventive_restart_skipped_outside_window);
     RUN_TEST(test_preventive_restart_skipped_already_today);
     RUN_TEST(test_preventive_restart_skipped_device_on);

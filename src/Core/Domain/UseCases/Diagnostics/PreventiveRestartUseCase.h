@@ -34,7 +34,9 @@ private:
     IDebugSystem* _debugSystem;
     IBootEventLog* _restartEventLog;
 
-    static constexpr int PREVENTIVE_RESTART_HOUR = 2;
+    static constexpr int PREVENTIVE_RESTART_HOUR = 13;
+    static constexpr int PREVENTIVE_RESTART_MINUTE = 30;
+    static constexpr int PREVENTIVE_RESTART_WINDOW_MIN = 59;
     static constexpr int PREVENTIVE_RESTART_LOOKAHEAD_MIN = 5;
 
     void log(const char* format, ...) {
@@ -58,12 +60,11 @@ private:
     }
 
     bool isInsideRestartWindow(const struct tm& localTime) {
-        // Default: legacy preventive restart window 02:00–02:59 local time.
-        return localTime.tm_hour == PREVENTIVE_RESTART_HOUR;
-
-        // Alternative: restart only at exact minute, e.g. 17:20.
-        // Uncomment the line below and comment out the default return if needed.
-        // return localTime.tm_hour == 17 && localTime.tm_min == 20;
+        // Restart window: 59 minutes starting at the configured minute.
+        int currentMinutes = localTime.tm_hour * 60 + localTime.tm_min;
+        int startMinutes = PREVENTIVE_RESTART_HOUR * 60 + PREVENTIVE_RESTART_MINUTE;
+        int endMinutes = startMinutes + PREVENTIVE_RESTART_WINDOW_MIN;
+        return currentMinutes >= startMinutes && currentMinutes <= endMinutes;
     }
 
     bool wasAlreadyRestartedToday(const struct tm& localTime) {
@@ -184,8 +185,8 @@ public:
 
         char record[160];
         snprintf(record, sizeof(record),
-                 "PREVENTIVE_RESTART: preventive restart at 02:%02d - all devices off and no rules will start",
-                 localTime.tm_min);
+                 "PREVENTIVE_RESTART: preventive restart at %02d:%02d - all devices off and no rules will start",
+                 localTime.tm_hour, localTime.tm_min);
         writeRestartLogEntry(record);
 
         markRestartedToday(localTime);
