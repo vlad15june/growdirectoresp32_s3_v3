@@ -196,6 +196,49 @@ void LedUseCases::loop()
     case ModuleModeEnum::CONFIGURED_DONE:
         if (networkStatusProvider != nullptr && networkStatusProvider->isNetworkOffline())
         {
+            bool deviceModule = (moduleConfig->getModuleType() == MODULE_TYPE_DEVICE ||
+                                 moduleConfig->getModuleType() == MODULE_TYPE_HYDRO ||
+                                 moduleConfig->getModuleSubType() == MODULE_SUBTYPE_DIMMER);
+
+            if (deviceModule && deviceModel != nullptr)
+            {
+                if (currentTime - lastBlinkTime > BLINK_SLOW_ON_TIME)
+                {
+                    lastBlinkTime = currentTime;
+                    ledState = !ledState;
+                }
+
+                auto devices = deviceModel->getAllDevices();
+
+                for (uint8_t i = 0; i < ledsCount && i < devices.size(); i++)
+                {
+                    bool deviceIsOn = (devices[i]->state == DEVICE_STATE_ON ||
+                                       devices[i]->state == DEVICE_STATE_STEP_ON);
+
+                    if (deviceIsOn)
+                    {
+                        if (ledState)
+                        {
+                            ledAdapter->setGreenLedOff(i);
+                            ledAdapter->setRedLedOn(i);
+                        }
+                        else
+                        {
+                            ledAdapter->setGreenLedOn(i);
+                            ledAdapter->setRedLedOff(i);
+                        }
+                    }
+                    else
+                    {
+                        ledAdapter->setGreenLedOff(i);
+                        ledAdapter->setRedLedOn(i);
+                    }
+                }
+
+                log("CONFIGURED_DONE offline: per-device green/red state: %s", ledState ? "ON" : "OFF");
+                break;
+            }
+
             if (currentTime - lastBlinkTime > (ledState ? BLINK_SLOW_ON_TIME : BLINK_SLOW_OFF_TIME))
             {
                 lastBlinkTime = currentTime;
