@@ -1,5 +1,14 @@
 # Release Notes
 
+## Version 2.18.1 (2026-07-24)
+
+### Fixed
+- **Correct Status-Light Indications**: GDV1-3752 Fixed the module status light to match the specification — it now shows a steady yellow while the module is starting up and a steady red when the module is configured but has lost its connection to the server, instead of the previous incorrect indication.
+- **Per-Output Indication While Offline**: GDV1-3752 Fixed the offline indication so that, when a configured module has no server connection, each connected output that is currently switched on is shown with its own green light, letting operators see which outputs are active even without a connection.
+- **Sensor Rule Thresholds Applied Correctly**: GDV1-3753 Fixed sensor-based rules so their lower and upper thresholds are applied in the correct order regardless of how they were entered, so a rule switches its equipment on and off at the intended values with the proper margin.
+
+---
+
 ## Version 2.17.30 (2026-07-23)
 
 ### Fixed
