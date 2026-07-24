@@ -31,20 +31,23 @@ inline SensorVerdict evaluateSensorHysteresis(RuleDirection direction, double va
         return Utils::isInsideArc(value, valueLow, valueHigh) ? SensorVerdict::TURN_ON : SensorVerdict::TURN_OFF;
     }
 
+    double lo = (valueLow < valueHigh) ? valueLow : valueHigh;
+    double hi = (valueLow > valueHigh) ? valueLow : valueHigh;
+
     if (direction == RuleDirection::DOWN) {
-        if (value >= valueHigh) {
+        if (value >= hi) {
             return previouslyOn ? SensorVerdict::HOLD : SensorVerdict::TURN_ON;
         }
-        if (value <= valueLow) {
+        if (value <= lo) {
             return previouslyOn ? SensorVerdict::TURN_OFF : SensorVerdict::HOLD;
         }
         return SensorVerdict::HOLD;
     }
 
-    if (value <= valueLow) {
+    if (value <= lo) {
         return previouslyOn ? SensorVerdict::HOLD : SensorVerdict::TURN_ON;
     }
-    if (value >= valueHigh) {
+    if (value >= hi) {
         return previouslyOn ? SensorVerdict::TURN_OFF : SensorVerdict::HOLD;
     }
     return SensorVerdict::HOLD;

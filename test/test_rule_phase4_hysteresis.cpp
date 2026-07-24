@@ -64,6 +64,46 @@ static void test_no_spurious_turn_off_at_boot(void) {
     TEST_ASSERT_EQUAL_INT(V_ON, verdict(RuleDirection::UP, 23.0, 24.0, 26.0, false));
 }
 
+static void test_down_inverted_bounds_turns_on_above_max_when_off(void) {
+    TEST_ASSERT_EQUAL_INT(V_ON, verdict(RuleDirection::DOWN, 26.2, 26.0, 24.0, false));
+    TEST_ASSERT_EQUAL_INT(V_ON, verdict(RuleDirection::DOWN, 26.0, 26.0, 24.0, false));
+}
+
+static void test_down_inverted_bounds_turns_off_below_min_when_on(void) {
+    TEST_ASSERT_EQUAL_INT(V_OFF, verdict(RuleDirection::DOWN, 23.8, 26.0, 24.0, true));
+    TEST_ASSERT_EQUAL_INT(V_OFF, verdict(RuleDirection::DOWN, 24.0, 26.0, 24.0, true));
+}
+
+static void test_down_inverted_bounds_deadband_holds(void) {
+    TEST_ASSERT_EQUAL_INT(V_HOLD, verdict(RuleDirection::DOWN, 25.0, 26.0, 24.0, true));
+    TEST_ASSERT_EQUAL_INT(V_HOLD, verdict(RuleDirection::DOWN, 25.0, 26.0, 24.0, false));
+}
+
+static void test_up_inverted_bounds_turns_on_below_min_when_off(void) {
+    TEST_ASSERT_EQUAL_INT(V_ON, verdict(RuleDirection::UP, 23.9, 26.0, 24.0, false));
+    TEST_ASSERT_EQUAL_INT(V_ON, verdict(RuleDirection::UP, 24.0, 26.0, 24.0, false));
+}
+
+static void test_up_inverted_bounds_turns_off_above_max_when_on(void) {
+    TEST_ASSERT_EQUAL_INT(V_OFF, verdict(RuleDirection::UP, 26.1, 26.0, 24.0, true));
+    TEST_ASSERT_EQUAL_INT(V_OFF, verdict(RuleDirection::UP, 26.0, 26.0, 24.0, true));
+}
+
+static void test_up_inverted_bounds_deadband_holds(void) {
+    TEST_ASSERT_EQUAL_INT(V_HOLD, verdict(RuleDirection::UP, 25.0, 26.0, 24.0, true));
+    TEST_ASSERT_EQUAL_INT(V_HOLD, verdict(RuleDirection::UP, 25.0, 26.0, 24.0, false));
+}
+
+static void test_gdv1_3753_ph_down_inverted_bounds_does_not_turn_on(void) {
+    TEST_ASSERT_EQUAL_INT(V_HOLD, verdict(RuleDirection::DOWN, 2729.0, 2812.021973, 2664.710938, false));
+    TEST_ASSERT_EQUAL_INT(V_HOLD, verdict(RuleDirection::DOWN, 2701.0, 2812.021973, 2664.710938, false));
+}
+
+static void test_gdv1_3753_ph_down_inverted_bounds_switches_at_extremes(void) {
+    TEST_ASSERT_EQUAL_INT(V_ON, verdict(RuleDirection::DOWN, 2850.0, 2812.021973, 2664.710938, false));
+    TEST_ASSERT_EQUAL_INT(V_OFF, verdict(RuleDirection::DOWN, 2600.0, 2812.021973, 2664.710938, true));
+}
+
 extern "C" void run_rule_phase4_hysteresis_tests(void) {
     RUN_TEST(test_down_turns_on_above_high_when_off);
     RUN_TEST(test_down_turns_off_below_low_when_on);
@@ -76,4 +116,12 @@ extern "C" void run_rule_phase4_hysteresis_tests(void) {
     RUN_TEST(test_up_on_zone_while_on_holds);
     RUN_TEST(test_unknown_is_inert);
     RUN_TEST(test_no_spurious_turn_off_at_boot);
+    RUN_TEST(test_down_inverted_bounds_turns_on_above_max_when_off);
+    RUN_TEST(test_down_inverted_bounds_turns_off_below_min_when_on);
+    RUN_TEST(test_down_inverted_bounds_deadband_holds);
+    RUN_TEST(test_up_inverted_bounds_turns_on_below_min_when_off);
+    RUN_TEST(test_up_inverted_bounds_turns_off_above_max_when_on);
+    RUN_TEST(test_up_inverted_bounds_deadband_holds);
+    RUN_TEST(test_gdv1_3753_ph_down_inverted_bounds_does_not_turn_on);
+    RUN_TEST(test_gdv1_3753_ph_down_inverted_bounds_switches_at_extremes);
 }
