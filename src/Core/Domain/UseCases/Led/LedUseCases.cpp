@@ -54,8 +54,8 @@ void LedUseCases::logOffline(const char *format, ...)
 
 void LedUseCases::ledOnLoad()
 {
-    log("Setting all yellow LEDs on during module load");
-    ledAdapter->setAllYellowLedOn();
+    log("Setting yellow LED on during module load");
+    ledAdapter->setYellowLedOn(0);
 }
 
 void LedUseCases::ledOffLoad()

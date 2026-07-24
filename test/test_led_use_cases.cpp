@@ -103,9 +103,11 @@ static void test_led_on_load(void)
     g_ledUseCases->ledOnLoad();
 
     if (debug_file != nullptr)
-        fprintf(debug_file, "Checking if setAllYellowLedOn was called: %s\n",
-                g_mockLedAdapter.setAllYellowLedOnCalled ? "Yes" : "No");
-    TEST_ASSERT_TRUE(g_mockLedAdapter.setAllYellowLedOnCalled);
+        fprintf(debug_file, "Checking if setYellowLedOn was called: %s, index=%d\n",
+                g_mockLedAdapter.setYellowLedOnCalled ? "Yes" : "No", g_mockLedAdapter.lastYellowLedIndex);
+    TEST_ASSERT_TRUE(g_mockLedAdapter.setYellowLedOnCalled);
+    TEST_ASSERT_EQUAL(0, g_mockLedAdapter.lastYellowLedIndex);
+    TEST_ASSERT_FALSE(g_mockLedAdapter.setAllYellowLedOnCalled);
 
     led_use_cases_teardown();
     if (debug_file != nullptr)
@@ -153,9 +155,10 @@ static void test_null_dependencies_handle_gracefully(void)
     g_ledUseCases->ledOnLoad();
 
     if (debug_file != nullptr)
-        fprintf(debug_file, "Checking if setAllYellowLedOn was called: %s\n",
-                g_mockLedAdapter.setAllYellowLedOnCalled ? "Yes" : "No");
-    TEST_ASSERT_TRUE(g_mockLedAdapter.setAllYellowLedOnCalled);
+        fprintf(debug_file, "Checking if setYellowLedOn was called: %s, index=%d\n",
+                g_mockLedAdapter.setYellowLedOnCalled ? "Yes" : "No", g_mockLedAdapter.lastYellowLedIndex);
+    TEST_ASSERT_TRUE(g_mockLedAdapter.setYellowLedOnCalled);
+    TEST_ASSERT_EQUAL(0, g_mockLedAdapter.lastYellowLedIndex);
 
     led_use_cases_teardown();
     if (debug_file != nullptr)
