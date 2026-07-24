@@ -5,6 +5,7 @@
 #include <WiFiUdp.h>
 #include "time.h"
 #include "esp_sntp.h"
+#include <ESP32Time.h>
 #include <cstdarg>
 #include <cstdio>
 
@@ -25,6 +26,8 @@ private:
 
     // Real time seconds counter (for command time validation)
     unsigned long _realTimeSeconds;
+
+    ESP32Time _rtc;
 
     ILogger *_logger;
     IDebugSystem *_debugSystem;
@@ -295,9 +298,15 @@ void NTPTimeAdapter::restoreTimeFromStorage()
     snprintf(_logBuffer, sizeof(_logBuffer), "Time restored from EEPROM: %s", buffer);
     log("TIME_SYNC: %s\n", _logBuffer);
 
-    // Set RTC time (assumes ESP32 RTC is available)
-    // Note: You might need to adjust this to match your specific RTC implementation
-    // rtc.setTimeStruct(timeinfo);
+    if (timeinfo.tm_year + 1900 > 2020)
+    {
+        _rtc.setTimeStruct(timeinfo);
+        log("TIME_SYNC: System clock seeded from EEPROM: %s\n", buffer);
+    }
+    else
+    {
+        log("TIME_SYNC: Skipped clock seed, stored time invalid: %s\n", buffer);
+    }
 }
 
 // Static callback function

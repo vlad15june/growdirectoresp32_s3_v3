@@ -1,5 +1,20 @@
 # Release Notes
 
+## Version 2.17.30 (2026-07-23)
+
+### Fixed
+- **Build Reliability**: Fixed a build issue where the automated build environment could not find a required time library, so the release can be produced reliably. No change to device behavior.
+
+---
+
+## Version 2.17.29 (2026-07-22)
+
+### Fixed
+- **Time-Based Rules Survive an Offline Reboot**: GDV1-3752 Fixed an issue where, after a reboot without internet access, the device had no valid time until it could reach the time server, so schedule and cyclic rules stopped working. On startup the device now restores its clock from the last saved time, so time-based rules keep running even when the device restarts offline.
+- **Rule Operation-Time Window and Day Restrictions Now Enforced**: GDV1-3754 Fixed an issue where a rule's configured daily operation-time window and its allowed days of the week/month were not applied. A rule now switches its equipment on only within its configured hours and on its permitted days, and stays off outside that window.
+
+---
+
 ## Version 2.17.28 (2026-07-20)
 
 ### Fixed
