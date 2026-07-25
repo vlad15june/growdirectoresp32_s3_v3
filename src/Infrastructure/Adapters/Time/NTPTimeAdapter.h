@@ -291,6 +291,12 @@ void NTPTimeAdapter::saveTimeToStorage()
 
 void NTPTimeAdapter::restoreTimeFromStorage()
 {
+    if (isTimeSynchronized())
+    {
+        log("TIME_SYNC: System clock already valid, skipping EEPROM restore\n");
+        return;
+    }
+
     struct tm timeinfo = getTimeFromEEPROM();
 
     char buffer[150];
