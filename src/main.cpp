@@ -279,8 +279,8 @@ void setup()
                   millis(), wdtInitRc, wdtAddRc);
   }
 
-  // settings.begin();
-  // settings.setConfigured(ModuleModeEnum::USER_CAN_CONFIGURE);
+   // settings.begin();
+   // settings.setConfigured(ModuleModeEnum::USER_CAN_CONFIGURE);
 
   // settings.begin();
   // settings.setConfigured(ModuleModeEnum::AP_TEST_MODE);
@@ -295,6 +295,13 @@ void setup()
   // spiffsAdapter.removeFile("/sensors/sensors.json");
   // spiffsAdapter.removeFile("/wifiNetworks.json");
 
+  // FOR TESTING ONLY: clear preventive restart day marker                                                                                                                                      
+   //Serial.println("[TEST] Clearing lastPreventiveRestartDay");                                                                                                                                   
+   //settings.setLastPreventiveRestartDay(0);  
+
+  // FOR TESTING ONLY: print diagnostic message
+  //debugSystem.setDebugFeatureState(DebugFeatures::DIAGNOSTIC_DEBUG, true);
+ 
   if (settings.getNeedClearSpiffs() == NEED_CLEAR_SPIFFS_MARKER) {
     Serial.println("needClearSpiffs flag set — removing SPIFFS files");
     spiffsAdapter.removeFile("/data/sensorTypes.json");
@@ -330,6 +337,19 @@ void setup()
 void loop()
 {
   esp_task_wdt_reset();
+
+  static unsigned long lastTimeLog = 0;
+  if (millis() - lastTimeLog >= 2 * 60 * 1000) {
+    struct tm localTime;
+    if (ntpTimeAdapter.getLocalTime(&localTime)) {
+      Serial.printf("[MONITOR_TIME] %02d:%02d:%02d %02d/%02d/%04d\n",
+                    localTime.tm_hour, localTime.tm_min, localTime.tm_sec,
+                    localTime.tm_mday, localTime.tm_mon + 1, localTime.tm_year + 1900);
+    } else {
+      Serial.println("[MONITOR_TIME] local time not available");
+    }
+    lastTimeLog = millis();
+  }
 
   if (loopService)
   {

@@ -27,3 +27,8 @@ doc/log-analysis/
 /Resources.md
 /.claude/skills/dev-assistant/state/
 /.playwright-mcp/
+
+# Historical docs and local test scripts
+/lib/test_scripts/
+/old/
+/tickets/GDV1-XXXX-preventive-nightly-restart-implementation-plan.md

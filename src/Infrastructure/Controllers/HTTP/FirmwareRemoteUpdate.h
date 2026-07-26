@@ -212,6 +212,6 @@ public:
     }
 
     bool isUpdateInProgress() override {
-        return Update.isRunning();
+        return Update.isRunning(); 
     }
 };

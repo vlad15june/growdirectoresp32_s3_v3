@@ -123,8 +123,10 @@ public:
         WiFi.disconnect(true);
         WiFi.mode(WIFI_OFF);
         ::delay(100);
+        Serial.println("[DEEP_SLEEP] esp_deep_sleep");
         esp_sleep_enable_timer_wakeup((uint64_t)HARD_RESET_SLEEP_MS * 1000ULL);
         esp_deep_sleep_start();
+        Serial.println("[ESP_RESTART] ESP.restart");
         ESP.restart();
     }
 

@@ -24,6 +24,12 @@ inline bool isDeviceOffForPreventiveRestart(DeviceStateEnum state) {
 }
 
 class PreventiveRestartUseCase {
+public:
+    static constexpr int PREVENTIVE_RESTART_HOUR = 2;
+    static constexpr int PREVENTIVE_RESTART_MINUTE = 0;
+    static constexpr int PREVENTIVE_RESTART_WINDOW_MIN = 59;
+    static constexpr int PREVENTIVE_RESTART_LOOKAHEAD_MIN = 5;
+
 private:
     IModuleConfig* _moduleConfig;
     IDeviceModel* _deviceModel;
@@ -33,11 +39,6 @@ private:
     ILogger* _logger;
     IDebugSystem* _debugSystem;
     IBootEventLog* _restartEventLog;
-
-    static constexpr int PREVENTIVE_RESTART_HOUR = 13;
-    static constexpr int PREVENTIVE_RESTART_MINUTE = 30;
-    static constexpr int PREVENTIVE_RESTART_WINDOW_MIN = 59;
-    static constexpr int PREVENTIVE_RESTART_LOOKAHEAD_MIN = 5;
 
     void log(const char* format, ...) {
         if (!_logger || !_debugSystem || !_debugSystem->isFeatureEnabled(DebugFeatures::DIAGNOSTIC_DEBUG)) {
@@ -170,7 +171,8 @@ public:
         }
 
         if (!areAllDevicesOff()) {
-            log("PREVENTIVE_RESTART: skipped, at least one device is ON");
+            log("PREVENTIVE_RESTART: skipped, at least one device is ON at %02d:%02d",
+                localTime.tm_hour, localTime.tm_min);
             return;
         }
 

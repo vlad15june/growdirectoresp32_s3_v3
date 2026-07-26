@@ -72,12 +72,18 @@ static void setTime(int hour, int minute, int day) {
     g_timeAdapter.setEpochTime(epoch);
 }
 
+static void setTimeFromMinutes(int minutesSinceMidnight, int day) {
+    setTime(minutesSinceMidnight / 60, minutesSinceMidnight % 60, day);
+}
+
 void test_preventive_restart_triggers_when_safe() {
     resetAll();
     setupUseCase();
 
     g_moduleConfig.setRequestedModuleMode(CONFIGURED_DONE);
-    setTime(13, 30, 15);
+    int startMinutes = PreventiveRestartUseCase::PREVENTIVE_RESTART_HOUR * 60 +
+                       PreventiveRestartUseCase::PREVENTIVE_RESTART_MINUTE;
+    setTimeFromMinutes(startMinutes + 14, 15);
 
     g_device.deviceUid = "relay_1";
     g_device.state = DEVICE_STATE_OFF;
@@ -97,7 +103,10 @@ void test_preventive_restart_triggers_at_window_end() {
     setupUseCase();
 
     g_moduleConfig.setRequestedModuleMode(CONFIGURED_DONE);
-    setTime(14, 29, 15);
+    int endMinutes = PreventiveRestartUseCase::PREVENTIVE_RESTART_HOUR * 60 +
+                     PreventiveRestartUseCase::PREVENTIVE_RESTART_MINUTE +
+                     PreventiveRestartUseCase::PREVENTIVE_RESTART_WINDOW_MIN;
+    setTimeFromMinutes(endMinutes, 15);
 
     g_device.deviceUid = "relay_1";
     g_device.state = DEVICE_STATE_OFF;
@@ -115,7 +124,10 @@ void test_preventive_restart_skipped_outside_window() {
     setupUseCase();
 
     g_moduleConfig.setRequestedModuleMode(CONFIGURED_DONE);
-    setTime(14, 30, 15);
+    int endMinutes = PreventiveRestartUseCase::PREVENTIVE_RESTART_HOUR * 60 +
+                     PreventiveRestartUseCase::PREVENTIVE_RESTART_MINUTE +
+                     PreventiveRestartUseCase::PREVENTIVE_RESTART_WINDOW_MIN;
+    setTimeFromMinutes(endMinutes + 1, 15);
 
     g_device.deviceUid = "relay_1";
     g_device.state = DEVICE_STATE_OFF;
@@ -134,7 +146,9 @@ void test_preventive_restart_skipped_already_today() {
 
     g_moduleConfig.setRequestedModuleMode(CONFIGURED_DONE);
     g_settings.setLastPreventiveRestartDay(15);
-    setTime(13, 30, 15);
+    int startMinutes = PreventiveRestartUseCase::PREVENTIVE_RESTART_HOUR * 60 +
+                       PreventiveRestartUseCase::PREVENTIVE_RESTART_MINUTE;
+    setTimeFromMinutes(startMinutes + 14, 15);
 
     g_device.deviceUid = "relay_1";
     g_device.state = DEVICE_STATE_OFF;
@@ -151,7 +165,9 @@ void test_preventive_restart_skipped_device_on() {
     setupUseCase();
 
     g_moduleConfig.setRequestedModuleMode(CONFIGURED_DONE);
-    setTime(13, 30, 15);
+    int startMinutes = PreventiveRestartUseCase::PREVENTIVE_RESTART_HOUR * 60 +
+                       PreventiveRestartUseCase::PREVENTIVE_RESTART_MINUTE;
+    setTimeFromMinutes(startMinutes + 14, 15);
 
     g_device.deviceUid = "relay_1";
     g_device.state = DEVICE_STATE_ON;
@@ -168,7 +184,9 @@ void test_preventive_restart_skipped_rule_starts_soon() {
     setupUseCase();
 
     g_moduleConfig.setRequestedModuleMode(CONFIGURED_DONE);
-    setTime(13, 30, 15);
+    int startMinutes = PreventiveRestartUseCase::PREVENTIVE_RESTART_HOUR * 60 +
+                       PreventiveRestartUseCase::PREVENTIVE_RESTART_MINUTE;
+    setTimeFromMinutes(startMinutes + 14, 15);
 
     g_device.deviceUid = "relay_1";
     g_device.state = DEVICE_STATE_OFF;
@@ -180,7 +198,8 @@ void test_preventive_restart_skipped_rule_starts_soon() {
 
     TEST_ASSERT_EQUAL_INT(CONFIGURED_DONE, g_moduleConfig.getRequestedModuleMode());
     TEST_ASSERT_EQUAL_UINT8(0, g_settings.getBootType());
-    TEST_ASSERT_EQUAL_INT(5, g_evaluateRules.getLastMinutes());
+    TEST_ASSERT_EQUAL_INT(PreventiveRestartUseCase::PREVENTIVE_RESTART_LOOKAHEAD_MIN,
+                         g_evaluateRules.getLastMinutes());
 }
 
 void test_preventive_restart_skipped_ota_in_progress() {
@@ -188,7 +207,9 @@ void test_preventive_restart_skipped_ota_in_progress() {
     setupUseCase();
 
     g_moduleConfig.setRequestedModuleMode(CONFIGURED_DONE);
-    setTime(13, 30, 15);
+    int startMinutes = PreventiveRestartUseCase::PREVENTIVE_RESTART_HOUR * 60 +
+                       PreventiveRestartUseCase::PREVENTIVE_RESTART_MINUTE;
+    setTimeFromMinutes(startMinutes + 14, 15);
 
     g_device.deviceUid = "relay_1";
     g_device.state = DEVICE_STATE_OFF;
@@ -207,7 +228,9 @@ void test_preventive_restart_skipped_not_configured() {
     setupUseCase();
 
     g_moduleConfig.setRequestedModuleMode(USER_CAN_CONFIGURE);
-    setTime(13, 30, 15);
+    int startMinutes = PreventiveRestartUseCase::PREVENTIVE_RESTART_HOUR * 60 +
+                       PreventiveRestartUseCase::PREVENTIVE_RESTART_MINUTE;
+    setTimeFromMinutes(startMinutes + 14, 15);
 
     g_device.deviceUid = "relay_1";
     g_device.state = DEVICE_STATE_OFF;
