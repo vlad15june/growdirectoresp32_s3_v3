@@ -1,0 +1,124 @@
+SensorService: Reading all sensors
+SensorService: Found 1 Modbus sensors
+[ModbusRS485_1] Sending request: 0xFF 0x03 0x00 0x00 0x00 0x01 0x91 0xD4  | Request sent.
+ModbusSensorReader: Read 7 bytes from device 255 on port 0
+ModbusSensorReader: Raw bytes: FF 03 02 00 00 91 90 
+ModbusSensorReader: Read value -40.00 from device 255 on port 0
+SensorReader: Read modbus channel air_temp, value: -40.00 on port 0
+[ModbusRS485_1] Sending request: 0xFF 0x03 0x00 0x01 0x00 0x01 0xC0 0x14  | Request sent.
+ModbusSensorReader: Read 7 bytes from device 255 on port 0
+ModbusSensorReader: Raw bytes: FF 03 02 0E 31 54 24 
+ModbusSensorReader: Read value 36.33 from device 255 on port 0
+SensorReader: Read modbus channel humidity, value: 36.33 on port 0
+[ModbusRS485_1] Sending request: 0xFF 0x03 0x00 0x02 0x00 0x01 0x30 0x14  | Request sent.
+ModbusSensorReader: Read 7 bytes from device 255 on port 0
+ModbusSensorReader: Raw bytes: FF 03 02 00 00 91 90 
+ModbusSensorReader: Read value 0.00 from device 255 on port 0
+SensorReader: Read modbus channel pressure, value: 0.00 on port 0
+Repository: Getting entity with UID: 48:27:E2:E2:01:78.00
+Repository: Entity found in cache
+SensorService: Read multi-channel sensor 48:27:E2:E2:01:78.00
+SensorService: Sending sensor update to server
+NET: /api/v1/HardWare/update -> {"GrowdirectorUid":"48:27:E2:E2:01:78","email":"demo@demo.com","accountUid":"53444f91-e698-c0c7-caa2-dbc3bdbf93fc","time":"2025-10-01T04:39:48.062Z","millis":43977824,"devices":[],"sensors":[{"uid":"48:27:E2:E2:01:78.00.01","value":-40,"state":"online"},{"uid":"48:27:E2:E2:01:78.00.02","value":36.32999802,"state":"online"},{"uid":"48:27:E2:E2:01:78.00.03","value":0,"state":"online"}]}
+NET: /api/v1/HardWare/update -> response 200, try = 0
+
+
+
+
+доработать функцию
+bool scanModbusSensor(const SensorEntity &sensor)
+доработки:
+. получить значение адресса modbuss устройства используя команду (6EH function code query, описание команды смотри ниже), если не удалось получить адресс используя команду то использовать sensor.modbusDeviceAddress
+. из SensorEntity->ModbusRegisterConfig использовать canConnectMinValue и canConnectMaxValue
+. получить заниечеи _modbusReader->readRegister(sensor.modbusDeviceAddress, config, dummyValue, portIndex), и если считанное dummyValue значение между canConnectMinValue и canConnectMaxValue - то success = true;
+. 
+
+
+Function: Query the device communication address. When the device communication address changes and the user does not know the current address, pass 6EH function code query, that is, read the value in the device address register (0x0012)
+6EH request frame format:
+
+Slave address | Function code | Register address | Number of registers | CRC check code 
+FF | 6E | 00 12 | 00 01 | 9 C18
+
+Slave address: fixed 0xFF
+Register address: 0x0012, That is the product address register address
+The 6EH function code requests that the frame data be a fixed value. Users can use this command to test whether the product is normal.
+6EH response frame format:
+
+Slave address | Function code | Returns the number of bytes | Register value | CRC check code
+FF | 6E | 02 | 00 XX | Check code
+
+Register value: The lower eight bits of the register value are the device address
+
+
+
+
+
+в интерфейс class ISensorReader добавить метод 
+virtual bool writeSensorAddress(const SensorEntity& sensor, int newAddress) = 0;
+в класс ModbusSensorReader реализовать метод, реализовать пока только для modBuss, для других возвращать false
+для реализации испзовать IModbusSensorReader, в нем добавить метод
+virtual bool writeSensorAddress(int currentAddress, int newAddress, int portIndex) = 0;
+использовать команду 0x10 (Preset Multiple Registers)
+реализовать метод в ModbusRS485, по записи значения в регистр 
+bool ModbusRS485::writeRegister(int slaveAddress, int registerAddress, uint16_t value)
+
+доработать метод bool scanModbusSensor(const SensorEntity &sensor)
+в методе сделать включение/выклчюение питания порта, чтоб не влияли другие сенсоры, выключить все порты, и включить только тот порт который сканируется,
+использовать метод в IModbusSensorReader (сделать новый метод по отключению питания порта)
+virtual void powerOnPort(int portIndex) = 0;
+virtual void powerOffPort(int portIndex) = 0;
+а IModbusSensorReader будет использовать ModbusRS485, в нем реализовать методы по включению/выключению питания порта
+void ModbusRS485::powerOnPort(int portIndex)
+void ModbusRS485::powerOffPort(int portIndex)
+пример кода выключения - _arduino.digitalWrite(_sensorPowerPin, _arduino.getDigitalLow());
+
+
+при установке нового адресса тоже нужно выключать все другие порты кроме того на котором работает сенсор
+
+в конце метода 
+inline void ModuleSetupService::fillSensorModuleStructure(Node &node)
+когда все сенсоры определены и добавлены, то нужно получить заново все сенсоры из репозитория (auto sensorEntities = sensorRepository->getAll();) и проверить на наличие сонсоров с повторяющимися адресами
+и если такие есть то для второго и последующих сенсоров с одинаковым адресом нужно установить новый неиспользуемый адрес. 
+Также если у сенсора установлен адресс вне диапозона 0x70 - 0x78, то тоже нужно установить новый неиспользуемый адрес
+адресса должны быть в диапазоне от 0x70 до 0x78.
+новый адрес должен быть записан в sensorEntity.modbusDeviceAddress
+После изменения адресса нужно обновить сенсор в репозитории sensorRepository->update(sensorEntity)
+
+
+
+
+
+
+
+
+
+старое решение (для истории)
+в
+/Users/arsenarutiunian/Projects/GrowDirector/esp32/PlatformIO IDE/growdirectoresp32_S3_v3/src/Application/Services/ModuleSetupService.h
+в строку 1302 (//TODO: set new address ModBus sensors) нужно добавить установку нового адресса для ModBuss устройства, нужно пройтись по existingSensors, посмотреть какой адресс уже используется и установить новый неиспользуемый адресс
+адресса должны быть в диапазоне от 0x70 до 0x78
+
+
+в метод inline void ModuleSetupService::scanPinForSensorTypes(int pin, Node &node)
+нужно еще передать существующие сенсоры existingSensors
+в месте вызова метода они как раз есть
+// Check if pin is occupied by ModBus sensors
+        if (!pinOccupied && isPinOccupied(pin, existingSensors, "ModBus"))
+        {
+            pinOccupied = true;
+        }
+
+        if (!pinOccupied)
+        {
+            log("SETUP: Pin %d is empty, scanning for sensors", pin);
+            scanPinForSensorTypes(pin, node);
+        }
+        else
+        {
+            log("SETUP: Pin %d is occupied by existing sensor", pin);
+        }
+
+
+
+
