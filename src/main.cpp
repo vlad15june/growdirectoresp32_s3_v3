@@ -338,19 +338,6 @@ void loop()
 {
   esp_task_wdt_reset();
 
-  static unsigned long lastTimeLog = 0;
-  if (millis() - lastTimeLog >= 2 * 60 * 1000) {
-    struct tm localTime;
-    if (ntpTimeAdapter.getLocalTime(&localTime)) {
-      Serial.printf("[MONITOR_TIME] %02d:%02d:%02d %02d/%02d/%04d\n",
-                    localTime.tm_hour, localTime.tm_min, localTime.tm_sec,
-                    localTime.tm_mday, localTime.tm_mon + 1, localTime.tm_year + 1900);
-    } else {
-      Serial.println("[MONITOR_TIME] local time not available");
-    }
-    lastTimeLog = millis();
-  }
-
   if (loopService)
   {
     loopService->loop();
