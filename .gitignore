@@ -31,4 +31,7 @@ doc/log-analysis/
 # Historical docs and local test scripts
 /lib/test_scripts/
 /old/
+!/old/aptestmode.h
+!/old/server_communication.h
+!/old/temp
 /tickets/GDV1-XXXX-preventive-nightly-restart-implementation-plan.md
