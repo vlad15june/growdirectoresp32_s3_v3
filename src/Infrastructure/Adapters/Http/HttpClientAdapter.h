@@ -1,6 +1,7 @@
 #pragma once
 
 #include <HTTPClient.h>
+#include <WiFiClientSecure.h>
 #include "Infrastructure/Adapters/Http/IHttpClientAdapter.h"
 #include "Core/Domain/Interfaces/ILogger.h"
 
@@ -10,15 +11,18 @@
 class HttpClientAdapter : public IHttpClientAdapter {
 private:
     HTTPClient _client;
+    WiFiClientSecure _secureClient;
     bool _isConnected;
     String _responseBuffer; // Internal buffer to store response
-    
+
 public:
     /**
      * @brief Construct a new Http Client Adapter
      */
-    HttpClientAdapter() 
+    HttpClientAdapter()
         : _isConnected(false) {
+        _secureClient.setInsecure();
+        _client.setReuse(true);
     }
     
     /**
@@ -41,16 +45,17 @@ public:
             _client.end();
             _isConnected = false;
         }
-        
-        // We need to convert to String for underlying HTTPClient
+
         String urlStr(url);
-        bool success = _client.begin(urlStr);
+        bool success = urlStr.startsWith("https")
+            ? _client.begin(_secureClient, urlStr)
+            : _client.begin(urlStr);
         _isConnected = success;
-        
+
         if (!success) {
             Serial.printf("HTTP: Failed to begin connection to %s", url);
         }
-        
+
         return success;
     }
     

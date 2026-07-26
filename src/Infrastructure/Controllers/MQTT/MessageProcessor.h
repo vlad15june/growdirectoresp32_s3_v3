@@ -80,6 +80,7 @@ public:
         }
 
         free(payloadStr);
+        free(topicStr);
     }
 
     void addTopicHandler(ITopicHandler *handler) override

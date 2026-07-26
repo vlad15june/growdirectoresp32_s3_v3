@@ -1,5 +1,47 @@
 # Release Notes
 
+## Version 2.18.1 (2026-07-24)
+
+### Fixed
+- **Correct Status-Light Indications**: GDV1-3752 Fixed the module status light to match the specification — it now shows a steady yellow while the module is starting up and a steady red when the module is configured but has lost its connection to the server, instead of the previous incorrect indication.
+- **Per-Output Indication While Offline**: GDV1-3752 Fixed the offline indication so that, when a configured module has no server connection, each connected output that is currently switched on is shown with its own green light, letting operators see which outputs are active even without a connection.
+- **Sensor Rule Thresholds Applied Correctly**: GDV1-3753 Fixed sensor-based rules so their lower and upper thresholds are applied in the correct order regardless of how they were entered, so a rule switches its equipment on and off at the intended values with the proper margin.
+
+---
+
+## Version 2.17.30 (2026-07-23)
+
+### Fixed
+- **Build Reliability**: Fixed a build issue where the automated build environment could not find a required time library, so the release can be produced reliably. No change to device behavior.
+
+---
+
+## Version 2.17.29 (2026-07-22)
+
+### Fixed
+- **Time-Based Rules Survive an Offline Reboot**: GDV1-3752 Fixed an issue where, after a reboot without internet access, the device had no valid time until it could reach the time server, so schedule and cyclic rules stopped working. On startup the device now restores its clock from the last saved time, so time-based rules keep running even when the device restarts offline.
+- **Rule Operation-Time Window and Day Restrictions Now Enforced**: GDV1-3754 Fixed an issue where a rule's configured daily operation-time window and its allowed days of the week/month were not applied. A rule now switches its equipment on only within its configured hours and on its permitted days, and stays off outside that window.
+
+---
+
+## Version 2.17.28 (2026-07-20)
+
+### Fixed
+- **Build Reliability**: Fixed a build issue that prevented the firmware from compiling in the automated build environment, so the release can be produced reliably. No change to device behavior.
+
+---
+
+## Version 2.17.27 (2026-07-19)
+
+### Changed
+- **Gentler Recovery From Prolonged Server Loss**: When the connection to the server (messaging or data) stays down for more than about ten minutes, the device now restarts its Wi-Fi connection to recover, instead of performing a full reboot. A full reboot remains only as a last resort when the device is completely offline.
+
+### Fixed
+- **Reliable Secure Server Connections Over Long Runtimes**: Fixed a problem where the device could progressively fail to open secure connections to the server after running for a long time, because repeated large temporary memory allocations fragmented the limited memory on boards without extra memory. Memory for secure connections and for processing server messages is now reused from fixed pools, keeping the link stable over long uptimes.
+- **Memory Leak in Incoming Message Handling**: Fixed a memory leak where the buffer holding each incoming server message was not released, slowly consuming the device's memory during operation and contributing to the connection failures above.
+
+---
+
 ## Version 2.17.26 (2026-07-18)
 
 ### Fixed

@@ -12,6 +12,7 @@
 #include "Application/DTOs/RuleStateUpdateDto.h"
 #include "Core/Domain/Enums/SensorStatusEnum.h"
 #include <ArduinoJson.h>
+#include "Infrastructure/Adapters/Json/JsonMemoryPool.h"
 
 class ArduinoJsonConverter : public IJsonConverter
 {
@@ -84,7 +85,7 @@ private:
 public:
     bool moduleStructureFromJson(const std::string &jsonStr, ModuleStructure &moduleStructure) override
     {
-        DynamicJsonDocument doc(4096);
+        PooledJsonDocument doc(4096);
         DeserializationError error = deserializeJson(doc, jsonStr);
         if (error)
             return false;
@@ -161,7 +162,7 @@ public:
 
     std::string moduleStructureToJson(const ModuleStructure &moduleStructure) override
     {
-        DynamicJsonDocument doc(4096);
+        PooledJsonDocument doc(4096);
         doc["GrowdirectorUid"] = moduleStructure.growdirectorUid;
         doc["firmware"] = moduleStructure.firmware;
         doc["email"] = moduleStructure.email;
@@ -229,7 +230,7 @@ public:
 
     std::string diagnosticToJson(const DiagnosticDto &diagnosticData) override
     {
-        DynamicJsonDocument doc(2048);
+        PooledJsonDocument doc(2048);
 
         doc["rssi"] = diagnosticData.rssi;
         doc["uid"] = diagnosticData.uid;
@@ -264,7 +265,7 @@ public:
 
     bool ruleFromJson(const std::string &jsonStr, Rule &rule) override
     {
-        DynamicJsonDocument doc(4096);
+        PooledJsonDocument doc(4096);
         DeserializationError error = deserializeJson(doc, jsonStr);
         if (error)
             return false;
@@ -486,15 +487,16 @@ public:
             rule.timeToSetPoint = doc["timeToSetPoint"] | 0;
             rule.isAdvanced = doc["isAdvanced"] | false;
 
-            // TODO: These should handle time conversion properly
             if (doc.containsKey("startDayTime"))
             {
-                rule.startDayTime = 0; // Should convert ISO time string
+                std::string startDayTimeStr = doc["startDayTime"] | "";
+                rule.startDayTime = parseISOTimeToTimeT(startDayTimeStr);
             }
 
             if (doc.containsKey("endDayTime"))
             {
-                rule.endDayTime = 0; // Should convert ISO time string
+                std::string endDayTimeStr = doc["endDayTime"] | "";
+                rule.endDayTime = parseISOTimeToTimeT(endDayTimeStr);
             }
 
             // Parse advanced rule values
@@ -534,7 +536,7 @@ public:
 
     std::string ruleToJson(const Rule &rule) override
     {
-        DynamicJsonDocument doc(4096);
+        PooledJsonDocument doc(4096);
 
         // Common properties
         doc["uid"] = rule.uid;
@@ -741,9 +743,8 @@ public:
             doc["timeToSetPoint"] = rule.timeToSetPoint;
             doc["isAdvanced"] = rule.isAdvanced;
 
-            // TODO: Format time properly to ISO standard
-            doc["startDayTime"] = "";
-            doc["endDayTime"] = "";
+            doc["startDayTime"] = timeToISOString(rule.startDayTime);
+            doc["endDayTime"] = timeToISOString(rule.endDayTime);
 
             // Advanced rule values
             JsonArray advancedValuesArr = doc.createNestedArray("advancedRuleValues");
@@ -775,7 +776,7 @@ public:
 
     bool rulesFromJson(const std::string &jsonStr, std::vector<Rule> &rules) override
     {
-        DynamicJsonDocument doc(16384); // Larger capacity for array
+        PooledJsonDocument doc(16384); // Larger capacity for array
         DeserializationError error = deserializeJson(doc, jsonStr);
         if (error)
             return false;
@@ -786,7 +787,7 @@ public:
             Rule rule;
 
             // Copy to a separate document for individual processing
-            DynamicJsonDocument ruleDoc(4096);
+            PooledJsonDocument ruleDoc(4096);
             JsonObject destObj = ruleDoc.to<JsonObject>();
 
             // Copy all properties from the array element
@@ -810,7 +811,7 @@ public:
 
     std::string rulesToJson(const std::vector<Rule> &rules) override
     {
-        DynamicJsonDocument doc(16384); // Larger capacity for array
+        PooledJsonDocument doc(16384); // Larger capacity for array
         JsonArray rulesArr = doc.to<JsonArray>();
 
         for (const Rule &rule : rules)
@@ -825,7 +826,7 @@ public:
 
     std::string updateToJson(const UpdateDto &updateData) override
     {
-        DynamicJsonDocument doc(8192);
+        PooledJsonDocument doc(8192);
 
         doc["GrowdirectorUid"] = updateData.growdirectorUid;
         doc["email"] = updateData.email;
@@ -949,7 +950,7 @@ public:
 
     bool commandFromJson(const std::string &jsonStr, CommandDto &commandDto) override
     {
-        DynamicJsonDocument doc(4096);
+        PooledJsonDocument doc(4096);
         DeserializationError error = deserializeJson(doc, jsonStr);
         if (error)
             return false;
@@ -987,7 +988,7 @@ public:
             commandDto.version = doc["version"] | "";
             commandDto.url = doc["url"] | "";
 
-            DynamicJsonDocument optionsDoc(512);
+            PooledJsonDocument optionsDoc(512);
             JsonObject optionsObj = optionsDoc.to<JsonObject>();
 
             if (doc.containsKey("options") && doc["options"].is<JsonObject>())
@@ -1045,7 +1046,7 @@ public:
 
     std::string commandToJson(const CommandDto &commandDto) override
     {
-        DynamicJsonDocument doc(4096);
+        PooledJsonDocument doc(4096);
 
         doc["growDirectorUid"] = commandDto.growDirectorUid;
         doc["type"] = commandDto.type;
@@ -1108,7 +1109,7 @@ public:
             // Parse options JSON string back to object
             if (!commandDto.options.empty())
             {
-                DynamicJsonDocument optionsDoc(2048);
+                PooledJsonDocument optionsDoc(2048);
                 DeserializationError optionsError = deserializeJson(optionsDoc, commandDto.options);
                 if (!optionsError)
                 {
@@ -1124,7 +1125,7 @@ public:
 
     std::string commandResultToJson(const CommandResultDto &commandResultDto) override
     {
-        DynamicJsonDocument doc(512);
+        PooledJsonDocument doc(512);
         
         doc["status"] = commandResultDto.status;
         doc["command"] = commandResultDto.command;
@@ -1141,7 +1142,7 @@ public:
 
     std::string rawIoResultToJson(const RawIoResultDto &rawIoResult) override
     {
-        DynamicJsonDocument doc(1024);
+        PooledJsonDocument doc(1024);
 
         doc["command"] = rawIoResult.command;
         doc["channel"] = rawIoResult.channel;
@@ -1161,7 +1162,7 @@ public:
 
     bool commandResultFromJson(const std::string &jsonStr, CommandResultDto &commandResultDto) override
     {
-        DynamicJsonDocument doc(512);
+        PooledJsonDocument doc(512);
         DeserializationError error = deserializeJson(doc, jsonStr);
         if (error)
             return false;
@@ -1175,7 +1176,7 @@ public:
 
     std::string deviceCommandUpdateToJson(const DeviceCommandUpdateDto& commandUpdateDto) override
     {
-        DynamicJsonDocument doc(1024);
+        PooledJsonDocument doc(1024);
         JsonArray arr = doc.to<JsonArray>();
         JsonObject obj = arr.createNestedObject();
 
@@ -1194,7 +1195,7 @@ public:
 
     bool deviceCommandFromJson(const std::string &jsonStr, DeviceCommandDto &commandDto) override
     {
-        DynamicJsonDocument doc(2048);
+        PooledJsonDocument doc(2048);
         DeserializationError error = deserializeJson(doc, jsonStr);
         if (error)
             return false;
@@ -1216,7 +1217,7 @@ public:
 
     std::string deviceCommandToJson(const DeviceCommandDto &commandDto) override
     {
-        DynamicJsonDocument doc(2048);
+        PooledJsonDocument doc(2048);
 
         doc["id"] = commandDto.id;
         doc["uid"] = commandDto.uid;
@@ -1262,7 +1263,7 @@ public:
 
     bool deviceCommandsFromJson(const std::string &jsonStr, std::vector<DeviceCommandDto> &commands) override
     {
-        DynamicJsonDocument doc(8192); // Larger capacity for array
+        PooledJsonDocument doc(8192); // Larger capacity for array
         DeserializationError error = deserializeJson(doc, jsonStr);
         if (error)
             return false;
@@ -1305,7 +1306,7 @@ public:
 
     std::string ruleStateToJson(const RuleStateDto& ruleState) override
     {
-        DynamicJsonDocument doc(512);
+        PooledJsonDocument doc(512);
 
         doc["uid"] = ruleState.uid;
         doc["state"] = ruleState.state;
@@ -1328,7 +1329,7 @@ public:
 
     bool ruleStateFromJson(const std::string& jsonStr, RuleStateDto& ruleState) override
     {
-        DynamicJsonDocument doc(512);
+        PooledJsonDocument doc(512);
         DeserializationError error = deserializeJson(doc, jsonStr);
         if (error)
             return false;
@@ -1344,7 +1345,7 @@ public:
 
     std::string ruleStateUpdateToJson(const RuleStateUpdateDto& ruleStateUpdate) override
     {
-        DynamicJsonDocument doc(4096);
+        PooledJsonDocument doc(4096);
 
         doc["timestamp"] = ruleStateUpdate.timestamp;
         doc["status"] = ruleStateUpdate.status;
@@ -1386,7 +1387,7 @@ public:
 
     std::string ruleStateUpdateSingleToJson(const RuleStateDto& ruleState, const std::string& timestamp) override
     {
-        DynamicJsonDocument doc(1024);
+        PooledJsonDocument doc(1024);
 
         doc["timestamp"] = timestamp;
         if (!ruleState.accountUid.empty())
@@ -1410,7 +1411,7 @@ public:
 
     std::string ruleSensorOfflineEventToJson(const RuleSensorOfflineEventDto& event) override
     {
-        DynamicJsonDocument doc(512);
+        PooledJsonDocument doc(512);
 
         doc["uid"] = event.uid;
         doc["accountUid"] = event.accountUid;
@@ -1426,7 +1427,7 @@ public:
 
     bool ruleStateUpdateFromJson(const std::string& jsonStr, RuleStateUpdateDto& ruleStateUpdate) override
     {
-        DynamicJsonDocument doc(4096);
+        PooledJsonDocument doc(4096);
         DeserializationError error = deserializeJson(doc, jsonStr);
         if (error)
             return false;
@@ -1458,7 +1459,7 @@ public:
     
     bool sensorFromJson(const std::string &jsonStr, SensorEntity &sensor) override
     {
-        DynamicJsonDocument doc(4096);
+        PooledJsonDocument doc(4096);
         DeserializationError error = deserializeJson(doc, jsonStr);
         if (error)
             return false;
@@ -1535,7 +1536,7 @@ public:
 
     std::string sensorToJson(const SensorEntity &sensor) override
     {
-        DynamicJsonDocument doc(4096);
+        PooledJsonDocument doc(4096);
         
         doc["uid"] = sensor.uid;
         doc["sensorType"] = sensor.sensorType;
@@ -1607,7 +1608,7 @@ public:
 
     bool sensorsFromJson(const std::string &jsonStr, std::vector<SensorEntity> &sensors) override
     {
-        DynamicJsonDocument doc(16384); // Larger capacity for array
+        PooledJsonDocument doc(16384); // Larger capacity for array
         DeserializationError error = deserializeJson(doc, jsonStr);
         if (error)
             return false;
@@ -1618,7 +1619,7 @@ public:
             SensorEntity sensor;
 
             // Copy to a separate document for individual processing
-            DynamicJsonDocument sensorDoc(4096);
+            PooledJsonDocument sensorDoc(4096);
             JsonObject destObj = sensorDoc.to<JsonObject>();
 
             // Copy all properties from the array element
@@ -1642,7 +1643,7 @@ public:
 
     std::string sensorsToJson(const std::vector<SensorEntity> &sensors) override
     {
-        DynamicJsonDocument doc(16384); // Larger capacity for array
+        PooledJsonDocument doc(16384); // Larger capacity for array
         JsonArray sensorsArr = doc.to<JsonArray>();
 
         for (const SensorEntity &sensor : sensors)
@@ -1657,7 +1658,7 @@ public:
 
     bool modbusRegisterConfigFromJson(const std::string &jsonStr, ModbusRegisterConfig &config) override
     {
-        DynamicJsonDocument doc(1024);
+        PooledJsonDocument doc(1024);
         DeserializationError error = deserializeJson(doc, jsonStr);
         if (error)
             return false;
@@ -1678,7 +1679,7 @@ public:
 
     std::string modbusRegisterConfigToJson(const ModbusRegisterConfig &config) override
     {
-        DynamicJsonDocument doc(1024);
+        PooledJsonDocument doc(1024);
 
         doc["functionCode"] = config.functionCode;
         doc["startRegister"] = config.startRegister;
@@ -1698,7 +1699,7 @@ public:
 
     bool modbusRegisterConfigsFromJson(const std::string &jsonStr, std::vector<ModbusRegisterConfig> &configs) override
     {
-        DynamicJsonDocument doc(4096);
+        PooledJsonDocument doc(4096);
         DeserializationError error = deserializeJson(doc, jsonStr);
         if (error)
             return false;
@@ -1730,7 +1731,7 @@ public:
 
     std::string modbusRegisterConfigsToJson(const std::vector<ModbusRegisterConfig> &configs) override
     {
-        DynamicJsonDocument doc(4096);
+        PooledJsonDocument doc(4096);
         JsonArray configsArr = doc.to<JsonArray>();
 
         for (const ModbusRegisterConfig &config : configs)
@@ -1755,7 +1756,7 @@ public:
 
     bool i2cRegisterConfigFromJson(const std::string &jsonStr, I2CRegisterConfig &config) override
     {
-        DynamicJsonDocument doc(512);
+        PooledJsonDocument doc(512);
         DeserializationError error = deserializeJson(doc, jsonStr);
         if (error)
             return false;
@@ -1773,7 +1774,7 @@ public:
 
     std::string i2cRegisterConfigToJson(const I2CRegisterConfig &config) override
     {
-        DynamicJsonDocument doc(512);
+        PooledJsonDocument doc(512);
 
         doc["register"] = config.registerAddr;
         doc["length"] = config.length;
@@ -1790,7 +1791,7 @@ public:
 
     bool i2cRegisterConfigsFromJson(const std::string &jsonStr, std::vector<I2CRegisterConfig> &configs) override
     {
-        DynamicJsonDocument doc(2048);
+        PooledJsonDocument doc(2048);
         DeserializationError error = deserializeJson(doc, jsonStr);
         if (error)
             return false;
@@ -1819,7 +1820,7 @@ public:
 
     std::string i2cRegisterConfigsToJson(const std::vector<I2CRegisterConfig> &configs) override
     {
-        DynamicJsonDocument doc(2048);
+        PooledJsonDocument doc(2048);
         JsonArray configsArr = doc.to<JsonArray>();
 
         for (const auto &config : configs)
@@ -1841,7 +1842,7 @@ public:
 
     bool sensorTypeFromJson(const std::string &jsonStr, SensorType &sensorType) override
     {
-        DynamicJsonDocument doc(8192);
+        PooledJsonDocument doc(8192);
         
         DeserializationError error = deserializeJson(doc, jsonStr);
         if (error) {
@@ -1958,7 +1959,7 @@ public:
         //Serial.printf("ArduinoJsonConverter: Free heap at start: %d\n", ESP.getFreeHeap());
         
         try {
-            DynamicJsonDocument doc(16384);
+            PooledJsonDocument doc(16384);
             //Serial.printf("ArduinoJsonConverter: Document created, capacity: %d\n", doc.capacity());
             
             // Main sensor type properties
@@ -2191,7 +2192,7 @@ public:
 
     std::string moduleCommandUpdateToJson(const ModuleCommandUpdateDto& commandUpdateDto) override
     {
-        DynamicJsonDocument doc(2048);
+        PooledJsonDocument doc(2048);
 
         doc["uid"] = commandUpdateDto.uid;
         doc["status"] = commandUpdateDto.status;
@@ -2235,7 +2236,7 @@ public:
 
     std::string moduleCommandUpdatesToJson(const std::vector<ModuleCommandUpdateDto>& commandUpdates) override
     {
-        DynamicJsonDocument doc(8192);
+        PooledJsonDocument doc(8192);
         JsonArray array = doc.to<JsonArray>();
 
         for (const auto& commandUpdateDto : commandUpdates)
@@ -2284,7 +2285,7 @@ public:
 
     bool moduleCommandFromJson(const std::string &jsonStr, ModuleCommandDto &commandDto) override
     {
-        DynamicJsonDocument doc(2048);
+        PooledJsonDocument doc(2048);
         DeserializationError error = deserializeJson(doc, jsonStr);
         if (error)
             return false;
@@ -2318,7 +2319,7 @@ public:
 
     std::string moduleCommandToJson(const ModuleCommandDto &commandDto) override
     {
-        DynamicJsonDocument doc(2048);
+        PooledJsonDocument doc(2048);
 
         doc["uid"] = commandDto.uid;
         doc["command"] = commandDto.command;
@@ -2336,7 +2337,7 @@ public:
 
     bool moduleCommandsFromJson(const std::string &jsonStr, std::vector<ModuleCommandDto> &commands) override
     {
-        DynamicJsonDocument doc(8192); // Larger capacity for array
+        PooledJsonDocument doc(8192); // Larger capacity for array
         DeserializationError error = deserializeJson(doc, jsonStr);
         if (error)
             return false;
@@ -2394,7 +2395,7 @@ public:
         networks.clear();
         if (jsonStr.empty())
             return false;
-        DynamicJsonDocument doc(4096);
+        PooledJsonDocument doc(4096);
         DeserializationError error = deserializeJson(doc, jsonStr);
         if (error)
             return false;
@@ -2413,7 +2414,7 @@ public:
 
     std::string wifiNetworksToJson(const std::vector<WifiNetworkEntry> &networks) override
     {
-        DynamicJsonDocument doc(4096);
+        PooledJsonDocument doc(4096);
         JsonArray arr = doc.to<JsonArray>();
         for (const auto &entry : networks)
         {
@@ -2428,7 +2429,7 @@ public:
 
     bool sensorValuesFromUpdateJson(const std::string &json, std::vector<RemoteSensorValue> &out) override
     {
-        DynamicJsonDocument doc(8192);
+        PooledJsonDocument doc(8192);
         DeserializationError error = deserializeJson(doc, json);
         if (error)
             return false;
@@ -2464,7 +2465,7 @@ public:
 
     std::string remoteModuleCommandToJson(const std::string &command, const std::string &targetUid) override
     {
-        DynamicJsonDocument doc(256);
+        PooledJsonDocument doc(256);
         doc["type"] = "module_command";
         doc["command"] = command;
         doc["targetUid"] = targetUid;
@@ -2476,7 +2477,7 @@ public:
 
     bool remoteModuleCommandFromJson(const std::string &json, std::string &outCommand, std::string &outTargetUid) override
     {
-        DynamicJsonDocument doc(256);
+        PooledJsonDocument doc(256);
         DeserializationError error = deserializeJson(doc, json);
         if (error)
             return false;

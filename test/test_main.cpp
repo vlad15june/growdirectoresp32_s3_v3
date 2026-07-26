@@ -52,6 +52,7 @@ extern "C" int run_sensor_recovery_tests(void);
 extern "C" void run_module_to_module_reboot_tests(void);
 extern "C" void run_rule_dnf_combine_tests(void);
 extern "C" int run_preventive_restart_use_case_tests(void);
+extern "C" void run_rule_operation_time_tests(void);
 
 void setUp(void) {
     // set stuff up here
@@ -217,6 +218,8 @@ int main(void) {
 
     // Run tests for nightly preventive restart
     run_preventive_restart_use_case_tests();
+
+    run_rule_operation_time_tests();
 
     return UNITY_END();
 }

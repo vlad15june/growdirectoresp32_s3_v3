@@ -31,20 +31,23 @@ inline SensorVerdict evaluateSensorHysteresis(RuleDirection direction, double va
         return Utils::isInsideArc(value, valueLow, valueHigh) ? SensorVerdict::TURN_ON : SensorVerdict::TURN_OFF;
     }
 
+    double lo = (valueLow < valueHigh) ? valueLow : valueHigh;
+    double hi = (valueLow > valueHigh) ? valueLow : valueHigh;
+
     if (direction == RuleDirection::DOWN) {
-        if (value >= valueHigh) {
+        if (value >= hi) {
             return previouslyOn ? SensorVerdict::HOLD : SensorVerdict::TURN_ON;
         }
-        if (value <= valueLow) {
+        if (value <= lo) {
             return previouslyOn ? SensorVerdict::TURN_OFF : SensorVerdict::HOLD;
         }
         return SensorVerdict::HOLD;
     }
 
-    if (value <= valueLow) {
+    if (value <= lo) {
         return previouslyOn ? SensorVerdict::HOLD : SensorVerdict::TURN_ON;
     }
-    if (value >= valueHigh) {
+    if (value >= hi) {
         return previouslyOn ? SensorVerdict::TURN_OFF : SensorVerdict::HOLD;
     }
     return SensorVerdict::HOLD;
@@ -546,7 +549,7 @@ public:
             return;
         }
 
-        log("EVALUATE_RULES: Starting rule evaluation cycle at %lu ms, last= %lu, elapsed= %lu", now, _lastEvaluationTime, elapsed);
+        logSerial("EVALUATE_RULES: Starting rule evaluation cycle at %lu ms, last= %lu, elapsed= %lu", now, _lastEvaluationTime, elapsed);
         
         _lastEvaluationTime = now;
         
@@ -560,7 +563,7 @@ public:
         // Get active rules from repository
         std::vector<Rule> activeRules = _ruleRepository->getActiveRules();
         
-        log("EVALUATE_RULES: Starting rule evaluation cycle - %d active rules", 
+        logSerial("EVALUATE_RULES: Starting rule evaluation cycle - %d active rules",
             static_cast<int>(activeRules.size()));
         
         // Evaluate all active rules
@@ -589,7 +592,7 @@ public:
     }
 
     RuleEvaluationResult evaluateRule(const Rule& rule) override {
-        log("EVALUATE_RULES: Evaluating rule %s", rule.uid.c_str());
+        logSerial("EVALUATE_RULES: Evaluating rule %s", rule.uid.c_str());
         
         // Create result with basic rule information
         RuleEvaluationResult result(rule.uid, rule.ruleType, rule.version);
@@ -611,7 +614,11 @@ public:
             result.ruleStopReason = validationResult.errorMessage;
             return result;
         }
-        
+
+        if (!isRuleActiveNow(rule, result)) {
+            return result;
+        }
+
         // Fill sensor information
         if (!rule.sensorUid.empty()) {
             result.sensorUid = rule.sensorUid;
@@ -735,13 +742,13 @@ public:
             _ruleLastEvaluated[rule.uid] = _arduinoAdapter->millis();
         }
         
-        log("EVALUATE_RULES: Rule %s condition %s, state: %s", 
+        logSerial("EVALUATE_RULES: Rule %s condition %s, state: %s",
             rule.uid.c_str(), conditionMet ? "MET" : "NOT MET", getDeviceStateName(result.state));
         return result;
     }
 
     bool executeRuleActions(const Rule& rule) override {
-        log("EVALUATE_RULES: Executing actions for rule %s", rule.uid.c_str());
+        logSerial("EVALUATE_RULES: Executing actions for rule %s", rule.uid.c_str());
         
         RuleEvaluationResult currentState = _ruleActiveStates[rule.uid];
         RuleEvaluationResult evaluationResult = evaluateRule(rule);
@@ -855,6 +862,74 @@ private:
             }
         }
         return false;
+    }
+
+    bool isRuleActiveNow(const Rule& rule, RuleEvaluationResult& result) {
+        bool hasWindow = (rule.startDayTime != 0 || rule.endDayTime != 0);
+        bool hasDays = (!rule.daysOfWeek.empty() || !rule.daysOfMonth.empty());
+        if (!hasWindow && !hasDays) {
+            return true;
+        }
+
+        if (!_ntpTimeAdapter) {
+            log("EVALUATE_RULES: NTP time adapter not available for activity window of rule %s", rule.uid.c_str());
+            result.state = DEVICE_STATE_OFF;
+            result.isRuleTurnOnDevice = false;
+            result.ruleStopReason = "time_not_available_error";
+            return false;
+        }
+
+        time_t currentTime = _ntpTimeAdapter->getEpochTime();
+        struct tm timeinfo;
+        if (!gmtime_r(&currentTime, &timeinfo)) {
+            log("EVALUATE_RULES: Failed to get current time for activity window of rule %s", rule.uid.c_str());
+            result.state = DEVICE_STATE_OFF;
+            result.isRuleTurnOnDevice = false;
+            result.ruleStopReason = "time_not_available_error";
+            return false;
+        }
+
+        if (hasWindow) {
+            long nowSec = timeinfo.tm_hour * 3600 + timeinfo.tm_min * 60 + timeinfo.tm_sec;
+            long startSec = static_cast<long>(rule.startDayTime);
+            long endSec = static_cast<long>(rule.endDayTime);
+            bool windowOpen;
+            if (endSec >= startSec) {
+                windowOpen = (nowSec >= startSec && nowSec <= endSec);
+            } else {
+                windowOpen = (nowSec >= startSec || nowSec <= endSec);
+            }
+            if (!windowOpen) {
+                log("EVALUATE_RULES: Rule %s outside operation time window (now=%ld start=%ld end=%ld)",
+                    rule.uid.c_str(), nowSec, startSec, endSec);
+                result.state = DEVICE_STATE_OFF;
+                result.isRuleTurnOnDevice = false;
+                result.ruleStopReason = "time_reach";
+                return false;
+            }
+        }
+
+        if (hasDays) {
+            bool dayMatches = false;
+            for (int day : rule.daysOfWeek) {
+                if (day == timeinfo.tm_wday) { dayMatches = true; break; }
+            }
+            if (!dayMatches) {
+                for (int day : rule.daysOfMonth) {
+                    if (day == timeinfo.tm_mday) { dayMatches = true; break; }
+                }
+            }
+            if (!dayMatches) {
+                log("EVALUATE_RULES: Rule %s not active on current day (wday=%d mday=%d)",
+                    rule.uid.c_str(), timeinfo.tm_wday, timeinfo.tm_mday);
+                result.state = DEVICE_STATE_OFF;
+                result.isRuleTurnOnDevice = false;
+                result.ruleStopReason = "rule_off_by_date";
+                return false;
+            }
+        }
+
+        return true;
     }
 
     RuleEvaluationResult evaluateScheduleRule(const Rule& rule, RuleEvaluationResult& result) {
@@ -1051,7 +1126,7 @@ private:
             for (const auto& cond : rule.conditions) {
                 bool condOn;
                 if (cond.sensorUids.empty()) {
-                    log("EVALUATE_RULES: SENSOR_COND uid=%s reason=no_sensor_uid on=0", rule.uid.c_str());
+                    logSerial("EVALUATE_RULES: SENSOR_COND uid=%s reason=no_sensor_uid on=0", rule.uid.c_str());
                     condOn = false;
                 } else {
                     double condValue = getSensorValue(cond.sensorUids[0]);
@@ -1069,14 +1144,14 @@ private:
                             condOn = committedOn;
                             break;
                     }
-                    log("EVALUATE_RULES: SENSOR_COND uid=%s sensor=%s dir=%s value=%.2f low=%.2f high=%.2f on=%d",
+                    logSerial("EVALUATE_RULES: SENSOR_COND uid=%s sensor=%s dir=%s value=%.2f low=%.2f high=%.2f on=%d",
                         rule.uid.c_str(), cond.sensorUids[0].c_str(), getRuleDirectionName(cond.direction),
                         condValue, cond.valueLow, cond.valueHigh, condOn ? 1 : 0);
                 }
                 condFired.push_back(condOn);
             }
             bool targetOn = combineConditionsDnf(rule.conditions, condFired, rule.conditionOr);
-            log("EVALUATE_RULES: SENSOR_COND uid=%s mode=%s ops=%s nConds=%d targetOn=%d",
+            logSerial("EVALUATE_RULES: SENSOR_COND uid=%s mode=%s ops=%s nConds=%d targetOn=%d",
                 rule.uid.c_str(),
                 conditionsHaveJoinOp(rule.conditions) ? "dnf" : "legacy",
                 conditionsOpsString(rule.conditions).c_str(),
@@ -1204,7 +1279,7 @@ private:
             count++;
         }
         double mean = count > 0 ? sum / count : 0.0;
-        log("EVALUATE_RULES: AVG_MEAN uid=%s n=%d mean=%.2f", ruleUid.c_str(), count, mean);
+        logSerial("EVALUATE_RULES: AVG_MEAN uid=%s n=%d mean=%.2f", ruleUid.c_str(), count, mean);
         return mean;
     }
 
@@ -1237,7 +1312,7 @@ private:
                 condFired.push_back(fires);
             }
             bool firing = combineConditionsDnf(rule.conditions, condFired, rule.conditionOr);
-            log("EVALUATE_RULES: STEP_COND uid=%s mode=%s ops=%s nConds=%d firing=%d",
+            logSerial("EVALUATE_RULES: STEP_COND uid=%s mode=%s ops=%s nConds=%d firing=%d",
                 rule.uid.c_str(),
                 conditionsHaveJoinOp(rule.conditions) ? "dnf" : "legacy",
                 conditionsOpsString(rule.conditions).c_str(),
@@ -1248,13 +1323,13 @@ private:
         if (rule.direction == RuleDirection::BETWEEN) {
             double value = getSensorValue(rule.sensorUid);
             bool firing = Utils::isInsideArc(value, rule.valueLow, rule.valueHigh);
-            log("EVALUATE_RULES: STEP_COND uid=%s mode=single firing=%d", rule.uid.c_str(), firing ? 1 : 0);
+            logSerial("EVALUATE_RULES: STEP_COND uid=%s mode=single firing=%d", rule.uid.c_str(), firing ? 1 : 0);
             return firing;
         }
 
         double value = getSensorValue(rule.sensorUid);
         bool firing = conditionFires(value, rule.direction, rule.valueTarget);
-        log("EVALUATE_RULES: STEP_COND uid=%s mode=single firing=%d", rule.uid.c_str(), firing ? 1 : 0);
+        logSerial("EVALUATE_RULES: STEP_COND uid=%s mode=single firing=%d", rule.uid.c_str(), firing ? 1 : 0);
         return firing;
     }
 

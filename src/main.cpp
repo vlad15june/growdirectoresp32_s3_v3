@@ -7,6 +7,7 @@
 #include <T67XX.h>
 #include "globals.h"
 #include "Infrastructure/Adapters/ExternalWDT/ExternalWDT.h"
+#include "Infrastructure/Adapters/Http/TlsMemoryPool.h"
 #include "esp_task_wdt.h"
 
 // Global loop service instance
@@ -256,6 +257,7 @@ void setup()
   initDependencies();
 
   Serial.begin(115200);
+  TlsMemoryPool::install();
   Serial.printf("[%lu ms] System initialized.\n", millis());
   Serial.print("Free heap: ");
   Serial.println(ESP.getFreeHeap());

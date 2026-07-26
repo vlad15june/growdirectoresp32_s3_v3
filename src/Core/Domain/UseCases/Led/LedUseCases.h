@@ -39,6 +39,16 @@ private:
     void log(const char* format, ...);
     void logOffline(const char* format, ...);
 
+    void logRedIndicationTransition(uint8_t configStatus, bool networkOffline);
+    void handleBlinkingMode(unsigned long currentTime);
+    void blinkFirstLedFast(unsigned long currentTime, uint8_t ledsCount, bool useYellow, const char* label);
+    void handleConfiguredDoneOffline(unsigned long currentTime, uint8_t ledsCount);
+    void handleConfiguredDoneOnline(unsigned long currentTime, uint8_t ledsCount);
+    void renderPerDeviceOffline(uint8_t ledsCount);
+    void renderPerDeviceOnline(uint8_t ledsCount);
+    bool isDeviceModule() const;
+    bool isDeviceOn(const Device* device) const;
+
 public:
     // Constructor
     LedUseCases(ILedAdapter* adapter, IModuleConfig* moduleConfig, IArduinoAdapter* arduinoAdapter,

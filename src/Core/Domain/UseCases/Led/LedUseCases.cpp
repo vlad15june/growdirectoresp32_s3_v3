@@ -2,7 +2,6 @@
 #include <cstdarg>
 #include <cstdio>
 
-// Constructor
 LedUseCases::LedUseCases(ILedAdapter *adapter, IModuleConfig *moduleConfig, IArduinoAdapter *arduinoAdapter,
                          ILogger *loggerInstance, IDebugSystem *debugSystemInstance, IDeviceModel *deviceModel,
                          INetworkStatusProvider *networkStatusProvider)
@@ -16,10 +15,8 @@ LedUseCases::LedUseCases(ILedAdapter *adapter, IModuleConfig *moduleConfig, IArd
 {
 }
 
-// Destructor
 LedUseCases::~LedUseCases()
 {
-    // No dynamic memory to clean up
     log("LedUseCases destroyed");
 }
 
@@ -55,26 +52,22 @@ void LedUseCases::logOffline(const char *format, ...)
     logger->println(DebugFeatures::OFFLINE_INDICATION_DEBUG, buffer, channel);
 }
 
-// Turn LEDs on during module load
 void LedUseCases::ledOnLoad()
 {
-    log("Setting all yellow LEDs on during module load");
+    log("Setting yellow LED on during module load");
     ledAdapter->setYellowLedOn(0);
 }
 
-// Turn LEDs off during module unload
 void LedUseCases::ledOffLoad()
 {
     log("Setting all yellow LEDs off during module unload");
     ledAdapter->setAllYellowLedOff();
 }
 
-// Blink green LED twice
 void LedUseCases::ledBlinkGreen2Times()
 {
 }
 
-// Blink yellow LED (red+green together) twice
 void LedUseCases::ledBlinkYellow2Times()
 {
 }
@@ -90,7 +83,182 @@ bool LedUseCases::isBlinking() const
     return _blinking;
 }
 
-// Main loop for managing LED states based on module configuration
+bool LedUseCases::isDeviceModule() const
+{
+    return moduleConfig->getModuleType() == MODULE_TYPE_DEVICE ||
+           moduleConfig->getModuleType() == MODULE_TYPE_HYDRO ||
+           moduleConfig->getModuleSubType() == MODULE_SUBTYPE_DIMMER;
+}
+
+bool LedUseCases::isDeviceOn(const Device *device) const
+{
+    return device->state == DEVICE_STATE_ON || device->state == DEVICE_STATE_STEP_ON;
+}
+
+void LedUseCases::logRedIndicationTransition(uint8_t configStatus, bool networkOffline)
+{
+    bool redNow = _blinking || (configStatus == ModuleModeEnum::CONFIGURED_DONE && networkOffline);
+    if (redNow && !_redReported)
+    {
+        _redReported = true;
+        logOffline("OFFLINE_INDICATION: RED-on reason=%s isNetworkOffline=%d configStatus=%u",
+                   _blinking ? "identify_blinking" : "network_offline", networkOffline ? 1 : 0, configStatus);
+    }
+    else if (!redNow && _redReported)
+    {
+        _redReported = false;
+        logOffline("OFFLINE_INDICATION: RED-off configStatus=%u", configStatus);
+    }
+}
+
+void LedUseCases::handleBlinkingMode(unsigned long currentTime)
+{
+    if (currentTime - lastBlinkTime <= (ledState ? BLINK_FAST_ON_TIME : BLINK_FAST_OFF_TIME))
+    {
+        return;
+    }
+
+    lastBlinkTime = currentTime;
+    ledState = !ledState;
+
+    ledAdapter->setAllGreenLedOff();
+
+    if (ledState)
+    {
+        ledAdapter->setAllRedLedOn();
+    }
+    else
+    {
+        ledAdapter->setAllRedLedOff();
+    }
+
+    log("Blinking mode: Red LED state: %s", ledState ? "ON" : "OFF");
+}
+
+void LedUseCases::blinkFirstLedFast(unsigned long currentTime, uint8_t ledsCount, bool useYellow, const char *label)
+{
+    if (currentTime - lastBlinkTime <= (ledState ? BLINK_FAST_ON_TIME : BLINK_FAST_OFF_TIME))
+    {
+        return;
+    }
+
+    lastBlinkTime = currentTime;
+    ledState = !ledState;
+
+    ledAdapter->setAllRedLedOff();
+    ledAdapter->setAllGreenLedOff();
+
+    if (ledState && ledsCount > 0)
+    {
+        if (useYellow)
+        {
+            ledAdapter->setYellowLedOn(0);
+        }
+        else
+        {
+            ledAdapter->setGreenLedOn(0);
+        }
+    }
+
+    log("%s blink state: %s", label, ledState ? "ON" : "OFF");
+}
+
+void LedUseCases::renderPerDeviceOffline(uint8_t ledsCount)
+{
+    auto devices = deviceModel->getAllDevices();
+
+    for (uint8_t i = 0; i < ledsCount && i < devices.size(); i++)
+    {
+        if (isDeviceOn(devices[i]))
+        {
+            if (ledState)
+            {
+                ledAdapter->setGreenLedOff(i);
+                ledAdapter->setRedLedOn(i);
+            }
+            else
+            {
+                ledAdapter->setGreenLedOn(i);
+                ledAdapter->setRedLedOff(i);
+            }
+        }
+        else
+        {
+            ledAdapter->setGreenLedOff(i);
+            ledAdapter->setRedLedOn(i);
+        }
+    }
+}
+
+void LedUseCases::renderPerDeviceOnline(uint8_t ledsCount)
+{
+    auto devices = deviceModel->getAllDevices();
+
+    for (uint8_t i = 0; i < ledsCount && i < devices.size(); i++)
+    {
+        if (isDeviceOn(devices[i]))
+        {
+            ledAdapter->setGreenLedOn(i);
+        }
+        else if (ledState)
+        {
+            ledAdapter->setGreenLedOn(i);
+        }
+        else
+        {
+            ledAdapter->setGreenLedOff(i);
+        }
+    }
+}
+
+void LedUseCases::handleConfiguredDoneOffline(unsigned long currentTime, uint8_t ledsCount)
+{
+    if (isDeviceModule() && deviceModel != nullptr)
+    {
+        if (currentTime - lastBlinkTime > BLINK_SLOW_ON_TIME)
+        {
+            lastBlinkTime = currentTime;
+            ledState = !ledState;
+        }
+
+        renderPerDeviceOffline(ledsCount);
+        log("CONFIGURED_DONE offline: per-device green/red state: %s", ledState ? "ON" : "OFF");
+        return;
+    }
+
+    ledAdapter->setAllGreenLedOff();
+    ledAdapter->setAllRedLedOn();
+    log("CONFIGURED_DONE offline: solid red (no server connection)");
+}
+
+void LedUseCases::handleConfiguredDoneOnline(unsigned long currentTime, uint8_t ledsCount)
+{
+    if (currentTime - lastBlinkTime <= (ledState ? BLINK_SLOW_ON_TIME : BLINK_SLOW_OFF_TIME))
+    {
+        return;
+    }
+
+    lastBlinkTime = currentTime;
+    ledState = !ledState;
+
+    ledAdapter->setAllRedLedOff();
+
+    if (isDeviceModule() && deviceModel != nullptr)
+    {
+        renderPerDeviceOnline(ledsCount);
+    }
+    else if (ledState)
+    {
+        ledAdapter->setAllGreenLedOn();
+    }
+    else
+    {
+        ledAdapter->setAllGreenLedOff();
+    }
+
+    log("CONFIGURED_DONE: Green LED blink state: %s", ledState ? "ON" : "OFF");
+}
+
 void LedUseCases::loop()
 {
     if (moduleConfig == nullptr || arduinoAdapter == nullptr || ledAdapter == nullptr)
@@ -106,179 +274,37 @@ void LedUseCases::loop()
         return;
     }
 
-    // Get the current module configuration status
     uint8_t configStatus = settings->getIfConfigured();
     unsigned long currentTime = arduinoAdapter->millis();
     uint8_t ledsCount = moduleConfig->getLedsCount();
 
     bool networkOffline = (networkStatusProvider != nullptr && networkStatusProvider->isNetworkOffline());
-    bool redNow = _blinking || (configStatus == ModuleModeEnum::CONFIGURED_DONE && networkOffline);
-    if (redNow && !_redReported)
-    {
-        _redReported = true;
-        logOffline("OFFLINE_INDICATION: RED-on reason=%s isNetworkOffline=%d configStatus=%u",
-                   _blinking ? "identify_blinking" : "network_offline", networkOffline ? 1 : 0, configStatus);
-    }
-    else if (!redNow && _redReported)
-    {
-        _redReported = false;
-        logOffline("OFFLINE_INDICATION: RED-off configStatus=%u", configStatus);
-    }
+    logRedIndicationTransition(configStatus, networkOffline);
 
     if (_blinking)
     {
-        if (currentTime - lastBlinkTime > (ledState ? BLINK_FAST_ON_TIME : BLINK_FAST_OFF_TIME))
-        {
-            lastBlinkTime = currentTime;
-            ledState = !ledState;
-
-            ledAdapter->setAllGreenLedOff();
-
-            if (ledState)
-            {
-                ledAdapter->setAllRedLedOn();
-            }
-            else
-            {
-                ledAdapter->setAllRedLedOff();
-            }
-
-            log("Blinking mode: Red LED state: %s", ledState ? "ON" : "OFF");
-        }
+        handleBlinkingMode(currentTime);
         return;
     }
 
-    // Handle LED states based on module configuration status
     switch (configStatus)
     {
     case ModuleModeEnum::USER_CAN_CONFIGURE:
-        // One Yellow LED blinks with a 0.5-second on/off cycle, all others are off
-        if (currentTime - lastBlinkTime > (ledState ? BLINK_FAST_ON_TIME : BLINK_FAST_OFF_TIME))
-        {
-            lastBlinkTime = currentTime;
-            ledState = !ledState;
-
-            // Turn off all LEDs first
-            ledAdapter->setAllRedLedOff();
-            ledAdapter->setAllGreenLedOff();
-
-            // If LED should be on, turn on yellow (red+green together) for the first LED only
-            if (ledState && ledsCount > 0)
-            {
-                ledAdapter->setYellowLedOn(0); // Use the first LED for yellow blinking
-            }
-
-            log("USER_CAN_CONFIGURE: Yellow LED blink state: %s", ledState ? "ON" : "OFF");
-        }
+        blinkFirstLedFast(currentTime, ledsCount, true, "USER_CAN_CONFIGURE: Yellow LED");
         break;
 
     case ModuleModeEnum::USER_CAN_RE_CONFIGURE:
-        // Green LED blinks with a 0.5-second on/off cycle, all others are off
-        if (currentTime - lastBlinkTime > (ledState ? BLINK_FAST_ON_TIME : BLINK_FAST_OFF_TIME))
-        {
-            lastBlinkTime = currentTime;
-            ledState = !ledState;
-
-            // Turn off all LEDs first
-            ledAdapter->setAllRedLedOff();
-            ledAdapter->setAllGreenLedOff();
-
-            // If LED should be on, turn on green for the first LED only
-            if (ledState && ledsCount > 0)
-            {
-                ledAdapter->setGreenLedOn(0); // Use the first LED for green blinking
-            }
-
-            log("USER_CAN_RE_CONFIGURE: Green LED blink state: %s", ledState ? "ON" : "OFF");
-        }
+        blinkFirstLedFast(currentTime, ledsCount, false, "USER_CAN_RE_CONFIGURE: Green LED");
         break;
 
     case ModuleModeEnum::CONFIGURED_DONE:
-        if (networkStatusProvider != nullptr && networkStatusProvider->isNetworkOffline())
+        if (networkOffline)
         {
-            if (currentTime - lastBlinkTime > (ledState ? BLINK_SLOW_ON_TIME : BLINK_SLOW_OFF_TIME))
-            {
-                lastBlinkTime = currentTime;
-                ledState = !ledState;
-
-                ledAdapter->setAllGreenLedOff();
-
-                if (ledState)
-                {
-                    ledAdapter->setAllRedLedOn();
-                }
-                else
-                {
-                    ledAdapter->setAllRedLedOff();
-                }
-
-                log("CONFIGURED_DONE offline: Red LED blink state: %s", ledState ? "ON" : "OFF");
-            }
-            break;
+            handleConfiguredDoneOffline(currentTime, ledsCount);
         }
-
-        if (currentTime - lastBlinkTime > (ledState ? BLINK_SLOW_ON_TIME : BLINK_SLOW_OFF_TIME))
+        else
         {
-            lastBlinkTime = currentTime;
-            ledState = !ledState;
-
-            ledAdapter->setAllRedLedOff();
-
-            if (moduleConfig->getModuleType() == MODULE_TYPE_DEVICE ||
-                moduleConfig->getModuleType() == MODULE_TYPE_HYDRO ||
-                moduleConfig->getModuleSubType() == MODULE_SUBTYPE_DIMMER)
-            {
-                if (deviceModel != nullptr)
-                {
-                    auto devices = deviceModel->getAllDevices();
-
-                    for (uint8_t i = 0; i < ledsCount && i < devices.size(); i++)
-                    {
-                        bool deviceIsOn = (devices[i]->state == DEVICE_STATE_ON ||
-                                           devices[i]->state == DEVICE_STATE_STEP_ON);
-
-                        if (deviceIsOn)
-                        {
-                            ledAdapter->setGreenLedOn(i);
-                        }
-                        else
-                        {
-                            if (ledState)
-                            {
-                                ledAdapter->setGreenLedOn(i);
-                            }
-                            else
-                            {
-                                ledAdapter->setGreenLedOff(i);
-                            }
-                        }
-                    }
-                }
-                else
-                {
-                    if (ledState)
-                    {
-                        ledAdapter->setAllGreenLedOn();
-                    }
-                    else
-                    {
-                        ledAdapter->setAllGreenLedOff();
-                    }
-                }
-            }
-            else
-            {
-                if (ledState)
-                {
-                    ledAdapter->setAllGreenLedOn();
-                }
-                else
-                {
-                    ledAdapter->setAllGreenLedOff();
-                }
-            }
-
-            log("CONFIGURED_DONE: Green LED blink state: %s", ledState ? "ON" : "OFF");
+            handleConfiguredDoneOnline(currentTime, ledsCount);
         }
         break;
 
@@ -286,7 +312,6 @@ void LedUseCases::loop()
         break;
 
     default:
-        // For any other state, turn off all LEDs
         ledAdapter->setAllRedLedOff();
         ledAdapter->setAllGreenLedOff();
         log("Unknown config status: %d, all LEDs off", configStatus);
