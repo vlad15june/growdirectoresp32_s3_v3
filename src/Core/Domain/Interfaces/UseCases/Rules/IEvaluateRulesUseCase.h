@@ -51,6 +51,14 @@ public:
      * @return RuleEvaluationResult of the last evaluation
      */
     virtual RuleEvaluationResult getLastEvaluationResult(const std::string& ruleUid) const = 0;
+
+    /**
+     * Check whether any active rule would turn a device on within the next N minutes.
+     * Used by the preventive restart logic.
+     * @param minutes Look-ahead window in minutes
+     * @return true if a rule is predicted to turn a device on, false otherwise
+     */
+    virtual bool willAnyRuleTurnDeviceOnWithinMinutes(int minutes) = 0;
 };
 
 #endif // IEVALUATE_RULES_USE_CASE_H

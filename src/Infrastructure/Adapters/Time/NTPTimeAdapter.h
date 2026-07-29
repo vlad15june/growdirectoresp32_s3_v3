@@ -91,6 +91,7 @@ public:
     void restoreTimeFromStorage() override;
     void forceSyncTime() override;
     bool isTimeSynchronized() override;
+    bool getLocalTime(struct tm* out) override;
 
     // Callback handler that will be called by the static callback
     void onTimeSynchronized();
@@ -162,6 +163,23 @@ unsigned long NTPTimeAdapter::getEpochTime()
 
     time(&now);
     return static_cast<unsigned long>(now);
+}
+
+bool NTPTimeAdapter::getLocalTime(struct tm* out)
+{
+    if (out == nullptr)
+    {
+        log("TIME: getLocalTime called with null pointer\n");
+        return false;
+    }
+
+    if (!::getLocalTime(out))
+    {
+        log("TIME: Failed to obtain local time\n");
+        return false;
+    }
+
+    return true;
 }
 
 const char* NTPTimeAdapter::getFormattedTime()

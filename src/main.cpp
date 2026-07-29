@@ -281,8 +281,8 @@ void setup()
                   millis(), wdtInitRc, wdtAddRc);
   }
 
-  // settings.begin();
-  // settings.setConfigured(ModuleModeEnum::USER_CAN_CONFIGURE);
+   //settings.begin();
+   //settings.setConfigured(ModuleModeEnum::USER_CAN_CONFIGURE);
 
   // settings.begin();
   // settings.setConfigured(ModuleModeEnum::AP_TEST_MODE);
@@ -297,6 +297,13 @@ void setup()
   // spiffsAdapter.removeFile("/sensors/sensors.json");
   // spiffsAdapter.removeFile("/wifiNetworks.json");
 
+  // FOR TESTING ONLY: clear preventive restart day marker                                                                                                                                      
+   //Serial.println("[TEST] Clearing lastPreventiveRestartDay");                                                                                                                                   
+   //settings.setLastPreventiveRestartDay(0);  
+
+  // FOR TESTING ONLY: print diagnostic message
+  //debugSystem.setDebugFeatureState(DebugFeatures::DIAGNOSTIC_DEBUG, true);
+ 
   if (settings.getNeedClearSpiffs() == NEED_CLEAR_SPIFFS_MARKER) {
     Serial.println("needClearSpiffs flag set — removing SPIFFS files");
     spiffsAdapter.removeFile("/data/sensorTypes.json");

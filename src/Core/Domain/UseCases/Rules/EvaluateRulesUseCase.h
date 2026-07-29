@@ -786,7 +786,84 @@ public:
         return RuleEvaluationResult();
     }
 
+    bool willAnyRuleTurnDeviceOnWithinMinutes(int minutes) override {
+        if (!_ruleRepository || !_ntpTimeAdapter) {
+            return false;
+        }
+
+        time_t now = _ntpTimeAdapter->getEpochTime();
+        if (now == 0) {
+            return false;
+        }
+
+        time_t futureTime = now + minutes * 60;
+        struct tm futureTm;
+        if (!gmtime_r(&futureTime, &futureTm)) {
+            return false;
+        }
+
+        std::vector<Rule> activeRules = _ruleRepository->getActiveRules();
+        for (const auto& rule : activeRules) {
+            if (rule.mode != RuleMode::ON) {
+                continue;
+            }
+            if (rule.state == RuleState::DELETING) {
+                continue;
+            }
+
+            if (rule.ruleType == RuleType::SCHEDULE) {
+                if (willScheduleRuleTurnOnAt(rule, futureTm)) {
+                    log("EVALUATE_RULES: PREVENTIVE_RESTART schedule rule %s will be ON at +%d min",
+                        rule.uid.c_str(), minutes);
+                    return true;
+                }
+            }
+            else if (rule.ruleType == RuleType::LOOP) {
+                Device* device = _deviceModel ? _deviceModel->getDeviceByUid(rule.deviceUid.c_str()) : nullptr;
+                if (device && isDeviceOffForPreventiveRestart(device->state)) {
+                    log("EVALUATE_RULES: PREVENTIVE_RESTART loop rule %s will turn device %s ON soon",
+                        rule.uid.c_str(), rule.deviceUid.c_str());
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
 private:
+    static bool isDeviceOffForPreventiveRestart(DeviceStateEnum state) {
+        return state == DEVICE_STATE_OFF ||
+               state == DEVICE_STATE_OFF_BY_POWER_ON ||
+               state == DEVICE_STATE_DELAY_OFF ||
+               state == DEVICE_STATE_STEP_WAITING;
+    }
+
+    bool willScheduleRuleTurnOnAt(const Rule& rule, const struct tm& futureTm) {
+        for (const auto& item : rule.schedule) {
+            struct tm startAt = {0};
+            if (!gmtime_r(&item.startAt, &startAt)) {
+                continue;
+            }
+
+            uint32_t startSec = startAt.tm_hour * 3600 + startAt.tm_min * 60;
+            uint32_t endSec = startSec + static_cast<uint32_t>(item.duration);
+            uint32_t futureSec = futureTm.tm_hour * 3600 + futureTm.tm_min * 60 + futureTm.tm_sec;
+
+            // today's window
+            if (startSec <= futureSec && futureSec < endSec) {
+                return true;
+            }
+
+            // cross-midnight window from yesterday
+            uint32_t futureSecNextDay = futureSec + 24 * 3600;
+            if (startSec <= futureSecNextDay && futureSecNextDay < endSec) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     bool isRuleActiveNow(const Rule& rule, RuleEvaluationResult& result) {
         bool hasWindow = (rule.startDayTime != 0 || rule.endDayTime != 0);
         bool hasDays = (!rule.daysOfWeek.empty() || !rule.daysOfMonth.empty());

@@ -39,6 +39,7 @@
 #include "Core/Domain/UseCases/Sensors/SensorCommandUseCase.h"
 #include "Core/Domain/UseCases/Rules/EvaluateRulesUseCase.h"
 #include "Core/Domain/UseCases/Rules/SyncRulesUseCase.h"
+#include "Core/Domain/UseCases/Diagnostics/PreventiveRestartUseCase.h"
 #include "Core/Domain/UseCases/SensorTypes/SyncSensorTypesUseCase.h"
 
 #include "Core/Domain/Data/Models/ModuleStructure.h"
@@ -178,6 +179,8 @@ OtaUpdateLog otaUpdateLog(&spiffsAdapter, &mqttLogger, &ntpTimeAdapter, &arduino
 
 BootEventLog bootEventLog(&spiffsAdapter, &mqttLogger, &ntpTimeAdapter, &arduinoAdapter, &wifiAdapter, DebugFeatures::BUTTON_DEBUG);
 
+BootEventLog restartEventLog(&spiffsAdapter, &mqttLogger, &ntpTimeAdapter, &arduinoAdapter, &wifiAdapter, "restart");
+
 FirmwareRemoteUpdate firmwareRemoteUpdate(&mqttLogger, &debugSystem, &settings, &otaUpdateLog);
 
 WiFiManager wifiManager(&wifiAdapter, &settings, &mqttLogger, &debugSystem, &spiffsAdapter, &jsonConverter);
@@ -274,6 +277,35 @@ WebServerLauncher webServerLauncher(
 
 SensorValueModel sensorValueModel;
 
+RuleStateReportingService ruleStateReportingService(
+    &hybridApiService,
+    &jsonConverter,
+    &settings,
+    &moduleConfig,
+    &ntpTimeAdapter,
+    &mqttLogger,
+    &debugSystem);
+
+EvaluateRulesUseCase evaluateRulesUseCase(
+    &deviceModel,
+    &ruleRepository,
+    &arduinoAdapter,
+    &ntpTimeAdapter,
+    &sensorValueModel,
+    &mqttLogger,
+    &debugSystem,
+    &ruleStateReportingService);
+
+PreventiveRestartUseCase preventiveRestartUseCase(
+    &moduleConfig,
+    &deviceModel,
+    &evaluateRulesUseCase,
+    &firmwareRemoteUpdate,
+    &ntpTimeAdapter,
+    &mqttLogger,
+    &debugSystem,
+    &restartEventLog);
+
 DiagnosticService diagnosticService(
     &restApiService,
     &moduleConfig,
@@ -284,7 +316,8 @@ DiagnosticService diagnosticService(
     &ntpTimeAdapter,
     &arduinoAdapter,
     &mqttManager,
-    &hybridApiService);
+    &hybridApiService,
+    &preventiveRestartUseCase);
 
 LedUseCases ledUseCases(&ledAdapter, &moduleConfig, &arduinoAdapter, &mqttLogger, &debugSystem, &deviceModel, &diagnosticService);
 
@@ -334,25 +367,6 @@ DeviceService deviceService(
     &hybridApiService,
     &mqttLogger,
     &debugSystem);
-
-RuleStateReportingService ruleStateReportingService(
-    &hybridApiService,
-    &jsonConverter,
-    &settings,
-    &moduleConfig,
-    &ntpTimeAdapter,
-    &mqttLogger,
-    &debugSystem);
-
-EvaluateRulesUseCase evaluateRulesUseCase(
-    &deviceModel,
-    &ruleRepository,
-    &arduinoAdapter,
-    &ntpTimeAdapter,
-    &sensorValueModel,
-    &mqttLogger,
-    &debugSystem,
-    &ruleStateReportingService);
 
 SyncRulesUseCase syncRulesUseCase(
     &hybridApiService,
@@ -497,5 +511,6 @@ void initDependencies()
     commandService.setRemoteSensorReceiver(&remoteSensorReceiver);
     loopServiceFactory.setOtaUpdateLog(&otaUpdateLog);
     loopServiceFactory.setBootEventLog(&bootEventLog);
+    loopServiceFactory.setRestartEventLog(&restartEventLog);
 }
 #endif // GLOBALS_H

@@ -23,6 +23,7 @@ private:
     IRuleService* ruleService;
     IOtaUpdateLog* otaUpdateLog;
     IBootEventLog* bootEventLog;
+    IBootEventLog* restartEventLog;
 
     // Diagnostic timer variables
     unsigned long lastDiagnosticTime = 0;
@@ -43,7 +44,8 @@ public:
           sensorService(nullptr),
           ruleService(nullptr),
           otaUpdateLog(nullptr),
-          bootEventLog(nullptr) {}
+          bootEventLog(nullptr),
+          restartEventLog(nullptr) {}
     
     ~LoopServiceConfigureDone() override = default;
     
@@ -103,6 +105,9 @@ public:
                 if (bootEventLog && bootEventLog->hasPending()) {
                     bootEventLog->flushToMqttIfAny();
                 }
+                if (restartEventLog && restartEventLog->hasPending()) {
+                    restartEventLog->flushToMqttIfAny();
+                }
             }
         }
     }
@@ -113,6 +118,10 @@ public:
 
     virtual void setBootEventLog(IBootEventLog* bootLog) {
         this->bootEventLog = bootLog;
+    }
+
+    virtual void setRestartEventLog(IBootEventLog* restartLog) {
+        this->restartEventLog = restartLog;
     }
 
     virtual void setOnChangeLocalIpUseCase(IOnChangeLocalIpUseCase* useCase) {

@@ -39,6 +39,15 @@ public:
         return _formattedTime.c_str();
     }
 
+    bool getLocalTime(struct tm* out) override {
+        if (out == nullptr) {
+            return false;
+        }
+        time_t t = static_cast<time_t>(_epochTime);
+        localtime_r(&t, out);
+        return true;
+    }
+
     void printTime() override {
         // Mock implementation, does nothing
     }

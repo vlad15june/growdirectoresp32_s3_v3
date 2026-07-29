@@ -32,6 +32,7 @@ private:
         _byteValues["noScanSensors"] = 0;
         _byteValues["wasInitialSyncCompleted"] = 0;
         _byteValues["needClearSpiffs"] = 0;
+        _byteValues["lastPreventiveRestartDay"] = 0;
 
         // Set default sensor types
         for (int i = 0; i < 4; i++)
@@ -330,6 +331,16 @@ public:
     void setNeedClearSpiffs(uint8_t needClear) override
     {
         _byteValues["needClearSpiffs"] = needClear;
+    }
+
+    uint8_t getLastPreventiveRestartDay() override
+    {
+        return _byteValues["lastPreventiveRestartDay"];
+    }
+
+    void setLastPreventiveRestartDay(uint8_t day) override
+    {
+        _byteValues["lastPreventiveRestartDay"] = day;
     }
 
     // Reset method to reset all values to defaults
