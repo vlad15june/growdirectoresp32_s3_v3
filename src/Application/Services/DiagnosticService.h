@@ -58,7 +58,7 @@ private:
     // Full offline state tracking (WiFi down OR (MQTT down AND API down))
     unsigned long _allOfflineStartTime;
     bool _wasFullyOffline;
-    static const unsigned long OFFLINE_RESET_THRESHOLD_SENSOR_MS = 15 * 60 * 1000; // 15 minutes for sensor directors
+    static const unsigned long OFFLINE_RESET_THRESHOLD_SENSOR_MS = 1 * 60 * 60 * 1000; // 1 hour for sensor directors
     static const unsigned long OFFLINE_RESET_THRESHOLD_DEVICE_MS = 4 * 60 * 60 * 1000; // 4 hours for other modules
 
     unsigned long _httpDownSince = 0;
