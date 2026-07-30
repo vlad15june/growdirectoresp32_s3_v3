@@ -112,6 +112,9 @@ Use Cases (сценарии использования) - бизнес-логи�
 ##### `/src/Core/Domain/UseCases/DeviceControl`
 Логика управления устройствами.
 
+##### `/src/Core/Domain/UseCases/Diagnostics`
+Логика диагностики и профилактических действий (профилактический перезапуск модуля).
+
 ##### `/src/Core/Domain/UseCases/Led`
 Логика управления светодиодами.
 

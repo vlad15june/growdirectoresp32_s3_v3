@@ -1,5 +1,18 @@
 # Release Notes
 
+## Version 2.18.2 (2026-07-30)
+
+### Added
+- **Preventive Nightly Restart**: GDV1-3731 The module now performs a preventive restart once a day during an early-morning window, but only when it is fully configured, not in the middle of a firmware update, all of its outputs are off, and no rule is due to switch an output on within the next few minutes — so the restart never interrupts active equipment.
+
+### Changed
+- **Longer Offline Wait Before Reboot on Sensor Modules**: GDV1-3182 A sensor-only module now waits one hour of being fully offline (no network and no server connection) before it automatically reboots to recover, instead of the previous fifteen minutes.
+
+### Fixed
+- **Device Clock No Longer Overwritten With Stale Time**: GDV1-3766 Fixed startup so the device restores its clock from the last saved time only when it does not already have a valid time. Previously it could overwrite an accurate clock with an older saved value, disturbing time-based rules.
+
+---
+
 ## Version 2.18.1 (2026-07-24)
 
 ### Fixed
