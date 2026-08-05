@@ -179,6 +179,46 @@ void test_preventive_restart_skipped_device_on() {
     TEST_ASSERT_EQUAL_UINT8(0, g_settings.getBootType());
 }
 
+// GDV1-3794: delayOff keeps the relay closed, so it must block the preventive restart.
+void test_preventive_restart_skipped_device_in_delay_off() {
+    resetAll();
+    setupUseCase();
+
+    g_moduleConfig.setRequestedModuleMode(CONFIGURED_DONE);
+    int startMinutes = PreventiveRestartUseCase::PREVENTIVE_RESTART_HOUR * 60 +
+                       PreventiveRestartUseCase::PREVENTIVE_RESTART_MINUTE;
+    setTimeFromMinutes(startMinutes + 14, 15);
+
+    g_device.deviceUid = "relay_1";
+    g_device.state = DEVICE_STATE_DELAY_OFF;
+    g_deviceModel.addDevice(&g_device);
+
+    g_useCase->perform();
+
+    TEST_ASSERT_EQUAL_INT(CONFIGURED_DONE, g_moduleConfig.getRequestedModuleMode());
+    TEST_ASSERT_EQUAL_UINT8(0, g_settings.getBootType());
+}
+
+// GDV1-3794: delayOn leaves the relay open and nothing is running, so it must not block the restart.
+void test_preventive_restart_triggers_with_device_in_delay_on() {
+    resetAll();
+    setupUseCase();
+
+    g_moduleConfig.setRequestedModuleMode(CONFIGURED_DONE);
+    int startMinutes = PreventiveRestartUseCase::PREVENTIVE_RESTART_HOUR * 60 +
+                       PreventiveRestartUseCase::PREVENTIVE_RESTART_MINUTE;
+    setTimeFromMinutes(startMinutes + 14, 15);
+
+    g_device.deviceUid = "relay_1";
+    g_device.state = DEVICE_STATE_DELAY_ON;
+    g_deviceModel.addDevice(&g_device);
+
+    g_useCase->perform();
+
+    TEST_ASSERT_EQUAL_INT(CONFIGURED_NEED_RESTART, g_moduleConfig.getRequestedModuleMode());
+    TEST_ASSERT_EQUAL_UINT8(BOOT_TYPE_TECHNICAL, g_settings.getBootType());
+}
+
 void test_preventive_restart_skipped_rule_starts_soon() {
     resetAll();
     setupUseCase();
@@ -250,6 +290,8 @@ extern "C" int run_preventive_restart_use_case_tests() {
     RUN_TEST(test_preventive_restart_skipped_outside_window);
     RUN_TEST(test_preventive_restart_skipped_already_today);
     RUN_TEST(test_preventive_restart_skipped_device_on);
+    RUN_TEST(test_preventive_restart_skipped_device_in_delay_off);
+    RUN_TEST(test_preventive_restart_triggers_with_device_in_delay_on);
     RUN_TEST(test_preventive_restart_skipped_rule_starts_soon);
     RUN_TEST(test_preventive_restart_skipped_ota_in_progress);
     RUN_TEST(test_preventive_restart_skipped_not_configured);
