@@ -47,14 +47,22 @@ public:
             {
             case CONFIGURED_NEED_RESTART:
                 log("OnChangeModuleModeUseCase: NEED_RESTART detected - immediate restart without saving mode");
-                if (_moduleConfig.getSettings()->getBootType() != BOOT_TYPE_TECHNICAL)
                 {
-                    _moduleConfig.getSettings()->setBootType(BOOT_TYPE_USER);
-                    log("OnChangeModuleModeUseCase: Set boot type to USER");
-                }
-                else
-                {
-                    log("OnChangeModuleModeUseCase: Keeping boot type TECHNICAL (set by diagnostic)");
+                    // Boot types deliberately set by the caller must survive this restart so the
+                    // next boot can report the real reboot reason (TECHNICAL - diagnostic,
+                    // FIRMWARE_UPDATE - OTA, SENSOR_CHNG - sensor configuration change).
+                    uint8_t currentBootType = _moduleConfig.getSettings()->getBootType();
+                    if (currentBootType != BOOT_TYPE_TECHNICAL &&
+                        currentBootType != BOOT_TYPE_FIRMWARE_UPDATE &&
+                        currentBootType != BOOT_TYPE_SENSOR_CHNG)
+                    {
+                        _moduleConfig.getSettings()->setBootType(BOOT_TYPE_USER);
+                        log("OnChangeModuleModeUseCase: Set boot type to USER");
+                    }
+                    else
+                    {
+                        log("OnChangeModuleModeUseCase: Keeping boot type %d (set by caller)", currentBootType);
+                    }
                 }
                 _arduinoAdapter.delay(100);
                 restart();
