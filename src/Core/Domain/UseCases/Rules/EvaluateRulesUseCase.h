@@ -832,11 +832,10 @@ public:
     }
 
 private:
+    // Same meaning as in PreventiveRestartUseCase.h: relay actually open - shared predicate from
+    // DeviceStateEnum.h.
     static bool isDeviceOffForPreventiveRestart(DeviceStateEnum state) {
-        return state == DEVICE_STATE_OFF ||
-               state == DEVICE_STATE_OFF_BY_POWER_ON ||
-               state == DEVICE_STATE_DELAY_OFF ||
-               state == DEVICE_STATE_STEP_WAITING;
+        return isDeviceStateNotPowered(state);
     }
 
     bool willScheduleRuleTurnOnAt(const Rule& rule, const struct tm& futureTm) {

@@ -66,14 +66,13 @@ public:
         : ruleUid(ruleUid), ruleType(ruleType), ruleVersion(ruleVersion) {}
     
     /**
-     * @brief Check if the evaluation result indicates device should be on
+     * @brief Check if the device is currently powered by this rule
+     *
+     * Uses the shared predicate from DeviceStateEnum.h, i.e. the states in which the relay is
+     * actually closed - including DEVICE_STATE_DELAY_OFF and excluding DEVICE_STATE_DELAY_ON.
      */
     bool isDeviceOn() const {
-        return state == DEVICE_STATE_ON || 
-               state == DEVICE_STATE_STEP_ON ||
-               state == DEVICE_STATE_DELAY_ON ||
-               state == DEVICE_STATE_REQUEST_ON ||
-               state == DEVICE_STATE_REQUEST_STEP_ON;
+        return isDeviceStatePowered(state);
     }
     
     /**
