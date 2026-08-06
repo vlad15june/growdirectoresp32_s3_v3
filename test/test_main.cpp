@@ -51,6 +51,7 @@ extern "C" int run_check_firmware_update_on_startup_tests(void);
 extern "C" int run_sensor_recovery_tests(void);
 extern "C" void run_module_to_module_reboot_tests(void);
 extern "C" void run_rule_dnf_combine_tests(void);
+extern "C" void run_rule_fired_condition_tests(void);
 extern "C" int run_preventive_restart_use_case_tests(void);
 extern "C" void run_rule_operation_time_tests(void);
 extern "C" void run_rule_sensor_value_refresh_tests(void);
@@ -216,6 +217,9 @@ int main(void) {
 
     // Run tests for DNF AND/OR condition combining (GDV1-3717)
     run_rule_dnf_combine_tests();
+
+    // Run tests for reporting the condition that actually fired (GDV1-3755)
+    run_rule_fired_condition_tests();
 
     // Run tests for nightly preventive restart
     run_preventive_restart_use_case_tests();
