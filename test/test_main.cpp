@@ -53,6 +53,7 @@ extern "C" void run_module_to_module_reboot_tests(void);
 extern "C" void run_rule_dnf_combine_tests(void);
 extern "C" int run_preventive_restart_use_case_tests(void);
 extern "C" void run_rule_operation_time_tests(void);
+extern "C" void run_rule_sensor_value_refresh_tests(void);
 
 void setUp(void) {
     // set stuff up here
@@ -220,6 +221,8 @@ int main(void) {
     run_preventive_restart_use_case_tests();
 
     run_rule_operation_time_tests();
+
+    run_rule_sensor_value_refresh_tests();
 
     return UNITY_END();
 }

@@ -249,6 +249,56 @@ private:
         return ops;
     }
 
+    static bool isRuleHoldingDeviceState(DeviceStateEnum state) {
+        return state != DEVICE_STATE_NONE &&
+               state != DEVICE_STATE_OFF &&
+               state != DEVICE_STATE_OFF_BY_POWER_ON;
+    }
+
+    void refreshReportedSensorDescriptor(const Rule& rule, const RuleEvaluationResult& evaluationResult) {
+        if (!_deviceModel || evaluationResult.sensorUid.empty()) {
+            return;
+        }
+
+        if (!isRuleHoldingDeviceState(evaluationResult.state)) {
+            return;
+        }
+
+        auto ctxIt = _deviceRuleContext.find(rule.deviceUid);
+        if (ctxIt == _deviceRuleContext.end() || ctxIt->second.ruleUid != rule.uid) {
+            return;
+        }
+
+        Device* device = _deviceModel->getDeviceByUid(rule.deviceUid.c_str());
+        if (!device || !device->workByRule) {
+            return;
+        }
+
+        RuleEvaluationResult& ctx = ctxIt->second;
+        bool descriptorChanged = ctx.sensorUid != evaluationResult.sensorUid ||
+                                 ctx.sensorValue != evaluationResult.sensorValue ||
+                                 ctx.sensorValueLow != evaluationResult.sensorValueLow ||
+                                 ctx.sensorValueHigh != evaluationResult.sensorValueHigh;
+
+        ctx.sensorUid = evaluationResult.sensorUid;
+        ctx.sensorValue = evaluationResult.sensorValue;
+        ctx.sensorValueTime = evaluationResult.sensorValueTime;
+        ctx.sensorValueLow = evaluationResult.sensorValueLow;
+        ctx.sensorValueHigh = evaluationResult.sensorValueHigh;
+
+        device->sensorUid = ctx.sensorUid.c_str();
+        device->sensorValue = ctx.sensorValue;
+        device->sensorValueTime = ctx.sensorValueTime;
+        device->sensorValueLow = ctx.sensorValueLow;
+        device->sensorValueHigh = ctx.sensorValueHigh;
+
+        if (descriptorChanged) {
+            logSerial("EVALUATE_RULES: SENSOR_REPORT_REFRESH uid=%s deviceUid=%s state=%s sensor=%s value=%.2f low=%.2f high=%.2f",
+                rule.uid.c_str(), rule.deviceUid.c_str(), getDeviceStateName(ctx.state),
+                ctx.sensorUid.c_str(), ctx.sensorValue, ctx.sensorValueLow, ctx.sensorValueHigh);
+        }
+    }
+
     void purgeDeletingRules() {
         if (!_ruleRepository) {
             return;
@@ -754,6 +804,7 @@ public:
         RuleEvaluationResult evaluationResult = evaluateRule(rule);
         
         if (currentState.state == evaluationResult.state) {
+            refreshReportedSensorDescriptor(rule, evaluationResult);
             return true; // No change needed
         }
 
