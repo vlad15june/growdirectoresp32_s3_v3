@@ -212,6 +212,7 @@ private:
     std::map<std::string, RuleEvaluationResult> _deviceRuleContext;
     std::map<std::string, int> _deletePurgeRetries;
     std::map<std::string, unsigned long> _sensorWaitSince;
+    std::map<std::string, std::vector<bool>> _conditionHoldStates;
 
     static const int DELETING_PURGE_MAX_RETRIES = 3;
     static const unsigned long SENSOR_FRESHNESS_WINDOW_MS = 300000;
@@ -361,6 +362,7 @@ private:
             _lastEvaluationResults.erase(rule.uid);
             _ruleLastEvaluated.erase(rule.uid);
             _delayTimers.erase(rule.uid);
+            _conditionHoldStates.erase(rule.uid);
 
             if (_ruleRepository->remove(rule.uid.c_str())) {
                 _deletePurgeRetries.erase(rule.uid);
@@ -418,6 +420,7 @@ private:
             _lastEvaluationResults.erase(rule.uid);
             _ruleLastEvaluated.erase(rule.uid);
             _delayTimers.erase(rule.uid);
+            _conditionHoldStates.erase(rule.uid);
         }
     }
 
@@ -458,6 +461,7 @@ private:
             _ruleActiveStates.erase(rule.uid);
             _lastEvaluationResults.erase(rule.uid);
             _ruleLastEvaluated.erase(rule.uid);
+            _conditionHoldStates.erase(rule.uid);
 
             log("EVALUATE_RULES: %s_STOP uid=%s deviceUid=%s reason=rule_off_by_date",
                 rule.ruleType == RuleType::LOOP ? "LOOP" : "STEP",
@@ -1197,21 +1201,44 @@ private:
         return std::string(buffer);
     }
 
+    bool isRuleHoldSessionActive(const std::string& ruleUid) {
+        auto it = _ruleActiveStates.find(ruleUid);
+        if (it == _ruleActiveStates.end()) {
+            return false;
+        }
+        DeviceStateEnum state = it->second.state;
+        return state == DEVICE_STATE_ON ||
+               state == DEVICE_STATE_REQUEST_ON ||
+               state == DEVICE_STATE_DELAY_ON ||
+               state == DEVICE_STATE_DELAY_OFF;
+    }
+
+    std::vector<bool>& conditionHoldStates(const Rule& rule) {
+        std::vector<bool>& held = _conditionHoldStates[rule.uid];
+        if (held.size() != rule.conditions.size() || !isRuleHoldSessionActive(rule.uid)) {
+            held.assign(rule.conditions.size(), false);
+        }
+        return held;
+    }
+
     SensorVerdict evaluateSensorRule(const Rule& rule, bool committedOn, int* firedIndex = nullptr) {
         if (firedIndex) {
             *firedIndex = -1;
         }
         if (!rule.conditions.empty()) {
+            std::vector<bool>& condHeld = conditionHoldStates(rule);
             std::vector<bool> condFired;
             condFired.reserve(rule.conditions.size());
-            for (const auto& cond : rule.conditions) {
+            for (size_t i = 0; i < rule.conditions.size(); ++i) {
+                const RuleCondition& cond = rule.conditions[i];
+                bool condPreviouslyOn = condHeld[i];
                 bool condOn;
                 if (cond.sensorUids.empty()) {
                     logSerial("EVALUATE_RULES: SENSOR_COND uid=%s reason=no_sensor_uid on=0", rule.uid.c_str());
                     condOn = false;
                 } else {
                     double condValue = getSensorValue(cond.sensorUids[0]);
-                    SensorVerdict condVerdict = evaluateSensorHysteresis(cond.direction, condValue, cond.valueLow, cond.valueHigh, committedOn);
+                    SensorVerdict condVerdict = evaluateSensorHysteresis(cond.direction, condValue, cond.valueLow, cond.valueHigh, condPreviouslyOn);
                     switch (condVerdict) {
                         case SensorVerdict::TURN_ON:
                             condOn = true;
@@ -1222,13 +1249,14 @@ private:
                             break;
                         case SensorVerdict::HOLD:
                         default:
-                            condOn = committedOn;
+                            condOn = condPreviouslyOn;
                             break;
                     }
-                    logSerial("EVALUATE_RULES: SENSOR_COND uid=%s sensor=%s dir=%s value=%.2f low=%.2f high=%.2f on=%d",
+                    logSerial("EVALUATE_RULES: SENSOR_COND uid=%s sensor=%s dir=%s value=%.2f low=%.2f high=%.2f prevOn=%d on=%d",
                         rule.uid.c_str(), cond.sensorUids[0].c_str(), getRuleDirectionName(cond.direction),
-                        condValue, cond.valueLow, cond.valueHigh, condOn ? 1 : 0);
+                        condValue, cond.valueLow, cond.valueHigh, condPreviouslyOn ? 1 : 0, condOn ? 1 : 0);
                 }
+                condHeld[i] = condOn;
                 condFired.push_back(condOn);
             }
             int firedAt = -1;
@@ -1861,6 +1889,7 @@ private:
         _lastEvaluationResults.erase(rule.uid);
         _ruleLastEvaluated.erase(rule.uid);
         _delayTimers.erase(rule.uid);
+        _conditionHoldStates.erase(rule.uid);
     }
 
     void transitionToSensorUnreachable(const Rule& rule) {
@@ -1896,6 +1925,7 @@ private:
             _ruleActiveStates.erase(rule.uid);
             _lastEvaluationResults.erase(rule.uid);
             _ruleLastEvaluated.erase(rule.uid);
+            _conditionHoldStates.erase(rule.uid);
         }
 
         _delayTimers.erase(rule.uid);
