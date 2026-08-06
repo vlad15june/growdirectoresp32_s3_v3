@@ -1,5 +1,19 @@
 # Release Notes
 
+## Version 2.18.3 (2026-08-06)
+
+### Changed
+- **Delayed Switching Is No Longer Cancelled By A Reading Settling In The Middle**: GDV1-3793 While a rule with a switch-on or switch-off delay is counting down, a sensor reading that drifts back into the neutral band between the rule's lower and upper thresholds no longer aborts the pending switch as an unstable reading. The delay now runs to its end and the equipment switches as scheduled; only the sensor actually crossing back over its threshold cancels the pending switch.
+
+### Fixed
+- **Neutral-Band Condition No Longer Keeps Equipment Switched On**: GDV1-3793 In a rule that combines several conditions with OR, a condition whose sensor was sitting in the neutral band between its thresholds was treated as if it had triggered for as long as the rule was on, even though it never had. Once any condition had switched the equipment on, such a condition could keep it on indefinitely after the condition that really triggered had released. Every condition now carries only its own state, so the equipment switches off when the condition that actually turned it on releases.
+- **Equipment Still Running During A Switch-Off Delay Is Recognised As Running**: GDV1-3794 An output that was still powered while its switch-off delay counted down was treated as already off. As a result the sensor-unreachable protection and the maximum-run protection did not switch it off, turning the rule off or removing it left the equipment running, and the nightly preventive restart could take place while the equipment was still working. The opposite case was wrong too: an output merely waiting out its switch-on delay, with no power on it, counted as running and could postpone that restart for no reason. Powered and unpowered outputs are now recognised the same way everywhere.
+- **Status Reports The Rule Condition That Actually Fired**: GDV1-3755 A rule built from several conditions always reported the sensor and the threshold pair of its first condition in the module status update, regardless of which condition had switched the equipment on. The module now reports the condition that is holding the equipment on and keeps reporting it while that condition stays triggered, handing over to another condition only when its own releases. Step (dosing) rules now report their target value as both boundaries instead of reporting empty ones.
+- **Sensor Reading Reported While A Rule Holds Equipment On Stays Current**: GDV1-3792 While a rule kept its equipment switched on, the module status update kept repeating the reading captured at the moment the rule switched the equipment on, so the reported value drifted further from the real one for the whole session, and the reported sensor and thresholds stayed frozen even after the rule was edited. The reported reading, its time and its thresholds are now refreshed for as long as the rule holds the equipment; the values reported when the rule releases the equipment still reflect that moment.
+- **Reboot Reason Preserved After A Firmware Update Or A Sensor Change**: GDV1-3797 After a successful firmware update, and after a sensor configuration change that requires a restart, the module reported the restart that followed as an ordinary user restart, and the firmware-update record was missing from its log. The real reason is now kept and reported, so update history and diagnostics show why the module restarted. Nothing changes in how the module restarts or operates.
+
+---
+
 ## Version 2.18.2 (2026-07-30)
 
 ### Added
