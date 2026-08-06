@@ -16,11 +16,10 @@
 #include <cstdarg>
 #include <cstdio>
 
+// A device counts as off for the preventive restart only when its relay is actually open:
+// shared predicate from DeviceStateEnum.h (DEVICE_STATE_DELAY_OFF still drives the relay closed).
 inline bool isDeviceOffForPreventiveRestart(DeviceStateEnum state) {
-    return state == DEVICE_STATE_OFF ||
-           state == DEVICE_STATE_OFF_BY_POWER_ON ||
-           state == DEVICE_STATE_DELAY_OFF ||
-           state == DEVICE_STATE_STEP_WAITING;
+    return isDeviceStateNotPowered(state);
 }
 
 class PreventiveRestartUseCase {

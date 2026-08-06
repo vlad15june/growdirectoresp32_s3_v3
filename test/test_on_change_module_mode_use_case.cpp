@@ -104,6 +104,44 @@ void test_loop_technical_need_restart_calls_hard_reset(void) {
     on_change_module_mode_use_case_teardown();
 }
 
+void test_loop_firmware_update_need_restart_preserves_boot_type(void) {
+    on_change_module_mode_use_case_setup();
+
+    // Boot type set to FIRMWARE_UPDATE right after the image was flashed (OTA)
+    g_mockSettings.setBootType(BOOT_TYPE_FIRMWARE_UPDATE);
+    g_mockModuleConfig.setRequestedModuleMode(CONFIGURED_NEED_RESTART);
+
+    g_onChangeModuleModeUseCase->loop();
+
+    // Boot type survives the restart so the next boot can report reboot-firmware-update
+    TEST_ASSERT_EQUAL(BOOT_TYPE_FIRMWARE_UPDATE, g_mockSettings.getBootType());
+
+    // Reset dispatch is unaffected: still the soft reset path (hard reset is TECHNICAL only)
+    TEST_ASSERT_TRUE(g_mockArduinoAdapter.restartCalled);
+    TEST_ASSERT_FALSE(g_mockArduinoAdapter.hardResetCalled);
+
+    on_change_module_mode_use_case_teardown();
+}
+
+void test_loop_sensor_chng_need_restart_preserves_boot_type(void) {
+    on_change_module_mode_use_case_setup();
+
+    // Boot type set to SENSOR_CHNG by the sensor configuration command
+    g_mockSettings.setBootType(BOOT_TYPE_SENSOR_CHNG);
+    g_mockModuleConfig.setRequestedModuleMode(CONFIGURED_NEED_RESTART);
+
+    g_onChangeModuleModeUseCase->loop();
+
+    // Boot type survives the restart so the next boot can report reboot-sensor-type-chng
+    TEST_ASSERT_EQUAL(BOOT_TYPE_SENSOR_CHNG, g_mockSettings.getBootType());
+
+    // Reset dispatch is unaffected: still the soft reset path (hard reset is TECHNICAL only)
+    TEST_ASSERT_TRUE(g_mockArduinoAdapter.restartCalled);
+    TEST_ASSERT_FALSE(g_mockArduinoAdapter.hardResetCalled);
+
+    on_change_module_mode_use_case_teardown();
+}
+
 void test_loop_when_mode_changes_to_user_can_configure(void) {
     on_change_module_mode_use_case_setup();
     
@@ -230,6 +268,8 @@ extern "C" int run_on_change_module_mode_use_case_tests(void) {
     RUN_TEST(test_loop_when_no_mode_change);
     RUN_TEST(test_loop_when_mode_changes_to_need_restart);
     RUN_TEST(test_loop_technical_need_restart_calls_hard_reset);
+    RUN_TEST(test_loop_firmware_update_need_restart_preserves_boot_type);
+    RUN_TEST(test_loop_sensor_chng_need_restart_preserves_boot_type);
     RUN_TEST(test_loop_when_mode_changes_to_user_can_configure);
     RUN_TEST(test_loop_when_mode_changes_to_user_can_reconfigure);
     RUN_TEST(test_loop_when_mode_changes_to_ap_test_mode);

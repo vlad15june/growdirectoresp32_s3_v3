@@ -55,7 +55,12 @@ inline SensorVerdict evaluateSensorHysteresis(RuleDirection direction, double va
 
 inline bool combineConditionsDnf(const std::vector<RuleCondition>& conditions,
                                  const std::vector<bool>& condFired,
-                                 bool conditionOr) {
+                                 bool conditionOr,
+                                 int* firedIndex = nullptr) {
+    if (firedIndex) {
+        *firedIndex = -1;
+    }
+
     bool hasJoinOp = false;
     for (size_t i = 1; i < conditions.size(); ++i) {
         if (conditions[i].joinOp != RuleJoinOp::UNSET) {
@@ -69,30 +74,47 @@ inline bool combineConditionsDnf(const std::vector<RuleCondition>& conditions,
             return false;
         }
         if (conditionOr) {
-            for (bool f : condFired) {
-                if (f) return true;
+            for (size_t i = 0; i < condFired.size(); ++i) {
+                if (condFired[i]) {
+                    if (firedIndex) {
+                        *firedIndex = static_cast<int>(i);
+                    }
+                    return true;
+                }
             }
             return false;
         }
         for (bool f : condFired) {
             if (!f) return false;
         }
+        if (firedIndex) {
+            *firedIndex = 0;
+        }
         return true;
     }
 
     bool result = false;
     bool group = true;
+    size_t groupStart = 0;
     for (size_t i = 0; i < condFired.size(); ++i) {
         bool f = condFired[i];
         RuleJoinOp op = (i == 0) ? RuleJoinOp::UNSET : conditions[i].joinOp;
         if (i == 0) {
             group = f;
+            groupStart = 0;
         } else if (op == RuleJoinOp::OR) {
+            if (group && firedIndex && *firedIndex < 0) {
+                *firedIndex = static_cast<int>(groupStart);
+            }
             result = result || group;
             group = f;
+            groupStart = i;
         } else {
             group = group && f;
         }
+    }
+    if (group && firedIndex && *firedIndex < 0) {
+        *firedIndex = static_cast<int>(groupStart);
     }
     result = result || group;
     return result;
@@ -248,6 +270,56 @@ private:
             }
         }
         return ops;
+    }
+
+    static bool isRuleHoldingDeviceState(DeviceStateEnum state) {
+        return state != DEVICE_STATE_NONE &&
+               state != DEVICE_STATE_OFF &&
+               state != DEVICE_STATE_OFF_BY_POWER_ON;
+    }
+
+    void refreshReportedSensorDescriptor(const Rule& rule, const RuleEvaluationResult& evaluationResult) {
+        if (!_deviceModel || evaluationResult.sensorUid.empty()) {
+            return;
+        }
+
+        if (!isRuleHoldingDeviceState(evaluationResult.state)) {
+            return;
+        }
+
+        auto ctxIt = _deviceRuleContext.find(rule.deviceUid);
+        if (ctxIt == _deviceRuleContext.end() || ctxIt->second.ruleUid != rule.uid) {
+            return;
+        }
+
+        Device* device = _deviceModel->getDeviceByUid(rule.deviceUid.c_str());
+        if (!device || !device->workByRule) {
+            return;
+        }
+
+        RuleEvaluationResult& ctx = ctxIt->second;
+        bool descriptorChanged = ctx.sensorUid != evaluationResult.sensorUid ||
+                                 ctx.sensorValue != evaluationResult.sensorValue ||
+                                 ctx.sensorValueLow != evaluationResult.sensorValueLow ||
+                                 ctx.sensorValueHigh != evaluationResult.sensorValueHigh;
+
+        ctx.sensorUid = evaluationResult.sensorUid;
+        ctx.sensorValue = evaluationResult.sensorValue;
+        ctx.sensorValueTime = evaluationResult.sensorValueTime;
+        ctx.sensorValueLow = evaluationResult.sensorValueLow;
+        ctx.sensorValueHigh = evaluationResult.sensorValueHigh;
+
+        device->sensorUid = ctx.sensorUid.c_str();
+        device->sensorValue = ctx.sensorValue;
+        device->sensorValueTime = ctx.sensorValueTime;
+        device->sensorValueLow = ctx.sensorValueLow;
+        device->sensorValueHigh = ctx.sensorValueHigh;
+
+        if (descriptorChanged) {
+            logSerial("EVALUATE_RULES: SENSOR_REPORT_REFRESH uid=%s deviceUid=%s state=%s sensor=%s value=%.2f low=%.2f high=%.2f",
+                rule.uid.c_str(), rule.deviceUid.c_str(), getDeviceStateName(ctx.state),
+                ctx.sensorUid.c_str(), ctx.sensorValue, ctx.sensorValueLow, ctx.sensorValueHigh);
+        }
     }
 
     void purgeDeletingRules() {
@@ -679,7 +751,13 @@ public:
                 bool committedOn = (currentState == DEVICE_STATE_ON ||
                                     currentState == DEVICE_STATE_REQUEST_ON ||
                                     currentState == DEVICE_STATE_DELAY_OFF);
-                SensorVerdict verdict = evaluateSensorRule(rule, committedOn);
+                int firedIndex = -1;
+                SensorVerdict verdict = evaluateSensorRule(rule, committedOn, &firedIndex);
+                if (firedIndex >= 0) {
+                    applyFiredConditionDescriptor(rule, firedIndex, result);
+                } else if (committedOn) {
+                    carryOverFiredConditionDescriptor(rule, result);
+                }
                 bool targetOn;
                 switch (verdict) {
                     case SensorVerdict::TURN_ON:
@@ -758,6 +836,7 @@ public:
         RuleEvaluationResult evaluationResult = evaluateRule(rule);
         
         if (currentState.state == evaluationResult.state) {
+            refreshReportedSensorDescriptor(rule, evaluationResult);
             return true; // No change needed
         }
 
@@ -836,11 +915,10 @@ public:
     }
 
 private:
+    // Same meaning as in PreventiveRestartUseCase.h: relay actually open - shared predicate from
+    // DeviceStateEnum.h.
     static bool isDeviceOffForPreventiveRestart(DeviceStateEnum state) {
-        return state == DEVICE_STATE_OFF ||
-               state == DEVICE_STATE_OFF_BY_POWER_ON ||
-               state == DEVICE_STATE_DELAY_OFF ||
-               state == DEVICE_STATE_STEP_WAITING;
+        return isDeviceStateNotPowered(state);
     }
 
     bool willScheduleRuleTurnOnAt(const Rule& rule, const struct tm& futureTm) {
@@ -1143,7 +1221,10 @@ private:
         return held;
     }
 
-    SensorVerdict evaluateSensorRule(const Rule& rule, bool committedOn) {
+    SensorVerdict evaluateSensorRule(const Rule& rule, bool committedOn, int* firedIndex = nullptr) {
+        if (firedIndex) {
+            *firedIndex = -1;
+        }
         if (!rule.conditions.empty()) {
             std::vector<bool>& condHeld = conditionHoldStates(rule);
             std::vector<bool> condFired;
@@ -1178,12 +1259,21 @@ private:
                 condHeld[i] = condOn;
                 condFired.push_back(condOn);
             }
-            bool targetOn = combineConditionsDnf(rule.conditions, condFired, rule.conditionOr);
-            logSerial("EVALUATE_RULES: SENSOR_COND uid=%s mode=%s ops=%s nConds=%d targetOn=%d",
+            int firedAt = -1;
+            bool targetOn = combineConditionsDnf(rule.conditions, condFired, rule.conditionOr, &firedAt);
+            if (targetOn) {
+                firedAt = stickyFiredIndex(rule, condFired, firedAt, committedOn);
+            } else {
+                firedAt = -1;
+            }
+            if (firedIndex) {
+                *firedIndex = firedAt;
+            }
+            logSerial("EVALUATE_RULES: SENSOR_COND uid=%s mode=%s ops=%s nConds=%d targetOn=%d fired=%d",
                 rule.uid.c_str(),
                 conditionsHaveJoinOp(rule.conditions) ? "dnf" : "legacy",
                 conditionsOpsString(rule.conditions).c_str(),
-                static_cast<int>(rule.conditions.size()), targetOn ? 1 : 0);
+                static_cast<int>(rule.conditions.size()), targetOn ? 1 : 0, firedAt);
             return targetOn ? SensorVerdict::TURN_ON : SensorVerdict::TURN_OFF;
         }
 
@@ -1311,6 +1401,86 @@ private:
         return mean;
     }
 
+    static int conditionIndexBySensorUid(const Rule& rule, const std::string& sensorUid) {
+        for (size_t i = 0; i < rule.conditions.size(); ++i) {
+            if (!rule.conditions[i].sensorUids.empty() && rule.conditions[i].sensorUids[0] == sensorUid) {
+                return static_cast<int>(i);
+            }
+        }
+        return -1;
+    }
+
+    void carryOverFiredConditionDescriptor(const Rule& rule, RuleEvaluationResult& result) {
+        auto it = _ruleActiveStates.find(rule.uid);
+        if (it == _ruleActiveStates.end() || it->second.sensorUid.empty()) {
+            return;
+        }
+        applyFiredConditionDescriptor(rule, conditionIndexBySensorUid(rule, it->second.sensorUid), result);
+    }
+
+    int stickyFiredIndex(const Rule& rule, const std::vector<bool>& condFired,
+                         int firedIndex, bool committedOn) {
+        if (!committedOn || firedIndex < 0) {
+            return firedIndex;
+        }
+        auto it = _ruleActiveStates.find(rule.uid);
+        if (it == _ruleActiveStates.end() || it->second.sensorUid.empty()) {
+            return firedIndex;
+        }
+        const std::string& previousUid = it->second.sensorUid;
+        size_t count = condFired.size() < rule.conditions.size() ? condFired.size() : rule.conditions.size();
+        for (size_t i = 0; i < count; ++i) {
+            if (!condFired[i] || rule.conditions[i].sensorUids.empty()) {
+                continue;
+            }
+            if (rule.conditions[i].sensorUids[0] == previousUid) {
+                if (static_cast<int>(i) != firedIndex) {
+                    logSerial("EVALUATE_RULES: FIRED_COND_STICKY uid=%s keep=%d instead=%d sensor=%s",
+                        rule.uid.c_str(), static_cast<int>(i), firedIndex, previousUid.c_str());
+                }
+                return static_cast<int>(i);
+            }
+        }
+        logSerial("EVALUATE_RULES: FIRED_COND_HANDOFF uid=%s from=%s to=%d",
+            rule.uid.c_str(), previousUid.c_str(), firedIndex);
+        return firedIndex;
+    }
+
+    void applyFiredConditionDescriptor(const Rule& rule, int firedIndex, RuleEvaluationResult& result) {
+        if (firedIndex < 0 || firedIndex >= static_cast<int>(rule.conditions.size())) {
+            return;
+        }
+        const RuleCondition& cond = rule.conditions[firedIndex];
+        if (cond.sensorUids.empty() || cond.sensorUids[0].empty()) {
+            return;
+        }
+
+        bool stepTarget = (rule.ruleType == RuleType::STEP && cond.direction != RuleDirection::BETWEEN);
+
+        result.sensorUid = cond.sensorUids[0];
+        result.sensorValue = static_cast<float>(stepTarget
+            ? computeMean(rule.uid, cond.sensorUids)
+            : getSensorValue(cond.sensorUids[0]));
+        if (_arduinoAdapter) {
+            result.sensorValueTime = _arduinoAdapter->millis();
+        }
+
+        if (stepTarget) {
+            double target = (cond.valueTarget != 0.0)
+                            ? cond.valueTarget
+                            : (cond.direction == RuleDirection::DOWN ? cond.valueHigh : cond.valueLow);
+            result.sensorValueLow = static_cast<float>(target);
+            result.sensorValueHigh = static_cast<float>(target);
+        } else {
+            result.sensorValueLow = static_cast<float>(cond.valueLow);
+            result.sensorValueHigh = static_cast<float>(cond.valueHigh);
+        }
+
+        logSerial("EVALUATE_RULES: FIRED_COND uid=%s index=%d sensor=%s value=%.2f low=%.2f high=%.2f",
+            rule.uid.c_str(), firedIndex, result.sensorUid.c_str(),
+            result.sensorValue, result.sensorValueLow, result.sensorValueHigh);
+    }
+
     static bool conditionFires(double value, RuleDirection direction, double target) {
         if (direction == RuleDirection::DOWN) {
             return value >= target;
@@ -1321,7 +1491,10 @@ private:
         return false;
     }
 
-    bool evaluateConditionSet(const Rule& rule) {
+    bool evaluateConditionSet(const Rule& rule, int* firedIndex = nullptr) {
+        if (firedIndex) {
+            *firedIndex = -1;
+        }
         if (!rule.conditions.empty()) {
             std::vector<bool> condFired;
             condFired.reserve(rule.conditions.size());
@@ -1339,12 +1512,19 @@ private:
                 }
                 condFired.push_back(fires);
             }
-            bool firing = combineConditionsDnf(rule.conditions, condFired, rule.conditionOr);
-            logSerial("EVALUATE_RULES: STEP_COND uid=%s mode=%s ops=%s nConds=%d firing=%d",
+            int firedAt = -1;
+            bool firing = combineConditionsDnf(rule.conditions, condFired, rule.conditionOr, &firedAt);
+            if (!firing) {
+                firedAt = -1;
+            }
+            if (firedIndex) {
+                *firedIndex = firedAt;
+            }
+            logSerial("EVALUATE_RULES: STEP_COND uid=%s mode=%s ops=%s nConds=%d firing=%d fired=%d",
                 rule.uid.c_str(),
                 conditionsHaveJoinOp(rule.conditions) ? "dnf" : "legacy",
                 conditionsOpsString(rule.conditions).c_str(),
-                static_cast<int>(rule.conditions.size()), firing ? 1 : 0);
+                static_cast<int>(rule.conditions.size()), firing ? 1 : 0, firedAt);
             return firing;
         }
 
@@ -1423,7 +1603,8 @@ private:
         }
 
         bool running = isStepCycleState(deviceState);
-        bool firing = evaluateConditionSet(rule);
+        int firedIndex = -1;
+        bool firing = evaluateConditionSet(rule, &firedIndex);
 
         if (!running) {
             if (firing) {
@@ -1440,6 +1621,7 @@ private:
                     result.sensorUid = rule.sensorUid;
                     result.sensorValue = static_cast<float>(getSensorValue(rule.sensorUid));
                 }
+                applyFiredConditionDescriptor(rule, firedIndex, result);
                 result.ruleSensorStartAt = sensorEventTimestamp();
                 result.ruleSensorValueStart = result.sensorValue;
                 log("EVALUATE_RULES: STEP_START uid=%s cyclesCap=%d", rule.uid.c_str(), rule.cyclesToSetPoint);
