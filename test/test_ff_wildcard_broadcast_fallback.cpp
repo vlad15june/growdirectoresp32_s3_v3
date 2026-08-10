@@ -23,6 +23,10 @@ public:
 
     std::map<std::pair<int, uint8_t>, std::vector<uint8_t>> responses;
 
+    // Responses delivered piece by piece: each readAvailable() call pops the
+    // next chunk, mimicking a device that trickles the frame out over time.
+    std::map<std::pair<int, uint8_t>, std::vector<std::vector<uint8_t>>> chunkedResponses;
+
     std::set<int> respondingAddresses;
     int respondAddressAfterWrites = -1;
     size_t respondAfterWriteCount = 0;
@@ -49,6 +53,17 @@ public:
             size_t n = bytes.size();
             if (n > maxLength) n = maxLength;
             for (size_t i = 0; i < n; i++) buffer[i] = bytes[i];
+            return (int)n;
+        }
+
+        auto cit = chunkedResponses.find({addr, fc});
+        if (cit != chunkedResponses.end()) {
+            if (cit->second.empty()) return 0;
+            auto chunk = cit->second.front();
+            cit->second.erase(cit->second.begin());
+            size_t n = chunk.size();
+            if (n > maxLength) n = maxLength;
+            for (size_t i = 0; i < n; i++) buffer[i] = chunk[i];
             return (int)n;
         }
 
@@ -167,6 +182,29 @@ void test_cwyw_stage_runs_after_ws12s_timeout_and_confirms(void) {
     TEST_ASSERT_TRUE(fake.hasWrite(true, 7, 0x0018, 22));
 }
 
+// Regression: the CWYW device trickles its 7-byte reply out over ~200 ms and
+// each readAvailable() consumes what it returns. The reader must accumulate
+// the partial chunks into a full frame instead of discarding them.
+void test_cwyw_stage_accepts_partial_frame_chunks(void) {
+    MockModbusRS485 fake;
+    fake.chunkedResponses[{0xFF, 0x6E}] = {
+        { 0x01, 0x6E },
+        { 0x02, 0x00, 0x07 },
+        { 0x00, 0x00 },
+    };
+    fake.respondAddressAfterWrites = 22;
+    fake.respondAfterWriteCount = 3;
+    std::vector<IModbusRS485 *> ports{ &fake };
+    MockArduinoAdapter arduino;
+    ModbusSensorReader reader(ports, arduino, nullptr, nullptr);
+
+    bool ok = reader.writeSensorAddress(10, 22, 0, 0x0100, 16, 0x0100);
+
+    TEST_ASSERT_TRUE(ok);
+    TEST_ASSERT_TRUE(fake.hasWildcardFrameWithFc(0x6E));
+    TEST_ASSERT_TRUE(fake.hasWrite(true, 7, 0x0018, 22));
+}
+
 // INV-5: both FF stages fail -> legacy broadcast loop runs as today, return false.
 void test_both_stages_fail_then_legacy_loop_runs(void) {
     MockModbusRS485 fake;
@@ -271,10 +309,38 @@ void test_no_restore_factory_frame_ever_emitted(void) {
     TEST_ASSERT_FALSE(fake.anyFrameStartsWith(banned));
 }
 
+// Channels of other sensor types must keep using the server multiplier as-is.
+void test_other_channels_keep_server_multiplier(void) {
+    MockModbusRS485 fake;
+    fake.responses[{0x01, 0x03}] = { 0x01, 0x03, 0x04, 0x00, 0x00, 0x08, 0x5A, 0x00, 0x00 };
+    std::vector<IModbusRS485 *> ports{ &fake };
+    MockArduinoAdapter arduino;
+    ModbusSensorReader reader(ports, arduino, nullptr, nullptr);
+
+    ModbusRegisterConfig cfg;
+    cfg.functionCode = 0x03;
+    cfg.startRegister = 0x0004;
+    cfg.numRegisters = 2;
+    cfg.multiplier = 0.001f;
+    cfg.offset = 0.0f;
+    cfg.channelName = "pressure";
+    cfg.channel = 3;
+    cfg.sensorType = "pressure";
+    cfg.canConnectMinValue = 0;
+    cfg.canConnectMaxValue = 200000;
+
+    float value = 0.0f;
+    bool ok = reader.readRegister(0x01, cfg, value, 0);
+
+    TEST_ASSERT_TRUE(ok);
+    TEST_ASSERT_FLOAT_WITHIN(0.001f, 2.138f, value);
+}
+
 extern "C" int run_ff_wildcard_broadcast_fallback_tests(void) {
     RUN_TEST(test_primary_confirmed_skips_ff_fallback);
     RUN_TEST(test_ws12s_stage_query_write_ping_confirms);
     RUN_TEST(test_cwyw_stage_runs_after_ws12s_timeout_and_confirms);
+    RUN_TEST(test_cwyw_stage_accepts_partial_frame_chunks);
     RUN_TEST(test_both_stages_fail_then_legacy_loop_runs);
     RUN_TEST(test_ff_query_crc_mismatch_skips_stage);
     RUN_TEST(test_ws12s_address_parsed_from_payload_not_slave_byte);
@@ -282,5 +348,6 @@ extern "C" int run_ff_wildcard_broadcast_fallback_tests(void) {
     RUN_TEST(test_ws12s_address_byte_above_247_skips_stage);
     RUN_TEST(test_ff_query_fc_mismatch_skips_stage);
     RUN_TEST(test_no_restore_factory_frame_ever_emitted);
+    RUN_TEST(test_other_channels_keep_server_multiplier);
     return 0;
 }

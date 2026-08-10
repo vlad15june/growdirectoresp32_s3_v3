@@ -6,6 +6,7 @@
 #include <cstring>
 #include <cstdarg>
 #include <cstdio>
+#include <cstdint>
 #include "../../../../../Core/Domain/Data/Entities/Sensor/ModbusRegisterConfig.h"
 #include "../../../../../Core/Domain/Interfaces/Adapters/Sensors/IModbusSensorReader.h"
 #include "../../../Rs485/IModbusRS485.h"
@@ -93,14 +94,25 @@ public:
             uint8_t byteCount = response[2];
             if (byteCount == config.numRegisters * 2 && bytesRead >= 3 + byteCount + 2)
             {
-                uint16_t rawValue = 0;
+                float rawValue = 0.0f;
                 if (config.numRegisters == 1)
                 {
-                    rawValue = (response[3] << 8) | response[4];
+                    rawValue = static_cast<float>((response[3] << 8) | response[4]);
+                }
+                else if (config.numRegisters == 2)
+                {
+                    // 32-bit big-endian value (two consecutive 16-bit registers)
+                    int32_t raw32 = static_cast<int32_t>(
+                        (static_cast<uint32_t>(response[3]) << 24) |
+                        (static_cast<uint32_t>(response[4]) << 16) |
+                        (static_cast<uint32_t>(response[5]) << 8) |
+                        static_cast<uint32_t>(response[6]));
+                    rawValue = static_cast<float>(raw32);
                 }
                 else
                 {
-                    rawValue = (response[3] << 8) | response[4];
+                    // Fallback for unsupported lengths - use the first register
+                    rawValue = static_cast<float>((response[3] << 8) | response[4]);
                 }
 
                 outValue = rawValue * config.multiplier + config.offset;
@@ -545,15 +557,32 @@ private:
 
         modbus->sendData(req, 8);
 
+        // The device can trickle the response out over ~200 ms, and every
+        // readAvailable() call consumes what it returns, so partial frames
+        // must be accumulated here instead of being discarded between polls.
         uint8_t buf[16];
         int n = 0;
-        for (int attempt = 1; attempt <= 3; attempt++)
+        for (int attempt = 1; attempt <= 30; attempt++)
         {
-            _arduino.delay(20);
-            n = modbus->readAvailable(buf, sizeof(buf));
-            if (n >= 5)
+            _arduino.delay(10);
+            int got = modbus->readAvailable(buf + n, sizeof(buf) - n);
+            if (got > 0)
             {
-                break;
+                n += got;
+            }
+            if (n >= 3)
+            {
+                // addr + fc + byteCount + data(byteCount) + crc(2)
+                int expected = buf[2] + 5;
+                if (expected > (int)sizeof(buf))
+                {
+                    expected = sizeof(buf);
+                }
+                if (n >= expected)
+                {
+                    n = expected;
+                    break;
+                }
             }
         }
 
