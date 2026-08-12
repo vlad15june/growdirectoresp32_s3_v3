@@ -48,6 +48,12 @@ public:
             service->handleModuleMode();
         }
     }
+
+    static void callAddSensorToStructure(ModuleSetupService* service, Node& node, const SensorEntity& sensorEntity) {
+        if (service) {
+            service->addSensorToStructure(node, sensorEntity);
+        }
+    }
 };
 
 // Global test variables
@@ -1646,6 +1652,148 @@ static void test_configure_done_runs_deletion_when_no_update() {
     module_setup_service_teardown();
 }
 
+// --- GDV1-3782: computed VPD channel in the module structure ---
+
+static ModbusRegisterConfig makeVpdTestConfig(uint8_t channel, const std::string& sensorType) {
+    ModbusRegisterConfig config;
+    config.functionCode = 3;
+    config.startRegister = 0;
+    config.numRegisters = 1;
+    config.multiplier = 0.1f;
+    config.offset = 0.0f;
+    config.channelName = sensorType;
+    config.channel = channel;
+    config.sensorType = sensorType;
+    config.canConnectMinValue = 0.0f;
+    config.canConnectMaxValue = 100.0f;
+    return config;
+}
+
+static SensorEntity makeVpdTestAirSensor(const std::string& uid, int pin, int address) {
+    SensorEntity sensor;
+    sensor.uid = uid;
+    sensor.model = "ry_ws301";
+    sensor.protocol = "ModBus";
+    sensor.pin = pin;
+    sensor.modbusDeviceAddress = address;
+    sensor.sensorTypeUid = "model-uid-ry-ws301";
+    sensor.modbusRegisterConfigs.push_back(makeVpdTestConfig(1, "air_temp"));
+    sensor.modbusRegisterConfigs.push_back(makeVpdTestConfig(2, "humidity"));
+    return sensor;
+}
+
+static int countSensorsOfType(const Node& node, const std::string& type) {
+    int count = 0;
+    for (const auto& sensor : node.sensors) {
+        if (sensor.type == type) count++;
+    }
+    return count;
+}
+
+static const Sensor* findStructureSensor(const Node& node, const std::string& uid) {
+    for (const auto& sensor : node.sensors) {
+        if (sensor.uid == uid) return &sensor;
+    }
+    return nullptr;
+}
+
+// INV-1, INV-6, INV-9: a sensor with the air pair gets exactly one vpd record, parent pin/group/model
+static void test_structure_adds_vpd_channel_for_air_sensor(void) {
+    module_setup_service_setup();
+
+    Node node;
+    SensorEntity sensor = makeVpdTestAirSensor("AA:BB:CC:DD:EE:FF.00", 0, 1);
+    ModuleSetupServiceTestHelper::callAddSensorToStructure(g_moduleSetupService, node, sensor);
+
+    TEST_ASSERT_EQUAL(3, node.sensors.size());
+    TEST_ASSERT_EQUAL(1, countSensorsOfType(node, "vpd"));
+
+    const Sensor* vpd = findStructureSensor(node, "AA:BB:CC:DD:EE:FF.00.03");
+    TEST_ASSERT_NOT_NULL(vpd);
+    TEST_ASSERT_EQUAL_STRING("vpd", vpd->type.c_str());
+    TEST_ASSERT_EQUAL(0, vpd->pin);
+    TEST_ASSERT_EQUAL(1, vpd->group);
+    TEST_ASSERT_EQUAL_STRING("model-uid-ry-ws301", vpd->modelUid.c_str());
+
+    module_setup_service_teardown();
+}
+
+// INV-1: a soil sensor has no air pair, so no vpd record is created
+static void test_structure_has_no_vpd_channel_without_pair(void) {
+    module_setup_service_setup();
+
+    Node node;
+    SensorEntity sensor;
+    sensor.uid = "AA:BB:CC:DD:EE:FF.01";
+    sensor.protocol = "ModBus";
+    sensor.pin = 1;
+    sensor.modbusDeviceAddress = 1;
+    sensor.modbusRegisterConfigs.push_back(makeVpdTestConfig(1, "soil_temp"));
+    sensor.modbusRegisterConfigs.push_back(makeVpdTestConfig(2, "soil_moisture"));
+
+    ModuleSetupServiceTestHelper::callAddSensorToStructure(g_moduleSetupService, node, sensor);
+
+    TEST_ASSERT_EQUAL(2, node.sensors.size());
+    TEST_ASSERT_EQUAL(0, countSensorsOfType(node, "vpd"));
+
+    module_setup_service_teardown();
+}
+
+// INV-3: two air sensors -> two independent vpd records
+static void test_structure_two_air_sensors_get_own_vpd(void) {
+    module_setup_service_setup();
+
+    Node node;
+    SensorEntity first = makeVpdTestAirSensor("AA:BB:CC:DD:EE:FF.00", 0, 1);
+    SensorEntity second = makeVpdTestAirSensor("AA:BB:CC:DD:EE:FF.01", 1, 2);
+    second.modbusRegisterConfigs.push_back(makeVpdTestConfig(3, "co2"));
+
+    ModuleSetupServiceTestHelper::callAddSensorToStructure(g_moduleSetupService, node, first);
+    ModuleSetupServiceTestHelper::callAddSensorToStructure(g_moduleSetupService, node, second);
+
+    TEST_ASSERT_EQUAL(2, countSensorsOfType(node, "vpd"));
+    TEST_ASSERT_NOT_NULL(findStructureSensor(node, "AA:BB:CC:DD:EE:FF.00.03"));
+    TEST_ASSERT_NOT_NULL(findStructureSensor(node, "AA:BB:CC:DD:EE:FF.01.04"));
+
+    module_setup_service_teardown();
+}
+
+// INV-6: rebuilding the same structure replaces the record instead of duplicating it
+static void test_structure_vpd_channel_is_not_duplicated(void) {
+    module_setup_service_setup();
+
+    Node node;
+    SensorEntity sensor = makeVpdTestAirSensor("AA:BB:CC:DD:EE:FF.00", 0, 1);
+    ModuleSetupServiceTestHelper::callAddSensorToStructure(g_moduleSetupService, node, sensor);
+    ModuleSetupServiceTestHelper::callAddSensorToStructure(g_moduleSetupService, node, sensor);
+
+    TEST_ASSERT_EQUAL(3, node.sensors.size());
+    TEST_ASSERT_EQUAL(1, countSensorsOfType(node, "vpd"));
+
+    module_setup_service_teardown();
+}
+
+// INV-5: the number must fit two digits, otherwise no channel is created
+static void test_structure_skips_vpd_channel_on_overflow(void) {
+    module_setup_service_setup();
+
+    Node node;
+    SensorEntity sensor;
+    sensor.uid = "AA:BB:CC:DD:EE:FF.00";
+    sensor.protocol = "ModBus";
+    sensor.pin = 0;
+    sensor.modbusDeviceAddress = 1;
+    sensor.modbusRegisterConfigs.push_back(makeVpdTestConfig(1, "air_temp"));
+    sensor.modbusRegisterConfigs.push_back(makeVpdTestConfig(99, "humidity"));
+
+    ModuleSetupServiceTestHelper::callAddSensorToStructure(g_moduleSetupService, node, sensor);
+
+    TEST_ASSERT_EQUAL(2, node.sensors.size());
+    TEST_ASSERT_EQUAL(0, countSensorsOfType(node, "vpd"));
+
+    module_setup_service_teardown();
+}
+
 // Main test runner function
 extern "C" int run_module_setup_service_tests(void) {
     if (debug_file != nullptr) fprintf(debug_file, "\n----- Running ModuleSetupService Tests -----\n");
@@ -1707,6 +1855,13 @@ extern "C" int run_module_setup_service_tests(void) {
 
     RUN_TEST(test_configure_done_skips_deletion_when_update_applied);
     RUN_TEST(test_configure_done_runs_deletion_when_no_update);
+
+    // Computed VPD channel in the module structure (GDV1-3782)
+    RUN_TEST(test_structure_adds_vpd_channel_for_air_sensor);
+    RUN_TEST(test_structure_has_no_vpd_channel_without_pair);
+    RUN_TEST(test_structure_two_air_sensors_get_own_vpd);
+    RUN_TEST(test_structure_vpd_channel_is_not_duplicated);
+    RUN_TEST(test_structure_skips_vpd_channel_on_overflow);
 
     if (debug_file != nullptr) fprintf(debug_file, "\n----- ModuleSetupService Tests Complete -----\n");
     

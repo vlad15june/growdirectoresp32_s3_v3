@@ -10,7 +10,9 @@
 #include "Core/Domain/Interfaces/Adapters/IArduinoAdapter.h"
 #include "Core/Domain/Interfaces/Adapters/Json/IJsonConverter.h"
 #include "Infrastructure/Adapters/Time/INTPTimeAdapter.h"
+#include "Core/Domain/UseCases/Sensors/VpdChannelUseCase.h"
 #include <cstdarg>
+#include <functional>
 #include <unordered_map>
 
 /**
@@ -33,7 +35,11 @@ private:
     bool _lastSyncStatus = false;
     time_t _lastSuccessfulSyncTimestamp = 0;
     bool _forceSyncRequested = false;
-    
+
+    // Called once per synchronization when the catalog changed the computed channel layout
+    // of at least one sensor - the structure has to be rebuilt and sent again (INV-10)
+    std::function<void(const char*)> _onSensorChannelsChanged;
+
     void log(const char* format, ...) {
         if (_logger && _debugSystem && _debugSystem->isFeatureEnabled(DebugFeatures::SENSOR_DATA_DEBUG)) {
             char buffer[512];
@@ -80,7 +86,11 @@ public:
     }
     
     ~SyncSensorTypesUseCase() override = default;
-    
+
+    void setOnSensorChannelsChanged(std::function<void(const char*)> callback) {
+        _onSensorChannelsChanged = callback;
+    }
+
     bool init() override {
         log("SYNC_SENSOR_TYPES: Initializing sensor types sync use case");
         
@@ -293,6 +303,7 @@ private:
 
         std::vector<SensorEntity> allSensors = _sensorRepository->getAll();
         int updatedCount = 0;
+        bool structureDirty = false;
 
         for (auto& sensor : allSensors) {
             if (sensor.sensorTypeUid.empty()) continue;
@@ -303,11 +314,25 @@ private:
             const SensorType* sensorType = it->second;
             bool wasUpdated = false;
 
+            uint8_t vpdChannelBefore = 0;
+            bool hadVpd = VpdChannelUseCase::vpdChannelNumber(sensor.modbusRegisterConfigs, vpdChannelBefore);
+
             // Update Modbus register configs and baud rate
             if (sensor.isModbusSensor() && !sensorType->modbusRegisterConfig.empty()) {
                 sensor.modbusRegisterConfigs = sensorType->modbusRegisterConfig;
                 sensor.baudRate = sensorType->baudRate;
                 wasUpdated = true;
+            }
+
+            uint8_t vpdChannelAfter = 0;
+            bool hasVpd = VpdChannelUseCase::vpdChannelNumber(sensor.modbusRegisterConfigs, vpdChannelAfter);
+
+            if (hadVpd != hasVpd || (hadVpd && vpdChannelBefore != vpdChannelAfter)) {
+                structureDirty = true;
+                log("SYNC_SENSOR_TYPES: VPD_SHIFT uid=%s old=%s new=%s",
+                    sensor.uid.c_str(),
+                    hadVpd ? VpdChannelUseCase::channelUid(sensor.uid, vpdChannelBefore).c_str() : "none",
+                    hasVpd ? VpdChannelUseCase::channelUid(sensor.uid, vpdChannelAfter).c_str() : "none");
             }
 
             // Update I2C register configs
@@ -328,6 +353,11 @@ private:
         }
 
         log("SYNC_SENSOR_TYPES: Updated %d sensors from changed sensor types", updatedCount);
+
+        // One call per synchronization, not per sensor
+        if (structureDirty && _onSensorChannelsChanged) {
+            _onSensorChannelsChanged("vpd_channel_shift");
+        }
     }
     
     bool shouldUpdateSensorType(const SensorType& existingSensorType, const SensorType& newSensorType) {

@@ -40,6 +40,7 @@
 #include "Core/Domain/Interfaces/UseCases/IOnConnectivityRestoredUseCase.h"
 #include "Core/Domain/Interfaces/UseCases/ICheckModuleDeletionUseCase.h"
 #include "Core/Domain/Interfaces/UseCases/ICheckFirmwareUpdateOnStartupUseCase.h"
+#include "Core/Domain/UseCases/Sensors/VpdChannelUseCase.h"
 #include <memory>
 #include <cstdarg>
 #include <cstdio>
@@ -195,6 +196,10 @@ public:
 
     void setupModule() override;
     std::unique_ptr<ILoopService> getLoopService() override;
+
+    // Cheap structure rebuild (no port scan) + immediate send. Used when the sensor type catalog
+    // shifted the computed VPD channel number and the backend must learn the new uid at once.
+    bool republishModuleStructure(const char *reason);
 };
 
 // Implementation
@@ -1101,6 +1106,45 @@ inline void ModuleSetupService::addMultiChannelModbusSensor(Node &node, const Se
                 sensor.uid.c_str(), sensor.type.c_str(), config.channel, sensor.pin);
         }
     }
+
+    // Computed VPD channel: it has no register config, so the structure has to learn about it here
+    uint8_t vpdCh = 0;
+    if (VpdChannelUseCase::vpdChannelNumber(sensorEntity.modbusRegisterConfigs, vpdCh))
+    {
+        Sensor vpdSensor;
+        vpdSensor.uid = VpdChannelUseCase::channelUid(sensorEntity.uid, vpdCh);
+        vpdSensor.type = VpdChannelUseCase::VPD_TYPE;
+        vpdSensor.pin = sensorEntity.pin;
+        vpdSensor.group = sensorEntity.modbusDeviceAddress;
+        vpdSensor.modelUid = sensorEntity.sensorTypeUid;
+
+        bool vpdFound = false;
+        for (auto &existingSensor : node.sensors)
+        {
+            if (existingSensor.uid == vpdSensor.uid)
+            {
+                existingSensor = vpdSensor;
+                vpdFound = true;
+                break;
+            }
+        }
+
+        if (!vpdFound)
+        {
+            node.sensors.push_back(vpdSensor);
+        }
+
+        log("SETUP: VPD_CHANNEL uid=%s channel=%d pin=%d", vpdSensor.uid.c_str(), vpdCh, vpdSensor.pin);
+    }
+    else
+    {
+        uint8_t tempCh = 0;
+        uint8_t humCh = 0;
+        if (VpdChannelUseCase::findAirPair(sensorEntity.modbusRegisterConfigs, tempCh, humCh))
+        {
+            log("SETUP: VPD_SKIP uid=%s reason=overflow max=%d", sensorEntity.uid.c_str(), VpdChannelUseCase::MAX_CHANNEL);
+        }
+    }
 }
 
 inline void ModuleSetupService::addMultiChannelI2CSensor(Node &node, const SensorEntity &sensorEntity)
@@ -1564,6 +1608,38 @@ inline void ModuleSetupService::fillModuleStructure()
         moduleStructure->nodes.size(),
         currentNode.type.c_str(),
         currentNode.subtype.c_str());
+}
+
+inline bool ModuleSetupService::republishModuleStructure(const char *reason)
+{
+    if (!moduleStructure || moduleStructure->nodes.empty() || !sensorRepository || !hybridApiService)
+    {
+        log("SETUP: STRUCTURE_REPUBLISH reason=%s sent=0 sensors=0 (republish_fail: prerequisites missing)",
+            reason ? reason : "unknown");
+        return false;
+    }
+
+    // Rebuild sensor records only - no port scan, no blocking ModBus traffic
+    Node &node = moduleStructure->nodes[0];
+    node.sensors.clear();
+
+    auto sensorEntities = sensorRepository->getAll();
+    for (const auto &sensorEntity : sensorEntities)
+    {
+        addSensorToStructure(node, sensorEntity);
+    }
+
+    bool sent = hybridApiService->sendToServerModuleStructure(*moduleStructure, ApiPriority::BOTH);
+
+    log("SETUP: STRUCTURE_REPUBLISH reason=%s sent=%d sensors=%zu",
+        reason ? reason : "unknown", sent ? 1 : 0, node.sensors.size());
+
+    if (!sent)
+    {
+        log("SETUP: STRUCTURE_REPUBLISH republish_fail reason=%s", reason ? reason : "unknown");
+    }
+
+    return sent;
 }
 
 inline void ModuleSetupService::setupModule()

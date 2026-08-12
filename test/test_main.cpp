@@ -56,6 +56,8 @@ extern "C" void run_rule_fired_condition_tests(void);
 extern "C" int run_preventive_restart_use_case_tests(void);
 extern "C" void run_rule_operation_time_tests(void);
 extern "C" void run_rule_sensor_value_refresh_tests(void);
+extern "C" void run_vpd_channel_tests(void);
+extern "C" void run_sensor_service_tests(void);
 
 void setUp(void) {
     // set stuff up here
@@ -231,6 +233,11 @@ int main(void) {
     run_rule_operation_time_tests();
 
     run_rule_sensor_value_refresh_tests();
+
+    // Run tests for the computed VPD sensor channel (GDV1-3782)
+    run_vpd_channel_tests();
+
+    run_sensor_service_tests();
 
     return UNITY_END();
 }

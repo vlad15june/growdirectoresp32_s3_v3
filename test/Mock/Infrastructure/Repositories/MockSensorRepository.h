@@ -6,6 +6,8 @@
 class MockSensorRepository : public ISensorRepository {
 public:
     std::vector<SensorEntity> sensors;
+    // Filled only by tests that drive the sensor read loop; empty by default, as before
+    std::vector<SensorEntity> modbusSensors;
 
     Utils::Optional<SensorEntity> get(const char* uid) override {
         for (const auto& sensor : sensors) {
@@ -37,7 +39,7 @@ public:
     std::vector<SensorEntity> getSensorsByModel(const char*) override { return {}; }
     std::vector<SensorEntity> getActiveSensors() override { return sensors; }
     std::vector<SensorEntity> getSensorsWithErrors() override { return {}; }
-    std::vector<SensorEntity> getModbusSensors() override { return {}; }
+    std::vector<SensorEntity> getModbusSensors() override { return modbusSensors; }
     std::vector<SensorEntity> getI2CSensors() override { return {}; }
     std::vector<SensorEntity> getAtlasSensors() override { return {}; }
     std::vector<SensorEntity> getMultiChannelSensors() override { return {}; }

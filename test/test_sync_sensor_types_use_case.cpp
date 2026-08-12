@@ -6,6 +6,8 @@
 #include "Mock/Infrastructure/Logging/MockLogger.h"
 #include "Mock/Infrastructure/Logging/MockDebugSystem.h"
 #include "Mock/Infrastructure/Configuration/MockNTPTimeAdapter.h"
+#include "Mock/Infrastructure/Repositories/MockSensorRepository.h"
+#include "Core/Domain/UseCases/Sensors/VpdChannelUseCase.h"
 #include "Infrastructure/Adapters/Json/JsonConverter.h"
 
 // Global test variables
@@ -474,6 +476,125 @@ void test_sync_sensor_types_get_last_sync_time(void) {
     sync_sensor_types_use_case_teardown();
 }
 
+
+// --- GDV1-3782: the catalog moved the computed VPD channel -> log + one structure republish ---
+
+static ModbusRegisterConfig makeVpdSyncConfig(uint8_t channel, const std::string& sensorType) {
+    ModbusRegisterConfig config;
+    config.functionCode = 3;
+    config.startRegister = 0;
+    config.numRegisters = 1;
+    config.multiplier = 0.1f;
+    config.offset = 0.0f;
+    config.channelName = sensorType;
+    config.channel = channel;
+    config.sensorType = sensorType;
+    config.canConnectMinValue = 0.0f;
+    config.canConnectMaxValue = 100.0f;
+    return config;
+}
+
+static SensorEntity makeVpdSyncSensor(const std::string& uid, const std::string& typeUid) {
+    SensorEntity sensor;
+    sensor.uid = uid;
+    sensor.protocol = "ModBus";
+    sensor.pin = 0;
+    sensor.sensorTypeUid = typeUid;
+    sensor.modbusRegisterConfigs.push_back(makeVpdSyncConfig(1, "air_temp"));
+    sensor.modbusRegisterConfigs.push_back(makeVpdSyncConfig(2, "humidity"));
+    return sensor;
+}
+
+static SensorType makeVpdSyncType(const std::string& typeUid, const std::vector<ModbusRegisterConfig>& configs) {
+    SensorType sensorType;
+    sensorType.uid = typeUid;
+    sensorType.name = "ry_ws301";
+    sensorType.protocol = SensorProtocol::MODBUS_PROTOCOL;
+    sensorType.baudRate = 9600;
+    sensorType.modbusRegisterConfig = configs;
+    return sensorType;
+}
+
+// INV-4, INV-10: an extra register channel shifts max+1, so the structure must be resent once
+void test_sync_sensor_types_vpd_shift_triggers_republish(void) {
+    sync_sensor_types_use_case_setup();
+
+    MockSensorRepository sensorRepository;
+    sensorRepository.sensors.push_back(makeVpdSyncSensor("AA:BB:CC:DD:EE:FF.00", "type-uid"));
+    sensorRepository.sensors.push_back(makeVpdSyncSensor("AA:BB:CC:DD:EE:FF.01", "type-uid"));
+
+    SyncSensorTypesUseCase useCase(
+        &g_mockApiService,
+        &g_mockRepository,
+        &g_mockArduinoAdapter,
+        &g_mockNtpTimeAdapter,
+        &g_jsonConverter,
+        &g_mockLogger,
+        &g_mockDebugSystem,
+        &sensorRepository);
+
+    int callbackCount = 0;
+    std::string callbackReason;
+    useCase.setOnSensorChannelsChanged([&callbackCount, &callbackReason](const char* reason) {
+        callbackCount++;
+        callbackReason = reason ? reason : "";
+    });
+
+    std::vector<ModbusRegisterConfig> grown;
+    grown.push_back(makeVpdSyncConfig(1, "air_temp"));
+    grown.push_back(makeVpdSyncConfig(2, "humidity"));
+    grown.push_back(makeVpdSyncConfig(5, "co2"));
+
+    std::vector<SensorType> changed;
+    changed.push_back(makeVpdSyncType("type-uid", grown));
+
+    g_mockApiService.sensorTypesListReturnValue = changed;
+    g_mockRepository.setShouldReturnEmpty(true);
+    useCase.forceSync();
+
+    // One call per synchronization, not per sensor
+    TEST_ASSERT_EQUAL(1, callbackCount);
+    TEST_ASSERT_EQUAL_STRING("vpd_channel_shift", callbackReason.c_str());
+
+    sync_sensor_types_use_case_teardown();
+}
+
+// The channel layout did not change -> no republish
+void test_sync_sensor_types_no_republish_without_shift(void) {
+    sync_sensor_types_use_case_setup();
+
+    MockSensorRepository sensorRepository;
+    sensorRepository.sensors.push_back(makeVpdSyncSensor("AA:BB:CC:DD:EE:FF.00", "type-uid"));
+
+    SyncSensorTypesUseCase useCase(
+        &g_mockApiService,
+        &g_mockRepository,
+        &g_mockArduinoAdapter,
+        &g_mockNtpTimeAdapter,
+        &g_jsonConverter,
+        &g_mockLogger,
+        &g_mockDebugSystem,
+        &sensorRepository);
+
+    int callbackCount = 0;
+    useCase.setOnSensorChannelsChanged([&callbackCount](const char*) { callbackCount++; });
+
+    std::vector<ModbusRegisterConfig> same;
+    same.push_back(makeVpdSyncConfig(1, "air_temp"));
+    same.push_back(makeVpdSyncConfig(2, "humidity"));
+
+    std::vector<SensorType> changed;
+    changed.push_back(makeVpdSyncType("type-uid", same));
+
+    g_mockApiService.sensorTypesListReturnValue = changed;
+    g_mockRepository.setShouldReturnEmpty(true);
+    useCase.forceSync();
+
+    TEST_ASSERT_EQUAL(0, callbackCount);
+
+    sync_sensor_types_use_case_teardown();
+}
+
 // Main test runner function
 extern "C" int run_sync_sensor_types_use_case_tests(void) {
     UNITY_BEGIN();
@@ -493,6 +614,8 @@ extern "C" int run_sync_sensor_types_use_case_tests(void) {
     RUN_TEST(test_sync_sensor_types_multiple_types);
     RUN_TEST(test_sync_sensor_types_get_last_sync_status);
     RUN_TEST(test_sync_sensor_types_get_last_sync_time);
+    RUN_TEST(test_sync_sensor_types_vpd_shift_triggers_republish);
+    RUN_TEST(test_sync_sensor_types_no_republish_without_shift);
     
     return UNITY_END();
 }

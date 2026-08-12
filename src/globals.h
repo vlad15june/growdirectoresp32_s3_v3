@@ -509,6 +509,8 @@ void initDependencies()
     syncRulesUseCase.setRemoteSensorReceiver(&remoteSensorReceiver);
     syncRulesUseCase.setSettings(&settings);
     commandService.setRemoteSensorReceiver(&remoteSensorReceiver);
+    syncSensorTypesUseCase.setOnSensorChannelsChanged([](const char *reason)
+                                                      { moduleSetupService.republishModuleStructure(reason); });
     loopServiceFactory.setOtaUpdateLog(&otaUpdateLog);
     loopServiceFactory.setBootEventLog(&bootEventLog);
     loopServiceFactory.setRestartEventLog(&restartEventLog);

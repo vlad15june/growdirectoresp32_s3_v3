@@ -2,6 +2,7 @@
 #include "Core/Domain/Enums/BootTypeEnum.h"
 #include "Core/Domain/Enums/ModuleModeEnum.h"
 #include "Core/Domain/Enums/SensorStateEnum.h"
+#include "Core/Domain/UseCases/Sensors/VpdChannelUseCase.h"
 #include <cstring>
 
 SensorService::SensorService(IModuleConfig *moduleConfig,
@@ -175,6 +176,32 @@ bool SensorService::readSensor(SensorEntity sensor)
                 snprintf(item, sizeof(item), "%s=%.2f ", ch.c_str(), pair.second);
                 values += item;
             }
+
+            // Computed VPD channel: needs both sources from THIS read, otherwise the cached
+            // value is left as it is - same as any other channel that was not read this time
+            uint8_t tempCh = 0;
+            uint8_t humCh = 0;
+            uint8_t vpdCh = 0;
+            if (VpdChannelUseCase::findAirPair(sensor.modbusRegisterConfigs, tempCh, humCh) &&
+                VpdChannelUseCase::vpdChannelNumber(sensor.modbusRegisterConfigs, vpdCh))
+            {
+                auto tempIt = channelValues.find(VpdChannelUseCase::channelUid(sensor.uid, tempCh));
+                auto humIt = channelValues.find(VpdChannelUseCase::channelUid(sensor.uid, humCh));
+
+                if (tempIt != channelValues.end() && humIt != channelValues.end())
+                {
+                    std::string vpdUid = VpdChannelUseCase::channelUid(sensor.uid, vpdCh);
+                    float vpd = VpdChannelUseCase::compute(tempIt->second, humIt->second);
+                    sensorValueModel->setChannelValue(sensor.uid, vpdUid, vpd);
+                    log("SensorService: VPD uid=%s t=%.2f rh=%.2f vpd=%.3f",
+                        vpdUid.c_str(), tempIt->second, humIt->second, vpd);
+                }
+                else
+                {
+                    log("SensorService: VPD_SKIP uid=%s reason=partial_read", sensor.uid.c_str());
+                }
+            }
+
             sensorValueModel->setLastReadTime(sensor.uid, currentTime);
             sensorRepository->updateSensorStatus(sensor.uid.c_str(), true, false);
             log("SensorService: Read %s addr=%d %s: %s", sensor.model.c_str(), sensor.modbusDeviceAddress, sensor.uid.c_str(), values.c_str());
@@ -378,6 +405,19 @@ UpdateDto SensorService::createSensorUpdateDto()
                 sensorDto.value = 0.0f;
                 sensorDto.state = getSensorStateName(SENSOR_STATE_DISCONNECTED);
                 dto.sensors.push_back(sensorDto);
+            }
+
+            // The computed VPD channel has no register config - without this it would silently
+            // disappear from the packet instead of being reported as disconnected
+            uint8_t vpdCh = 0;
+            if (VpdChannelUseCase::vpdChannelNumber(sensor.modbusRegisterConfigs, vpdCh))
+            {
+                SensorDto sensorDto;
+                sensorDto.uid = VpdChannelUseCase::channelUid(sensor.uid, vpdCh);
+                sensorDto.value = 0.0f;
+                sensorDto.state = getSensorStateName(SENSOR_STATE_DISCONNECTED);
+                dto.sensors.push_back(sensorDto);
+                log("SensorService: VPD_DISCONNECTED uid=%s", sensorDto.uid.c_str());
             }
         }
         else
