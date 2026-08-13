@@ -93,8 +93,6 @@ private:
     IUdpInboundDispatcher *udpInboundDispatcher;
     IRemoteModuleCommandReceiver *remoteModuleCommandReceiver;
 
-    // Sensor records of the structure are built by an injected use case, not by this class: the
-    // same records are needed by RepublishModuleStructureUseCase (review of PR #17, 2026-08-13)
     ISensorStructureUseCase *sensorStructureUseCase;
 
     void log(const char *format, ...);
