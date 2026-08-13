@@ -95,10 +95,12 @@ struct Fixture {
     FakeSensorReader sensorReader;
     MockSensorValueModel sensorValueModel;
     MockArduinoAdapter arduinoAdapter;
+    SensorPlausibilityUseCase plausibility;
     SensorService service;
 
     Fixture()
-        : service(nullptr,
+        : plausibility(&sensorTypeRepository),
+          service(nullptr,
                   nullptr,
                   &sensorRepository,
                   &sensorReader,
@@ -111,7 +113,7 @@ struct Fixture {
                   nullptr,
                   nullptr,
                   nullptr,
-                  &sensorTypeRepository) {}
+                  &plausibility) {}
 };
 
 // -------- the gate itself: four cases required by the ticket --------
@@ -336,27 +338,88 @@ void test_limits_resolution_and_decision(void) {
     repository.addSensorType(makeAirTempSensorType(AIR_TEMP_LIMIT_MIN, AIR_TEMP_LIMIT_MAX));
     SensorPlausibilityUseCase plausibility(&repository);
 
-    SensorPlausibilityUseCase::Limits limits = plausibility.getLimits(makeSingleChannelSensor(), "air_temp");
+    // through the interface: this is how SensorService sees the gate
+    ISensorPlausibilityUseCase &gate = plausibility;
+
+    ISensorPlausibilityUseCase::Limits limits = gate.getLimits(makeSingleChannelSensor(), "air_temp");
     TEST_ASSERT_TRUE(limits.defined);
     TEST_ASSERT_EQUAL_FLOAT(AIR_TEMP_LIMIT_MIN, limits.min);
     TEST_ASSERT_EQUAL_FLOAT(AIR_TEMP_LIMIT_MAX, limits.max);
 
-    TEST_ASSERT_FALSE(SensorPlausibilityUseCase::isWithinLimits(-273.0f, limits));
-    TEST_ASSERT_FALSE(SensorPlausibilityUseCase::isWithinLimits(3801.0f, limits));
-    TEST_ASSERT_TRUE(SensorPlausibilityUseCase::isWithinLimits(21.5f, limits));
+    TEST_ASSERT_FALSE(gate.isWithinLimits(-273.0f, limits));
+    TEST_ASSERT_FALSE(gate.isWithinLimits(3801.0f, limits));
+    TEST_ASSERT_TRUE(gate.isWithinLimits(21.5f, limits));
 
-    SensorPlausibilityUseCase::Limits none;
+    ISensorPlausibilityUseCase::Limits none;
     TEST_ASSERT_FALSE(none.defined);
-    TEST_ASSERT_TRUE(SensorPlausibilityUseCase::isWithinLimits(3801.0f, none));
+    TEST_ASSERT_TRUE(gate.isWithinLimits(3801.0f, none));
 }
 
 // Without a sensor type repository the gate is inert — the wiring is what turns it on
 void test_gate_without_repository_accepts_everything(void) {
     SensorPlausibilityUseCase plausibility;
-    SensorPlausibilityUseCase::Limits limits;
+    ISensorPlausibilityUseCase::Limits limits;
 
     TEST_ASSERT_TRUE(plausibility.isPlausible(makeSingleChannelSensor(), "air_temp", 3801.0f, limits));
     TEST_ASSERT_FALSE(limits.defined);
+}
+
+// The service depends on the interface, not on the sensor type catalog: a stub verdict is enough
+// to drive the reading path, which is the point of injecting the gate (PR #18 review).
+class AlwaysRejectingGate : public ISensorPlausibilityUseCase {
+public:
+    mutable int calls = 0;
+
+    Limits getLimits(const SensorEntity &, const std::string &) const override {
+        Limits limits;
+        limits.min = 0.0f;
+        limits.max = 1.0f;
+        limits.defined = true;
+        return limits;
+    }
+
+    bool isWithinLimits(float, const Limits &) const override { return false; }
+
+    bool isPlausible(const SensorEntity &sensor,
+                     const std::string &subSensorTypeName,
+                     float,
+                     Limits &outLimits) const override {
+        calls++;
+        outLimits = getLimits(sensor, subSensorTypeName);
+        return false;
+    }
+};
+
+void test_service_uses_the_injected_gate(void) {
+    MockSensorRepository sensorRepository;
+    FakeSensorReader sensorReader;
+    MockSensorValueModel sensorValueModel;
+    MockArduinoAdapter arduinoAdapter;
+    AlwaysRejectingGate gate;
+    SensorService service(nullptr, nullptr, &sensorRepository, &sensorReader, &sensorValueModel,
+                          nullptr, &arduinoAdapter, nullptr, nullptr, nullptr, nullptr, nullptr,
+                          nullptr, &gate);
+
+    sensorReader.singleValue = 21.5f;  // a perfectly normal value: only the gate rejects it
+
+    TEST_ASSERT_FALSE(service.readSensor(makeSingleChannelSensor()));
+    TEST_ASSERT_EQUAL_INT(1, gate.calls);
+    TEST_ASSERT_EQUAL_INT(0, sensorValueModel.setSensorValueCallCount);
+}
+
+// Nothing injected at all -> the gate is inert and the old behaviour stands
+void test_service_without_a_gate_accepts_everything(void) {
+    MockSensorRepository sensorRepository;
+    FakeSensorReader sensorReader;
+    MockSensorValueModel sensorValueModel;
+    MockArduinoAdapter arduinoAdapter;
+    SensorService service(nullptr, nullptr, &sensorRepository, &sensorReader, &sensorValueModel,
+                          nullptr, &arduinoAdapter);
+
+    sensorReader.singleValue = 3801.0f;
+
+    TEST_ASSERT_TRUE(service.readSensor(makeSingleChannelSensor()));
+    TEST_ASSERT_EQUAL_INT(1, sensorValueModel.setSensorValueCallCount);
 }
 
 } // namespace
@@ -373,5 +436,7 @@ extern "C" int run_sensor_plausibility_limits_tests(void) {
     RUN_TEST(test_multi_channel_all_channels_implausible_is_an_error);
     RUN_TEST(test_limits_resolution_and_decision);
     RUN_TEST(test_gate_without_repository_accepts_everything);
+    RUN_TEST(test_service_uses_the_injected_gate);
+    RUN_TEST(test_service_without_a_gate_accepts_everything);
     return 0;
 }

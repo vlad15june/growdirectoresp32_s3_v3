@@ -4,6 +4,7 @@
 #include "Core/Domain/Data/Entities/Sensor/Sensor.h"
 #include "Core/Domain/Data/Entities/Sensor/SensorType.h"
 #include "Core/Domain/Interfaces/Repositories/ISensorTypeRepository.h"
+#include "Core/Domain/Interfaces/UseCases/ISensorPlausibilityUseCase.h"
 #include <string>
 
 /**
@@ -15,25 +16,13 @@
  *
  * minValue/maxValue are NOT used here: those are the recommended working range (UI/agronomy),
  * not plausibility.
+ *
+ * The reading path gets this object through ISensorPlausibilityUseCase (review of PR #18,
+ * 2026-08-13): the sensor type repository is a dependency of the gate, not of the service.
  */
-class SensorPlausibilityUseCase
+class SensorPlausibilityUseCase : public ISensorPlausibilityUseCase
 {
 public:
-    /**
-     * @brief Physical range resolved for one sensor channel.
-     *
-     * defined == false means the server sent no bounds for this channel (both are still at the
-     * constructor default 0.0f) — nothing to gate on.
-     */
-    struct Limits
-    {
-        float min;
-        float max;
-        bool defined;
-
-        Limits() : min(0.0f), max(0.0f), defined(false) {}
-    };
-
     explicit SensorPlausibilityUseCase(ISensorTypeRepository *sensorTypeRepository = nullptr)
         : _sensorTypeRepository(sensorTypeRepository) {}
 
@@ -47,7 +36,7 @@ public:
      * @param value Reading to check
      * @param limits Range resolved for the channel; undefined range accepts everything
      */
-    static bool isWithinLimits(float value, const Limits &limits)
+    bool isWithinLimits(float value, const Limits &limits) const override
     {
         if (!limits.defined)
         {
@@ -63,7 +52,7 @@ public:
      * @return Range; defined == false when there is no sensor type, no such channel, or the
      *         server sent limitMinValue == limitMaxValue == 0
      */
-    Limits getLimits(const SensorEntity &sensor, const std::string &subSensorTypeName) const
+    Limits getLimits(const SensorEntity &sensor, const std::string &subSensorTypeName) const override
     {
         Limits limits;
 
@@ -111,7 +100,7 @@ public:
     bool isPlausible(const SensorEntity &sensor,
                      const std::string &subSensorTypeName,
                      float value,
-                     Limits &outLimits) const
+                     Limits &outLimits) const override
     {
         outLimits = getLimits(sensor, subSensorTypeName);
         return isWithinLimits(value, outLimits);

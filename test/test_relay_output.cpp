@@ -1,8 +1,8 @@
 #include <unity.h>
 #include <string>
 
-#include "Core/Domain/UseCases/DeviceControl/ProcessDeviceStateUseCase.cpp"
-#include "Core/Domain/UseCases/DeviceControl/ProcessAnalogDeviceStateUseCase.cpp"
+#include "Core/Domain/UseCases/DeviceControl/ProcessDeviceStateUseCase.h"
+#include "Core/Domain/UseCases/DeviceControl/ProcessAnalogDeviceStateUseCase.h"
 #include "Core/Domain/UseCases/DeviceControl/ProcessDeviceStateUseCaseFactory.h"
 #include "Core/Domain/UseCases/DeviceControl/DeviceCommandExecutionUseCase.h"
 #include "Core/Domain/Data/Models/DeviceModel.h"

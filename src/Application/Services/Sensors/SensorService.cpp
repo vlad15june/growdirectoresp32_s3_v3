@@ -17,11 +17,10 @@ SensorService::SensorService(IModuleConfig *moduleConfig,
                              IUdpManager *udpManager,
                              IJsonConverter *jsonConverter,
                              IMqttManager *mqttManager,
-                             ISensorTypeRepository *sensorTypeRepository)
+                             ISensorPlausibilityUseCase *plausibilityUseCase)
     : moduleConfig(moduleConfig),
       moduleStructure(moduleStructure),
       sensorRepository(sensorRepository),
-      sensorTypeRepository(sensorTypeRepository),
       sensorReader(sensorReader),
       sensorValueModel(sensorValueModel),
       timeAdapter(timeAdapter),
@@ -32,10 +31,10 @@ SensorService::SensorService(IModuleConfig *moduleConfig,
       udpManager(udpManager),
       jsonConverter(jsonConverter),
       mqttManager(mqttManager),
+      plausibilityUseCase(plausibilityUseCase),
       lastSensorReadTime(0),
       lastSensorUpdateTime(0),
-      lastUdpSendTime(0),
-      _plausibility(sensorTypeRepository)
+      lastUdpSendTime(0)
 {
 }
 
@@ -245,8 +244,14 @@ bool SensorService::acceptReading(const SensorEntity &sensor,
                                   const std::string &channelUid,
                                   float value)
 {
-    SensorPlausibilityUseCase::Limits limits;
-    if (_plausibility.isPlausible(sensor, subSensorTypeName, value, limits))
+    if (!plausibilityUseCase)
+    {
+        // Nothing wired in: the gate is inert, behaviour is the one from before GDV1-3810
+        return true;
+    }
+
+    ISensorPlausibilityUseCase::Limits limits;
+    if (plausibilityUseCase->isPlausible(sensor, subSensorTypeName, value, limits))
     {
         return true;
     }
@@ -261,7 +266,7 @@ bool SensorService::acceptReading(const SensorEntity &sensor,
     return false;
 }
 
-std::string SensorService::channelSensorTypeName(const SensorEntity &sensor, const std::string &channelUid)
+std::string SensorService::channelSensorTypeName(const SensorEntity &sensor, const std::string &channelUid) const
 {
     for (const auto &registerConfig : sensor.modbusRegisterConfigs)
     {

@@ -7,7 +7,6 @@
 #include "Core/Domain/Data/Models/ModuleStructure.h"
 #include "Core/Domain/Data/Models/ISensorValueModel.h"
 #include "Core/Domain/Interfaces/Repositories/ISensorRepository.h"
-#include "Core/Domain/Interfaces/Repositories/ISensorTypeRepository.h"
 #include "Core/Domain/Interfaces/Adapters/Sensors/ISensorReader.h"
 #include "Application/DTOs/UpdateDto.h"
 #include "Infrastructure/Adapters/Time/INTPTimeAdapter.h"
@@ -19,14 +18,13 @@
 #include "Core/Domain/Interfaces/Adapters/Json/IJsonConverter.h"
 #include "Core/Domain/Interfaces/Mqtt/IMqttManager.h"
 #include "Core/Domain/UseCases/Sensors/SensorRecoveryUseCase.h"
-#include "Core/Domain/UseCases/Sensors/SensorPlausibilityUseCase.h"
+#include "Core/Domain/Interfaces/UseCases/ISensorPlausibilityUseCase.h"
 
 class SensorService : public ISensorService {
 private:
     IModuleConfig* moduleConfig;
     ModuleStructure* moduleStructure;
     ISensorRepository* sensorRepository;
-    ISensorTypeRepository* sensorTypeRepository;
     ISensorReader* sensorReader;
     ISensorValueModel* sensorValueModel;
     INTPTimeAdapter* timeAdapter;
@@ -37,7 +35,10 @@ private:
     IUdpManager* udpManager;
     IJsonConverter* jsonConverter;
     IMqttManager* mqttManager;
-    
+    // Injected, not owned: the gate is an interchangeable decision behind an interface, and a test
+    // gives the service its own verdict instead of a repository full of sensor types (PR #18 review)
+    ISensorPlausibilityUseCase* plausibilityUseCase;
+
     const unsigned long SENSOR_READ_INTERVAL = 15000;
     const unsigned long SENSOR_UPDATE_INTERVAL = 15000;
     const unsigned long UDP_SEND_INTERVAL = 15000;
@@ -46,7 +47,6 @@ private:
     unsigned long lastUdpSendTime = 0;
 
     SensorRecoveryUseCase _recovery;
-    SensorPlausibilityUseCase _plausibility;
 
     std::string generateSensorUid(const SensorEntity& sensor, const std::string& channelName = "") const;
     UpdateDto createSensorUpdateDto();
@@ -74,7 +74,7 @@ private:
      * @param channelUid Channel UID as built by the reader (<sensor uid>.<channel>)
      * @return Sub sensor type name, empty when the channel is not in the register configs
      */
-    static std::string channelSensorTypeName(const SensorEntity& sensor, const std::string& channelUid);
+    std::string channelSensorTypeName(const SensorEntity& sensor, const std::string& channelUid) const;
     
     void log(const char* format, ...)
     {
@@ -134,7 +134,7 @@ public:
                   IUdpManager* udpManager = nullptr,
                   IJsonConverter* jsonConverter = nullptr,
                   IMqttManager* mqttManager = nullptr,
-                  ISensorTypeRepository* sensorTypeRepository = nullptr);
+                  ISensorPlausibilityUseCase* plausibilityUseCase = nullptr);
 
     ~SensorService();
     
