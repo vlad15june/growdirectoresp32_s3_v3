@@ -129,7 +129,7 @@ Send diagnostic info.
 
 **Firmware payload keys (from code)**
 - `rssi`, `uid`, `email`, `accountUid`, `timestamp`, `uptimeMs`
-- `networkFails`, `apiSendFails`, `apiStatus`, `mqttStatus`, `mqttFails`, `apiSendFailRatio`
+- `networkFails`, `apiSendFails`, `apiStatus`, `mqttStatus`, `mqttFails`, `mqttOversizeDrops`, `apiSendFailRatio`
 - `firmware`, `freeHeap`, `minFreeHeap`, `heapSize`, `maxAllocHeap`, `failsInHour`
 
 ### GET /api/v1/Hardware/devices_command
