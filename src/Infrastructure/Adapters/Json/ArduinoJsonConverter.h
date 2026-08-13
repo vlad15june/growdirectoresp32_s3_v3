@@ -248,6 +248,7 @@ public:
         doc["apiStatus"] = diagnosticData.apiStatus;
         doc["mqttStatus"] = diagnosticData.mqttStatus;
         doc["mqttFails"] = diagnosticData.mqttFails;
+        doc["mqttOversizeDrops"] = diagnosticData.mqttOversizeDrops;
         doc["apiSendFailRatio"] = diagnosticData.apiSendFailRatio;
         doc["firmware"] = diagnosticData.firmware;
         doc["freeHeap"] = diagnosticData.freeHeap;
