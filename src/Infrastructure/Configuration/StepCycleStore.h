@@ -29,9 +29,11 @@ struct StepCycleSlot
  * is declared in globals.h in the RTC memory of the built-in clock (`RTC_NOINIT_ATTR`), which
  * survives every restart the module makes by itself - the nightly preventive one, the technical
  * one after an offline period, an OTA - and, unlike the EEPROM, has no write endurance limit.
- * A power cut still clears it: the on-chip RTC memory is not battery backed. When the external
- * clock is wired up, declare the table in its battery-backed NVRAM instead - nothing else here
- * or in the rules has to change.
+ * A power cut still clears it: the on-chip RTC memory is not battery backed. TO FINISH LATER: the
+ * board also carries an EXTERNAL clock (RV-3028) with a battery, and its memory survives a power
+ * cut - once that chip has a driver (`Rtc3028Adapter`, planned; today only the jig stubs
+ * `#init_rtc3028` / `#read_rtc3028` in BoardTest.h), declare the table in its battery-backed
+ * memory instead. Nothing else here or in the rules has to change.
  */
 struct StepCycleTable
 {

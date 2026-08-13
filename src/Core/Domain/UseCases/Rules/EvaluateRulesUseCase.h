@@ -335,6 +335,8 @@ private:
     // restored at boot, so the count continues across a restart. The store is NOT the EEPROM: the
     // value changes once per completed cycle and the EEPROM has a finite write endurance (owner,
     // review of PR #20, 2026-08-13) - it lives in the memory of the clock, see StepCycleStore.
+    // Until the external RV-3028 clock has a driver, that is the on-chip clock memory, so a power
+    // cut resets the count; moving the table to the battery-backed chip is the remaining work.
 
     // Only a step rule whose protective shutdown is armed with a cycle limit is worth a write.
     static bool isStepCycleTracked(const Rule& rule) {
