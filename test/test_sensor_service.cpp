@@ -1,7 +1,5 @@
 #include <unity.h>
-// Same convention as test_device_command.cpp / test_led_use_cases.cpp: the native env does not
-// build src/, so the implementation unit is pulled into the test translation unit
-#include "Application/Services/Sensors/SensorService.cpp"
+#include "Application/Services/Sensors/SensorService.h"
 #include "Core/Domain/UseCases/Sensors/VpdChannelUseCase.h"
 #include "Mock/Infrastructure/Configuration/MockModuleConfig.h"
 #include "Mock/Infrastructure/Configuration/MockSettings.h"

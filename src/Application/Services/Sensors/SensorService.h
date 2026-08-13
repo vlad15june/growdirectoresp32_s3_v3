@@ -18,6 +18,8 @@
 #include "Core/Domain/Interfaces/Adapters/Json/IJsonConverter.h"
 #include "Core/Domain/Interfaces/Mqtt/IMqttManager.h"
 #include "Core/Domain/UseCases/Sensors/SensorRecoveryUseCase.h"
+#include "Core/Domain/UseCases/Sensors/VirtualSensorChannelsUseCase.h"
+#include <map>
 
 class SensorService : public ISensorService {
 private:
@@ -50,6 +52,11 @@ private:
     bool readI2CSensors();
     bool readModbusSensors();
     void sendUpdateViaUdp(const UpdateDto& updateDto);
+
+    // Computed (virtual) channels of a sensor - VPD today, more later. Which channels exist and
+    // how they are calculated is VirtualSensorChannelsUseCase; these two only store and report.
+    void applyVirtualChannels(const SensorEntity& sensor, const std::map<std::string, float>& rawChannelValues);
+    void appendVirtualChannelDtos(const SensorEntity& sensor, UpdateDto& dto);
     
     void log(const char* format, ...)
     {

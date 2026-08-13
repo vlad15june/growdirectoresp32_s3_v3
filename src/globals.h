@@ -41,6 +41,7 @@
 #include "Core/Domain/UseCases/Rules/SyncRulesUseCase.h"
 #include "Core/Domain/UseCases/Diagnostics/PreventiveRestartUseCase.h"
 #include "Core/Domain/UseCases/SensorTypes/SyncSensorTypesUseCase.h"
+#include "Core/Domain/UseCases/ModuleStructure/RepublishModuleStructureUseCase.h"
 
 #include "Core/Domain/Data/Models/ModuleStructure.h"
 #include "Core/Domain/Data/Models/IDeviceModel.h"
@@ -500,6 +501,13 @@ ModuleSetupService moduleSetupService(
     &udpInboundDispatcher,
     &remoteModuleCommandReceiver);
 
+RepublishModuleStructureUseCase republishModuleStructureUseCase(
+    &moduleStructure,
+    &sensorRepository,
+    &hybridApiService,
+    &mqttLogger,
+    &debugSystem);
+
 void initDependencies()
 {
     topicHandlerFactory.setModuleConfig(&moduleConfig);
@@ -510,7 +518,7 @@ void initDependencies()
     syncRulesUseCase.setSettings(&settings);
     commandService.setRemoteSensorReceiver(&remoteSensorReceiver);
     syncSensorTypesUseCase.setOnSensorChannelsChanged([](const char *reason)
-                                                      { moduleSetupService.republishModuleStructure(reason); });
+                                                      { republishModuleStructureUseCase.execute(reason); });
     loopServiceFactory.setOtaUpdateLog(&otaUpdateLog);
     loopServiceFactory.setBootEventLog(&bootEventLog);
     loopServiceFactory.setRestartEventLog(&restartEventLog);
