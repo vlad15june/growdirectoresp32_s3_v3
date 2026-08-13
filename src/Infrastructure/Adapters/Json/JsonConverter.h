@@ -1513,6 +1513,7 @@ public:
             config.sensorType = extractValue(configStr, "sensorType");
             config.canConnectMinValue = static_cast<float>(extractDoubleValue(configStr, "canConnectMinValue"));
             config.canConnectMaxValue = static_cast<float>(extractDoubleValue(configStr, "canConnectMaxValue"));
+            config.dataType = modbusDataTypeFromString(extractValue(configStr, "dataType"));
             sensor.modbusRegisterConfigs.push_back(config);
         }
 
@@ -1581,6 +1582,7 @@ public:
                 oss << ",\"sensorType\":\"" << config.sensorType << "\"";
                 oss << ",\"canConnectMinValue\":" << config.canConnectMinValue;
                 oss << ",\"canConnectMaxValue\":" << config.canConnectMaxValue;
+                oss << ",\"dataType\":\"" << modbusDataTypeToString(config.dataType) << "\"";
                 oss << "}";
                 if (i + 1 < sensor.modbusRegisterConfigs.size())
                     oss << ",";
@@ -1655,6 +1657,7 @@ public:
         config.sensorType = extractValue(jsonStr, "sensorType");
         config.canConnectMinValue = static_cast<float>(extractDoubleValue(jsonStr, "canConnectMinValue"));
         config.canConnectMaxValue = static_cast<float>(extractDoubleValue(jsonStr, "canConnectMaxValue"));
+        config.dataType = modbusDataTypeFromString(extractValue(jsonStr, "dataType"));
 
         return !config.channelName.empty();
     }
@@ -1673,6 +1676,7 @@ public:
         oss << ",\"sensorType\":\"" << config.sensorType << "\"";
         oss << ",\"canConnectMinValue\":" << config.canConnectMinValue;
         oss << ",\"canConnectMaxValue\":" << config.canConnectMaxValue;
+        oss << ",\"dataType\":\"" << modbusDataTypeToString(config.dataType) << "\"";
         oss << "}";
         return oss.str();
     }

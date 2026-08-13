@@ -1509,6 +1509,7 @@ public:
                 config.sensorType = configObj["sensorType"] | "";
                 config.canConnectMinValue = configObj["canConnectMinValue"] | 0.0f;
                 config.canConnectMaxValue = configObj["canConnectMaxValue"] | 100.0f;
+                config.dataType = modbusDataTypeFromString(configObj["dataType"] | "uint16");
                 sensor.modbusRegisterConfigs.push_back(config);
             }
         }
@@ -1581,6 +1582,7 @@ public:
                 configObj["sensorType"] = config.sensorType;
                 configObj["canConnectMinValue"] = config.canConnectMinValue;
                 configObj["canConnectMaxValue"] = config.canConnectMaxValue;
+                configObj["dataType"] = modbusDataTypeToString(config.dataType);
             }
         }
 
@@ -1673,6 +1675,7 @@ public:
         config.sensorType = doc["sensorType"] | "";
         config.canConnectMinValue = doc["canConnectMinValue"] | 0.0f;
         config.canConnectMaxValue = doc["canConnectMaxValue"] | 100.0f;
+        config.dataType = modbusDataTypeFromString(doc["dataType"] | "uint16");
 
         return true;
     }
@@ -1691,6 +1694,7 @@ public:
         doc["sensorType"] = config.sensorType;
         doc["canConnectMinValue"] = config.canConnectMinValue;
         doc["canConnectMaxValue"] = config.canConnectMaxValue;
+        doc["dataType"] = modbusDataTypeToString(config.dataType);
 
         std::string output;
         serializeJson(doc, output);
@@ -1721,6 +1725,7 @@ public:
                 config.sensorType = configObj["sensorType"] | "";
                 config.canConnectMinValue = configObj["canConnectMinValue"] | 0.0f;
                 config.canConnectMaxValue = configObj["canConnectMaxValue"] | 100.0f;
+                config.dataType = modbusDataTypeFromString(configObj["dataType"] | "uint16");
                 
                 configs.push_back(config);
             }
@@ -1747,6 +1752,7 @@ public:
             configObj["sensorType"] = config.sensorType;
             configObj["canConnectMinValue"] = config.canConnectMinValue;
             configObj["canConnectMaxValue"] = config.canConnectMaxValue;
+            configObj["dataType"] = modbusDataTypeToString(config.dataType);
         }
 
         std::string output;
@@ -1934,6 +1940,7 @@ public:
                 config.sensorType = configObj["sensorType"] | "";
                 config.canConnectMinValue = configObj["canConnectMinValue"] | 0.0f;
                 config.canConnectMaxValue = configObj["canConnectMaxValue"] | 100.0f;
+                config.dataType = modbusDataTypeFromString(configObj["dataType"] | "uint16");
                 sensorType.modbusRegisterConfig.push_back(config);
             }
         }
@@ -2066,6 +2073,7 @@ public:
                 configObj["sensorType"] = config.sensorType;
                 configObj["canConnectMinValue"] = config.canConnectMinValue;
                 configObj["canConnectMaxValue"] = config.canConnectMaxValue;
+                configObj["dataType"] = modbusDataTypeToString(config.dataType);
                 //Serial.printf("ArduinoJsonConverter: Modbus config %d processed, free heap: %d\n", i, ESP.getFreeHeap());
             }
 

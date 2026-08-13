@@ -475,6 +475,9 @@ private:
             tempSensor.protocol = sensorType.getProtocolString();
             tempSensor.modbusDeviceAddress = sensorType.modbusDeviceAddress;
             tempSensor.baudRate = sensorType.baudRate;
+            tempSensor.modbusPingAddress = sensorType.modbusPingAddress;
+            tempSensor.registerToStoreModbusDeviceAddress = sensorType.registerToStoreModbusDeviceAddress;
+            tempSensor.writeRegistersCommand = sensorType.writeRegistersCommand;
             tempSensor.i2cAddress = sensorType.i2cAddress;
             tempSensor.chipType = sensorType.chipType;
             tempSensor.modbusRegisterConfigs = sensorType.modbusRegisterConfig;
@@ -913,6 +916,9 @@ private:
             tempSensor.sensorTypeUid = sensorType.uid;
             tempSensor.modbusDeviceAddress = sensorType.modbusDeviceAddress;
             tempSensor.baudRate = sensorType.baudRate;
+            tempSensor.modbusPingAddress = sensorType.modbusPingAddress;
+            tempSensor.registerToStoreModbusDeviceAddress = sensorType.registerToStoreModbusDeviceAddress;
+            tempSensor.writeRegistersCommand = sensorType.writeRegistersCommand;
             tempSensor.i2cAddress = sensorType.i2cAddress;
             tempSensor.chipType = sensorType.chipType;
             tempSensor.modbusRegisterConfigs = sensorType.modbusRegisterConfig;

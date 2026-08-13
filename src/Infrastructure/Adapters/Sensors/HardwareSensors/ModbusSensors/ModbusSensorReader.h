@@ -97,22 +97,48 @@ public:
                 float rawValue = 0.0f;
                 if (config.numRegisters == 1)
                 {
-                    rawValue = static_cast<float>((response[3] << 8) | response[4]);
+                    uint16_t rawU16 = static_cast<uint16_t>((response[3] << 8) | response[4]);
+                    if (config.dataType == ModbusDataType::Int16)
+                    {
+                        rawValue = static_cast<float>(static_cast<int16_t>(rawU16));
+                    }
+                    else
+                    {
+                        rawValue = static_cast<float>(rawU16);
+                    }
                 }
                 else if (config.numRegisters == 2)
                 {
-                    // 32-bit big-endian value (two consecutive 16-bit registers)
-                    int32_t raw32 = static_cast<int32_t>(
+                    uint32_t rawU32 =
                         (static_cast<uint32_t>(response[3]) << 24) |
                         (static_cast<uint32_t>(response[4]) << 16) |
                         (static_cast<uint32_t>(response[5]) << 8) |
-                        static_cast<uint32_t>(response[6]));
-                    rawValue = static_cast<float>(raw32);
+                        static_cast<uint32_t>(response[6]);
+
+                    if (config.dataType == ModbusDataType::Float32)
+                    {
+                        float floatValue = 0.0f;
+                        std::memcpy(&floatValue, &rawU32, sizeof(floatValue));
+                        rawValue = floatValue;
+                    }
+                    else
+                    {
+                        // 32-bit big-endian integer value (preserves existing behaviour)
+                        rawValue = static_cast<float>(static_cast<int32_t>(rawU32));
+                    }
                 }
                 else
                 {
                     // Fallback for unsupported lengths - use the first register
-                    rawValue = static_cast<float>((response[3] << 8) | response[4]);
+                    uint16_t rawU16 = static_cast<uint16_t>((response[3] << 8) | response[4]);
+                    if (config.dataType == ModbusDataType::Int16)
+                    {
+                        rawValue = static_cast<float>(static_cast<int16_t>(rawU16));
+                    }
+                    else
+                    {
+                        rawValue = static_cast<float>(rawU16);
+                    }
                 }
 
                 outValue = rawValue * config.multiplier + config.offset;
@@ -352,6 +378,31 @@ private:
         }
     }
 
+    bool confirmAddressWithOptionalPowerCycle(int newAddress, int portIndex,
+                                              const ModbusRegisterConfig& probe)
+    {
+        if (pingAddress((uint8_t)newAddress, probe, portIndex))
+        {
+            return true;
+        }
+
+        // Some sensors (e.g. RK520-02) apply a new Modbus address only after a
+        // power cycle. Reboot the port and try again before giving up.
+        log("ModbusSensorReader: Ping failed after address write, power-cycling port %d to apply new address",
+            portIndex);
+        powerCyclePort(portIndex);
+        return pingAddress((uint8_t)newAddress, probe, portIndex);
+    }
+
+    void powerCyclePort(int portIndex)
+    {
+        powerOffPort(portIndex);
+        _arduino.delay(100);
+        powerOnPort(portIndex);
+        log("ModbusSensorReader: Port %d power-cycled, warmup 10s", portIndex);
+        _arduino.delay(10000);
+    }
+
     bool tryPrimaryWrite(int currentAddress, int newAddress, int portIndex,
                          uint16_t storeRegister, uint8_t writeCommand,
                          const ModbusRegisterConfig& probe)
@@ -373,7 +424,7 @@ private:
 
         log("ModbusSensorReader: Verifying primary write - probing new address %d (ping register 0x%04X) on port %d",
             newAddress, probe.startRegister, portIndex);
-        if (pingAddress((uint8_t)newAddress, probe, portIndex))
+        if (confirmAddressWithOptionalPowerCycle(newAddress, portIndex, probe))
         {
             log("ModbusSensorReader: Primary write CONFIRMED - device responds at new address %d on port %d", newAddress, portIndex);
             return true;
@@ -387,7 +438,7 @@ private:
 
         log("ModbusSensorReader: Verifying primary broadcast write - probing new address %d (ping register 0x%04X) on port %d",
             newAddress, probe.startRegister, portIndex);
-        if (pingAddress((uint8_t)newAddress, probe, portIndex))
+        if (confirmAddressWithOptionalPowerCycle(newAddress, portIndex, probe))
         {
             log("ModbusSensorReader: Primary broadcast write CONFIRMED - device responds at new address %d on port %d", newAddress, portIndex);
             return true;
