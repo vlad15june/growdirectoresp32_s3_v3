@@ -54,6 +54,7 @@
 #include "Infrastructure/Logging/BootEventLog.h"
 #include "Infrastructure/Configuration/ModuleConfig.h"
 #include "Infrastructure/Configuration/Settings.h"
+#include "Infrastructure/Configuration/StepCycleStore.h"
 #include "Infrastructure/Logging/DebugSystem.h"
 #include "Infrastructure/Adapters/Time/NTPTimeAdapter.h"
 #include "Infrastructure/Adapters/Led/LedAdapter.h"
@@ -129,6 +130,17 @@ ArduinoJsonConverter jsonConverter;
 
 EepromAdapter eeprom(1024, 0);
 Settings settings(eeprom, &mqttLogger, &debugSystem);
+
+// STEP rule cycle counters (GDV1-3811) live in the RTC memory of the built-in clock, not in the
+// EEPROM: the counter is written once per completed cycle, and the EEPROM has a finite write
+// endurance (owner, review of PR #20, 2026-08-13). RTC_NOINIT_ATTR means the bytes are not zeroed
+// at boot, so the table survives every restart the module makes by itself - the nightly preventive
+// one, the technical one after an offline period, an OTA.
+// A power cut does clear it: the on-chip RTC memory is not battery backed. When the external clock
+// is wired up, move this table into its battery-backed NVRAM - StepCycleStore does not care where
+// the table is, and nothing in the rules has to change.
+RTC_NOINIT_ATTR StepCycleTable rtcStepCycleTable;
+StepCycleStore stepCycleStore(rtcStepCycleTable, &mqttLogger, &debugSystem);
 
 LedAdapter ledAdapter(&mqttLogger, &debugSystem);
 
@@ -295,7 +307,7 @@ EvaluateRulesUseCase evaluateRulesUseCase(
     &mqttLogger,
     &debugSystem,
     &ruleStateReportingService,
-    &settings);
+    &stepCycleStore);
 
 PreventiveRestartUseCase preventiveRestartUseCase(
     &moduleConfig,
@@ -503,6 +515,8 @@ ModuleSetupService moduleSetupService(
 
 void initDependencies()
 {
+    // After a power cut the RTC memory holds whatever bytes were there (GDV1-3811)
+    stepCycleStore.dropInvalidSlots();
     topicHandlerFactory.setModuleConfig(&moduleConfig);
     topicHandlerFactory.setCommandService(&commandService);
     topicHandlerFactory.setJsonConverter(&jsonConverter);

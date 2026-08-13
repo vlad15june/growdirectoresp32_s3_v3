@@ -12,7 +12,7 @@
 #include "Application/Services/Rules/RuleValidator.h"
 #include "Core/Domain/Data/Models/RuleEvaluationResult.h"
 #include "Core/Domain/Interfaces/Rules/IRuleStateNotifier.h"
-#include "Core/Domain/Interfaces/ISettings.h"
+#include "Core/Domain/Interfaces/IStepCycleStore.h"
 #include "Core/Utils/WindArc.h"
 #include <map>
 #include <set>
@@ -203,7 +203,7 @@ private:
     IArduinoAdapter* _arduinoAdapter;
     INTPTimeAdapter* _ntpTimeAdapter;
     IRuleStateNotifier* _ruleStateNotifier;
-    ISettings* _settings;
+    IStepCycleStore* _stepCycleStore;
     RuleValidator _ruleValidator;
 
     // Rule state tracking
@@ -331,8 +331,10 @@ private:
     // --- Persisted STEP cycle counter (GDV1-3811) ---------------------------------------------
     // currentCycle lives on the device entity, i.e. in RAM, and used to be lost on every reboot:
     // the protective shutdown could then only ever see the cycles run since the last restart.
-    // The counter is written to the settings storage while a tracked step run is in progress and
-    // restored at boot, so the count continues across a restart.
+    // The counter is written to IStepCycleStore while a tracked step run is in progress and
+    // restored at boot, so the count continues across a restart. The store is NOT the EEPROM: the
+    // value changes once per completed cycle and the EEPROM has a finite write endurance (owner,
+    // review of PR #20, 2026-08-13) - it lives in the memory of the clock, see StepCycleStore.
 
     // Only a step rule whose protective shutdown is armed with a cycle limit is worth a write.
     static bool isStepCycleTracked(const Rule& rule) {
@@ -346,12 +348,12 @@ private:
     // match; anything else is a leftover of an edited or replaced rule and gets dropped.
     bool loadStepCycle(const Rule& rule, int& storedCycle) {
         storedCycle = 0;
-        if (!_settings || !isStepCycleTracked(rule)) {
+        if (!_stepCycleStore || !isStepCycleTracked(rule)) {
             return false;
         }
 
         StepCycleCounter stored;
-        if (!_settings->getStepCycleCounter(rule.deviceUid.c_str(), stored)) {
+        if (!_stepCycleStore->getStepCycleCounter(rule.deviceUid.c_str(), stored)) {
             return false;
         }
 
@@ -359,7 +361,7 @@ private:
             log("EVALUATE_RULES: STEP_CYCLE_DROPPED uid=%s deviceUid=%s storedRule=%s storedCap=%d cap=%d",
                 rule.uid.c_str(), rule.deviceUid.c_str(), stored.ruleUid.c_str(),
                 stored.cyclesToSetPoint, rule.cyclesToSetPoint);
-            _settings->clearStepCycleCounter(rule.deviceUid.c_str());
+            _stepCycleStore->clearStepCycleCounter(rule.deviceUid.c_str());
             return false;
         }
 
@@ -368,12 +370,12 @@ private:
     }
 
     void persistStepCycle(const Rule& rule, int currentCycle) {
-        if (!_settings || !isStepCycleTracked(rule) || currentCycle <= 0) {
+        if (!_stepCycleStore || !isStepCycleTracked(rule) || currentCycle <= 0) {
             return;
         }
 
         StepCycleCounter stored;
-        if (_settings->getStepCycleCounter(rule.deviceUid.c_str(), stored) &&
+        if (_stepCycleStore->getStepCycleCounter(rule.deviceUid.c_str(), stored) &&
             stored.ruleUid == rule.uid &&
             stored.cyclesToSetPoint == rule.cyclesToSetPoint &&
             stored.currentCycle == currentCycle) {
@@ -385,7 +387,7 @@ private:
         counter.ruleUid = rule.uid;
         counter.cyclesToSetPoint = rule.cyclesToSetPoint;
         counter.currentCycle = currentCycle;
-        _settings->setStepCycleCounter(counter);
+        _stepCycleStore->setStepCycleCounter(counter);
 
         log("EVALUATE_RULES: STEP_CYCLE_STORED uid=%s deviceUid=%s cycle=%d/%d",
             rule.uid.c_str(), rule.deviceUid.c_str(), currentCycle, rule.cyclesToSetPoint);
@@ -393,24 +395,24 @@ private:
 
     // Called whenever the run this counter belongs to is over: the next run starts from scratch.
     void clearStepCycle(const Rule& rule) {
-        if (!_settings || rule.deviceUid.empty()) {
+        if (!_stepCycleStore || rule.deviceUid.empty()) {
             return;
         }
 
         StepCycleCounter stored;
-        if (!_settings->getStepCycleCounter(rule.deviceUid.c_str(), stored) ||
+        if (!_stepCycleStore->getStepCycleCounter(rule.deviceUid.c_str(), stored) ||
             stored.ruleUid != rule.uid) {
             return;
         }
 
-        _settings->clearStepCycleCounter(rule.deviceUid.c_str());
+        _stepCycleStore->clearStepCycleCounter(rule.deviceUid.c_str());
         log("EVALUATE_RULES: STEP_CYCLE_CLEARED uid=%s deviceUid=%s", rule.uid.c_str(), rule.deviceUid.c_str());
     }
 
     // Drop the record of a rule that is out of play (switched off, out of its date window) and
     // mark the rule as handled, so it is neither re-read every tick nor restored if it comes back.
     void dropStepCycleOnce(const Rule& rule) {
-        if (!_settings || !isStepCycleTracked(rule) || _stepCycleDropped.count(rule.uid)) {
+        if (!_stepCycleStore || !isStepCycleTracked(rule) || _stepCycleDropped.count(rule.uid)) {
             return;
         }
 
@@ -695,7 +697,7 @@ public:
         ILogger* logger = nullptr,
         IDebugSystem* debugSystem = nullptr,
         IRuleStateNotifier* ruleStateNotifier = nullptr,
-        ISettings* settings = nullptr
+        IStepCycleStore* stepCycleStore = nullptr
     ) : _deviceModel(deviceModel),
         _ruleRepository(ruleRepository),
         _sensorValueModel(sensorValueModel),
@@ -704,7 +706,7 @@ public:
         _arduinoAdapter(arduinoAdapter),
         _ntpTimeAdapter(ntpTimeAdapter),
         _ruleStateNotifier(ruleStateNotifier),
-        _settings(settings),
+        _stepCycleStore(stepCycleStore),
         _ruleValidator(logger, debugSystem),
         _lastEvaluationTime(0) {
         

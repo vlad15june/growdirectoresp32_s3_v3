@@ -14,15 +14,7 @@ private:
     std::map<std::string, uint8_t> _byteValues;
     std::map<std::string, float> _floatValues;
     std::map<std::string, std::string> _stringValues;
-    std::map<std::string, StepCycleCounter> _stepCycleCounters;
     struct tm _localTime;
-
-public:
-    // Counters of the persisted step cycle traffic, so tests can assert how cheap the writes are
-    int stepCycleWrites = 0;
-    int stepCycleClears = 0;
-
-private:
 
     // Initialize with default values
     void initDefaults()
@@ -351,56 +343,10 @@ public:
         _byteValues["lastPreventiveRestartDay"] = day;
     }
 
-    // STEP rule cycle counters (GDV1-3811). The map survives between two use case instances, which
-    // is how a reboot is simulated in tests: the entities are rebuilt, the storage is not.
-    bool getStepCycleCounter(const char *deviceUid, StepCycleCounter &counter) override
-    {
-        if (deviceUid == nullptr)
-        {
-            return false;
-        }
-
-        auto it = _stepCycleCounters.find(deviceUid);
-        if (it == _stepCycleCounters.end())
-        {
-            return false;
-        }
-
-        counter = it->second;
-        return true;
-    }
-
-    void setStepCycleCounter(const StepCycleCounter &counter) override
-    {
-        _stepCycleCounters[counter.deviceUid] = counter;
-        stepCycleWrites++;
-    }
-
-    void clearStepCycleCounter(const char *deviceUid) override
-    {
-        if (deviceUid == nullptr)
-        {
-            return;
-        }
-
-        if (_stepCycleCounters.erase(deviceUid) > 0)
-        {
-            stepCycleClears++;
-        }
-    }
-
-    bool hasStepCycleCounter(const std::string &deviceUid) const
-    {
-        return _stepCycleCounters.find(deviceUid) != _stepCycleCounters.end();
-    }
-
     // Reset method to reset all values to defaults
     void reset()
     {
         initDefaults();
-        _stepCycleCounters.clear();
-        stepCycleWrites = 0;
-        stepCycleClears = 0;
     }
 
     // Check if a setting was modified from default
