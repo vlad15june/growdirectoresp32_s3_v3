@@ -10,7 +10,7 @@
 #include <string>
 #include <vector>
 
-#include "Application/Services/Sensors/SensorService.cpp"
+#include "Application/Services/Sensors/SensorService.h"
 #include "Core/Domain/UseCases/Sensors/SensorPlausibilityUseCase.h"
 #include "Core/Domain/Data/Entities/Sensor/Sensor.h"
 #include "Core/Domain/Data/Entities/Sensor/SensorType.h"
@@ -23,6 +23,7 @@ namespace {
 
 const std::string SENSOR_UID = "9C:13:9E:99:47:38.00";
 const std::string SENSOR_TYPE_UID = "4719a986-a300-48d5-bd1f-e34a1329798a";
+const std::string SOIL_SENSOR_TYPE_UID = "144f6c6d-d210-44bf-a9c3-23c5f26472fe";
 
 // Air temperature as the server seeds it: recommended range 15..35, physical range -40..75
 const float AIR_TEMP_LIMIT_MIN = -40.0f;
@@ -246,6 +247,58 @@ SensorEntity makeTwoChannelSensor() {
     return sensor;
 }
 
+// MP-508C as the server seeds it (main.cpp): soil moisture + soil temperature. A multi-channel
+// sensor WITHOUT an air temperature / humidity pair, so it never grows a computed channel.
+SensorType makeSoilSensorType() {
+    SensorType sensorType;
+    sensorType.uid = SOIL_SENSOR_TYPE_UID;
+    sensorType.name = "mp-508c";
+    sensorType.protocol = SensorProtocol::MODBUS_PROTOCOL;
+
+    SubSensorType soilMoisture;
+    soilMoisture.name = "soil_moisture";
+    soilMoisture.limitMinValue = 0.0f;
+    soilMoisture.limitMaxValue = 100.0f;
+    sensorType.sensorTypes.push_back(soilMoisture);
+
+    SubSensorType soilTemp;
+    soilTemp.name = "soil_temp";
+    soilTemp.limitMinValue = -40.0f;
+    soilTemp.limitMaxValue = 80.0f;
+    sensorType.sensorTypes.push_back(soilTemp);
+
+    return sensorType;
+}
+
+SensorEntity makeSoilSensor() {
+    SensorEntity sensor = makeSingleChannelSensor();
+    sensor.sensorType = "";
+    sensor.model = "mp-508c";
+    sensor.sensorTypeUid = SOIL_SENSOR_TYPE_UID;
+
+    ModbusRegisterConfig soilMoisture;
+    soilMoisture.channel = 1;
+    soilMoisture.channelName = "soil_moisture";
+    soilMoisture.sensorType = "soil_moisture";
+    sensor.modbusRegisterConfigs.push_back(soilMoisture);
+
+    ModbusRegisterConfig soilTemp;
+    soilTemp.channel = 2;
+    soilTemp.channelName = "soil_temp";
+    soilTemp.sensorType = "soil_temp";
+    sensor.modbusRegisterConfigs.push_back(soilTemp);
+
+    return sensor;
+}
+
+// The gate decides per channel: the implausible channel is dropped, the healthy one is stored and
+// the read still counts as successful.
+//
+// Stated by channel uid and not by "how many channels were stored": an air temperature + humidity
+// sensor additionally publishes a COMPUTED VPD channel (GDV1-3782), and the accepted order
+// (2026-08-13) is "VPD is computed from the raw readings and then goes through this very gate".
+// The number of stored channels therefore grows with that feature, while what this test states -
+// which register channel survives the gate - does not.
 void test_multi_channel_drops_only_the_implausible_channel(void) {
     Fixture f;
     f.sensorTypeRepository.addSensorType(makeTwoChannelSensorType());
@@ -254,18 +307,22 @@ void test_multi_channel_drops_only_the_implausible_channel(void) {
 
     TEST_ASSERT_TRUE(f.service.readSensor(makeTwoChannelSensor()));
 
-    TEST_ASSERT_EQUAL_INT(1, f.sensorValueModel.setChannelValueCallCount);
     TEST_ASSERT_EQUAL_FLOAT(0.0f, f.sensorValueModel.getChannelValue(SENSOR_UID, SENSOR_UID + ".01"));
     TEST_ASSERT_EQUAL_FLOAT(55.0f, f.sensorValueModel.getChannelValue(SENSOR_UID, SENSOR_UID + ".02"));
+    TEST_ASSERT_EQUAL_INT(1, f.sensorValueModel.setLastReadTimeCallCount);
+    TEST_ASSERT_FALSE(f.sensorRepository.lastStatusIsError);
 }
 
+// Nothing survived the gate -> the read counts as unsuccessful. Deliberately on the soil sensor:
+// it has no air pair, so no computed channel can survive on its behalf and the case keeps talking
+// about the gate alone, before and after GDV1-3782.
 void test_multi_channel_all_channels_implausible_is_an_error(void) {
     Fixture f;
-    f.sensorTypeRepository.addSensorType(makeTwoChannelSensorType());
-    f.sensorReader.multiValues[SENSOR_UID + ".01"] = 3801.0f;
-    f.sensorReader.multiValues[SENSOR_UID + ".02"] = 900.0f;
+    f.sensorTypeRepository.addSensorType(makeSoilSensorType());
+    f.sensorReader.multiValues[SENSOR_UID + ".01"] = 900.0f;   // soil_moisture, above 100
+    f.sensorReader.multiValues[SENSOR_UID + ".02"] = 3801.0f;  // soil_temp, above 80
 
-    TEST_ASSERT_FALSE(f.service.readSensor(makeTwoChannelSensor()));
+    TEST_ASSERT_FALSE(f.service.readSensor(makeSoilSensor()));
 
     TEST_ASSERT_EQUAL_INT(0, f.sensorValueModel.setChannelValueCallCount);
     TEST_ASSERT_EQUAL_INT(0, f.sensorValueModel.setLastReadTimeCallCount);
