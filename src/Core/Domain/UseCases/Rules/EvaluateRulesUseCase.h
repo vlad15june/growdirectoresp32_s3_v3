@@ -217,6 +217,8 @@ private:
     std::map<std::string, std::vector<bool>> _conditionHoldStates;
     // Rules whose persisted cycle counter has already been looked at since boot (GDV1-3811)
     std::set<std::string> _stepCycleRestored;
+    // Rules whose persisted cycle counter has already been dropped for being out of play
+    std::set<std::string> _stepCycleDropped;
 
     static const int DELETING_PURGE_MAX_RETRIES = 3;
     static const unsigned long SENSOR_FRESHNESS_WINDOW_MS = 300000;
@@ -408,10 +410,11 @@ private:
     // Drop the record of a rule that is out of play (switched off, out of its date window) and
     // mark the rule as handled, so it is neither re-read every tick nor restored if it comes back.
     void dropStepCycleOnce(const Rule& rule) {
-        if (!_settings || !isStepCycleTracked(rule) || _stepCycleRestored.count(rule.uid)) {
+        if (!_settings || !isStepCycleTracked(rule) || _stepCycleDropped.count(rule.uid)) {
             return;
         }
 
+        _stepCycleDropped.insert(rule.uid);
         _stepCycleRestored.insert(rule.uid);
         clearStepCycle(rule);
     }
@@ -783,6 +786,7 @@ public:
         for (const auto& rule : activeRules) {
             activeUids.insert(rule.uid);
             if (rule.state == RuleState::SYNCHRONIZED) {
+                _stepCycleDropped.erase(rule.uid);  // active again: a later switch-off drops anew
                 restoreStepCycle(rule);
                 FreshnessVerdict freshness = ruleSensorFreshness(rule, now);
                 if (freshness == FreshnessVerdict::STALE) {

@@ -446,6 +446,43 @@ static void test_step_cycle_cleared_when_rule_switched_off(void) {
     TEST_ASSERT_EQUAL_INT(0, device.currentCycle);
 }
 
+// The same when the rule was running in this uptime and is switched off mid-run: the record has
+// already been read by the boot-time restore, and it still has to go.
+static void test_step_cycle_cleared_when_running_rule_switched_off(void) {
+    MockSettings settings;
+    ModeAwareRuleRepository repo;
+    repo.rules.push_back(makeStepRule(true, 5));
+
+    MockSensorValueModel sensors;
+    armFiringSensor(sensors, 400000);
+    MockArduinoAdapter arduino;
+    MockNTPTimeAdapter ntp;
+    ntp.setEpochTime(1700000000);
+    MockRuleStateNotifier notifier;
+
+    DeviceDigitalOut device{};
+    initDevice(device);
+    SingleDeviceModel deviceModel;
+    deviceModel.device = &device;
+
+    EvaluateRulesUseCase uc(&deviceModel, &repo, &arduino, &ntp, &sensors,
+                            nullptr, nullptr, &notifier, &settings);
+
+    arduino.setMillis(400000);
+    uc.loop();
+    device.state = DEVICE_STATE_STEP_WAITING;
+    device.currentCycle = 3;
+    arduino.setMillis(401000);
+    uc.loop();
+    TEST_ASSERT_TRUE(settings.hasStepCycleCounter("dev-1"));
+
+    repo.rules[0].mode = RuleMode::OFF;   // the user switches the rule off mid-run
+    arduino.setMillis(402000);
+    uc.loop();
+
+    TEST_ASSERT_FALSE(settings.hasStepCycleCounter("dev-1"));
+}
+
 extern "C" void run_rule_step_cycle_persistence_tests(void) {
     RUN_TEST(test_step_cycle_restored_after_reboot);
     RUN_TEST(test_step_protective_shutdown_fires_across_reboot);
@@ -455,4 +492,5 @@ extern "C" void run_rule_step_cycle_persistence_tests(void) {
     RUN_TEST(test_step_cycle_written_once_per_cycle);
     RUN_TEST(test_step_cycle_cleared_when_setpoint_reached);
     RUN_TEST(test_step_cycle_cleared_when_rule_switched_off);
+    RUN_TEST(test_step_cycle_cleared_when_running_rule_switched_off);
 }
