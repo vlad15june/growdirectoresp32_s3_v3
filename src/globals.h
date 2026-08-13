@@ -37,6 +37,7 @@
 #include "Core/Domain/UseCases/DeviceControl/DeviceCommandExecutionUseCase.h"
 #include "Core/Domain/UseCases/ModuleCommand/ModuleCommandExecutionUseCase.h"
 #include "Core/Domain/UseCases/Sensors/SensorCommandUseCase.h"
+#include "Core/Domain/UseCases/Sensors/SensorPlausibilityUseCase.h"
 #include "Core/Domain/UseCases/Rules/EvaluateRulesUseCase.h"
 #include "Core/Domain/UseCases/Rules/SyncRulesUseCase.h"
 #include "Core/Domain/UseCases/Diagnostics/PreventiveRestartUseCase.h"
@@ -432,6 +433,10 @@ SensorStructureUseCase sensorStructureUseCase(
     &mqttLogger,
     &debugSystem);
 
+// Plausibility gate of the reading path (GDV1-3810): resolves the physical range of a channel from
+// the sensor type catalog. Created here and handed to SensorService as ISensorPlausibilityUseCase.
+SensorPlausibilityUseCase sensorPlausibilityUseCase(&sensorTypeRepository);
+
 SensorService sensorService(
     &moduleConfig,
     &moduleStructure,
@@ -446,6 +451,7 @@ SensorService sensorService(
     &udpManager,
     &jsonConverter,
     &mqttManager,
+    &sensorPlausibilityUseCase,
     &virtualSensorChannelsUseCase);
 
 RemoteSensorReceiver remoteSensorReceiver(
