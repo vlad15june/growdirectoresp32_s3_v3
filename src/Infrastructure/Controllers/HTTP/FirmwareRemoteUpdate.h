@@ -18,11 +18,12 @@
 #define FIRMWARE_UPDATE_STATE_ERROR 4
 #define FIRMWARE_UPDATE_STATE_HTTP_ERROR 5
 
-// HTTP timeout of the OTA download, ms. Same budget every other HTTP call of the firmware
-// uses (RestApiService.h): without it HTTPClient keeps its own default of 5 s
-// (HTTPCLIENT_DEFAULT_TCP_TIMEOUT), which is less than the time a loaded link needs to
-// deliver the first bytes of a 1.5 MB binary - the download then dies with
-// HTTPC_ERROR_READ_TIMEOUT (-11) although the server answered 200.
+// HTTP budget of the OTA download, ms - both for opening the connection and for waiting for
+// data. Same 30 s every other HTTP call of the firmware uses (RestApiService.h); left alone,
+// HTTPClient keeps its own default of 5 s on both (HTTPCLIENT_DEFAULT_TCP_TIMEOUT), which is
+// less than a loaded link needs either to finish the TLS handshake (the session then dies
+// with -1) or to deliver the first bytes of a 1.5 MB binary (-11), in both cases with the
+// server answering normally.
 #define FIRMWARE_UPDATE_HTTP_TIMEOUT_MS 30000
 
 class FirmwareRemoteUpdate : public IFirmwareRemoteUpdate {
@@ -129,10 +130,15 @@ public:
         }
         _httpClient = createNewHttpClient();
 
-        // Must be set before begin(): the client keeps the value until it is told otherwise,
-        // and a fresh client starts from the library default of 5 s.
+        // Must be set before begin(): the client keeps the values until it is told otherwise,
+        // and a fresh client starts from the library default of 5 s on both budgets. Both are
+        // needed - opening the connection and waiting for data fail separately, with -1 and
+        // -11 respectively, and this module has been seen to lose sessions to each of them.
+        _httpClient->setConnectTimeout(FIRMWARE_UPDATE_HTTP_TIMEOUT_MS);
         _httpClient->setTimeout(FIRMWARE_UPDATE_HTTP_TIMEOUT_MS);
-        otaWrite("HTTP timeout=%u ms", (unsigned)FIRMWARE_UPDATE_HTTP_TIMEOUT_MS);
+        otaWrite("HTTP timeout=%u ms connect=%u ms",
+                 (unsigned)FIRMWARE_UPDATE_HTTP_TIMEOUT_MS,
+                 (unsigned)FIRMWARE_UPDATE_HTTP_TIMEOUT_MS);
 
         bool isBegin = _httpClient->begin(url);
         log("UPDATE_FIRMWARE_DEBUG: isBegin=%s", isBegin ? "true" : "false");

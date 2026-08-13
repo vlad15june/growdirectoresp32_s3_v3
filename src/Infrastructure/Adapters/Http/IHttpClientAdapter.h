@@ -30,10 +30,21 @@ public:
     
     /**
      * @brief Set request timeout
-     * 
+     *
      * @param timeout Timeout in milliseconds
      */
     virtual void setTimeout(uint32_t timeout) = 0;
+
+    /**
+     * @brief Set the budget for opening the connection (TCP connect plus TLS handshake)
+     *
+     * Separate from setTimeout(), which only covers waiting for data on an already open
+     * connection: a slow link fails the two stages with two different codes
+     * (-1 on connect, -11 on read), so both budgets have to be given.
+     *
+     * @param timeout Timeout in milliseconds
+     */
+    virtual void setConnectTimeout(uint32_t timeout) = 0;
     
     /**
      * @brief Make a GET request

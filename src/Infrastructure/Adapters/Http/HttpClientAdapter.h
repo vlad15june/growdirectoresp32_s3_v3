@@ -78,6 +78,15 @@ public:
     void setTimeout(uint32_t timeout) override {
         _client.setTimeout(timeout);
     }
+
+    /**
+     * @brief Set the budget for opening the connection (TCP connect plus TLS handshake)
+     *
+     * @param timeout Timeout in milliseconds
+     */
+    void setConnectTimeout(uint32_t timeout) override {
+        _client.setConnectTimeout((int32_t)timeout);
+    }
     
     /**
      * @brief Make a GET request
