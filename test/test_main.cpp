@@ -49,6 +49,7 @@ extern "C" void run_ota_update_log_tests(void);
 extern "C" int run_wifi_self_reconnect_tests(void);
 extern "C" int run_check_firmware_update_on_startup_tests(void);
 extern "C" int run_sensor_recovery_tests(void);
+extern "C" int run_sensor_plausibility_limits_tests(void);
 extern "C" void run_module_to_module_reboot_tests(void);
 extern "C" void run_rule_dnf_combine_tests(void);
 extern "C" void run_rule_condition_hold_tests(void);
@@ -213,6 +214,9 @@ int main(void) {
 
     // Run tests for ModBus sensor power-cycle recovery (GDV1-3715)
     run_sensor_recovery_tests();
+
+    // Run tests for the sensor plausibility limits gate (GDV1-3810)
+    run_sensor_plausibility_limits_tests();
 
     // Run tests for module-to-module reboot over UDP (GDV1-3707)
     run_module_to_module_reboot_tests();
