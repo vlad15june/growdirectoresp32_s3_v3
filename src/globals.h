@@ -37,10 +37,15 @@
 #include "Core/Domain/UseCases/DeviceControl/DeviceCommandExecutionUseCase.h"
 #include "Core/Domain/UseCases/ModuleCommand/ModuleCommandExecutionUseCase.h"
 #include "Core/Domain/UseCases/Sensors/SensorCommandUseCase.h"
+#include "Core/Domain/UseCases/Sensors/SensorPlausibilityUseCase.h"
 #include "Core/Domain/UseCases/Rules/EvaluateRulesUseCase.h"
 #include "Core/Domain/UseCases/Rules/SyncRulesUseCase.h"
 #include "Core/Domain/UseCases/Diagnostics/PreventiveRestartUseCase.h"
 #include "Core/Domain/UseCases/SensorTypes/SyncSensorTypesUseCase.h"
+#include "Core/Domain/UseCases/ModuleStructure/RepublishModuleStructureUseCase.h"
+#include "Core/Domain/UseCases/ModuleStructure/SensorStructureUseCase.h"
+#include "Core/Domain/UseCases/Sensors/VirtualSensorChannelsUseCase.h"
+#include "Core/Domain/UseCases/Sensors/VpdChannelUseCase.h"
 
 #include "Core/Domain/Data/Models/ModuleStructure.h"
 #include "Core/Domain/Data/Models/IDeviceModel.h"
@@ -434,6 +439,21 @@ BoardTest boardTest(
     &arduinoAdapter,
     &wifiAdapter);
 
+// Computed (virtual) sensor channels (GDV1-3782). VPD is the first kind: the arithmetic lives in
+// VpdChannelUseCase, the list of kinds in VirtualSensorChannelsUseCase, and everyone who publishes
+// channels - the reading path, the update packet, the module structure, the catalog sync - gets
+// them from here as interfaces. A new computed channel is a new use case plus a line in this block.
+VpdChannelUseCase vpdChannelUseCase;
+VirtualSensorChannelsUseCase virtualSensorChannelsUseCase(&vpdChannelUseCase);
+SensorStructureUseCase sensorStructureUseCase(
+    &virtualSensorChannelsUseCase,
+    &mqttLogger,
+    &debugSystem);
+
+// Plausibility gate of the reading path (GDV1-3810): resolves the physical range of a channel from
+// the sensor type catalog. Created here and handed to SensorService as ISensorPlausibilityUseCase.
+SensorPlausibilityUseCase sensorPlausibilityUseCase(&sensorTypeRepository);
+
 SensorService sensorService(
     &moduleConfig,
     &moduleStructure,
@@ -447,7 +467,9 @@ SensorService sensorService(
     &debugSystem,
     &udpManager,
     &jsonConverter,
-    &mqttManager);
+    &mqttManager,
+    &sensorPlausibilityUseCase,
+    &virtualSensorChannelsUseCase);
 
 RemoteSensorReceiver remoteSensorReceiver(
     &udpManager,
@@ -517,6 +539,14 @@ ModuleSetupService moduleSetupService(
     &udpInboundDispatcher,
     &remoteModuleCommandReceiver);
 
+RepublishModuleStructureUseCase republishModuleStructureUseCase(
+    &moduleStructure,
+    &sensorRepository,
+    &hybridApiService,
+    &sensorStructureUseCase,
+    &mqttLogger,
+    &debugSystem);
+
 void initDependencies()
 {
     // After a power cut the RTC memory holds whatever bytes were there (GDV1-3811)
@@ -528,6 +558,9 @@ void initDependencies()
     syncRulesUseCase.setRemoteSensorReceiver(&remoteSensorReceiver);
     syncRulesUseCase.setSettings(&settings);
     commandService.setRemoteSensorReceiver(&remoteSensorReceiver);
+    moduleSetupService.setSensorStructureUseCase(&sensorStructureUseCase);
+    syncSensorTypesUseCase.setVirtualSensorChannelsUseCase(&virtualSensorChannelsUseCase);
+    syncSensorTypesUseCase.setRepublishModuleStructureUseCase(&republishModuleStructureUseCase);
     loopServiceFactory.setOtaUpdateLog(&otaUpdateLog);
     loopServiceFactory.setBootEventLog(&bootEventLog);
     loopServiceFactory.setRestartEventLog(&restartEventLog);

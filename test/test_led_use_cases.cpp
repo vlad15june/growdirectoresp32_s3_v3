@@ -1,6 +1,5 @@
 #include <unity.h>
 #include "Core/Domain/UseCases/Led/LedUseCases.h"
-#include "Core/Domain/UseCases/Led/LedUseCases.cpp"
 #include "Core/Domain/Enums/ModuleModeEnum.h"
 #include "Mock/Infrastructure/Logging/MockLogger.h"
 #include "Mock/Infrastructure/Logging/MockDebugSystem.h"

@@ -7,7 +7,7 @@
 #include "Application/DTOs/UpdateDto.h"
 #include "Application/Services/CommandService.h"
 #include "Core/Domain/UseCases/DeviceControl/DeviceCommandExecutionUseCase.h"
-#include "Application/Services/Devices/DeviceService.cpp"
+#include "Application/Services/Devices/DeviceService.h"
 #include "Core/Domain/Data/Models/DeviceModel.h"
 #include "Core/Domain/Data/Entities/Device.h"
 #include "Core/Domain/Data/Models/ModuleStructure.h"
