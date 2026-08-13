@@ -5,7 +5,8 @@
 #include "Core/Domain/Data/Models/ModuleStructure.h"
 #include "Core/Domain/Interfaces/ILogger.h"
 #include "Core/Domain/Interfaces/IDebugSystem.h"
-#include "Core/Domain/UseCases/Sensors/VirtualSensorChannelsUseCase.h"
+#include "Core/Domain/Interfaces/UseCases/ISensorStructureUseCase.h"
+#include "Core/Domain/Interfaces/UseCases/IVirtualSensorChannelsUseCase.h"
 #include <cstdarg>
 #include <cstdio>
 #include <string>
@@ -18,13 +19,18 @@
  * catalog moved a channel (RepublishModuleStructureUseCase) - and ModuleSetupService is large
  * enough without owning both. The class does exactly one thing: it upserts records into a Node.
  *
+ * Everything it needs arrives through the constructor, including the computed channels
+ * (IVirtualSensorChannelsUseCase); there are no static calls, so a test can give it a logger and
+ * its own set of computed channels.
+ *
  * Behaviour, log text and the SETUP_DEBUG feature are unchanged from the original methods.
  */
-class SensorStructureUseCase
+class SensorStructureUseCase : public ISensorStructureUseCase
 {
 private:
     ILogger *logger;
     IDebugSystem *debugSystem;
+    IVirtualSensorChannelsUseCase *virtualChannels;
 
     void log(const char *format, ...)
     {
@@ -65,12 +71,14 @@ private:
     }
 
 public:
-    SensorStructureUseCase(ILogger *logger = nullptr, IDebugSystem *debugSystem = nullptr)
-        : logger(logger), debugSystem(debugSystem)
+    SensorStructureUseCase(IVirtualSensorChannelsUseCase *virtualChannels = nullptr,
+                           ILogger *logger = nullptr,
+                           IDebugSystem *debugSystem = nullptr)
+        : logger(logger), debugSystem(debugSystem), virtualChannels(virtualChannels)
     {
     }
 
-    void addMultiChannelModbusSensor(Node &node, const SensorEntity &sensorEntity)
+    void addMultiChannelModbusSensor(Node &node, const SensorEntity &sensorEntity) override
     {
         for (const auto &config : sensorEntity.modbusRegisterConfigs)
         {
@@ -97,7 +105,7 @@ public:
         addVirtualChannelSensors(node, sensorEntity);
     }
 
-    void addMultiChannelI2CSensor(Node &node, const SensorEntity &sensorEntity)
+    void addMultiChannelI2CSensor(Node &node, const SensorEntity &sensorEntity) override
     {
         for (const auto &config : sensorEntity.i2cRegisterConfigs)
         {
@@ -121,7 +129,7 @@ public:
         }
     }
 
-    void addSingleChannelSensor(Node &node, const SensorEntity &sensorEntity)
+    void addSingleChannelSensor(Node &node, const SensorEntity &sensorEntity) override
     {
         Sensor sensor;
         sensor.uid = sensorEntity.uid + ".01";
@@ -142,7 +150,7 @@ public:
         }
     }
 
-    void addSensor(Node &node, const SensorEntity &sensorEntity)
+    void addSensor(Node &node, const SensorEntity &sensorEntity) override
     {
         if (sensorEntity.isMultiChannel())
         {
@@ -170,11 +178,16 @@ public:
      *
      * Without this the channel would silently be missing from the structure, and the backend
      * drops readings of a uid it does not know (INV-1, INV-5, INV-6, D-15). What a computed
-     * channel is and which ones exist is the business of VirtualSensorChannelsUseCase.
+     * channel is and which ones exist is IVirtualSensorChannelsUseCase.
      */
-    void addVirtualChannelSensors(Node &node, const SensorEntity &sensorEntity)
+    void addVirtualChannelSensors(Node &node, const SensorEntity &sensorEntity) override
     {
-        for (const auto &channel : VirtualSensorChannelsUseCase::channels(sensorEntity))
+        if (!virtualChannels)
+        {
+            return;
+        }
+
+        for (const auto &channel : virtualChannels->channels(sensorEntity))
         {
             Sensor sensor;
             sensor.uid = channel.uid;
@@ -190,10 +203,10 @@ public:
         }
 
         std::string overflowType;
-        if (VirtualSensorChannelsUseCase::hasOverflow(sensorEntity, overflowType))
+        if (virtualChannels->hasOverflow(sensorEntity, overflowType))
         {
             log("SETUP: VIRTUAL_CHANNEL_SKIP uid=%s type=%s reason=overflow max=%d",
-                sensorEntity.uid.c_str(), overflowType.c_str(), VirtualSensorChannelsUseCase::maxChannel());
+                sensorEntity.uid.c_str(), overflowType.c_str(), virtualChannels->maxChannel());
         }
     }
 };

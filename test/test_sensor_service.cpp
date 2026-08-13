@@ -1,5 +1,6 @@
 #include <unity.h>
 #include "Application/Services/Sensors/SensorService.h"
+#include "Core/Domain/UseCases/Sensors/VirtualSensorChannelsUseCase.h"
 #include "Core/Domain/UseCases/Sensors/VpdChannelUseCase.h"
 #include "Mock/Infrastructure/Configuration/MockModuleConfig.h"
 #include "Mock/Infrastructure/Configuration/MockSettings.h"
@@ -28,6 +29,9 @@ static MockLogger g_logger;
 static MockDebugSystem g_debugSystem;
 static MockMqttManager g_mqttManager;
 static ModuleStructure g_moduleStructure;
+// The computed channels arrive as a dependency, exactly as in globals.h (PR #17 review)
+static VpdChannelUseCase g_vpdChannelUseCase;
+static VirtualSensorChannelsUseCase g_virtualChannels(&g_vpdChannelUseCase);
 static SensorService *g_sensorService;
 
 static const char *SENSOR_UID = "84:F7:03:FE:88:2C.00";
@@ -97,7 +101,8 @@ static void sensor_service_setup(void)
         &g_debugSystem,
         nullptr, // udpManager - UDP path is out of scope here
         nullptr, // jsonConverter
-        &g_mqttManager);
+        &g_mqttManager,
+        &g_virtualChannels);
 }
 
 static void sensor_service_teardown(void)

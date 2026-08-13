@@ -6,7 +6,8 @@
 #include "Core/Domain/Interfaces/IDebugSystem.h"
 #include "Core/Domain/Interfaces/ILogger.h"
 #include "Core/Domain/Interfaces/Repositories/ISensorRepository.h"
-#include "Core/Domain/UseCases/ModuleStructure/SensorStructureUseCase.h"
+#include "Core/Domain/Interfaces/UseCases/IRepublishModuleStructureUseCase.h"
+#include "Core/Domain/Interfaces/UseCases/ISensorStructureUseCase.h"
 #include <cstdarg>
 #include <cstdio>
 
@@ -19,9 +20,11 @@
  * does not know and are dropped silently (GDV1-3782, INV-10).
  *
  * A separate use case and not a method of ModuleSetupService (review of PR #17, 2026-08-13):
- * updating the structure is its own job, and it needs nothing that setup owns.
+ * updating the structure is its own job, and it needs nothing that setup owns. The record builder
+ * arrives as ISensorStructureUseCase - the same instance the setup flow uses, created once in the
+ * composition root.
  */
-class RepublishModuleStructureUseCase
+class RepublishModuleStructureUseCase : public IRepublishModuleStructureUseCase
 {
 private:
     ILogger *logger;
@@ -29,7 +32,7 @@ private:
     ModuleStructure *moduleStructure;
     ISensorRepository *sensorRepository;
     IHybridAPIService *hybridApiService;
-    SensorStructureUseCase sensorStructure;
+    ISensorStructureUseCase *sensorStructure;
 
     void log(const char *format, ...)
     {
@@ -57,6 +60,7 @@ public:
     RepublishModuleStructureUseCase(ModuleStructure *moduleStructure = nullptr,
                                     ISensorRepository *sensorRepository = nullptr,
                                     IHybridAPIService *hybridApiService = nullptr,
+                                    ISensorStructureUseCase *sensorStructure = nullptr,
                                     ILogger *logger = nullptr,
                                     IDebugSystem *debugSystem = nullptr)
         : logger(logger),
@@ -64,7 +68,7 @@ public:
           moduleStructure(moduleStructure),
           sensorRepository(sensorRepository),
           hybridApiService(hybridApiService),
-          sensorStructure(logger, debugSystem)
+          sensorStructure(sensorStructure)
     {
     }
 
@@ -73,9 +77,10 @@ public:
      * @param reason short tag that ends up in the log, e.g. "vpd_channel_shift"
      * @return whether the structure was accepted for sending
      */
-    bool execute(const char *reason)
+    bool execute(const char *reason) override
     {
-        if (!moduleStructure || moduleStructure->nodes.empty() || !sensorRepository || !hybridApiService)
+        if (!moduleStructure || moduleStructure->nodes.empty() || !sensorRepository ||
+            !hybridApiService || !sensorStructure)
         {
             log("SETUP: STRUCTURE_REPUBLISH reason=%s sent=0 sensors=0 (republish_fail: prerequisites missing)",
                 reason ? reason : "unknown");
@@ -88,7 +93,7 @@ public:
         auto sensorEntities = sensorRepository->getAll();
         for (const auto &sensorEntity : sensorEntities)
         {
-            sensorStructure.addSensor(node, sensorEntity);
+            sensorStructure->addSensor(node, sensorEntity);
         }
 
         bool sent = hybridApiService->sendToServerModuleStructure(*moduleStructure, ApiPriority::BOTH);

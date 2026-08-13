@@ -40,7 +40,7 @@
 #include "Core/Domain/Interfaces/UseCases/IOnConnectivityRestoredUseCase.h"
 #include "Core/Domain/Interfaces/UseCases/ICheckModuleDeletionUseCase.h"
 #include "Core/Domain/Interfaces/UseCases/ICheckFirmwareUpdateOnStartupUseCase.h"
-#include "Core/Domain/UseCases/ModuleStructure/SensorStructureUseCase.h"
+#include "Core/Domain/Interfaces/UseCases/ISensorStructureUseCase.h"
 #include <memory>
 #include <cstdarg>
 #include <cstdio>
@@ -93,9 +93,9 @@ private:
     IUdpInboundDispatcher *udpInboundDispatcher;
     IRemoteModuleCommandReceiver *remoteModuleCommandReceiver;
 
-    // Sensor records of the structure are built here, not by this class: the same records are
-    // needed by RepublishModuleStructureUseCase (review of PR #17, 2026-08-13)
-    SensorStructureUseCase sensorStructure;
+    // Sensor records of the structure are built by an injected use case, not by this class: the
+    // same records are needed by RepublishModuleStructureUseCase (review of PR #17, 2026-08-13)
+    ISensorStructureUseCase *sensorStructureUseCase;
 
     void log(const char *format, ...);
 
@@ -198,6 +198,15 @@ public:
         IUdpInboundDispatcher *udpInboundDispatcher = nullptr,
         IRemoteModuleCommandReceiver *remoteModuleCommandReceiver = nullptr);
 
+    /**
+     * @brief Inject the builder of the sensor records of the structure (GDV1-3782)
+     *
+     * A setter and not a constructor argument: the constructor of this service is already 33
+     * positional parameters long, and globals.h wires the rest of the late dependencies the same
+     * way. The same instance is given to RepublishModuleStructureUseCase.
+     */
+    void setSensorStructureUseCase(ISensorStructureUseCase *useCase) { sensorStructureUseCase = useCase; }
+
     void setupModule() override;
     std::unique_ptr<ILoopService> getLoopService() override;
 };
@@ -270,7 +279,7 @@ inline ModuleSetupService::ModuleSetupService(
                                                        checkFirmwareUpdateOnStartupUseCase(checkFirmwareUpdateOnStartupUseCase),
                                                        udpInboundDispatcher(udpInboundDispatcher),
                                                        remoteModuleCommandReceiver(remoteModuleCommandReceiver),
-                                                       sensorStructure(logger, debugSystem)
+                                                       sensorStructureUseCase(nullptr)
 {
 }
 
@@ -1078,22 +1087,38 @@ inline void ModuleSetupService::createBaseNodeStructure(Node &node)
 // the setup flow (and its tests) already use.
 inline void ModuleSetupService::addMultiChannelModbusSensor(Node &node, const SensorEntity &sensorEntity)
 {
-    sensorStructure.addMultiChannelModbusSensor(node, sensorEntity);
+    if (sensorStructureUseCase)
+    {
+        sensorStructureUseCase->addMultiChannelModbusSensor(node, sensorEntity);
+    }
 }
 
 inline void ModuleSetupService::addMultiChannelI2CSensor(Node &node, const SensorEntity &sensorEntity)
 {
-    sensorStructure.addMultiChannelI2CSensor(node, sensorEntity);
+    if (sensorStructureUseCase)
+    {
+        sensorStructureUseCase->addMultiChannelI2CSensor(node, sensorEntity);
+    }
 }
 
 inline void ModuleSetupService::addSingleChannelSensor(Node &node, const SensorEntity &sensorEntity)
 {
-    sensorStructure.addSingleChannelSensor(node, sensorEntity);
+    if (sensorStructureUseCase)
+    {
+        sensorStructureUseCase->addSingleChannelSensor(node, sensorEntity);
+    }
 }
 
 inline void ModuleSetupService::addSensorToStructure(Node &node, const SensorEntity &sensorEntity)
 {
-    sensorStructure.addSensor(node, sensorEntity);
+    if (!sensorStructureUseCase)
+    {
+        log("SETUP: sensor structure use case is not wired - sensor %s is not added to the structure",
+            sensorEntity.uid.c_str());
+        return;
+    }
+
+    sensorStructureUseCase->addSensor(node, sensorEntity);
 }
 
 inline void ModuleSetupService::fillSensorModuleStructure(Node &node)

@@ -18,7 +18,7 @@
 #include "Core/Domain/Interfaces/Adapters/Json/IJsonConverter.h"
 #include "Core/Domain/Interfaces/Mqtt/IMqttManager.h"
 #include "Core/Domain/UseCases/Sensors/SensorRecoveryUseCase.h"
-#include "Core/Domain/UseCases/Sensors/VirtualSensorChannelsUseCase.h"
+#include "Core/Domain/Interfaces/UseCases/IVirtualSensorChannelsUseCase.h"
 #include <map>
 
 class SensorService : public ISensorService {
@@ -36,6 +36,9 @@ private:
     IUdpManager* udpManager;
     IJsonConverter* jsonConverter;
     IMqttManager* mqttManager;
+    // Injected, not known: which computed channels a sensor has and how they are calculated is
+    // IVirtualSensorChannelsUseCase, created in the composition root (PR #17 review)
+    IVirtualSensorChannelsUseCase* virtualChannelsUseCase;
     
     const unsigned long SENSOR_READ_INTERVAL = 15000;
     const unsigned long SENSOR_UPDATE_INTERVAL = 15000;
@@ -54,7 +57,7 @@ private:
     void sendUpdateViaUdp(const UpdateDto& updateDto);
 
     // Computed (virtual) channels of a sensor - VPD today, more later. Which channels exist and
-    // how they are calculated is VirtualSensorChannelsUseCase; these two only store and report.
+    // how they are calculated is the injected use case; these two only store and report.
     void applyVirtualChannels(const SensorEntity& sensor, const std::map<std::string, float>& rawChannelValues);
     void appendVirtualChannelDtos(const SensorEntity& sensor, UpdateDto& dto);
     
@@ -115,7 +118,8 @@ public:
                   IDebugSystem* debugSystem = nullptr,
                   IUdpManager* udpManager = nullptr,
                   IJsonConverter* jsonConverter = nullptr,
-                  IMqttManager* mqttManager = nullptr);
+                  IMqttManager* mqttManager = nullptr,
+                  IVirtualSensorChannelsUseCase* virtualChannelsUseCase = nullptr);
 
     ~SensorService();
     

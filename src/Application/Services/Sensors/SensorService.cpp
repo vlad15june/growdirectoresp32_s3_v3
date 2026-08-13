@@ -16,7 +16,8 @@ SensorService::SensorService(IModuleConfig *moduleConfig,
                              IDebugSystem *debugSystem,
                              IUdpManager *udpManager,
                              IJsonConverter *jsonConverter,
-                             IMqttManager *mqttManager)
+                             IMqttManager *mqttManager,
+                             IVirtualSensorChannelsUseCase *virtualChannelsUseCase)
     : moduleConfig(moduleConfig),
       moduleStructure(moduleStructure),
       sensorRepository(sensorRepository),
@@ -30,6 +31,7 @@ SensorService::SensorService(IModuleConfig *moduleConfig,
       udpManager(udpManager),
       jsonConverter(jsonConverter),
       mqttManager(mqttManager),
+      virtualChannelsUseCase(virtualChannelsUseCase),
       lastSensorReadTime(0),
       lastSensorUpdateTime(0),
       lastUdpSendTime(0)
@@ -222,13 +224,13 @@ bool SensorService::readSensor(SensorEntity sensor)
 void SensorService::applyVirtualChannels(const SensorEntity &sensor,
                                          const std::map<std::string, float> &rawChannelValues)
 {
-    if (!sensorValueModel)
+    if (!sensorValueModel || !virtualChannelsUseCase)
     {
         return;
     }
 
-    std::vector<VirtualSensorChannelsUseCase::Channel> partial;
-    for (const auto &channel : VirtualSensorChannelsUseCase::values(sensor, rawChannelValues, partial))
+    std::vector<IVirtualSensorChannelsUseCase::Channel> partial;
+    for (const auto &channel : virtualChannelsUseCase->values(sensor, rawChannelValues, partial))
     {
         sensorValueModel->setChannelValue(sensor.uid, channel.uid, channel.value);
         log("SensorService: VIRTUAL_CHANNEL uid=%s type=%s value=%.3f sources=%.2f,%.2f",
@@ -249,7 +251,12 @@ void SensorService::applyVirtualChannels(const SensorEntity &sensor,
 // packet of a failing sensor instead of being reported as disconnected (INV-8, D-10).
 void SensorService::appendVirtualChannelDtos(const SensorEntity &sensor, UpdateDto &dto)
 {
-    for (const auto &channel : VirtualSensorChannelsUseCase::channels(sensor))
+    if (!virtualChannelsUseCase)
+    {
+        return;
+    }
+
+    for (const auto &channel : virtualChannelsUseCase->channels(sensor))
     {
         SensorDto sensorDto;
         sensorDto.uid = channel.uid;

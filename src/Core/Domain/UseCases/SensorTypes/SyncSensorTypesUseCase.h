@@ -10,9 +10,9 @@
 #include "Core/Domain/Interfaces/Adapters/IArduinoAdapter.h"
 #include "Core/Domain/Interfaces/Adapters/Json/IJsonConverter.h"
 #include "Infrastructure/Adapters/Time/INTPTimeAdapter.h"
-#include "Core/Domain/UseCases/Sensors/VpdChannelUseCase.h"
+#include "Core/Domain/Interfaces/UseCases/IRepublishModuleStructureUseCase.h"
+#include "Core/Domain/Interfaces/UseCases/IVirtualSensorChannelsUseCase.h"
 #include <cstdarg>
-#include <functional>
 #include <unordered_map>
 
 /**
@@ -36,9 +36,10 @@ private:
     time_t _lastSuccessfulSyncTimestamp = 0;
     bool _forceSyncRequested = false;
 
-    // Called once per synchronization when the catalog changed the computed channel layout
-    // of at least one sensor - the structure has to be rebuilt and sent again (INV-10)
-    std::function<void(const char*)> _onSensorChannelsChanged;
+    // Injected (PR #17 review): which computed channels a sensor exposes is not knowledge of the
+    // sync, and neither is how the structure is republished when the catalog moved one of them
+    IVirtualSensorChannelsUseCase* _virtualChannels = nullptr;
+    IRepublishModuleStructureUseCase* _republishModuleStructure = nullptr;
 
     void log(const char* format, ...) {
         if (_logger && _debugSystem && _debugSystem->isFeatureEnabled(DebugFeatures::SENSOR_DATA_DEBUG)) {
@@ -87,8 +88,12 @@ public:
     
     ~SyncSensorTypesUseCase() override = default;
 
-    void setOnSensorChannelsChanged(std::function<void(const char*)> callback) {
-        _onSensorChannelsChanged = callback;
+    void setVirtualSensorChannelsUseCase(IVirtualSensorChannelsUseCase* virtualChannels) {
+        _virtualChannels = virtualChannels;
+    }
+
+    void setRepublishModuleStructureUseCase(IRepublishModuleStructureUseCase* republishModuleStructure) {
+        _republishModuleStructure = republishModuleStructure;
     }
 
     bool init() override {
@@ -314,8 +319,7 @@ private:
             const SensorType* sensorType = it->second;
             bool wasUpdated = false;
 
-            uint8_t vpdChannelBefore = 0;
-            bool hadVpd = VpdChannelUseCase::vpdChannelNumber(sensor.modbusRegisterConfigs, vpdChannelBefore);
+            std::string virtualChannelsBefore = describeVirtualChannels(sensor);
 
             // Update Modbus register configs and baud rate
             if (sensor.isModbusSensor() && !sensorType->modbusRegisterConfig.empty()) {
@@ -324,15 +328,14 @@ private:
                 wasUpdated = true;
             }
 
-            uint8_t vpdChannelAfter = 0;
-            bool hasVpd = VpdChannelUseCase::vpdChannelNumber(sensor.modbusRegisterConfigs, vpdChannelAfter);
+            std::string virtualChannelsAfter = describeVirtualChannels(sensor);
 
-            if (hadVpd != hasVpd || (hadVpd && vpdChannelBefore != vpdChannelAfter)) {
+            if (virtualChannelsBefore != virtualChannelsAfter) {
                 structureDirty = true;
-                log("SYNC_SENSOR_TYPES: VPD_SHIFT uid=%s old=%s new=%s",
+                log("SYNC_SENSOR_TYPES: VIRTUAL_CHANNEL_SHIFT uid=%s old=%s new=%s",
                     sensor.uid.c_str(),
-                    hadVpd ? VpdChannelUseCase::channelUid(sensor.uid, vpdChannelBefore).c_str() : "none",
-                    hasVpd ? VpdChannelUseCase::channelUid(sensor.uid, vpdChannelAfter).c_str() : "none");
+                    virtualChannelsBefore.c_str(),
+                    virtualChannelsAfter.c_str());
             }
 
             // Update I2C register configs
@@ -355,9 +358,27 @@ private:
         log("SYNC_SENSOR_TYPES: Updated %d sensors from changed sensor types", updatedCount);
 
         // One call per synchronization, not per sensor
-        if (structureDirty && _onSensorChannelsChanged) {
-            _onSensorChannelsChanged("vpd_channel_shift");
+        if (structureDirty && _republishModuleStructure) {
+            _republishModuleStructure->execute("virtual_channel_shift");
         }
+    }
+
+    // Computed channels of a sensor as one comparable string ("none" when it exposes none): the
+    // sync only has to notice that the layout moved, not what the channels mean
+    std::string describeVirtualChannels(const SensorEntity& sensor) {
+        if (!_virtualChannels) {
+            return "none";
+        }
+
+        std::string description;
+        for (const auto& channel : _virtualChannels->channels(sensor)) {
+            if (!description.empty()) {
+                description += ",";
+            }
+            description += channel.type + ":" + channel.uid;
+        }
+
+        return description.empty() ? "none" : description;
     }
     
     bool shouldUpdateSensorType(const SensorType& existingSensorType, const SensorType& newSensorType) {

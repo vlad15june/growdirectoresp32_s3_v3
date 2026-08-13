@@ -1,6 +1,5 @@
 #include <unity.h>
 #include "Core/Domain/Data/Models/ModuleStructure.h"
-#include "Core/Domain/Data/Models/ModuleStructure.cpp"
 #include "Application/DTOs/UpdateDto.h"
 #include "Infrastructure/Adapters/Json/JsonConverter.h"
 

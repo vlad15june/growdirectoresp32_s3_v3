@@ -2,6 +2,7 @@
 #define VPD_CHANNEL_USE_CASE_H
 
 #include "Core/Domain/Data/Entities/Sensor/ModbusRegisterConfig.h"
+#include "Core/Domain/Interfaces/UseCases/IVpdChannelUseCase.h"
 #include <cmath>
 #include <string>
 #include <vector>
@@ -12,8 +13,12 @@
  * Pure domain logic: no Arduino, no logger, no repositories - so it is covered by native tests.
  * A sensor that exposes both an "air_temp" and a "humidity" register channel additionally
  * exposes a computed "vpd" channel numbered max(register channel) + 1.
+ *
+ * An object with an interface and no static methods (review of PR #17, 2026-08-13): callers get
+ * it as IVpdChannelUseCase, so the arithmetic can be replaced in a test and the dependency is
+ * visible in the constructor of whoever uses it.
  */
-class VpdChannelUseCase
+class VpdChannelUseCase : public IVpdChannelUseCase
 {
 public:
     static constexpr const char *AIR_TEMP_TYPE = "air_temp";
@@ -21,11 +26,18 @@ public:
     static constexpr const char *VPD_TYPE = "vpd";
     static constexpr uint8_t MAX_CHANNEL = 99;
 
+    const char *channelType() const override
+    {
+        return VPD_TYPE;
+    }
+
     /**
      * @brief Find the air temperature / humidity channel pair of one sensor
      * @return true only when BOTH channels are present
      */
-    static bool findAirPair(const std::vector<ModbusRegisterConfig> &configs, uint8_t &tempCh, uint8_t &humCh)
+    bool findAirPair(const std::vector<ModbusRegisterConfig> &configs,
+                     uint8_t &tempCh,
+                     uint8_t &humCh) const override
     {
         bool hasTemp = false;
         bool hasHum = false;
@@ -51,7 +63,7 @@ public:
      * @brief Channel number of the computed VPD channel: max(register channel) + 1
      * @return false when the sensor has no air pair or the number does not fit two digits
      */
-    static bool vpdChannelNumber(const std::vector<ModbusRegisterConfig> &configs, uint8_t &out)
+    bool vpdChannelNumber(const std::vector<ModbusRegisterConfig> &configs, uint8_t &out) const override
     {
         uint8_t tempCh = 0;
         uint8_t humCh = 0;
@@ -82,7 +94,7 @@ public:
     /**
      * @brief Whether the sensor exposes a computed VPD channel at all
      */
-    static bool hasVpdChannel(const std::vector<ModbusRegisterConfig> &configs)
+    bool hasVpdChannel(const std::vector<ModbusRegisterConfig> &configs) const override
     {
         uint8_t channel = 0;
         return vpdChannelNumber(configs, channel);
@@ -91,7 +103,7 @@ public:
     /**
      * @brief VPD in kPa (Magnus formula, same as S2) - no rounding, no clamping
      */
-    static float compute(float temperatureC, float humidityPercent)
+    float compute(float temperatureC, float humidityPercent) const override
     {
         float es = 0.6108f * expf(17.27f * temperatureC / (temperatureC + 237.3f));
         float ea = humidityPercent / 100.0f * es;
@@ -101,9 +113,14 @@ public:
     /**
      * @brief Full channel uid: "<sensor uid>.<two digits>" - same format as register channels
      */
-    static std::string channelUid(const std::string &sensorUid, uint8_t channel)
+    std::string channelUid(const std::string &sensorUid, uint8_t channel) const override
     {
         return sensorUid + "." + (channel < 10 ? "0" : "") + std::to_string(channel);
+    }
+
+    uint8_t maxChannel() const override
+    {
+        return MAX_CHANNEL;
     }
 };
 

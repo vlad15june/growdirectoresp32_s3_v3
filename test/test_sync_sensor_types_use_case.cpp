@@ -7,7 +7,9 @@
 #include "Mock/Infrastructure/Logging/MockDebugSystem.h"
 #include "Mock/Infrastructure/Configuration/MockNTPTimeAdapter.h"
 #include "Mock/Infrastructure/Repositories/MockSensorRepository.h"
+#include "Core/Domain/UseCases/Sensors/VirtualSensorChannelsUseCase.h"
 #include "Core/Domain/UseCases/Sensors/VpdChannelUseCase.h"
+#include "Core/Domain/Interfaces/UseCases/IRepublishModuleStructureUseCase.h"
 #include "Infrastructure/Adapters/Json/JsonConverter.h"
 
 // Global test variables
@@ -515,6 +517,21 @@ static SensorType makeVpdSyncType(const std::string& typeUid, const std::vector<
     return sensorType;
 }
 
+
+// The sync is given IRepublishModuleStructureUseCase and IVirtualSensorChannelsUseCase (PR #17
+// review): the test injects its own republish use case instead of hooking a callback.
+class FakeRepublishModuleStructureUseCase : public IRepublishModuleStructureUseCase {
+public:
+    int calls = 0;
+    std::string lastReason;
+
+    bool execute(const char* reason) override {
+        calls++;
+        lastReason = reason ? reason : "";
+        return true;
+    }
+};
+
 // INV-4, INV-10: an extra register channel shifts max+1, so the structure must be resent once
 void test_sync_sensor_types_vpd_shift_triggers_republish(void) {
     sync_sensor_types_use_case_setup();
@@ -533,12 +550,11 @@ void test_sync_sensor_types_vpd_shift_triggers_republish(void) {
         &g_mockDebugSystem,
         &sensorRepository);
 
-    int callbackCount = 0;
-    std::string callbackReason;
-    useCase.setOnSensorChannelsChanged([&callbackCount, &callbackReason](const char* reason) {
-        callbackCount++;
-        callbackReason = reason ? reason : "";
-    });
+    VpdChannelUseCase vpdChannelUseCase;
+    VirtualSensorChannelsUseCase virtualChannels(&vpdChannelUseCase);
+    FakeRepublishModuleStructureUseCase republish;
+    useCase.setVirtualSensorChannelsUseCase(&virtualChannels);
+    useCase.setRepublishModuleStructureUseCase(&republish);
 
     std::vector<ModbusRegisterConfig> grown;
     grown.push_back(makeVpdSyncConfig(1, "air_temp"));
@@ -553,8 +569,8 @@ void test_sync_sensor_types_vpd_shift_triggers_republish(void) {
     useCase.forceSync();
 
     // One call per synchronization, not per sensor
-    TEST_ASSERT_EQUAL(1, callbackCount);
-    TEST_ASSERT_EQUAL_STRING("vpd_channel_shift", callbackReason.c_str());
+    TEST_ASSERT_EQUAL(1, republish.calls);
+    TEST_ASSERT_EQUAL_STRING("virtual_channel_shift", republish.lastReason.c_str());
 
     sync_sensor_types_use_case_teardown();
 }
@@ -576,8 +592,11 @@ void test_sync_sensor_types_no_republish_without_shift(void) {
         &g_mockDebugSystem,
         &sensorRepository);
 
-    int callbackCount = 0;
-    useCase.setOnSensorChannelsChanged([&callbackCount](const char*) { callbackCount++; });
+    VpdChannelUseCase vpdChannelUseCase;
+    VirtualSensorChannelsUseCase virtualChannels(&vpdChannelUseCase);
+    FakeRepublishModuleStructureUseCase republish;
+    useCase.setVirtualSensorChannelsUseCase(&virtualChannels);
+    useCase.setRepublishModuleStructureUseCase(&republish);
 
     std::vector<ModbusRegisterConfig> same;
     same.push_back(makeVpdSyncConfig(1, "air_temp"));
@@ -590,7 +609,7 @@ void test_sync_sensor_types_no_republish_without_shift(void) {
     g_mockRepository.setShouldReturnEmpty(true);
     useCase.forceSync();
 
-    TEST_ASSERT_EQUAL(0, callbackCount);
+    TEST_ASSERT_EQUAL(0, republish.calls);
 
     sync_sensor_types_use_case_teardown();
 }

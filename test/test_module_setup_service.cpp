@@ -1,6 +1,9 @@
 #include <unity.h>
 #include "Mock/ArduinoMock.h"
 #include "Application/Services/ModuleSetupService.h"
+#include "Core/Domain/UseCases/ModuleStructure/SensorStructureUseCase.h"
+#include "Core/Domain/UseCases/Sensors/VirtualSensorChannelsUseCase.h"
+#include "Core/Domain/UseCases/Sensors/VpdChannelUseCase.h"
 #include "Mock/Infrastructure/Logging/MockLogger.h"
 #include "Mock/Infrastructure/Logging/MockDebugSystem.h"
 #include "Mock/Infrastructure/Led/MockLedAdapter.h"
@@ -71,6 +74,10 @@ static MockSettings g_mockSettings;
 static MockMqttManager g_mockMqttManager;
 static MockMessageProcessor g_mockMessageProcessor;
 static MockDeviceService g_mockDeviceService;
+// The structure records are built by an injected use case, wired here the way globals.h wires it
+static VpdChannelUseCase g_vpdChannelUseCase;
+static VirtualSensorChannelsUseCase g_virtualChannels(&g_vpdChannelUseCase);
+static SensorStructureUseCase g_sensorStructureUseCase(&g_virtualChannels);
 static ModuleSetupService* g_moduleSetupService;
 static FILE* debug_file = nullptr;
 
@@ -119,6 +126,7 @@ static void module_setup_service_setup(void) {
         nullptr,
         &g_mockDeviceService  // Add the device service
     );
+    g_moduleSetupService->setSensorStructureUseCase(&g_sensorStructureUseCase);
 }
 
 static void module_setup_service_teardown(void) {
@@ -204,6 +212,7 @@ static void test_setup_module_without_led_adapter(void) {
         &g_mockLoopServiceFactory,
         &g_mockMqttManager
     );
+    g_moduleSetupService->setSensorStructureUseCase(&g_sensorStructureUseCase);
 
     // This should not crash and should still initialize the config
     g_moduleSetupService->setupModule();
@@ -233,6 +242,7 @@ static void test_setup_module_without_config(void) {
         &g_mockLoopServiceFactory,
         &g_mockMqttManager
     );
+    g_moduleSetupService->setSensorStructureUseCase(&g_sensorStructureUseCase);
     
     // This should not crash and should log an error
     g_moduleSetupService->setupModule();
@@ -276,6 +286,7 @@ static void test_setup_module_without_led_use_cases(void) {
         &g_mockLoopServiceFactory,
         &g_mockMqttManager
     );
+    g_moduleSetupService->setSensorStructureUseCase(&g_sensorStructureUseCase);
 
     // This should not crash and should still initialize the config and LEDs
     g_moduleSetupService->setupModule();
@@ -418,6 +429,7 @@ static void test_setup_module_without_web_server_launcher(void) {
         &g_mockLoopServiceFactory,
         &g_mockMqttManager
     );
+    g_moduleSetupService->setSensorStructureUseCase(&g_sensorStructureUseCase);
     
     // Set up the mock to simulate USER_CAN_CONFIGURE mode
     g_mockSettings.setConfigured(ModuleModeEnum::USER_CAN_CONFIGURE);
@@ -852,6 +864,7 @@ static void test_setup_ap_handles_missing_wifi_adapter() {
         &g_mockLoopServiceFactory,
         &g_mockMqttManager
     );
+    g_moduleSetupService->setSensorStructureUseCase(&g_sensorStructureUseCase);
     
     // This should not crash and should log an error
     ModuleSetupServiceTestHelper::callSetupAP(g_moduleSetupService);
@@ -938,6 +951,7 @@ static void test_setup_web_server_handles_null_launcher() {
         &g_mockWiFiManager,
         nullptr  // Pass null web server launcher
     );
+    g_moduleSetupService->setSensorStructureUseCase(&g_sensorStructureUseCase);
     
     // This should not crash and should log an error
     ModuleSetupServiceTestHelper::callSetupWebServer(g_moduleSetupService);
@@ -993,6 +1007,7 @@ static void test_get_loop_service_handles_null_factory() {
         &g_mockWebServerLauncher,
         nullptr  // Null factory
     );
+    g_moduleSetupService->setSensorStructureUseCase(&g_sensorStructureUseCase);
     
     // Call getLoopService - should not crash
     auto loopService = g_moduleSetupService->getLoopService();
@@ -1026,6 +1041,7 @@ static void test_get_loop_service_handles_null_config() {
         &g_mockWebServerLauncher,
         &g_mockLoopServiceFactory
     );
+    g_moduleSetupService->setSensorStructureUseCase(&g_sensorStructureUseCase);
     
     // Call getLoopService - should not crash
     auto loopService = g_moduleSetupService->getLoopService();
@@ -1136,6 +1152,7 @@ static void test_configure_done_mode_configure_sets_up_mqtt_connection() {
         &g_mockLoopServiceFactory,
         &g_mockMqttManager
     );
+    g_moduleSetupService->setSensorStructureUseCase(&g_sensorStructureUseCase);
     
     // Set up mocks for success case
     g_mockMqttManager.reset();
@@ -1172,6 +1189,7 @@ static void test_configure_done_mode_configure_handles_mqtt_connection_subscribe
         &g_mockLoopServiceFactory,
         &g_mockMqttManager
     );
+    g_moduleSetupService->setSensorStructureUseCase(&g_sensorStructureUseCase);
     
     // Set up mocks for failure case
     g_mockMqttManager.reset();
@@ -1212,6 +1230,7 @@ static void test_configure_done_mode_configure_handles_missing_mqtt_manager() {
         &g_mockLoopServiceFactory,
         nullptr  // No MQTT manager
     );
+    g_moduleSetupService->setSensorStructureUseCase(&g_sensorStructureUseCase);
     
     // Call the method under test
     ModuleSetupServiceTestHelper::callConfigureDoneModeConfigure(g_moduleSetupService);
@@ -1283,6 +1302,7 @@ static void test_configure_done_mode_configure_handles_missing_wifi_manager() {
         &g_mockLoopServiceFactory,
         &g_mockMqttManager
     );
+    g_moduleSetupService->setSensorStructureUseCase(&g_sensorStructureUseCase);
     
     // Call the method under test
     ModuleSetupServiceTestHelper::callConfigureDoneModeConfigure(g_moduleSetupService);
@@ -1406,6 +1426,7 @@ static void test_configure_done_mode_configure_handles_null_device_service() {
         nullptr,
         nullptr  // No device service
     );
+    g_moduleSetupService->setSensorStructureUseCase(&g_sensorStructureUseCase);
     
     // Call the method directly
     ModuleSetupServiceTestHelper::callConfigureDoneModeConfigure(g_moduleSetupService);
@@ -1472,6 +1493,7 @@ static void test_configure_done_mode_configure_sets_up_mqtt_topic_handlers_on_su
         &g_mockLoopServiceFactory,
         &g_mockMqttManager
     );
+    g_moduleSetupService->setSensorStructureUseCase(&g_sensorStructureUseCase);
     
     // Set up mocks for successful connection
     g_mockMqttManager.reset();
@@ -1512,6 +1534,7 @@ static void test_configure_done_mode_configure_do_not_sets_up_mqtt_topic_handler
         &g_mockLoopServiceFactory,
         &g_mockMqttManager
     );
+    g_moduleSetupService->setSensorStructureUseCase(&g_sensorStructureUseCase);
     
     // Set up mocks for failed connection
     g_mockMqttManager.reset();
@@ -1607,6 +1630,7 @@ static void build_service_with_deletion_fork(void) {
         nullptr,
         &g_mockCheckModuleDeletionUseCase,
         &g_mockCheckFirmwareUpdateOnStartupUseCase);
+    g_moduleSetupService->setSensorStructureUseCase(&g_sensorStructureUseCase);
 }
 
 static void test_configure_done_skips_deletion_when_update_applied() {
