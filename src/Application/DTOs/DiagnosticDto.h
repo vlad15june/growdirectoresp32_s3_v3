@@ -18,6 +18,7 @@ public:
     std::string apiStatus;          // API connection status ("connected" or "disconnected")
     std::string mqttStatus;         // MQTT connection status ("connected" or "disconnected")
     int mqttFails;                  // Count of MQTT connection failures
+    uint32_t mqttOversizeDrops;     // Count of inbound MQTT messages dropped for exceeding the size limit
     float apiSendFailRatio;         // Ratio of API send failures
     std::string firmware;           // Firmware version
     uint32_t freeHeap;              // Current free heap memory
@@ -33,8 +34,9 @@ public:
         uptimeMs(0), 
         networkFails(0), 
         apiSendFails(0), 
-        mqttFails(0), 
-        apiSendFailRatio(0), 
+        mqttFails(0),
+        mqttOversizeDrops(0),
+        apiSendFailRatio(0),
         freeHeap(0), 
         minFreeHeap(0), 
         heapSize(0),
