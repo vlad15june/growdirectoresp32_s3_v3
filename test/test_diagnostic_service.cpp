@@ -73,6 +73,7 @@ void diagnostic_service_setup(void) {
     // Configure MQTT manager
     g_mockMqttManager.isConnectedReturnValue = true;
     g_mockMqttManager.mqttFailsReturnValue = 5;
+    g_mockMqttManager.inboundOversizeDropsReturnValue = 3;
     
     // Configure Hybrid API service
     g_mockHybridApi.sendDiagnosticDataReturnValue = true;
@@ -116,6 +117,8 @@ void test_perform_collects_correct_diagnostic_data(void) {
     TEST_ASSERT_EQUAL_STRING("connected", diagnosticData.apiStatus.c_str());
     TEST_ASSERT_EQUAL_STRING("connected", diagnosticData.mqttStatus.c_str());
     TEST_ASSERT_EQUAL_INT(5, diagnosticData.mqttFails);
+    // Inbound messages dropped for exceeding the MQTT size limit (GDV1-3813)
+    TEST_ASSERT_EQUAL_UINT32(3, diagnosticData.mqttOversizeDrops);
     TEST_ASSERT_EQUAL_FLOAT(0.0f, diagnosticData.apiSendFailRatio);
     TEST_ASSERT_EQUAL_STRING("2.1.1", diagnosticData.firmware.c_str());
     TEST_ASSERT_EQUAL_UINT32(100000, diagnosticData.freeHeap);
@@ -137,6 +140,20 @@ void test_perform_serializes_psram_to_json(void) {
 
     TEST_ASSERT_TRUE(json.find("\"psramSize\":8388608") != std::string::npos);
     TEST_ASSERT_TRUE(json.find("\"psramFree\":8000000") != std::string::npos);
+
+    diagnostic_service_teardown();
+}
+
+// GDV1-3813: the count of inbound messages dropped for exceeding the MQTT size limit
+// has to leave the module with the diagnostics, otherwise the drop is only visible
+// with a live debug session attached.
+void test_perform_serializes_mqtt_oversize_drops_to_json(void) {
+    diagnostic_service_setup();
+
+    DiagnosticDto diagnosticData = g_diagnosticService->perform();
+    std::string json = g_jsonConverter.diagnosticToJson(diagnosticData);
+
+    TEST_ASSERT_TRUE(json.find("\"mqttOversizeDrops\":3") != std::string::npos);
 
     diagnostic_service_teardown();
 }
@@ -258,6 +275,7 @@ extern "C" int run_diagnostic_service_tests(void) {
     
     RUN_TEST(test_perform_collects_correct_diagnostic_data);
     RUN_TEST(test_perform_serializes_psram_to_json);
+    RUN_TEST(test_perform_serializes_mqtt_oversize_drops_to_json);
     RUN_TEST(test_perform_handles_offline_state);
     RUN_TEST(test_perform_and_send_uses_hybrid_api);
     RUN_TEST(test_perform_and_send_falls_back_to_rest_api);

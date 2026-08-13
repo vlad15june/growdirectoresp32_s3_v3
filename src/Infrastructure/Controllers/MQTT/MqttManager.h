@@ -16,6 +16,7 @@
 #include "Core/Domain/Interfaces/Mqtt/IMessageProcessor.h"
 #include "Core/Domain/Interfaces/Mqtt/IMqttManager.h"
 #include "Core/Domain/Interfaces/Adapters/IWifiAdapter.h"
+#include "MqttInboundSizeGuard.h"
 #include "TopicHandlerFactory.h"
 #include <cstdarg>
 #include <cstdio>
@@ -64,10 +65,11 @@ private:
     };
     QueueHandle_t _messageQueue;
 
-    static const size_t MAX_MESSAGE_SIZE = 8192;
+    static const size_t MAX_MESSAGE_SIZE = MqttInboundSizeGuard::MAX_INBOUND_MESSAGE_SIZE;
     String _assemblyTopic;
     std::vector<uint8_t> _assemblyBuf;
     size_t _assemblyTotal = 0;
+    MqttInboundSizeGuard _inboundSizeGuard;
 
     struct OptLock {
         std::recursive_mutex *m;
@@ -166,10 +168,46 @@ private:
         }
     }
 
+    // The debug line above only reaches Serial (the MQTT debug feature logs there), so on its
+    // own the drop stays invisible to the server. Publish it as an error event on the module
+    // log topic as well, so an undelivered message cannot look like a delivered one.
+    void reportOversizedDrop(const char *topic, size_t total)
+    {
+        if (_logger == nullptr)
+        {
+            return;
+        }
+
+        char buffer[192];
+        snprintf(buffer, sizeof(buffer),
+                 "[error] MQTT: inbound message dropped (over size limit) topic=%s total=%u limit=%u drops=%u",
+                 topic != nullptr ? topic : "",
+                 static_cast<unsigned>(total),
+                 static_cast<unsigned>(MAX_MESSAGE_SIZE),
+                 static_cast<unsigned>(_inboundSizeGuard.drops));
+
+        _logger->println(DebugFeatures::MQTT_DEBUG, MqttLoggerMode::MqttAndSerial, buffer);
+    }
+
     void onMqttMessage(char *topic, char *payload, size_t len, size_t index, size_t total)
     {
-        if (total == 0 || total > MAX_MESSAGE_SIZE)
+        if (total == 0)
         {
+            return;
+        }
+
+        const MqttInboundSizeVerdict verdict = _inboundSizeGuard.inspect(total, index, MAX_MESSAGE_SIZE);
+        if (verdict != MqttInboundSizeVerdict::Accept)
+        {
+            // A fragmented oversized message is announced with the same `total` on every
+            // fragment, so it is reported once - on the first one - and not once per fragment.
+            if (verdict == MqttInboundSizeVerdict::DropReport)
+            {
+                log("MQTT: dropping oversized inbound topic=%s total=%u limit=%u drops=%u",
+                    topic, static_cast<unsigned>(total), static_cast<unsigned>(MAX_MESSAGE_SIZE),
+                    static_cast<unsigned>(_inboundSizeGuard.drops));
+                reportOversizedDrop(topic, total);
+            }
             return;
         }
 
@@ -548,6 +586,11 @@ public:
     {
         _mqttFails = 0;
         log("MQTT failures counter reset");
+    }
+
+    uint32_t getInboundOversizeDrops() const override
+    {
+        return _inboundSizeGuard.drops;
     }
 
     const char *getClientId() const override

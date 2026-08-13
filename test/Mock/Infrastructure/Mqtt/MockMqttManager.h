@@ -45,7 +45,8 @@ public:
     bool unsubscribeReturnValue = true;
     bool publishReturnValue = true;
     int mqttFailsReturnValue = 0;
-    
+    uint32_t inboundOversizeDropsReturnValue = 0;
+
     // Implement interface methods
     bool connect() override {
         connectCalled = true;
@@ -130,7 +131,11 @@ public:
         resetMqttFailsCallCount++;
         mqttFailsReturnValue = 0;
     }
-    
+
+    uint32_t getInboundOversizeDrops() const override {
+        return inboundOversizeDropsReturnValue;
+    }
+
     // Implementation of client ID methods
     const char* getClientId() const override {
         return clientId.c_str();
@@ -181,6 +186,7 @@ public:
         unsubscribeReturnValue = true;
         publishReturnValue = true;
         mqttFailsReturnValue = 0;
+        inboundOversizeDropsReturnValue = 0;
     }
     
     // Constructor

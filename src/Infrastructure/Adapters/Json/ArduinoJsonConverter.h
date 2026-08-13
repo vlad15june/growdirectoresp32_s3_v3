@@ -248,6 +248,7 @@ public:
         doc["apiStatus"] = diagnosticData.apiStatus;
         doc["mqttStatus"] = diagnosticData.mqttStatus;
         doc["mqttFails"] = diagnosticData.mqttFails;
+        doc["mqttOversizeDrops"] = diagnosticData.mqttOversizeDrops;
         doc["apiSendFailRatio"] = diagnosticData.apiSendFailRatio;
         doc["firmware"] = diagnosticData.firmware;
         doc["freeHeap"] = diagnosticData.freeHeap;
@@ -359,6 +360,19 @@ public:
             {
                 rule.daysOfMonth.push_back(v.as<int>());
             }
+        }
+
+        // Operation time window - common for every rule type, not only sensor rules
+        if (doc.containsKey("startDayTime"))
+        {
+            std::string startDayTimeStr = doc["startDayTime"] | "";
+            rule.startDayTime = parseISOTimeToTimeT(startDayTimeStr);
+        }
+
+        if (doc.containsKey("endDayTime"))
+        {
+            std::string endDayTimeStr = doc["endDayTime"] | "";
+            rule.endDayTime = parseISOTimeToTimeT(endDayTimeStr);
         }
 
         // Type-specific properties
@@ -487,18 +501,6 @@ public:
             rule.timeToSetPoint = doc["timeToSetPoint"] | 0;
             rule.isAdvanced = doc["isAdvanced"] | false;
 
-            if (doc.containsKey("startDayTime"))
-            {
-                std::string startDayTimeStr = doc["startDayTime"] | "";
-                rule.startDayTime = parseISOTimeToTimeT(startDayTimeStr);
-            }
-
-            if (doc.containsKey("endDayTime"))
-            {
-                std::string endDayTimeStr = doc["endDayTime"] | "";
-                rule.endDayTime = parseISOTimeToTimeT(endDayTimeStr);
-            }
-
             // Parse advanced rule values
             rule.advancedRuleValues.clear();
             if (doc.containsKey("advancedRuleValues"))
@@ -618,6 +620,10 @@ public:
         {
             daysOfMonthArr.add(day);
         }
+
+        // Operation time window - common for every rule type, not only sensor rules
+        doc["startDayTime"] = timeToISOString(rule.startDayTime);
+        doc["endDayTime"] = timeToISOString(rule.endDayTime);
 
         // Type-specific properties
         if (!rule.isScheduleRule())
@@ -742,9 +748,6 @@ public:
             doc["valueHigh"] = rule.valueHigh;
             doc["timeToSetPoint"] = rule.timeToSetPoint;
             doc["isAdvanced"] = rule.isAdvanced;
-
-            doc["startDayTime"] = timeToISOString(rule.startDayTime);
-            doc["endDayTime"] = timeToISOString(rule.endDayTime);
 
             // Advanced rule values
             JsonArray advancedValuesArr = doc.createNestedArray("advancedRuleValues");
