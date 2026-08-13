@@ -59,6 +59,7 @@
 #include "Infrastructure/Logging/BootEventLog.h"
 #include "Infrastructure/Configuration/ModuleConfig.h"
 #include "Infrastructure/Configuration/Settings.h"
+#include "Infrastructure/Configuration/StepCycleStore.h"
 #include "Infrastructure/Logging/DebugSystem.h"
 #include "Infrastructure/Adapters/Time/NTPTimeAdapter.h"
 #include "Infrastructure/Adapters/Led/LedAdapter.h"
@@ -134,6 +135,21 @@ ArduinoJsonConverter jsonConverter;
 
 EepromAdapter eeprom(1024, 0);
 Settings settings(eeprom, &mqttLogger, &debugSystem);
+
+// STEP rule cycle counters (GDV1-3811) live in the RTC memory of the built-in clock, not in the
+// EEPROM: the counter is written once per completed cycle, and the EEPROM has a finite write
+// endurance (owner, review of PR #20, 2026-08-13). RTC_NOINIT_ATTR means the bytes are not zeroed
+// at boot, so the table survives every restart the module makes by itself - the nightly preventive
+// one, the technical one after an offline period, an OTA.
+// A power cut does clear it: the on-chip RTC memory is not battery backed. TO FINISH LATER: the
+// board carries an EXTERNAL clock, RV-3028, whose memory is battery backed and survives a power
+// cut too - move this table there as soon as the chip has a driver. Today there is none: only the
+// jig stubs `#init_rtc3028` / `#read_rtc3028` in BoardTest.h. The real `Rtc3028Adapter`
+// (clock source + battery-backed storage) is planned work, see the canon:
+// docs/features/workflow/jira-tickets/firmware/phase-3-1-rtc-and-basic-runtime-snapshot.md.
+// StepCycleStore does not care where the table is, so the move is a one-line change here.
+RTC_NOINIT_ATTR StepCycleTable rtcStepCycleTable;
+StepCycleStore stepCycleStore(rtcStepCycleTable, &mqttLogger, &debugSystem);
 
 LedAdapter ledAdapter(&mqttLogger, &debugSystem);
 
@@ -299,7 +315,8 @@ EvaluateRulesUseCase evaluateRulesUseCase(
     &sensorValueModel,
     &mqttLogger,
     &debugSystem,
-    &ruleStateReportingService);
+    &ruleStateReportingService,
+    &stepCycleStore);
 
 PreventiveRestartUseCase preventiveRestartUseCase(
     &moduleConfig,
@@ -532,6 +549,8 @@ RepublishModuleStructureUseCase republishModuleStructureUseCase(
 
 void initDependencies()
 {
+    // After a power cut the RTC memory holds whatever bytes were there (GDV1-3811)
+    stepCycleStore.dropInvalidSlots();
     topicHandlerFactory.setModuleConfig(&moduleConfig);
     topicHandlerFactory.setCommandService(&commandService);
     topicHandlerFactory.setJsonConverter(&jsonConverter);
