@@ -9,6 +9,7 @@
 #include <time.h>
 #include <cstdarg>
 #include <cstdio>
+#include <cstring>
 
 class Settings : public ISettings
 {
@@ -47,6 +48,103 @@ private:
     static const int EEPROM_WAS_INITIAL_SYNC_COMPLETED = 556;
     static const int EEPROM_NEED_CLEAR_SPIFFS = 558;
     static const int EEPROM_PREVENTIVE_RESTART_DAY = 560;
+
+    // STEP rule cycle counters (GDV1-3811): a small table of fixed-size slots, one per digital
+    // channel of the module (deviceCount is 4 at most, ModuleConfig). Layout of a slot:
+    //   [0]        occupied marker
+    //   [1..24]    deviceUid, zero terminated
+    //   [25..64]   ruleUid, zero terminated
+    //   [65..66]   cyclesToSetPoint (uint16, little endian)
+    //   [67..68]   currentCycle     (uint16, little endian)
+    // Table occupies 562..849 of the 1024 byte EEPROM image.
+    static const int EEPROM_STEP_CYCLE_TABLE = 562;
+    static const int STEP_CYCLE_SLOTS = 4;
+    static const int STEP_CYCLE_SLOT_SIZE = 72;
+    static const int STEP_CYCLE_DEVICE_UID_SIZE = 24;
+    static const int STEP_CYCLE_RULE_UID_SIZE = 40;
+    static const uint8_t STEP_CYCLE_SLOT_OCCUPIED = 0xC7;
+
+    static int stepCycleSlotAddress(int slot)
+    {
+        return EEPROM_STEP_CYCLE_TABLE + slot * STEP_CYCLE_SLOT_SIZE;
+    }
+
+    void readStepCycleSlot(int slot, StepCycleCounter &counter)
+    {
+        int base = stepCycleSlotAddress(slot);
+        char deviceUidBuffer[STEP_CYCLE_DEVICE_UID_SIZE];
+        char ruleUidBuffer[STEP_CYCLE_RULE_UID_SIZE];
+
+        _eeprom.readString(base + 1, deviceUidBuffer, STEP_CYCLE_DEVICE_UID_SIZE);
+        deviceUidBuffer[STEP_CYCLE_DEVICE_UID_SIZE - 1] = 0;
+        _eeprom.readString(base + 1 + STEP_CYCLE_DEVICE_UID_SIZE, ruleUidBuffer, STEP_CYCLE_RULE_UID_SIZE);
+        ruleUidBuffer[STEP_CYCLE_RULE_UID_SIZE - 1] = 0;
+
+        counter.deviceUid = deviceUidBuffer;
+        counter.ruleUid = ruleUidBuffer;
+
+        int valuesBase = base + 1 + STEP_CYCLE_DEVICE_UID_SIZE + STEP_CYCLE_RULE_UID_SIZE;
+        counter.cyclesToSetPoint = static_cast<int>(_eeprom.readByte(valuesBase)) |
+                                   (static_cast<int>(_eeprom.readByte(valuesBase + 1)) << 8);
+        counter.currentCycle = static_cast<int>(_eeprom.readByte(valuesBase + 2)) |
+                               (static_cast<int>(_eeprom.readByte(valuesBase + 3)) << 8);
+    }
+
+    bool isStepCycleSlotOccupied(int slot)
+    {
+        return _eeprom.readByte(stepCycleSlotAddress(slot)) == STEP_CYCLE_SLOT_OCCUPIED;
+    }
+
+    // Slot of the given device, or -1 when the device has no record yet.
+    int findStepCycleSlot(const char *deviceUid)
+    {
+        if (deviceUid == nullptr || deviceUid[0] == 0)
+        {
+            return -1;
+        }
+
+        for (int slot = 0; slot < STEP_CYCLE_SLOTS; slot++)
+        {
+            if (!isStepCycleSlotOccupied(slot))
+            {
+                continue;
+            }
+
+            StepCycleCounter stored;
+            readStepCycleSlot(slot, stored);
+            if (stored.deviceUid == deviceUid)
+            {
+                return slot;
+            }
+        }
+
+        return -1;
+    }
+
+    int findFreeStepCycleSlot()
+    {
+        for (int slot = 0; slot < STEP_CYCLE_SLOTS; slot++)
+        {
+            if (!isStepCycleSlotOccupied(slot))
+            {
+                return slot;
+            }
+        }
+        return -1;
+    }
+
+    static uint16_t clampStepCycleValue(int value)
+    {
+        if (value < 0)
+        {
+            return 0;
+        }
+        if (value > 0xFFFF)
+        {
+            return 0xFFFF;
+        }
+        return static_cast<uint16_t>(value);
+    }
 
     void log(const char *format, ...)
     {
@@ -397,6 +495,74 @@ public:
     {
         log("SETTINGS: lastPreventiveRestartDay = %d", day);
         _eeprom.writeByte(EEPROM_PREVENTIVE_RESTART_DAY, day);
+        _eeprom.commit();
+    }
+
+    bool getStepCycleCounter(const char *deviceUid, StepCycleCounter &counter) override
+    {
+        int slot = findStepCycleSlot(deviceUid);
+        if (slot < 0)
+        {
+            return false;
+        }
+
+        readStepCycleSlot(slot, counter);
+        return true;
+    }
+
+    void setStepCycleCounter(const StepCycleCounter &counter) override
+    {
+        if (counter.deviceUid.empty())
+        {
+            return;
+        }
+
+        int slot = findStepCycleSlot(counter.deviceUid.c_str());
+        if (slot < 0)
+        {
+            slot = findFreeStepCycleSlot();
+        }
+        if (slot < 0)
+        {
+            log("SETTINGS: stepCycleCounter table full, device %s not stored", counter.deviceUid.c_str());
+            return;
+        }
+
+        log("SETTINGS: stepCycleCounter slot=%d device=%s rule=%s cycle=%d/%d",
+            slot, counter.deviceUid.c_str(), counter.ruleUid.c_str(),
+            counter.currentCycle, counter.cyclesToSetPoint);
+
+        int base = stepCycleSlotAddress(slot);
+        char deviceUidBuffer[STEP_CYCLE_DEVICE_UID_SIZE] = {0};
+        char ruleUidBuffer[STEP_CYCLE_RULE_UID_SIZE] = {0};
+        strncpy(deviceUidBuffer, counter.deviceUid.c_str(), STEP_CYCLE_DEVICE_UID_SIZE - 1);
+        strncpy(ruleUidBuffer, counter.ruleUid.c_str(), STEP_CYCLE_RULE_UID_SIZE - 1);
+
+        uint16_t cycles = clampStepCycleValue(counter.cyclesToSetPoint);
+        uint16_t current = clampStepCycleValue(counter.currentCycle);
+        int valuesBase = base + 1 + STEP_CYCLE_DEVICE_UID_SIZE + STEP_CYCLE_RULE_UID_SIZE;
+
+        _eeprom.writeBytes(base + 1, reinterpret_cast<const byte *>(deviceUidBuffer), STEP_CYCLE_DEVICE_UID_SIZE);
+        _eeprom.writeBytes(base + 1 + STEP_CYCLE_DEVICE_UID_SIZE,
+                           reinterpret_cast<const byte *>(ruleUidBuffer), STEP_CYCLE_RULE_UID_SIZE);
+        _eeprom.writeByte(valuesBase, static_cast<uint8_t>(cycles & 0xFF));
+        _eeprom.writeByte(valuesBase + 1, static_cast<uint8_t>((cycles >> 8) & 0xFF));
+        _eeprom.writeByte(valuesBase + 2, static_cast<uint8_t>(current & 0xFF));
+        _eeprom.writeByte(valuesBase + 3, static_cast<uint8_t>((current >> 8) & 0xFF));
+        _eeprom.writeByte(base, STEP_CYCLE_SLOT_OCCUPIED);
+        _eeprom.commit();
+    }
+
+    void clearStepCycleCounter(const char *deviceUid) override
+    {
+        int slot = findStepCycleSlot(deviceUid);
+        if (slot < 0)
+        {
+            return;
+        }
+
+        log("SETTINGS: stepCycleCounter cleared slot=%d device=%s", slot, deviceUid);
+        _eeprom.writeByte(stepCycleSlotAddress(slot), 0);
         _eeprom.commit();
     }
 };

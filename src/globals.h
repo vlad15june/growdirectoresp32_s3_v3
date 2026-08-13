@@ -294,7 +294,8 @@ EvaluateRulesUseCase evaluateRulesUseCase(
     &sensorValueModel,
     &mqttLogger,
     &debugSystem,
-    &ruleStateReportingService);
+    &ruleStateReportingService,
+    &settings);
 
 PreventiveRestartUseCase preventiveRestartUseCase(
     &moduleConfig,

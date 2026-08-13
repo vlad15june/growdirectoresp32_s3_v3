@@ -3,6 +3,8 @@
 
 #include <time.h>
 
+#include "Core/Domain/Data/Entities/StepCycleCounter.h"
+
 // Buffer size for string operations
 #define BUFSIZE 40
 
@@ -92,6 +94,13 @@ public:
     // Day of month of the last preventive nightly restart (matches legacy address 560)
     virtual uint8_t getLastPreventiveRestartDay() = 0;
     virtual void setLastPreventiveRestartDay(uint8_t day) = 0;
+
+    // STEP rule cycle counter that has to survive a reboot (GDV1-3811).
+    // One record per device; the record carries the identity of what it counts, so a stale record
+    // is recognised and dropped instead of being restored onto a different rule or limit.
+    virtual bool getStepCycleCounter(const char* deviceUid, StepCycleCounter& counter) = 0;
+    virtual void setStepCycleCounter(const StepCycleCounter& counter) = 0;
+    virtual void clearStepCycleCounter(const char* deviceUid) = 0;
 };
 
 // Default implementation of destructor
