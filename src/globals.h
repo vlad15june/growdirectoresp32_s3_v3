@@ -430,7 +430,8 @@ SensorService sensorService(
     &debugSystem,
     &udpManager,
     &jsonConverter,
-    &mqttManager);
+    &mqttManager,
+    &sensorTypeRepository);
 
 RemoteSensorReceiver remoteSensorReceiver(
     &udpManager,

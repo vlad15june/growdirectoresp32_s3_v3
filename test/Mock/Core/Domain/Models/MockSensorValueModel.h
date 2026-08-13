@@ -10,8 +10,10 @@ class MockSensorValueModel : public ISensorValueModel {
 public:
     std::map<std::string, float> values;
     std::map<std::string, uint32_t> lastReadTimes;
+    std::map<std::string, float> channelValues;
 
     int setSensorValueCallCount = 0;
+    int setChannelValueCallCount = 0;
     int setLastReadTimeCallCount = 0;
     std::string lastSetUid;
     float lastSetValue = 0.0f;
@@ -44,12 +46,23 @@ public:
         return it != lastReadTimes.end() ? it->second : 0;
     }
 
-    float getChannelValue(const std::string&, const std::string&) const override { return 0.0f; }
-    void setChannelValue(const std::string&, const std::string&, float) override {}
-    std::vector<std::pair<std::string, float>> getChannelValues(const std::string&) const override { return {}; }
-    bool hasChannelValues(const std::string&) const override { return false; }
-    void clearChannelValues(const std::string&) override {}
-    void clearAllChannelValues() override {}
+    float getChannelValue(const std::string&, const std::string& channelName) const override {
+        auto it = channelValues.find(channelName);
+        return it != channelValues.end() ? it->second : 0.0f;
+    }
+
+    void setChannelValue(const std::string&, const std::string& channelName, float value) override {
+        channelValues[channelName] = value;
+        setChannelValueCallCount++;
+    }
+
+    std::vector<std::pair<std::string, float>> getChannelValues(const std::string&) const override {
+        return std::vector<std::pair<std::string, float>>(channelValues.begin(), channelValues.end());
+    }
+
+    bool hasChannelValues(const std::string&) const override { return !channelValues.empty(); }
+    void clearChannelValues(const std::string&) override { channelValues.clear(); }
+    void clearAllChannelValues() override { channelValues.clear(); }
     void setSensorMultiChannel(const std::string&, bool) override {}
     bool isSensorMultiChannel(const std::string&) const override { return false; }
     void removeSensor(const std::string&) override {}

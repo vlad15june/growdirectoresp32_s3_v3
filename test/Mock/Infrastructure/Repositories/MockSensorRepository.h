@@ -7,6 +7,12 @@ class MockSensorRepository : public ISensorRepository {
 public:
     std::vector<SensorEntity> sensors;
 
+    // Call tracking for updateSensorStatus
+    int updateSensorStatusCallCount = 0;
+    std::string lastStatusUid;
+    bool lastStatusIsActive = false;
+    bool lastStatusIsError = false;
+
     Utils::Optional<SensorEntity> get(const char* uid) override {
         for (const auto& sensor : sensors) {
             if (sensor.uid == uid) {
@@ -41,7 +47,13 @@ public:
     std::vector<SensorEntity> getI2CSensors() override { return {}; }
     std::vector<SensorEntity> getAtlasSensors() override { return {}; }
     std::vector<SensorEntity> getMultiChannelSensors() override { return {}; }
-    bool updateSensorStatus(const char*, bool, bool) override { return true; }
+    bool updateSensorStatus(const char* uid, bool isActive, bool isError) override {
+        updateSensorStatusCallCount++;
+        lastStatusUid = uid ? uid : "";
+        lastStatusIsActive = isActive;
+        lastStatusIsError = isError;
+        return true;
+    }
     bool createOrUpdateSensor(const SensorEntity&) override { return true; }
     bool updateSensorStatusEnum(const char*, SensorStatusEnum) override { return true; }
     std::vector<SensorEntity> getSensorsByStatus(SensorStatusEnum) override { return {}; }

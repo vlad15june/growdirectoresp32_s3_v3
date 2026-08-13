@@ -16,10 +16,12 @@ SensorService::SensorService(IModuleConfig *moduleConfig,
                              IDebugSystem *debugSystem,
                              IUdpManager *udpManager,
                              IJsonConverter *jsonConverter,
-                             IMqttManager *mqttManager)
+                             IMqttManager *mqttManager,
+                             ISensorTypeRepository *sensorTypeRepository)
     : moduleConfig(moduleConfig),
       moduleStructure(moduleStructure),
       sensorRepository(sensorRepository),
+      sensorTypeRepository(sensorTypeRepository),
       sensorReader(sensorReader),
       sensorValueModel(sensorValueModel),
       timeAdapter(timeAdapter),
@@ -32,7 +34,8 @@ SensorService::SensorService(IModuleConfig *moduleConfig,
       mqttManager(mqttManager),
       lastSensorReadTime(0),
       lastSensorUpdateTime(0),
-      lastUdpSendTime(0)
+      lastUdpSendTime(0),
+      _plausibility(sensorTypeRepository)
 {
 }
 
@@ -162,9 +165,16 @@ bool SensorService::readSensor(SensorEntity sensor)
         if (sensorReader->readMultiChannelSensor(sensor, channelValues))
         {
             std::string values;
+            int acceptedChannels = 0;
             for (const auto &pair : channelValues)
             {
+                if (!acceptReading(sensor, channelSensorTypeName(sensor, pair.first), pair.first, pair.second))
+                {
+                    continue;
+                }
+
                 sensorValueModel->setChannelValue(sensor.uid, pair.first, pair.second);
+                acceptedChannels++;
                 std::string ch = pair.first;
                 size_t dot = ch.find_last_of('.');
                 if (dot != std::string::npos)
@@ -175,6 +185,15 @@ bool SensorService::readSensor(SensorEntity sensor)
                 snprintf(item, sizeof(item), "%s=%.2f ", ch.c_str(), pair.second);
                 values += item;
             }
+
+            if (acceptedChannels == 0)
+            {
+                // Every channel of this read was implausible: the sensor is left without a fresh
+                // value, exactly as if the read had failed (GDV1-3810)
+                sensorRepository->updateSensorStatus(sensor.uid.c_str(), sensor.isActive, true);
+                return false;
+            }
+
             sensorValueModel->setLastReadTime(sensor.uid, currentTime);
             sensorRepository->updateSensorStatus(sensor.uid.c_str(), true, false);
             log("SensorService: Read %s addr=%d %s: %s", sensor.model.c_str(), sensor.modbusDeviceAddress, sensor.uid.c_str(), values.c_str());
@@ -196,6 +215,14 @@ bool SensorService::readSensor(SensorEntity sensor)
         float value;
         if (sensorReader->readSensor(sensor, value))
         {
+            if (!acceptReading(sensor, sensor.sensorType, sensor.uid, value))
+            {
+                // Implausible reading: no value stored, no fresh read time, sensor left in the
+                // error state so the rules fall back on sensor_unreachable (GDV1-3810)
+                sensorRepository->updateSensorStatus(sensor.uid.c_str(), sensor.isActive, true);
+                return false;
+            }
+
             // For single-channel sensors, use setSensorValue
             sensorValueModel->setSensorValue(sensor.uid, value);
             sensorValueModel->setLastReadTime(sensor.uid, currentTime);
@@ -211,6 +238,50 @@ bool SensorService::readSensor(SensorEntity sensor)
             return false;
         }
     }
+}
+
+bool SensorService::acceptReading(const SensorEntity &sensor,
+                                  const std::string &subSensorTypeName,
+                                  const std::string &channelUid,
+                                  float value)
+{
+    SensorPlausibilityUseCase::Limits limits;
+    if (_plausibility.isPlausible(sensor, subSensorTypeName, value, limits))
+    {
+        return true;
+    }
+
+    log("SensorService: REJECTED implausible value uid=%s type=%s value=%.2f limits=[%.2f,%.2f]",
+        channelUid.c_str(),
+        subSensorTypeName.empty() ? "-" : subSensorTypeName.c_str(),
+        value,
+        limits.min,
+        limits.max);
+
+    return false;
+}
+
+std::string SensorService::channelSensorTypeName(const SensorEntity &sensor, const std::string &channelUid)
+{
+    for (const auto &registerConfig : sensor.modbusRegisterConfigs)
+    {
+        std::string uid = sensor.uid + "." + (registerConfig.channel < 10 ? "0" : "") + std::to_string(registerConfig.channel);
+        if (uid == channelUid)
+        {
+            return registerConfig.sensorType.empty() ? registerConfig.channelName : registerConfig.sensorType;
+        }
+    }
+
+    for (const auto &registerConfig : sensor.i2cRegisterConfigs)
+    {
+        std::string uid = sensor.uid + "." + (registerConfig.channel < 10 ? "0" : "") + std::to_string(registerConfig.channel);
+        if (uid == channelUid)
+        {
+            return registerConfig.sensorType.empty() ? registerConfig.channelName : registerConfig.sensorType;
+        }
+    }
+
+    return "";
 }
 
 bool SensorService::readAnalogSensors()
