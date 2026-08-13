@@ -124,6 +124,9 @@ Use Cases (сценарии использования) - бизнес-логи�
 ##### `/src/Core/Domain/UseCases/ModuleMode`
 Логика переключения режимов работы модуля.
 
+##### `/src/Core/Domain/UseCases/ModuleStructure`
+Логика сборки и повторной публикации структуры модуля.
+
 ##### `/src/Core/Domain/UseCases/Rules`
 Логика работы с правилами автоматизации.
 

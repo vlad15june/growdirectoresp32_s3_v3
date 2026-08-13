@@ -1,5 +1,19 @@
 # Release Notes
 
+## Version 2.18.4 (2026-08-13)
+
+### Added
+- **Vapour Pressure Deficit Reported Next To Air Temperature And Humidity**: GDV1-3782 Every wired Modbus sensor that measures both air temperature and humidity now also reports vapour pressure deficit as an additional measurement channel of that same sensor, calculated from the pair on every reading and sent together with them, so VPD can be watched and used in rules without a separate sensor. The additional channel is announced in the module structure the device sends to the server; while the sensor cannot be read the channel is reported as disconnected instead of quietly disappearing from the packet, and when a sensor catalogue update changes which channels a sensor exposes, the device sends its structure again.
+
+### Fixed
+- **Operation-Time Window Applied To Every Rule Type**: GDV1-3807 A rule's daily operation-time window was only kept for sensor-based rules. Loop, step, pH, EC, average-sensor and dimmer rules were left without a window, so the check concluded there was none and let them run around the clock, and dimmer rules, which require a window, could never pass validation. The window is now kept and reported back for every rule type, so a rule switches its equipment only inside its configured hours.
+- **Implausible Sensor Readings No Longer Reach Rules**: GDV1-3810 A reading outside the physical range of its sensor type — the result of a broken exchange, a stuck register or a disconnected probe — was stored, sent to the server and used by rules, which switched equipment on it; a module in the field reported an air temperature of several thousand degrees this way. Such a reading is now rejected as it is read: it is not stored, does not count as a fresh reading, and leaves the sensor in its error state, so the existing protection against unreachable sensors takes over and the rejection is visible in the sensor log. Sensor types for which no physical range is configured are unaffected, and the recommended working range of a sensor is not used for this check.
+- **Dosing Cycle Count Survives A Restart**: GDV1-3811 A step (dosing) rule with a protective shutdown counted its completed cycles only while the module was running, so every restart handed the rule a fresh budget and the protective shutdown could be postponed indefinitely. The count is now kept in memory that survives a restart, and the shutdown fires at the configured cycle even if the module rebooted in between. The count is dropped when the rule is switched off, deleted or edited, when its date window has passed, when the target was reached and after a protective shutdown. A full power cut still clears it.
+- **Pressure And Water-Level Sensors Report Their Value**: GDV1-3418 A sensor that delivers its measurement over two consecutive registers — pressure and water level among them — was read as if it used a single one, so its value never came out right, and a sensor that trickles its answer out over a fraction of a second was given up on before the whole answer had arrived. The device now reads such a measurement whole and keeps collecting a slow answer until the frame is complete.
+- **Oversized Messages From The Server Are No Longer Dropped Silently**: GDV1-3813 An incoming message larger than the module can assemble was discarded without a trace: a rule too big to fit was accepted by the platform, sent to the module and simply never applied, with nothing to show why. Such a message is still dropped, but the module now logs it, reports it to the server as an error event and counts it in the module diagnostics, so the case is visible without a debug session. The size the module accepts is unchanged.
+
+---
+
 ## Version 2.18.3 (2026-08-06)
 
 ### Changed
