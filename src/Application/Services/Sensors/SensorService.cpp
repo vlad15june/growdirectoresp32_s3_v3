@@ -17,7 +17,8 @@ SensorService::SensorService(IModuleConfig *moduleConfig,
                              IUdpManager *udpManager,
                              IJsonConverter *jsonConverter,
                              IMqttManager *mqttManager,
-                             ISensorPlausibilityUseCase *plausibilityUseCase)
+                             ISensorPlausibilityUseCase *plausibilityUseCase,
+                             IVirtualSensorChannelsUseCase *virtualChannelsUseCase)
     : moduleConfig(moduleConfig),
       moduleStructure(moduleStructure),
       sensorRepository(sensorRepository),
@@ -31,6 +32,7 @@ SensorService::SensorService(IModuleConfig *moduleConfig,
       udpManager(udpManager),
       jsonConverter(jsonConverter),
       mqttManager(mqttManager),
+      virtualChannelsUseCase(virtualChannelsUseCase),
       plausibilityUseCase(plausibilityUseCase),
       lastSensorReadTime(0),
       lastSensorUpdateTime(0),
@@ -193,6 +195,10 @@ bool SensorService::readSensor(SensorEntity sensor)
                 return false;
             }
 
+            // Computed channels are calculated from the RAW readings of this read and then pass the
+            // same gate as any other value (accepted order, 2026-08-13)
+            applyVirtualChannels(sensor, channelValues);
+
             sensorValueModel->setLastReadTime(sensor.uid, currentTime);
             sensorRepository->updateSensorStatus(sensor.uid.c_str(), true, false);
             log("SensorService: Read %s addr=%d %s: %s", sensor.model.c_str(), sensor.modbusDeviceAddress, sensor.uid.c_str(), values.c_str());
@@ -236,6 +242,60 @@ bool SensorService::readSensor(SensorEntity sensor)
             log("SensorService: Failed to read sensor %s, marking as error", sensor.uid.c_str());
             return false;
         }
+    }
+}
+
+// Computed channels of one read: value from the RAW readings, stored like any other channel.
+// The value is subject to the same checks as the rest of the read (accepted order, 2026-08-13).
+void SensorService::applyVirtualChannels(const SensorEntity &sensor,
+                                         const std::map<std::string, float> &rawChannelValues)
+{
+    if (!sensorValueModel || !virtualChannelsUseCase)
+    {
+        return;
+    }
+
+    std::vector<IVirtualSensorChannelsUseCase::Channel> partial;
+    for (const auto &channel : virtualChannelsUseCase->values(sensor, rawChannelValues, partial))
+    {
+        if (!acceptReading(sensor, channel.type, channel.uid, channel.value))
+        {
+            continue;
+        }
+
+        sensorValueModel->setChannelValue(sensor.uid, channel.uid, channel.value);
+        log("SensorService: VIRTUAL_CHANNEL uid=%s type=%s value=%.3f sources=%.2f,%.2f",
+            channel.uid.c_str(), channel.type.c_str(), channel.value,
+            channel.firstSource, channel.secondSource);
+    }
+
+    // Not all sources answered this time: the cached value stays as it is, exactly like for a
+    // register channel that was not read (owner decision, 2026-08-12)
+    for (const auto &channel : partial)
+    {
+        log("SensorService: VIRTUAL_CHANNEL_SKIP uid=%s type=%s reason=partial_read",
+            channel.uid.c_str(), channel.type.c_str());
+    }
+}
+
+// A computed channel has no register config, so without this it would silently disappear from the
+// packet of a failing sensor instead of being reported as disconnected (INV-8, D-10).
+void SensorService::appendVirtualChannelDtos(const SensorEntity &sensor, UpdateDto &dto)
+{
+    if (!virtualChannelsUseCase)
+    {
+        return;
+    }
+
+    for (const auto &channel : virtualChannelsUseCase->channels(sensor))
+    {
+        SensorDto sensorDto;
+        sensorDto.uid = channel.uid;
+        sensorDto.value = 0.0f;
+        sensorDto.state = getSensorStateName(SENSOR_STATE_DISCONNECTED);
+        dto.sensors.push_back(sensorDto);
+        log("SensorService: VIRTUAL_CHANNEL_DISCONNECTED uid=%s type=%s",
+            sensorDto.uid.c_str(), channel.type.c_str());
     }
 }
 
@@ -455,6 +515,8 @@ UpdateDto SensorService::createSensorUpdateDto()
                 sensorDto.state = getSensorStateName(SENSOR_STATE_DISCONNECTED);
                 dto.sensors.push_back(sensorDto);
             }
+
+            appendVirtualChannelDtos(sensor, dto);
         }
         else
         {

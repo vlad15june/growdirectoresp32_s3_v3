@@ -58,6 +58,8 @@ extern "C" int run_preventive_restart_use_case_tests(void);
 extern "C" void run_rule_operation_time_tests(void);
 extern "C" void run_rule_sensor_value_refresh_tests(void);
 extern "C" void run_mqtt_inbound_size_guard_tests(void);
+extern "C" void run_vpd_channel_tests(void);
+extern "C" void run_sensor_service_tests(void);
 
 void setUp(void) {
     // set stuff up here
@@ -239,6 +241,11 @@ int main(void) {
 
     // Run tests for the inbound MQTT size limit (GDV1-3813)
     run_mqtt_inbound_size_guard_tests();
+
+    // Run tests for the computed VPD sensor channel (GDV1-3782)
+    run_vpd_channel_tests();
+
+    run_sensor_service_tests();
 
     return UNITY_END();
 }
