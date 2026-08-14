@@ -1,5 +1,12 @@
 # Release Notes
 
+## Version 2.18.5 (2026-08-14)
+
+### Fixed
+- **Remote Firmware Update No Longer Fails On A Slow Connection**: GDV1-3821 A remote firmware update gave the download only a few seconds to open the connection and to receive the first data of the binary, far less than a loaded link needs, so the update failed while the server was answering normally and the module stayed on its old version. The download now gets the same waiting budget as every other request the module makes to the server, for opening the connection and for receiving data alike. When an update does stop, the reason it stopped is reported back to the server together with the command result and written to the update log, so a failed update is no longer the same unexplained message whatever caused it.
+
+---
+
 ## Version 2.18.4 (2026-08-13)
 
 ### Added
