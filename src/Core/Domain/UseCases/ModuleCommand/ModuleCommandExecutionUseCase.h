@@ -1128,9 +1128,22 @@ private:
             }
         }
         
+        // Without this the next boot reports "power-on": the boot type is the only field that
+        // tells a commanded restart from a power cut, and ModuleSetupService resets it to
+        // POWER_ON once the structure is published, so anything left unset comes back as a power
+        // loss. A Reboot command always originates from a person (app or admin panel), hence
+        // USER - the firmware's own technical restarts set BOOT_TYPE_TECHNICAL on their paths.
+        // setBootType commits the EEPROM byte at once, so it survives the restart below.
+        if (settings)
+        {
+            settings->setBootType(BOOT_TYPE_USER);
+            log(DebugFeatures::MODULE_COMMAND_DEBUG,
+                "ModuleCommandUseCase: Reboot - Set boot type to BOOT_TYPE_USER");
+        }
+
         log(DebugFeatures::MODULE_COMMAND_DEBUG,
             "ModuleCommandUseCase: Executing reboot command");
-        
+
         arduinoAdapter->restart();
         return true;
     }
