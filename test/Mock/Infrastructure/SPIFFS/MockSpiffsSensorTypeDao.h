@@ -6,11 +6,14 @@
 #include <algorithm>
 #include "Infrastructure/Adapters/SPIFFS/ISpiffsSensorTypeDao.h"
 #include "Core/Domain/Data/Entities/Sensor/SensorType.h"
+#include "Core/Domain/Enums/StorageWriteErrorEnum.h"
 
 class MockSpiffsSensorTypeDao : public ISpiffsSensorTypeDao {
 private:
     std::vector<SensorType> storage;
     bool shouldFail = false;
+    StorageWriteErrorEnum lastSaveError = STORAGE_WRITE_ERROR_NONE;
+    size_t lastSaveBytes = 0;
 
 public:
     void setShouldFail(bool fail) { shouldFail = fail; }
@@ -65,10 +68,20 @@ public:
     }
 
     bool saveAll(const std::vector<SensorType>& entities) override {
-        if (shouldFail) return false;
+        if (shouldFail) {
+            lastSaveError = STORAGE_WRITE_ERROR_WRITE;
+            lastSaveBytes = 0;
+            return false;
+        }
+        lastSaveError = STORAGE_WRITE_ERROR_NONE;
+        lastSaveBytes = entities.size() * 100; // stand-in for the streamed byte count
         storage = entities;
         return true;
     }
+
+    StorageWriteErrorEnum getLastSaveError() const override { return lastSaveError; }
+
+    size_t getLastSaveBytes() const override { return lastSaveBytes; }
 
     bool getAll(std::vector<SensorType>& entities) override {
         if (shouldFail) return false;

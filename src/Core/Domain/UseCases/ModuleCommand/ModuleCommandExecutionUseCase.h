@@ -1115,17 +1115,14 @@ private:
                     "ModuleCommandUseCase: Sensor repository not available for clearing");
             }
             
-            if (sensorTypeRepository)
-            {
-                bool sensorTypesCleared = sensorTypeRepository->clear();
-                log(DebugFeatures::MODULE_COMMAND_DEBUG,
-                    "ModuleCommandUseCase: Sensor type data clear %s", sensorTypesCleared ? "successful" : "failed");
-            }
-            else
-            {
-                log(DebugFeatures::MODULE_COMMAND_DEBUG,
-                    "ModuleCommandUseCase: Sensor type repository not available for clearing");
-            }
+            // GDV1-3827: the sensor type catalog is NOT cleared here. It used to be, and the scan after
+            // the reboot then depended on the catalog being written again from the server: any failed
+            // write left the module with no sensor types at all, so ModuleSetupService fell through to
+            // placeholder sensors and never reached handleModbusAddressManagement. The sync rewrites the
+            // whole catalog file anyway (SyncSensorTypesUseCase -> saveAll), so there is nothing to gain
+            // from deleting it first and a whole scan to lose.
+            log(DebugFeatures::MODULE_COMMAND_DEBUG,
+                "ModuleCommandUseCase: Sensor type data kept, sync rewrites the catalog after reboot");
         }
         
         log(DebugFeatures::MODULE_COMMAND_DEBUG,

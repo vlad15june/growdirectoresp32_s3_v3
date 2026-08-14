@@ -2,11 +2,14 @@
 
 #include "ISpiffsSensorTypeDao.h"
 #include "ISpiffsAdapter.h"
+#include "ISpiffsFileWriter.h"
 #include "Core/Domain/Interfaces/Adapters/Json/IJsonConverter.h"
 #include "Core/Domain/Interfaces/IDebugSystem.h"
 #include "Core/Domain/Interfaces/ILogger.h"
 #include "Core/Domain/Data/Entities/Sensor/SensorType.h"
+#include "Core/Domain/Enums/StorageWriteErrorEnum.h"
 #include <string>
+#include <memory>
 #include <stdarg.h>
 #include <cstdio>
 #include <functional>
@@ -20,6 +23,8 @@ protected:
     IDebugSystem* debugSystem;
     ILogger* logger;
     std::string filePath;
+    StorageWriteErrorEnum lastSaveError = STORAGE_WRITE_ERROR_NONE;
+    size_t lastSaveBytes = 0;
 
     /**
      * @brief Log method for DAO operations
@@ -52,23 +57,52 @@ protected:
         return jsonConverter->sensorTypeFromJson(jsonStr, sensorType);
     }
 
-    std::string entitiesToJson(const std::vector<SensorType>& sensorTypes) {
-        log("SpiffsSensorTypeDao: entitiesToJson called with %d sensor types", sensorTypes.size());
-#ifdef ESP_PLATFORM
-        log("SpiffsSensorTypeDao: Free heap before JSON conversion: %d", ESP.getFreeHeap());
-#endif
-        
-        try {
-            std::string result = jsonConverter->sensorTypesToJson(sensorTypes);
-            log("SpiffsSensorTypeDao: JSON conversion successful, result length: %d", result.length());
-#ifdef ESP_PLATFORM
-            log("SpiffsSensorTypeDao: Free heap after JSON conversion: %d", ESP.getFreeHeap());
-#endif
-            return result;
-        } catch (...) {
-            log("SpiffsSensorTypeDao: ERROR - Exception in jsonConverter->sensorTypesToJson!");
-            return "[]";
+    /**
+     * @brief Stream the JSON array of entities into an open writer (GDV1-3827)
+     *
+     * One entity is serialized at a time, so the peak heap request is the largest single sensor type
+     * (~4 KB) instead of one contiguous block for the whole catalog (~28 KB for 14 types). A failure
+     * is recorded in lastSaveError and reported to the caller instead of degrading into "[]".
+     */
+    bool writeEntitiesToWriter(ISpiffsFileWriter& writer, const std::vector<SensorType>& entities) {
+        if (!writer.write("[")) {
+            lastSaveError = STORAGE_WRITE_ERROR_WRITE;
+            return false;
         }
+
+        for (size_t i = 0; i < entities.size(); i++) {
+            std::string entityJson;
+            try {
+                entityJson = entityToJson(entities[i]);
+            } catch (...) {
+                log("SpiffsSensorTypeDao: ERROR - Exception serializing sensor type %s", entities[i].uid.c_str());
+                lastSaveError = STORAGE_WRITE_ERROR_SERIALIZATION;
+                return false;
+            }
+
+            if (entityJson.empty() || entityJson == "{}") {
+                log("SpiffsSensorTypeDao: ERROR - Empty JSON for sensor type %s, aborting write",
+                    entities[i].uid.c_str());
+                lastSaveError = STORAGE_WRITE_ERROR_SERIALIZATION;
+                return false;
+            }
+
+            if (i > 0 && !writer.write(",")) {
+                lastSaveError = STORAGE_WRITE_ERROR_WRITE;
+                return false;
+            }
+            if (!writer.write(entityJson.c_str())) {
+                lastSaveError = STORAGE_WRITE_ERROR_WRITE;
+                return false;
+            }
+        }
+
+        if (!writer.write("]")) {
+            lastSaveError = STORAGE_WRITE_ERROR_WRITE;
+            return false;
+        }
+
+        return true;
     }
 
     bool jsonToEntities(const std::string& jsonStr, std::vector<SensorType>& sensorTypes) {
@@ -209,63 +243,76 @@ public:
         return result;
     }
 
+    /**
+     * @brief Write the whole catalog to storage, one sensor type at a time (GDV1-3827)
+     *
+     * The file is opened once and the JSON is streamed into it, so nothing bigger than a single
+     * sensor type has to fit into one heap block. The stream goes to a temporary file that replaces
+     * the stored catalog only when everything was written, therefore a failure at any point leaves
+     * the previous catalog intact. Why the write failed is kept in getLastSaveError() so the caller
+     * can log it — a refusal is no longer indistinguishable from an empty catalog.
+     */
     bool saveAll(const std::vector<SensorType>& entities) override {
         log("SpiffsSensorTypeDao: Saving %d sensor types", entities.size());
 #ifdef ESP_PLATFORM
         log("SpiffsSensorTypeDao: Free heap before save: %d", ESP.getFreeHeap());
 #endif
-        
+
+        lastSaveError = STORAGE_WRITE_ERROR_NONE;
+        lastSaveBytes = 0;
+
         if (filePath.empty()) {
             log("SpiffsSensorTypeDao: FilePath empty, initializing...");
             initialize();
         }
-        
-        log("SpiffsSensorTypeDao: Starting JSON serialization...");
-        for (size_t i = 0; i < entities.size(); i++) {
-            log("SpiffsSensorTypeDao: Processing entity %d - UID: %s, Name: %s", 
-                i, entities[i].uid.c_str(), entities[i].name.c_str());
-            log("SpiffsSensorTypeDao: Entity %d has %d sub-sensor types, %d modbus configs", 
-                i, entities[i].sensorTypes.size(), entities[i].modbusRegisterConfig.size());
-        }
-        
-        std::string jsonStr;
-        try {
-            log("SpiffsSensorTypeDao: Calling entitiesToJson...");
-            jsonStr = entitiesToJson(entities);
-            log("SpiffsSensorTypeDao: JSON serialization complete, length: %d", jsonStr.length());
-#ifdef ESP_PLATFORM
-            log("SpiffsSensorTypeDao: Free heap after JSON: %d", ESP.getFreeHeap());
-#endif
-        } catch (...) {
-            log("SpiffsSensorTypeDao: ERROR - Exception in JSON serialization!");
+
+        log("SpiffsSensorTypeDao: Starting streaming write to: %s", filePath.c_str());
+        std::unique_ptr<ISpiffsFileWriter> writer = spiffsAdapter->openForRewrite(filePath.c_str());
+        if (!writer) {
+            log("SpiffsSensorTypeDao: ERROR - Could not open %s for writing", filePath.c_str());
+            lastSaveError = STORAGE_WRITE_ERROR_OPEN;
             return false;
         }
 
-        // Guard: if entities are non-empty but serialization produced "[]" or empty,
-        // something went wrong — abort to avoid overwriting valid data with an empty file.
-        if (!entities.empty() && (jsonStr.empty() || jsonStr == "[]")) {
-            log("SpiffsSensorTypeDao: ERROR - JSON serialization produced empty result for %d entities, aborting write",
-                static_cast<int>(entities.size()));
-            return false;
-        }
-        
-        log("SpiffsSensorTypeDao: Starting file write to: %s", filePath.c_str());
+        bool streamed = false;
         try {
-            bool writeOk = spiffsAdapter->rewriteToFile(filePath.c_str(), jsonStr.c_str());
-#ifdef ESP_PLATFORM
-            log("SpiffsSensorTypeDao: Free heap after file write: %d", ESP.getFreeHeap());
-#endif
-            if (!writeOk) {
-                log("SpiffsSensorTypeDao: ERROR - File write failed for %s", filePath.c_str());
-                return false;
-            }
-            log("SpiffsSensorTypeDao: File write complete");
+            streamed = writeEntitiesToWriter(*writer, entities);
         } catch (...) {
-            log("SpiffsSensorTypeDao: ERROR - Exception in file write!");
+            log("SpiffsSensorTypeDao: ERROR - Exception during streaming write!");
+            lastSaveError = STORAGE_WRITE_ERROR_SERIALIZATION;
+            streamed = false;
+        }
+
+        lastSaveBytes = writer->bytesWritten();
+
+        if (!streamed) {
+            log("SpiffsSensorTypeDao: ERROR - Write of %d sensor types failed after %d bytes (%s), %s kept",
+                static_cast<int>(entities.size()), static_cast<int>(lastSaveBytes),
+                getStorageWriteErrorName(lastSaveError), filePath.c_str());
+            writer->abort();
             return false;
         }
-        
+
+        if (!writer->commit()) {
+            log("SpiffsSensorTypeDao: ERROR - File write failed for %s", filePath.c_str());
+            lastSaveError = STORAGE_WRITE_ERROR_COMMIT;
+            return false;
+        }
+
+#ifdef ESP_PLATFORM
+        log("SpiffsSensorTypeDao: Free heap after file write: %d", ESP.getFreeHeap());
+#endif
+        log("SpiffsSensorTypeDao: File write complete, %d bytes for %d sensor types",
+            static_cast<int>(lastSaveBytes), static_cast<int>(entities.size()));
         return true;
+    }
+
+    StorageWriteErrorEnum getLastSaveError() const override {
+        return lastSaveError;
+    }
+
+    size_t getLastSaveBytes() const override {
+        return lastSaveBytes;
     }
 
     bool getAll(std::vector<SensorType>& entities) override {

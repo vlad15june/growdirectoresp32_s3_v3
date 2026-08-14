@@ -1,12 +1,14 @@
 #pragma once
 
 #include "ISpiffsAdapter.h"
+#include "SpiffsFileWriter.h"
 #include "Core/Domain/Interfaces/ILogger.h"
 #include "Core/Domain/Interfaces/IDebugSystem.h"
 #include <Arduino.h>
 #include <FS.h>
 #include <SPIFFS.h>
 #include <esp_partition.h>
+#include <memory>
 #include <stdarg.h>
 #include <string>
 
@@ -134,6 +136,16 @@ public:
         }
         log("Wrote %d bytes to file: %s", written, filePath);
         return true;
+    }
+
+    std::unique_ptr<ISpiffsFileWriter> openForRewrite(const char* filePath) override {
+        std::unique_ptr<SpiffsFileWriter> writer(new SpiffsFileWriter(filePath, logger, debugSystem));
+        if (!writer->isOpen()) {
+            log("Failed to open file for streaming write: %s", filePath);
+            return nullptr;
+        }
+        log("Streaming write started for file: %s", filePath);
+        return writer;
     }
 
     bool appendToFile(const char* filePath, const char* body) override {

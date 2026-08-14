@@ -2,6 +2,7 @@
 #define MOCK_SENSOR_TYPE_REPOSITORY_H
 
 #include "Core/Domain/Interfaces/Repositories/ISensorTypeRepository.h"
+#include "Core/Domain/Enums/StorageWriteErrorEnum.h"
 #include "Core/Utils/Optional.h"
 #include <vector>
 #include <algorithm>
@@ -11,6 +12,10 @@ class MockSensorTypeRepository : public ISensorTypeRepository {
 private:
     std::vector<SensorType> sensorTypes;
     bool shouldReturnEmpty;
+    // GDV1-3827: let a test drive a refused bulk write and the reason reported for it
+    bool saveAllShouldFail = false;
+    StorageWriteErrorEnum lastSaveError = STORAGE_WRITE_ERROR_NONE;
+    size_t lastSaveBytes = 0;
 
 public:
     // Call tracking
@@ -35,6 +40,9 @@ public:
     void reset() {
         sensorTypes.clear();
         shouldReturnEmpty = false;
+        saveAllShouldFail = false;
+        lastSaveError = STORAGE_WRITE_ERROR_NONE;
+        lastSaveBytes = 0;
         getCalled = false;
         getAllCalled = false;
         saveCalled = false;
@@ -57,6 +65,10 @@ public:
 
     void setShouldReturnEmpty(bool value) {
         shouldReturnEmpty = value;
+    }
+
+    void setSaveAllShouldFail(bool value) {
+        saveAllShouldFail = value;
     }
 
     std::vector<SensorType> getSensorTypes() const {
@@ -107,14 +119,25 @@ public:
 
     int saveAll(const std::vector<SensorType>& entities) override {
         saveAllCalled = true;
+        if (saveAllShouldFail) {
+            lastSaveError = STORAGE_WRITE_ERROR_SERIALIZATION;
+            lastSaveBytes = 0;
+            return 0;
+        }
         int count = 0;
         for (const auto& entity : entities) {
             if (save(entity)) {
                 count++;
             }
         }
+        lastSaveError = STORAGE_WRITE_ERROR_NONE;
+        lastSaveBytes = entities.size() * 100; // stand-in for the streamed byte count
         return count;
     }
+
+    StorageWriteErrorEnum getLastSaveError() const override { return lastSaveError; }
+
+    size_t getLastSaveBytes() const override { return lastSaveBytes; }
 
     bool remove(const char* uid) override {
         removeCalled = true;
