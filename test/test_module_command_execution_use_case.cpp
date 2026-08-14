@@ -7,6 +7,9 @@
 #include "Mock/Infrastructure/Logging/MockLogger.h"
 #include "Mock/Infrastructure/Logging/MockDebugSystem.h"
 #include "Mock/Core/Domain/MockLedUseCases.h"
+#include "Mock/Core/Domain/MockFirmwareRemoteUpdate.h"
+#include "Mock/Infrastructure/Configuration/MockModuleConfig.h"
+#include "Mock/Infrastructure/Configuration/MockSettings.h"
 #include "Application/DTOs/ModuleCommandDto.h"
 #include "Core/Domain/Enums/ModuleCommandStatus.h"
 
@@ -247,6 +250,95 @@ void test_blinking_stop_no_led_use_case(void) {
     TEST_ASSERT_FALSE(ok);
 }
 
+// GDV1-3821. A failed OTA used to reach the backend as the single sentence
+// "Failed to start firmware update", whatever went wrong - so a read timeout (-11) on a slow
+// link looked exactly like a refused connection or a missing file. The reason the updater
+// recorded has to end up in the command result.
+static ModuleCommandDto makeUpdateFirmwareCommand(const char* uid) {
+    ModuleCommandDto cmd;
+    cmd.uid = uid;
+    cmd.command = "UpdateFirmware";
+    cmd.options = "{\"url\":\"https://api-test.growdirector.com/api/v1/Firmware/abc\",\"version\":\"2.18.4\"}";
+    cmd.createdAt = "";
+    return cmd;
+}
+
+void test_update_firmware_failure_reports_reason(void) {
+    MockLogger logger;
+    MockDebugSystem debugSystem;
+    MockFirmwareRemoteUpdate firmwareUpdater;
+
+    debugSystem.registerFeature(DebugFeatures::MODULE_COMMAND_DEBUG);
+    debugSystem.setDebugFeatureState(DebugFeatures::MODULE_COMMAND_DEBUG, true);
+
+    firmwareUpdater.setUpdateFromURLResult(false);
+    firmwareUpdater.setLastErrorMessage("HTTP code=-11");
+
+    ModuleCommandExecutionUseCase uc(
+        &logger, &debugSystem, nullptr, &firmwareUpdater,
+        nullptr, nullptr, nullptr, nullptr, nullptr, nullptr,
+        nullptr, nullptr, nullptr, nullptr, nullptr, nullptr);
+
+    auto results = uc.executeCommands({makeUpdateFirmwareCommand("cmd-fw-1")});
+
+    TEST_ASSERT_EQUAL(1, static_cast<int>(results.size()));
+    TEST_ASSERT_EQUAL_STRING("Error", results[0].status.c_str());
+    TEST_ASSERT_EQUAL_STRING("Failed to start firmware update: HTTP code=-11",
+                             results[0].errorMessage.c_str());
+    TEST_ASSERT_TRUE(firmwareUpdater.wasUpdateFromURLCalled());
+}
+
+// An updater that reports nothing must not produce a dangling "…update: " tail.
+void test_update_firmware_failure_without_reason_keeps_generic_message(void) {
+    MockLogger logger;
+    MockDebugSystem debugSystem;
+    MockFirmwareRemoteUpdate firmwareUpdater;
+
+    debugSystem.registerFeature(DebugFeatures::MODULE_COMMAND_DEBUG);
+    debugSystem.setDebugFeatureState(DebugFeatures::MODULE_COMMAND_DEBUG, true);
+
+    firmwareUpdater.setUpdateFromURLResult(false);
+
+    ModuleCommandExecutionUseCase uc(
+        &logger, &debugSystem, nullptr, &firmwareUpdater,
+        nullptr, nullptr, nullptr, nullptr, nullptr, nullptr,
+        nullptr, nullptr, nullptr, nullptr, nullptr, nullptr);
+
+    auto results = uc.executeCommands({makeUpdateFirmwareCommand("cmd-fw-2")});
+
+    TEST_ASSERT_EQUAL(1, static_cast<int>(results.size()));
+    TEST_ASSERT_EQUAL_STRING("Error", results[0].status.c_str());
+    TEST_ASSERT_EQUAL_STRING("Failed to start firmware update",
+                             results[0].errorMessage.c_str());
+}
+
+// The happy path keeps reporting Done with no message, and still asks for the restart.
+void test_update_firmware_success_reports_done_without_message(void) {
+    MockLogger logger;
+    MockDebugSystem debugSystem;
+    MockFirmwareRemoteUpdate firmwareUpdater;
+    MockModuleConfig moduleConfig;
+    MockSettings settings;
+
+    debugSystem.registerFeature(DebugFeatures::MODULE_COMMAND_DEBUG);
+    debugSystem.setDebugFeatureState(DebugFeatures::MODULE_COMMAND_DEBUG, true);
+
+    firmwareUpdater.setUpdateFromURLResult(true);
+    firmwareUpdater.setLastErrorMessage("HTTP code=-11");  // stale reason must be ignored
+
+    ModuleCommandExecutionUseCase uc(
+        &logger, &debugSystem, nullptr, &firmwareUpdater,
+        nullptr, nullptr, nullptr, nullptr, &moduleConfig, &settings,
+        nullptr, nullptr, nullptr, nullptr, nullptr, nullptr);
+
+    auto results = uc.executeCommands({makeUpdateFirmwareCommand("cmd-fw-3")});
+
+    TEST_ASSERT_EQUAL(1, static_cast<int>(results.size()));
+    TEST_ASSERT_EQUAL_STRING("Done", results[0].status.c_str());
+    TEST_ASSERT_EQUAL_STRING("", results[0].errorMessage.c_str());
+    TEST_ASSERT_EQUAL(CONFIGURED_NEED_RESTART, moduleConfig.getRequestedModuleMode());
+}
+
 extern "C" int run_module_command_execution_use_case_tests(void) {
     RUN_TEST(test_add_wifi_success);
     RUN_TEST(test_add_wifi_failure);
@@ -258,5 +350,8 @@ extern "C" int run_module_command_execution_use_case_tests(void) {
     RUN_TEST(test_blinking_stop_calls_led_use_case);
     RUN_TEST(test_blinking_start_no_led_use_case);
     RUN_TEST(test_blinking_stop_no_led_use_case);
+    RUN_TEST(test_update_firmware_failure_reports_reason);
+    RUN_TEST(test_update_firmware_failure_without_reason_keeps_generic_message);
+    RUN_TEST(test_update_firmware_success_reports_done_without_message);
     return 0;
 }

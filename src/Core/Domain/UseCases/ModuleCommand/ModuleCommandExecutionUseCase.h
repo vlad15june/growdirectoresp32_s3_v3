@@ -367,9 +367,22 @@ private:
         }
         else
         {
+            // The updater knows why it stopped (HTTP code, short write, no space); without it
+            // every cause of a failed OTA reaches the backend as the same opaque sentence.
+            const char* reason = firmwareUpdater->getLastErrorMessage();
+            std::string errorMessage = "Failed to start firmware update";
+
+            if (reason != nullptr && reason[0] != '\0')
+            {
+                errorMessage += ": ";
+                errorMessage += reason;
+            }
+
             log(DebugFeatures::MODULE_COMMAND_DEBUG,
-                "ModuleCommandUseCase: Firmware update failed to start");
-            return {ModuleCommandStatus::ERROR, "Failed to start firmware update"};
+                "ModuleCommandUseCase: Firmware update failed to start (%s)",
+                (reason != nullptr && reason[0] != '\0') ? reason : "no reason reported");
+
+            return {ModuleCommandStatus::ERROR, errorMessage};
         }
     }
 

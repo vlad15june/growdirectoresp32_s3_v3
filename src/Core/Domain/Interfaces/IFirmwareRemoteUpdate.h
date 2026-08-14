@@ -17,4 +17,15 @@ public:
      * @return true if an update is in progress, false otherwise
      */
     virtual bool isUpdateInProgress() = 0;
+
+    /**
+     * @brief Why the last update attempt stopped
+     *
+     * Filled on every failure path of updateFirmwareFromURL() and cleared when a new
+     * session starts. The wording is the same one that goes to the OTA log, so
+     * "HTTP code=-11" here and `ERROR: HTTP code=-11` there are the same event.
+     *
+     * @return Reason of the last failure, empty string if the last attempt did not fail
+     */
+    virtual const char* getLastErrorMessage() const = 0;
 };
