@@ -1,6 +1,8 @@
 #pragma once
 
 #include "ISpiffsFileWriter.h"
+#include "ISpiffsFileOps.h"
+#include "SpiffsFileReplacer.h"
 #include "Core/Domain/Interfaces/ILogger.h"
 #include "Core/Domain/Interfaces/IDebugSystem.h"
 #include <Arduino.h>
@@ -12,16 +14,18 @@
 /**
  * @brief SPIFFS implementation of the streaming writer (GDV1-3827)
  *
- * Writes into `<target>.tmp` and renames it over the target in commit(), so the stored file is
- * either the previous content or the complete new content — never a truncated mix.
+ * Writes into `<target>.tmp` and hands it to SpiffsFileReplacer in commit(), so the stored file is
+ * either the previous content or the complete new content — never a truncated mix, and never absent.
  */
 class SpiffsFileWriter : public ISpiffsFileWriter {
 public:
-    SpiffsFileWriter(const char* filePath, ILogger* logger = nullptr, IDebugSystem* debugSystem = nullptr)
+    SpiffsFileWriter(const char* filePath, ISpiffsFileOps* fileOps, ILogger* logger = nullptr,
+                     IDebugSystem* debugSystem = nullptr)
         : logger(logger),
           debugSystem(debugSystem),
+          replacer(fileOps, logger, debugSystem),
           targetPath(filePath != nullptr ? filePath : ""),
-          tempPath(targetPath + ".tmp"),
+          tempPath(replacer.tempPathFor(targetPath)),
           written(0),
           failed(false),
           committed(false) {
@@ -89,17 +93,13 @@ public:
             return false;
         }
 
-        // SPIFFS.rename() refuses an existing destination, so fall back to removing the old file
-        // only once the new one is known to be complete on flash.
-        if (!SPIFFS.rename(tempPath.c_str(), targetPath.c_str())) {
-            SPIFFS.remove(targetPath.c_str());
-            if (!SPIFFS.rename(tempPath.c_str(), targetPath.c_str())) {
-                log("SpiffsFileWriter: Failed to move %s onto %s", tempPath.c_str(), targetPath.c_str());
-                SPIFFS.remove(tempPath.c_str());
-                committed = true; // nothing left to abort
-                failed = true;
-                return false;
-            }
+        // The old file is moved aside rather than removed, so it exists under some name at every
+        // instant of the swap (SpiffsFileReplacer).
+        if (!replacer.replace(tempPath, targetPath)) {
+            SPIFFS.remove(tempPath.c_str());
+            committed = true; // nothing left to abort
+            failed = true;
+            return false;
         }
 
         committed = true;
@@ -138,6 +138,7 @@ private:
 
     ILogger* logger;
     IDebugSystem* debugSystem;
+    SpiffsFileReplacer replacer;
     std::string targetPath;
     std::string tempPath;
     File file;

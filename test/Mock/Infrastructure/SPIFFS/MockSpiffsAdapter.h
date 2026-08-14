@@ -6,6 +6,7 @@
 #include <map>
 #include <memory>
 #include "Infrastructure/Adapters/SPIFFS/ISpiffsAdapter.h"
+#include "Infrastructure/Adapters/SPIFFS/SpiffsFileReplacer.h"
 #include "Core/Domain/Enums/FileSystemStatusEnum.h"
 
 class MockSpiffsAdapter : public ISpiffsAdapter {
@@ -17,16 +18,21 @@ private:
     size_t largestWriteChunk = 0;
     size_t writeChunkCount = 0;
     size_t maxTotalWriteBytes = 0; // 0 = no limit; otherwise the stream fails once it is exceeded
+    std::string renameFailSource;  // renaming this file fails, the way flash can refuse one operation
 
     /**
-     * @brief In-memory ISpiffsFileWriter: streams into "<path>.tmp" and moves it on commit
+     * @brief In-memory ISpiffsFileWriter: streams into "<path>.tmp" and publishes it on commit
+     *
+     * Publishing goes through the product's SpiffsFileReplacer, so tests exercise the real swap
+     * sequence and this mock only supplies the file system underneath it.
      */
     class StreamWriter : public ISpiffsFileWriter {
     public:
         StreamWriter(MockSpiffsAdapter* owner, const char* filePath)
             : owner(owner),
+              replacer(owner),
               targetPath(filePath != nullptr ? filePath : ""),
-              tempPath(targetPath + ".tmp") {
+              tempPath(replacer.tempPathFor(targetPath)) {
             owner->fileSystem[tempPath] = "";
         }
 
@@ -64,8 +70,12 @@ private:
                 abort();
                 return false;
             }
-            owner->fileSystem[targetPath] = owner->fileSystem[tempPath];
-            owner->fileSystem.erase(tempPath);
+            if (!replacer.replace(tempPath, targetPath)) {
+                owner->fileSystem.erase(tempPath);
+                failed = true;
+                committed = true; // nothing left to abort
+                return false;
+            }
             committed = true;
             return true;
         }
@@ -80,6 +90,7 @@ private:
 
     private:
         MockSpiffsAdapter* owner;
+        SpiffsFileReplacer replacer;
         std::string targetPath;
         std::string tempPath;
         size_t written = 0;
@@ -96,6 +107,9 @@ public:
     size_t getWriteChunkCount() const { return writeChunkCount; }
     void resetWriteStats() { largestWriteChunk = 0; writeChunkCount = 0; }
     void setMaxTotalWriteBytes(size_t limit) { maxTotalWriteBytes = limit; }
+    // Renaming this exact file fails; everything else keeps working, which is how a single refused
+    // flash operation looks from the outside.
+    void setRenameFailSource(const char* filePath) { renameFailSource = filePath != nullptr ? filePath : ""; }
     std::string getFileContent(const char* fileName) {
         auto it = fileSystem.find(fileName);
         return it != fileSystem.end() ? it->second : std::string();
@@ -114,10 +128,32 @@ public:
         return true;
     }
 
-    bool fileExists(const char* fileName) {
+    bool fileExists(const char* fileName) override {
         return fileSystem.find(fileName) != fileSystem.end();
     }
-    
+
+    bool deleteFile(const char* filePath) override {
+        if (shouldFail) return false;
+        fileSystem.erase(filePath);
+        return true;
+    }
+
+    // SPIFFS.rename() refuses an existing destination and fails on a missing source — both matter
+    // for the swap sequence, so the mock refuses them too (GDV1-3827).
+    bool renameFile(const char* fromPath, const char* toPath) override {
+        if (shouldFail) return false;
+        if (!renameFailSource.empty() && renameFailSource == fromPath) return false;
+
+        auto source = fileSystem.find(fromPath);
+        if (source == fileSystem.end()) return false;
+        if (fileSystem.find(toPath) != fileSystem.end()) return false;
+
+        fileSystem[toPath] = source->second;
+        fileSystem.erase(fromPath);
+        return true;
+    }
+
+
     std::vector<std::string> listFiles(const char* dirName) {
         return std::vector<std::string>();
     }

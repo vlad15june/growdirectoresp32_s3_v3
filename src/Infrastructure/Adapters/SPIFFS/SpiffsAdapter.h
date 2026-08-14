@@ -138,8 +138,33 @@ public:
         return true;
     }
 
+    bool fileExists(const char* filePath) override {
+        return SPIFFS.exists(filePath);
+    }
+
+    bool deleteFile(const char* filePath) override {
+        if (!SPIFFS.exists(filePath)) {
+            return true;
+        }
+        if (SPIFFS.remove(filePath)) {
+            log("File removed: %s", filePath);
+            return true;
+        }
+        log("Failed to remove file: %s", filePath);
+        return false;
+    }
+
+    bool renameFile(const char* fromPath, const char* toPath) override {
+        if (SPIFFS.rename(fromPath, toPath)) {
+            log("File renamed: %s -> %s", fromPath, toPath);
+            return true;
+        }
+        log("Failed to rename file: %s -> %s", fromPath, toPath);
+        return false;
+    }
+
     std::unique_ptr<ISpiffsFileWriter> openForRewrite(const char* filePath) override {
-        std::unique_ptr<SpiffsFileWriter> writer(new SpiffsFileWriter(filePath, logger, debugSystem));
+        std::unique_ptr<SpiffsFileWriter> writer(new SpiffsFileWriter(filePath, this, logger, debugSystem));
         if (!writer->isOpen()) {
             log("Failed to open file for streaming write: %s", filePath);
             return nullptr;

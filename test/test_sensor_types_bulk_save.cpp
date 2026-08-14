@@ -7,9 +7,15 @@
 // After a "reboot with scan" — which cleared the catalog first — the module came up with no sensor
 // types at all and never scanned.
 //
-// These tests pin the four properties that make the write survive that: the payload is streamed type
-// by type, a refusal is reported with a reason, a failed write keeps the previous catalog (and leaves
-// no temporary file), and the reboot path no longer throws the catalog away.
+// These tests pin the properties that make the write survive that: the payload is streamed type by
+// type, a refusal is reported with a reason, a failed write keeps the previous catalog (and leaves no
+// temporary file), and the reboot path no longer throws the catalog away.
+//
+// The last group is about the swap itself. Replacing the stored catalog is a sequence of renames with
+// the previous file moved aside rather than removed, so the catalog is complete under some name at
+// every instant — a refused rename puts it back, and a power cut in the middle is healed on the next
+// load. That cut cannot be staged on a module, which is why it is pinned here: the tests place on the
+// mock file system exactly what flash holds between the two renames.
 
 #include <unity.h>
 #include <algorithm>
@@ -34,6 +40,7 @@
 
 static const char* BULK_SAVE_FILE = "/data/sensorTypes.json";
 static const char* BULK_SAVE_TEMP_FILE = "/data/sensorTypes.json.tmp";
+static const char* BULK_SAVE_BACKUP_FILE = "/data/sensorTypes.json.bak";
 
 // A sensor type of realistic weight: the live catalog averages ~1.4 KB of JSON per type, with
 // XF700A at ~3.9 KB, and that weight is what the single-buffer write could not allocate.
@@ -235,6 +242,139 @@ static void test_partial_write_keeps_catalog_and_leaves_no_temp_file(void) {
     TEST_ASSERT_EQUAL(12, stored.size());
 }
 
+// Publishing the new catalog fails: the previous one keeps its own name, and nothing is left over.
+//
+// This is the window the first version of the fix still had: it removed the target file and renamed
+// again, so a second failure (or a power cut) meant the catalog existed nowhere at all.
+static void test_failed_publish_keeps_catalog_and_leaves_no_leftovers(void) {
+    MockSpiffsAdapter spiffsAdapter;
+    JsonConverter jsonConverter;
+    MockLogger logger;
+    MockDebugSystem debugSystem;
+    SpiffsSensorTypeDao dao(&spiffsAdapter, &jsonConverter, &debugSystem, &logger);
+
+    TEST_ASSERT_TRUE(dao.saveAll(createCatalog(12)));
+    std::string storedBefore = spiffsAdapter.getFileContent(BULK_SAVE_FILE);
+
+    // Everything is written, but the flash refuses the one rename that would publish it.
+    spiffsAdapter.setRenameFailSource(BULK_SAVE_TEMP_FILE);
+    TEST_ASSERT_FALSE(dao.saveAll(createCatalog(14)));
+    TEST_ASSERT_EQUAL(STORAGE_WRITE_ERROR_COMMIT, dao.getLastSaveError());
+
+    // The 12 types are still under the name everyone reads...
+    TEST_ASSERT_EQUAL_STRING(storedBefore.c_str(), spiffsAdapter.getFileContent(BULK_SAVE_FILE).c_str());
+    // ...and neither the new copy nor the reserve is left behind.
+    TEST_ASSERT_FALSE(spiffsAdapter.fileExists(BULK_SAVE_TEMP_FILE));
+    TEST_ASSERT_FALSE(spiffsAdapter.fileExists(BULK_SAVE_BACKUP_FILE));
+
+    spiffsAdapter.setRenameFailSource("");
+    std::vector<SensorType> stored;
+    TEST_ASSERT_TRUE(dao.getAll(stored));
+    TEST_ASSERT_EQUAL(12, stored.size());
+}
+
+// A rewrite that succeeds leaves the catalog alone in storage: no temporary file, no reserve.
+static void test_successful_rewrite_leaves_no_temp_or_backup_file(void) {
+    MockSpiffsAdapter spiffsAdapter;
+    JsonConverter jsonConverter;
+    MockLogger logger;
+    MockDebugSystem debugSystem;
+    SpiffsSensorTypeDao dao(&spiffsAdapter, &jsonConverter, &debugSystem, &logger);
+
+    TEST_ASSERT_TRUE(dao.saveAll(createCatalog(12)));
+    TEST_ASSERT_TRUE(dao.saveAll(createCatalog(14)));
+
+    std::vector<SensorType> stored;
+    TEST_ASSERT_TRUE(dao.getAll(stored));
+    TEST_ASSERT_EQUAL(14, stored.size());
+    TEST_ASSERT_FALSE(spiffsAdapter.fileExists(BULK_SAVE_TEMP_FILE));
+    TEST_ASSERT_FALSE(spiffsAdapter.fileExists(BULK_SAVE_BACKUP_FILE));
+}
+
+// Power is cut in the middle of the swap: the new catalog is complete under its temporary name, the
+// previous one waits in the reserve, and the name everyone reads is momentarily free. The next load
+// has to come up with sensor types anyway — nothing else can heal this state.
+static void test_catalog_is_recovered_from_temp_file_after_power_cut(void) {
+    MockSpiffsAdapter spiffsAdapter;
+    JsonConverter jsonConverter;
+    MockLogger logger;
+    MockDebugSystem debugSystem;
+    SpiffsSensorTypeDao dao(&spiffsAdapter, &jsonConverter, &debugSystem, &logger);
+
+    TEST_ASSERT_TRUE(dao.saveAll(createCatalog(12)));
+    std::string previousCatalog = spiffsAdapter.getFileContent(BULK_SAVE_FILE);
+    TEST_ASSERT_TRUE(dao.saveAll(createCatalog(14)));
+    std::string newCatalog = spiffsAdapter.getFileContent(BULK_SAVE_FILE);
+
+    // What is on flash between the two renames.
+    spiffsAdapter.writeToFile(BULK_SAVE_BACKUP_FILE, previousCatalog.c_str());
+    spiffsAdapter.writeToFile(BULK_SAVE_TEMP_FILE, newCatalog.c_str());
+    spiffsAdapter.removeFile(BULK_SAVE_FILE);
+
+    SpiffsSensorTypeDao daoAfterBoot(&spiffsAdapter, &jsonConverter, &debugSystem, &logger);
+    std::vector<SensorType> stored;
+    TEST_ASSERT_TRUE(daoAfterBoot.getAll(stored));
+    // The catalog that was being published wins over the one it was replacing.
+    TEST_ASSERT_EQUAL(14, stored.size());
+    // And it is back under its own name, with the interrupted swap cleaned up.
+    TEST_ASSERT_EQUAL_STRING(newCatalog.c_str(), spiffsAdapter.getFileContent(BULK_SAVE_FILE).c_str());
+    TEST_ASSERT_FALSE(spiffsAdapter.fileExists(BULK_SAVE_TEMP_FILE));
+    TEST_ASSERT_FALSE(spiffsAdapter.fileExists(BULK_SAVE_BACKUP_FILE));
+}
+
+// Power is cut while the bytes were still being written: the temporary file breaks off mid-catalog,
+// so it is not a catalog and the reserve is what comes back.
+static void test_truncated_temp_file_is_rejected_and_backup_is_used(void) {
+    MockSpiffsAdapter spiffsAdapter;
+    JsonConverter jsonConverter;
+    MockLogger logger;
+    MockDebugSystem debugSystem;
+    SpiffsSensorTypeDao dao(&spiffsAdapter, &jsonConverter, &debugSystem, &logger);
+
+    TEST_ASSERT_TRUE(dao.saveAll(createCatalog(12)));
+    std::string previousCatalog = spiffsAdapter.getFileContent(BULK_SAVE_FILE);
+    TEST_ASSERT_TRUE(dao.saveAll(createCatalog(14)));
+    std::string newCatalog = spiffsAdapter.getFileContent(BULK_SAVE_FILE);
+
+    std::string truncated = newCatalog.substr(0, newCatalog.size() / 2);
+    spiffsAdapter.writeToFile(BULK_SAVE_BACKUP_FILE, previousCatalog.c_str());
+    spiffsAdapter.writeToFile(BULK_SAVE_TEMP_FILE, truncated.c_str());
+    spiffsAdapter.removeFile(BULK_SAVE_FILE);
+
+    SpiffsSensorTypeDao daoAfterBoot(&spiffsAdapter, &jsonConverter, &debugSystem, &logger);
+    std::vector<SensorType> stored;
+    TEST_ASSERT_TRUE(daoAfterBoot.getAll(stored));
+    // Half of the new catalog parses into sensor types, and it is still not a catalog.
+    TEST_ASSERT_EQUAL(12, stored.size());
+    TEST_ASSERT_EQUAL_STRING(previousCatalog.c_str(), spiffsAdapter.getFileContent(BULK_SAVE_FILE).c_str());
+    TEST_ASSERT_FALSE(spiffsAdapter.fileExists(BULK_SAVE_TEMP_FILE));
+    TEST_ASSERT_FALSE(spiffsAdapter.fileExists(BULK_SAVE_BACKUP_FILE));
+}
+
+// Clearing the catalog clears it for good: a leftover companion file must not be adopted afterwards.
+static void test_clear_drops_leftover_companion_files(void) {
+    MockSpiffsAdapter spiffsAdapter;
+    JsonConverter jsonConverter;
+    MockLogger logger;
+    MockDebugSystem debugSystem;
+    SpiffsSensorTypeDao dao(&spiffsAdapter, &jsonConverter, &debugSystem, &logger);
+
+    TEST_ASSERT_TRUE(dao.saveAll(createCatalog(12)));
+    std::string storedCatalog = spiffsAdapter.getFileContent(BULK_SAVE_FILE);
+    spiffsAdapter.writeToFile(BULK_SAVE_BACKUP_FILE, storedCatalog.c_str());
+    spiffsAdapter.writeToFile(BULK_SAVE_TEMP_FILE, storedCatalog.c_str());
+
+    TEST_ASSERT_TRUE(dao.clear());
+
+    TEST_ASSERT_FALSE(spiffsAdapter.fileExists(BULK_SAVE_FILE));
+    TEST_ASSERT_FALSE(spiffsAdapter.fileExists(BULK_SAVE_TEMP_FILE));
+    TEST_ASSERT_FALSE(spiffsAdapter.fileExists(BULK_SAVE_BACKUP_FILE));
+
+    std::vector<SensorType> stored;
+    TEST_ASSERT_FALSE(dao.getAll(stored));
+    TEST_ASSERT_EQUAL(0, stored.size());
+}
+
 // A refused bulk write is reported with its reason and the heap numbers that decided it.
 static void test_sync_logs_reason_and_heap_when_bulk_write_is_refused(void) {
     MockHybridAPIService apiService;
@@ -301,6 +441,11 @@ extern "C" int run_sensor_types_bulk_save_tests(void) {
     RUN_TEST(test_bulk_save_survives_heap_too_small_for_whole_catalog);
     RUN_TEST(test_failed_serialization_reports_reason_and_keeps_catalog);
     RUN_TEST(test_partial_write_keeps_catalog_and_leaves_no_temp_file);
+    RUN_TEST(test_failed_publish_keeps_catalog_and_leaves_no_leftovers);
+    RUN_TEST(test_successful_rewrite_leaves_no_temp_or_backup_file);
+    RUN_TEST(test_catalog_is_recovered_from_temp_file_after_power_cut);
+    RUN_TEST(test_truncated_temp_file_is_rejected_and_backup_is_used);
+    RUN_TEST(test_clear_drops_leftover_companion_files);
     RUN_TEST(test_sync_logs_reason_and_heap_when_bulk_write_is_refused);
     RUN_TEST(test_reboot_with_scan_keeps_sensor_type_catalog);
     return 0;

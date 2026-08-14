@@ -2,9 +2,16 @@
 #include <memory>
 #include <string>
 #include "ISpiffsFileWriter.h"
+#include "ISpiffsFileOps.h"
 #include "Core/Domain/Enums/FileSystemStatusEnum.h"
 
-class ISpiffsAdapter {
+/**
+ * @brief File system of the module.
+ *
+ * Extends ISpiffsFileOps (GDV1-3827) so that a component holding an adapter can also move files
+ * around — that is what makes a safe replacement of a stored file possible.
+ */
+class ISpiffsAdapter : public ISpiffsFileOps {
 public:
     virtual ~ISpiffsAdapter() = default;
 

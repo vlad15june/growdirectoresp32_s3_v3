@@ -3,6 +3,7 @@
 #include "ISpiffsSensorTypeDao.h"
 #include "ISpiffsAdapter.h"
 #include "ISpiffsFileWriter.h"
+#include "SpiffsFileReplacer.h"
 #include "Core/Domain/Interfaces/Adapters/Json/IJsonConverter.h"
 #include "Core/Domain/Interfaces/IDebugSystem.h"
 #include "Core/Domain/Interfaces/ILogger.h"
@@ -22,6 +23,7 @@ protected:
     IJsonConverter* jsonConverter;
     IDebugSystem* debugSystem;
     ILogger* logger;
+    SpiffsFileReplacer fileReplacer;
     std::string filePath;
     StorageWriteErrorEnum lastSaveError = STORAGE_WRITE_ERROR_NONE;
     size_t lastSaveBytes = 0;
@@ -109,6 +111,61 @@ protected:
         return jsonConverter->sensorTypesFromJson(jsonStr, sensorTypes);
     }
 
+    /**
+     * @brief Whether this payload is a whole catalog rather than the beginning of one (GDV1-3827)
+     *
+     * The streaming write ends with "]", the same end-of-stream marker the writer relies on, so a
+     * payload that does not end with it never reached its end and is not a catalog. Beyond that the
+     * content is judged exactly the way a normal read judges the stored file: it has to parse into at
+     * least one sensor type.
+     */
+    bool isCompleteCatalog(const std::string& content, std::vector<SensorType>& entities) {
+        size_t lastChar = content.find_last_not_of(" \t\r\n");
+        if (lastChar == std::string::npos || content[lastChar] != ']') {
+            return false;
+        }
+        return jsonToEntities(content, entities);
+    }
+
+    /**
+     * @brief Take the catalog from a leftover companion file when the catalog file is gone (GDV1-3827)
+     *
+     * Replacing the stored catalog is a sequence of renames (SpiffsFileReplacer), so a power cut in
+     * the middle of it leaves the complete catalog under `<file>.tmp` (the new one) or `<file>.bak`
+     * (the previous one) with `<file>` itself missing. This is the only thing that heals that state:
+     * the newer candidate wins, it gets its proper name back, and the older one is dropped.
+     */
+    bool recoverFromCompanionFile(std::vector<SensorType>& entities) {
+        const std::string candidates[] = {
+            fileReplacer.tempPathFor(filePath),   // the catalog that was being published
+            fileReplacer.backupPathFor(filePath)  // the catalog it was replacing
+        };
+
+        for (const std::string& candidate : candidates) {
+            std::string content = spiffsAdapter->readSPIFFSstr(candidate.c_str());
+            if (content.empty()) {
+                continue;
+            }
+
+            entities.clear();
+            if (!isCompleteCatalog(content, entities)) {
+                log("SpiffsSensorTypeDao: %s is not a complete catalog, ignoring it", candidate.c_str());
+                entities.clear();
+                continue;
+            }
+
+            log("SpiffsSensorTypeDao: Recovered %d sensor types from %s",
+                static_cast<int>(entities.size()), candidate.c_str());
+            if (fileReplacer.promote(candidate, filePath)) {
+                // Whatever is left of the interrupted replacement describes an older state.
+                fileReplacer.removeCompanions(filePath);
+            }
+            return true;
+        }
+
+        return false;
+    }
+
     void initialize() {
         log("SpiffsSensorTypeDao: Initializing");
         std::string basePath = getBasePath();
@@ -138,7 +195,8 @@ protected:
 
 public:
     SpiffsSensorTypeDao(ISpiffsAdapter* spiffsAdapter, IJsonConverter* jsonConverter, IDebugSystem* debugSystem = nullptr, ILogger* logger = nullptr)
-        : spiffsAdapter(spiffsAdapter), jsonConverter(jsonConverter), debugSystem(debugSystem), logger(logger) {
+        : spiffsAdapter(spiffsAdapter), jsonConverter(jsonConverter), debugSystem(debugSystem), logger(logger),
+          fileReplacer(spiffsAdapter, logger, debugSystem) {
         if (!spiffsAdapter || !jsonConverter) {
             throw std::invalid_argument("Adapters cannot be null");
         }
@@ -149,6 +207,9 @@ public:
         log("SpiffsSensorTypeDao: Clearing all data (removing file)");
         if (filePath.empty()) initialize();
         spiffsAdapter->removeFile(filePath.c_str());
+        // An empty catalog has to stay empty: a leftover companion file would otherwise be adopted
+        // as the catalog by the recovery in getAll() (GDV1-3827).
+        fileReplacer.removeCompanions(filePath);
         log("SpiffsSensorTypeDao: Clear operation completed");
         return true;
     }
@@ -158,6 +219,7 @@ public:
      */
     void setDebugSystem(IDebugSystem *debugSystemInstance) {
         debugSystem = debugSystemInstance;
+        fileReplacer.setDebugSystem(debugSystemInstance);
     }
 
     /**
@@ -165,6 +227,7 @@ public:
      */
     void setLogger(ILogger *loggerInstance) {
         logger = loggerInstance;
+        fileReplacer.setLogger(loggerInstance);
     }
 
     // ISpiffsDao implementation using uid
@@ -318,13 +381,13 @@ public:
     bool getAll(std::vector<SensorType>& entities) override {
         log("SpiffsSensorTypeDao: Getting all sensor types");
         if (filePath.empty()) initialize();
-        
+
         std::string content = spiffsAdapter->readSPIFFSstr(filePath.c_str());
         if (content.length() == 0) {
             log("SpiffsSensorTypeDao: No content found in file");
-            return false;
+            return recoverFromCompanionFile(entities);
         }
-        
+
         log("SpiffsSensorTypeDao: File content read, length: %d", content.length());
         bool result = jsonToEntities(content, entities);
         log("SpiffsSensorTypeDao: JSON deserialization %s, sensor types count: %d", result ? "successful" : "failed", entities.size());
