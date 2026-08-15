@@ -61,6 +61,7 @@ extern "C" void run_mqtt_inbound_size_guard_tests(void);
 extern "C" void run_rule_step_cycle_persistence_tests(void);
 extern "C" void run_vpd_channel_tests(void);
 extern "C" void run_sensor_service_tests(void);
+extern "C" int run_sensor_types_bulk_save_tests(void);
 
 void setUp(void) {
     // set stuff up here
@@ -250,6 +251,9 @@ int main(void) {
     run_vpd_channel_tests();
 
     run_sensor_service_tests();
+
+    // Run tests for always storing the sensor type catalog (GDV1-3827)
+    run_sensor_types_bulk_save_tests();
 
     return UNITY_END();
 }

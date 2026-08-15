@@ -1115,17 +1115,8 @@ private:
                     "ModuleCommandUseCase: Sensor repository not available for clearing");
             }
             
-            if (sensorTypeRepository)
-            {
-                bool sensorTypesCleared = sensorTypeRepository->clear();
-                log(DebugFeatures::MODULE_COMMAND_DEBUG,
-                    "ModuleCommandUseCase: Sensor type data clear %s", sensorTypesCleared ? "successful" : "failed");
-            }
-            else
-            {
-                log(DebugFeatures::MODULE_COMMAND_DEBUG,
-                    "ModuleCommandUseCase: Sensor type repository not available for clearing");
-            }
+            log(DebugFeatures::MODULE_COMMAND_DEBUG,
+                "ModuleCommandUseCase: Sensor type data kept, sync rewrites the catalog after reboot");
         }
         
         if (settings)

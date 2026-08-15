@@ -2092,13 +2092,15 @@ public:
             //Serial.printf("ArduinoJsonConverter: Output: %s\n", output.c_str());
             return output;
         }
+        // An empty string says "this sensor type could not be serialized"; "{}" looked like a valid
+        // (if useless) object and travelled into the stored catalog unnoticed (GDV1-3827).
         catch (const std::exception& e) {
             //Serial.printf("ArduinoJsonConverter: Exception in sensorTypeToJson: %s\n", e.what());
-            return "{}";
+            return "";
         }
         catch (...) {
             //Serial.printf("ArduinoJsonConverter: Unknown exception in sensorTypeToJson\n");
-            return "{}";
+            return "";
         }
     }
 
@@ -2164,17 +2166,24 @@ public:
     {
         //Serial.printf("ArduinoJsonConverter: sensorTypesToJson called with %d sensor types\n", sensorTypes.size());
         //Serial.printf("ArduinoJsonConverter: Free heap at start: %d\n", ESP.getFreeHeap());
-        
+
         try {
-            // Build the JSON array by concatenating individual sensor type JSON strings.
-            // This avoids allocating a large ArduinoJson document for the outer array,
-            // removing the ~64 KB heap constraint that could cause "[]" on low memory.
+            size_t exactSize = 2; // '[' and ']'
+            for (size_t i = 0; i < sensorTypes.size(); i++) {
+                size_t typeSize = sensorTypeToJson(sensorTypes[i]).size();
+                if (typeSize == 0) return ""; // a type that cannot be serialized fails the whole array
+                if (i > 0) exactSize += 1; // ','
+                exactSize += typeSize;
+            }
+
             std::string output;
-            output.reserve(sensorTypes.size() * 512);
+            output.reserve(exactSize);
             output += "[";
             for (size_t i = 0; i < sensorTypes.size(); i++) {
+                std::string typeJson = sensorTypeToJson(sensorTypes[i]);
+                if (typeJson.empty()) return "";
                 if (i > 0) output += ",";
-                output += sensorTypeToJson(sensorTypes[i]);
+                output += typeJson;
             }
             output += "]";
 
@@ -2183,13 +2192,15 @@ public:
 
             return output;
         }
+        // An empty string means "serialization failed", which "[]" could not say: "[]" is also the
+        // correct answer for an empty catalog, and that ambiguity is what silently emptied the file.
         catch (const std::exception& e) {
             //Serial.printf("ArduinoJsonConverter: Exception in sensorTypesToJson: %s\n", e.what());
-            return "[]";
+            return "";
         }
         catch (...) {
             //Serial.printf("ArduinoJsonConverter: Unknown exception in sensorTypesToJson\n");
-            return "[]";
+            return "";
         }
     }
 

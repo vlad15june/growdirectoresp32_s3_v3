@@ -12,6 +12,7 @@
 #include "Infrastructure/Adapters/Time/INTPTimeAdapter.h"
 #include "Core/Domain/Interfaces/UseCases/IRepublishModuleStructureUseCase.h"
 #include "Core/Domain/Interfaces/UseCases/IVirtualSensorChannelsUseCase.h"
+#include "Core/Domain/Enums/StorageWriteErrorEnum.h"
 #include <cstdarg>
 #include <unordered_map>
 
@@ -285,11 +286,19 @@ private:
         // Single bulk write — 1 SPIFFS read (getAll above) + 1 SPIFFS write
         int saved = _sensorTypeRepository->saveAll(toSave);
         if (saved != static_cast<int>(toSave.size())) {
-            log("SYNC_SENSOR_TYPES: saveAll wrote %d of %d sensor types", saved, static_cast<int>(toSave.size()));
+            log("SYNC_SENSOR_TYPES: saveAll wrote %d of %d sensor types, reason=%s, bytes=%d, freeHeap=%d, maxAllocHeap=%d",
+                saved, static_cast<int>(toSave.size()),
+                getStorageWriteErrorName(_sensorTypeRepository->getLastSaveError()),
+                static_cast<int>(_sensorTypeRepository->getLastSaveBytes()),
+                _arduinoAdapter ? static_cast<int>(_arduinoAdapter->getFreeHeap()) : -1,
+                _arduinoAdapter ? static_cast<int>(_arduinoAdapter->getMaxAllocHeap()) : -1);
             return 0;
         }
 
-        log("SYNC_SENSOR_TYPES: Bulk saved %d sensor types to storage", saved);
+        log("SYNC_SENSOR_TYPES: Bulk saved %d sensor types to storage, bytes=%d, freeHeap=%d, maxAllocHeap=%d",
+            saved, static_cast<int>(_sensorTypeRepository->getLastSaveBytes()),
+            _arduinoAdapter ? static_cast<int>(_arduinoAdapter->getFreeHeap()) : -1,
+            _arduinoAdapter ? static_cast<int>(_arduinoAdapter->getMaxAllocHeap()) : -1);
 
         // Update existing sensors with data from changed/added sensor types
         if (_sensorRepository && !changedSensorTypes.empty()) {
