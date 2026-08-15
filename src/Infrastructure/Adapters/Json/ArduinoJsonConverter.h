@@ -2167,14 +2167,7 @@ public:
         //Serial.printf("ArduinoJsonConverter: sensorTypesToJson called with %d sensor types\n", sensorTypes.size());
         //Serial.printf("ArduinoJsonConverter: Free heap at start: %d\n", ESP.getFreeHeap());
 
-        // The whole array still ends up in one std::string here, which needs one contiguous heap
-        // block for the entire catalog (GDV1-3827: ~20 KB of JSON for 14 sensor types). Storage does
-        // not go through this method any more — SpiffsSensorTypeDao streams the array type by type
-        // through ISpiffsFileWriter — so this stays only for callers that really want one string.
         try {
-            // Measure first, then reserve exactly: the old reserve(size * 512) was ~2.8x short of the
-            // real ~1.4 KB per type, so the string was reallocated twice and the peak request grew to
-            // 28 KB — more than the largest free block on a module that had been running for a while.
             size_t exactSize = 2; // '[' and ']'
             for (size_t i = 0; i < sensorTypes.size(); i++) {
                 size_t typeSize = sensorTypeToJson(sensorTypes[i]).size();

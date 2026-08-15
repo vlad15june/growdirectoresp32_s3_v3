@@ -286,9 +286,6 @@ private:
         // Single bulk write — 1 SPIFFS read (getAll above) + 1 SPIFFS write
         int saved = _sensorTypeRepository->saveAll(toSave);
         if (saved != static_cast<int>(toSave.size())) {
-            // GDV1-3827: the failure is decided by the heap, so the numbers that decide it go into the
-            // same line. SENSOR_DATA_DEBUG reaches MQTT, while the storage layer only talks to Serial —
-            // without this the only trace of a lost catalog was the bare "wrote 0 of N".
             log("SYNC_SENSOR_TYPES: saveAll wrote %d of %d sensor types, reason=%s, bytes=%d, freeHeap=%d, maxAllocHeap=%d",
                 saved, static_cast<int>(toSave.size()),
                 getStorageWriteErrorName(_sensorTypeRepository->getLastSaveError()),
