@@ -1,5 +1,14 @@
 # Release Notes
 
+## Version 2.18.6 (2026-08-15)
+
+### Fixed
+- **A Restart Asked For By The User Is Recorded As One**: GDV1-3820 A restart requested from the application or from the server was recorded by the module as if the power had been cut, so neither the diagnostics nor the module history could tell a deliberate restart from a power loss, and support had no way to see which of the two had happened. A commanded restart is now recorded as user-initiated wherever it comes from, while the restarts the module performs for its own reasons — a firmware update, a sensor configuration change — keep their own reason unchanged.
+- **Working Sensors Are No Longer Reported As Disconnected**: GDV1-3826 The check that rejects impossible readings measured every reading against the range of the sensor's subtype alone, so whole families of correctly working sensors — those allowed a wider range by their own configuration than their subtype describes — had their readings thrown away and were reported as disconnected, which silenced them for rules and for notifications. A reading is now accepted when it fits either the range of the subtype or the range configured for that sensor, so impossible values are still rejected and possible ones are not.
+- **The Sensor Type Catalogue Is Saved Reliably**: GDV1-3827 Saving the sensor type catalogue could fail on a module whose free memory had shrunk, because the whole catalogue was assembled in one piece before being written; the failure was then reported as if there had been nothing to save and the module was left with an empty catalogue, so a restart with a sensor scan came back without any sensors and the module had to be set up again by hand. The catalogue is now written piece by piece as it is saved, so its size no longer decides whether it can be stored; the new copy takes the place of the old one only once it is complete, and if the module loses power in the middle of that replacement the complete copy is picked up on the next start. A save that fails is now reported as a failure and appears in the log, and a restart with a scan no longer clears the catalogue before the new one has been written.
+
+---
+
 ## Version 2.18.5 (2026-08-14)
 
 ### Fixed
