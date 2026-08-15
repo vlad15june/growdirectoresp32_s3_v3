@@ -14,8 +14,8 @@ struct ModbusRegisterConfig
     std::string channelName;
     uint8_t channel;
     std::string sensorType;
-    float canConnectMinValue;
-    float canConnectMaxValue;
+    float canConnectMinValue = 0.0f;
+    float canConnectMaxValue = 0.0f;
 };
 
 #endif

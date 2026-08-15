@@ -331,6 +331,192 @@ void test_multi_channel_all_channels_implausible_is_an_error(void) {
     TEST_ASSERT_TRUE(f.sensorRepository.lastStatusIsError);
 }
 
+// -------- GDV1-3826: the range is the UNION of the sub type and the register config --------
+//
+// The sub sensor type alone is regularly the narrower of the two sources, and gating on it alone
+// dropped healthy readings and reported live channels as disconnected. The register config of the
+// very same channel already carries a range the scan accepts a sensor by (canConnect*), so the gate
+// now rejects only what is outside BOTH.
+
+const std::string WIDE_SENSOR_TYPE_UID = "e0d3b2a1-0000-4000-8000-000000000001";
+const std::string LUX_SENSOR_TYPE_UID = "e0d3b2a1-0000-4000-8000-000000000002";
+const std::string I2C_SENSOR_TYPE_UID = "e0d3b2a1-0000-4000-8000-000000000003";
+
+// One channel, one sub sensor type, one register config — the shape of every case below
+SensorType makeOneChannelSensorType(const std::string &uid,
+                                    const std::string &model,
+                                    const std::string &channel,
+                                    float limitMin,
+                                    float limitMax) {
+    SensorType sensorType;
+    sensorType.uid = uid;
+    sensorType.name = model;
+    sensorType.protocol = SensorProtocol::MODBUS_PROTOCOL;
+
+    SubSensorType subSensorType;
+    subSensorType.name = channel;
+    subSensorType.limitMinValue = limitMin;
+    subSensorType.limitMaxValue = limitMax;
+    sensorType.sensorTypes.push_back(subSensorType);
+
+    return sensorType;
+}
+
+SensorEntity makeRegisterChannelSensor(const std::string &uid,
+                                       const std::string &model,
+                                       const std::string &channel,
+                                       float canConnectMin,
+                                       float canConnectMax) {
+    SensorEntity sensor = makeSingleChannelSensor();
+    sensor.sensorType = "";
+    sensor.model = model;
+    sensor.sensorTypeUid = uid;
+
+    ModbusRegisterConfig registerConfig;
+    registerConfig.channel = 1;
+    registerConfig.channelName = channel;
+    registerConfig.sensorType = channel;
+    registerConfig.canConnectMinValue = canConnectMin;
+    registerConfig.canConnectMaxValue = canConnectMax;
+    sensor.modbusRegisterConfigs.push_back(registerConfig);
+
+    return sensor;
+}
+
+// Unconfigured wide channel: the catalogue says 0..100 while the register config declares the raw
+// counts the sensor actually answers with. The scan accepted 6471 on the module of the ticket and
+// the reading path then rejected 6502 as implausible — one firmware, two verdicts.
+void test_register_config_widens_the_upper_bound(void) {
+    Fixture f;
+    f.sensorTypeRepository.addSensorType(
+        makeOneChannelSensorType(WIDE_SENSOR_TYPE_UID, "ry-cwyw485", "conductivity", 0.0f, 100.0f));
+    SensorEntity sensor =
+        makeRegisterChannelSensor(WIDE_SENSOR_TYPE_UID, "ry-cwyw485", "conductivity", 0.0f, 100000.0f);
+    f.sensorReader.multiValues[SENSOR_UID + ".01"] = 6500.0f;
+
+    TEST_ASSERT_TRUE(f.service.readSensor(sensor));
+
+    TEST_ASSERT_EQUAL_FLOAT(6500.0f, f.sensorValueModel.getChannelValue(SENSOR_UID, SENSOR_UID + ".01"));
+    TEST_ASSERT_EQUAL_INT(1, f.sensorValueModel.setLastReadTimeCallCount);
+    TEST_ASSERT_FALSE(f.sensorRepository.lastStatusIsError);
+}
+
+// Lower bound, the class the ticket missed: lux is catalogued as 1..200000, so darkness (0 lux) was
+// dropped every night. The register config starts at zero, so zero is a reading, not a fault.
+void test_zero_lux_at_night_is_accepted(void) {
+    Fixture f;
+    f.sensorTypeRepository.addSensorType(
+        makeOneChannelSensorType(LUX_SENSOR_TYPE_UID, "XF700A", "lux", 1.0f, 200000.0f));
+    SensorEntity sensor =
+        makeRegisterChannelSensor(LUX_SENSOR_TYPE_UID, "XF700A", "lux", 0.0f, 200000.0f);
+    f.sensorReader.multiValues[SENSOR_UID + ".01"] = 0.0f;
+
+    TEST_ASSERT_TRUE(f.service.readSensor(sensor));
+
+    TEST_ASSERT_EQUAL_FLOAT(0.0f, f.sensorValueModel.getChannelValue(SENSOR_UID, SENSOR_UID + ".01"));
+    TEST_ASSERT_FALSE(f.sensorRepository.lastStatusIsError);
+}
+
+// The other direction, and the reason this is a union and not a replacement: mp-508c declares
+// canConnect 10..40 for soil temperature while the catalogue allows 0..100. Swapping one range for
+// the other would have narrowed acceptance and rejected cold soil.
+void test_register_config_narrower_than_the_sub_type_does_not_narrow_the_gate(void) {
+    Fixture f;
+    f.sensorTypeRepository.addSensorType(
+        makeOneChannelSensorType(SOIL_SENSOR_TYPE_UID, "mp-508c", "soil_temp", 0.0f, 100.0f));
+    SensorEntity sensor =
+        makeRegisterChannelSensor(SOIL_SENSOR_TYPE_UID, "mp-508c", "soil_temp", 10.0f, 40.0f);
+
+    f.sensorReader.multiValues[SENSOR_UID + ".01"] = 5.0f;  // inside the sub type, below canConnect
+    TEST_ASSERT_TRUE(f.service.readSensor(sensor));
+    TEST_ASSERT_EQUAL_FLOAT(5.0f, f.sensorValueModel.getChannelValue(SENSOR_UID, SENSOR_UID + ".01"));
+
+    // outside both sources: still garbage, still dropped
+    f.sensorReader.multiValues[SENSOR_UID + ".01"] = 3801.0f;
+    TEST_ASSERT_FALSE(f.service.readSensor(sensor));
+    TEST_ASSERT_EQUAL_INT(1, f.sensorValueModel.setChannelValueCallCount);
+    TEST_ASSERT_TRUE(f.sensorRepository.lastStatusIsError);
+}
+
+// I2C register configs carry no canConnect fields at all, so for them the sub sensor type stays the
+// only source and the behaviour is the one from GDV1-3810 — unchanged by this fix.
+void test_i2c_channel_without_can_connect_keeps_the_sub_type_range(void) {
+    Fixture f;
+    f.sensorTypeRepository.addSensorType(
+        makeOneChannelSensorType(I2C_SENSOR_TYPE_UID, "sht31", "humidity", 0.0f, 100.0f));
+
+    SensorEntity sensor = makeSingleChannelSensor();
+    sensor.sensorType = "";
+    sensor.model = "sht31";
+    sensor.protocol = "I2C";
+    sensor.sensorTypeUid = I2C_SENSOR_TYPE_UID;
+
+    I2CRegisterConfig registerConfig;
+    registerConfig.channel = 1;
+    registerConfig.channelName = "humidity";
+    registerConfig.sensorType = "humidity";
+    sensor.i2cRegisterConfigs.push_back(registerConfig);
+
+    f.sensorReader.multiValues[SENSOR_UID + ".01"] = 55.0f;
+    TEST_ASSERT_TRUE(f.service.readSensor(sensor));
+    TEST_ASSERT_EQUAL_FLOAT(55.0f, f.sensorValueModel.getChannelValue(SENSOR_UID, SENSOR_UID + ".01"));
+
+    f.sensorReader.multiValues[SENSOR_UID + ".01"] = 3801.0f;
+    TEST_ASSERT_FALSE(f.service.readSensor(sensor));
+    TEST_ASSERT_EQUAL_INT(1, f.sensorValueModel.setChannelValueCallCount);
+}
+
+// The catalogue knows nothing about this channel: the register config must NOT start gating it on
+// its own — that would make the gate stricter than before the fix, which is the defect itself.
+void test_unknown_sub_type_is_not_gated_by_the_register_config(void) {
+    Fixture f;
+    SensorEntity sensor =
+        makeRegisterChannelSensor(WIDE_SENSOR_TYPE_UID, "ry-cwyw485", "conductivity", 10.0f, 40.0f);
+    f.sensorReader.multiValues[SENSOR_UID + ".01"] = 900.0f;
+
+    TEST_ASSERT_TRUE(f.service.readSensor(sensor));
+
+    TEST_ASSERT_EQUAL_FLOAT(900.0f, f.sensorValueModel.getChannelValue(SENSOR_UID, SENSOR_UID + ".01"));
+
+    ISensorPlausibilityUseCase::Limits limits = f.plausibility.getLimits(sensor, "conductivity");
+    TEST_ASSERT_FALSE(limits.defined);
+}
+
+// The resolved range itself, both directions in numbers
+void test_limits_are_the_union_of_the_two_sources(void) {
+    MockSensorTypeRepository repository;
+    repository.addSensorType(
+        makeOneChannelSensorType(WIDE_SENSOR_TYPE_UID, "ry-cwyw485", "conductivity", 0.0f, 100.0f));
+    repository.addSensorType(
+        makeOneChannelSensorType(SOIL_SENSOR_TYPE_UID, "mp-508c", "soil_temp", 0.0f, 100.0f));
+    SensorPlausibilityUseCase plausibility(&repository);
+    ISensorPlausibilityUseCase &gate = plausibility;
+
+    // register config wider on top, sub type wider at the bottom
+    ISensorPlausibilityUseCase::Limits wide = gate.getLimits(
+        makeRegisterChannelSensor(WIDE_SENSOR_TYPE_UID, "ry-cwyw485", "conductivity", -50.0f, 100000.0f),
+        "conductivity");
+    TEST_ASSERT_TRUE(wide.defined);
+    TEST_ASSERT_EQUAL_FLOAT(-50.0f, wide.min);
+    TEST_ASSERT_EQUAL_FLOAT(100000.0f, wide.max);
+
+    // register config entirely inside the sub type range: the union is the sub type range
+    ISensorPlausibilityUseCase::Limits narrow = gate.getLimits(
+        makeRegisterChannelSensor(SOIL_SENSOR_TYPE_UID, "mp-508c", "soil_temp", 10.0f, 40.0f),
+        "soil_temp");
+    TEST_ASSERT_TRUE(narrow.defined);
+    TEST_ASSERT_EQUAL_FLOAT(0.0f, narrow.min);
+    TEST_ASSERT_EQUAL_FLOAT(100.0f, narrow.max);
+
+    // a config that declares nothing (both fields at their 0.0f default) contributes nothing
+    ISensorPlausibilityUseCase::Limits declaresNothing = gate.getLimits(
+        makeRegisterChannelSensor(SOIL_SENSOR_TYPE_UID, "mp-508c", "soil_temp", 0.0f, 0.0f),
+        "soil_temp");
+    TEST_ASSERT_TRUE(declaresNothing.defined);
+    TEST_ASSERT_EQUAL_FLOAT(0.0f, declaresNothing.min);
+    TEST_ASSERT_EQUAL_FLOAT(100.0f, declaresNothing.max);
+}
+
 // -------- the decision on its own --------
 
 void test_limits_resolution_and_decision(void) {
@@ -434,6 +620,12 @@ extern "C" int run_sensor_plausibility_limits_tests(void) {
     RUN_TEST(test_unknown_sensor_type_accepts_reading);
     RUN_TEST(test_multi_channel_drops_only_the_implausible_channel);
     RUN_TEST(test_multi_channel_all_channels_implausible_is_an_error);
+    RUN_TEST(test_register_config_widens_the_upper_bound);
+    RUN_TEST(test_zero_lux_at_night_is_accepted);
+    RUN_TEST(test_register_config_narrower_than_the_sub_type_does_not_narrow_the_gate);
+    RUN_TEST(test_i2c_channel_without_can_connect_keeps_the_sub_type_range);
+    RUN_TEST(test_unknown_sub_type_is_not_gated_by_the_register_config);
+    RUN_TEST(test_limits_are_the_union_of_the_two_sources);
     RUN_TEST(test_limits_resolution_and_decision);
     RUN_TEST(test_gate_without_repository_accepts_everything);
     RUN_TEST(test_service_uses_the_injected_gate);
