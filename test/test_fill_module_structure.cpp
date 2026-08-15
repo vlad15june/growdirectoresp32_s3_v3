@@ -6,7 +6,11 @@
 #include "Mock/Infrastructure/Configuration/MockModuleConfig.h"
 #include "Mock/Infrastructure/Configuration/MockSettings.h"
 #include "Mock/Infrastructure/Wifi/MockWifiAdapter.h"
+#include "Mock/Infrastructure/MockArduinoAdapter.h"
 #include "Core/Domain/Data/Models/ModuleStructure.h"
+#include "Core/Domain/Enums/BootTypeEnum.h"
+#include "Core/Domain/UseCases/ModuleCommand/ModuleCommandExecutionUseCase.h"
+#include "Application/DTOs/ModuleCommandDto.h"
 
 // Helper class for tests
 class FillModuleStructureTestHelper {
@@ -421,6 +425,46 @@ static void test_fill_module_structure_handles_null_settings() {
     fill_module_structure_teardown();
 }
 
+// GDV1-3820. The other end of the command path: the boot type recorded by a Reboot command has to
+// reach the published structure as "reboot-user" and only then fall back to power-on. The reset
+// here is what used to swallow the field nobody set, so a commanded restart arrived at the backend
+// as a power loss.
+static void test_fill_module_structure_reports_commanded_reboot_as_user() {
+    fill_module_structure_setup();
+
+    MockArduinoAdapter arduinoAdapter;
+    ModuleCommandExecutionUseCase commandUseCase(
+        &g_testLogger, &g_testDebugSystem, nullptr, nullptr, &arduinoAdapter,
+        nullptr, nullptr, nullptr, nullptr, &g_testSettings,
+        nullptr, nullptr, nullptr, nullptr, nullptr, nullptr);
+
+    ModuleCommandDto cmd;
+    cmd.uid = "cmd-reboot-structure";
+    cmd.command = "Reboot";
+    cmd.options = "{\"noScanSensors\":\"true\"}";
+    cmd.createdAt = "";
+
+    auto results = commandUseCase.executeCommands({cmd});
+
+    TEST_ASSERT_EQUAL(1, static_cast<int>(results.size()));
+    TEST_ASSERT_EQUAL_STRING("Done", results[0].status.c_str());
+    TEST_ASSERT_TRUE(arduinoAdapter.restartCalled);
+    TEST_ASSERT_EQUAL_UINT8(BOOT_TYPE_USER, g_testSettings.getBootType());
+
+    // The boot that follows the commanded restart
+    FillModuleStructureTestHelper::callFillModuleStructure(g_testModuleSetupService);
+
+    TEST_ASSERT_FALSE(g_testModuleStructure.nodes.empty());
+    if (!g_testModuleStructure.nodes.empty()) {
+        TEST_ASSERT_EQUAL_STRING("reboot-user", g_testModuleStructure.nodes[0].bootType.c_str());
+    }
+
+    // Reported once, then back to the default - the next boot must not claim a user reboot again
+    TEST_ASSERT_EQUAL_UINT8(BOOT_TYPE_POWER_ON, g_testSettings.getBootType());
+
+    fill_module_structure_teardown();
+}
+
 // Main test runner function
 extern "C" void run_fill_module_structure_tests(void) {
     printf("\n----- Running FillModuleStructure Tests -----\n");
@@ -437,6 +481,7 @@ extern "C" void run_fill_module_structure_tests(void) {
     RUN_TEST(test_fill_module_structure_handles_null_module_structure);
     RUN_TEST(test_fill_module_structure_handles_null_module_config);
     RUN_TEST(test_fill_module_structure_handles_null_settings);
-    
+    RUN_TEST(test_fill_module_structure_reports_commanded_reboot_as_user);
+
     printf("\n----- FillModuleStructure Tests Complete -----\n");
 }

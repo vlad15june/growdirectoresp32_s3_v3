@@ -1128,9 +1128,16 @@ private:
             }
         }
         
+        if (settings)
+        {
+            settings->setBootType(BOOT_TYPE_USER);
+            log(DebugFeatures::MODULE_COMMAND_DEBUG,
+                "ModuleCommandUseCase: Reboot - Set boot type to BOOT_TYPE_USER");
+        }
+
         log(DebugFeatures::MODULE_COMMAND_DEBUG,
             "ModuleCommandUseCase: Executing reboot command");
-        
+
         arduinoAdapter->restart();
         return true;
     }
