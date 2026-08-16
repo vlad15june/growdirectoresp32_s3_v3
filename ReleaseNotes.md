@@ -1,5 +1,35 @@
 # Release Notes
 
+## Version 2.18.6 (2026-08-15)
+
+### Fixed
+- **A Restart Asked For By The User Is Recorded As One**: GDV1-3820 A restart requested from the application or from the server was recorded by the module as if the power had been cut, so neither the diagnostics nor the module history could tell a deliberate restart from a power loss, and support had no way to see which of the two had happened. A commanded restart is now recorded as user-initiated wherever it comes from, while the restarts the module performs for its own reasons — a firmware update, a sensor configuration change — keep their own reason unchanged.
+- **Working Sensors Are No Longer Reported As Disconnected**: GDV1-3826 The check that rejects impossible readings measured every reading against the range of the sensor's subtype alone, so whole families of correctly working sensors — those allowed a wider range by their own configuration than their subtype describes — had their readings thrown away and were reported as disconnected, which silenced them for rules and for notifications. A reading is now accepted when it fits either the range of the subtype or the range configured for that sensor, so impossible values are still rejected and possible ones are not.
+- **The Sensor Type Catalogue Is Saved Reliably**: GDV1-3827 Saving the sensor type catalogue could fail on a module whose free memory had shrunk, because the whole catalogue was assembled in one piece before being written; the failure was then reported as if there had been nothing to save and the module was left with an empty catalogue, so a restart with a sensor scan came back without any sensors and the module had to be set up again by hand. The catalogue is now written piece by piece as it is saved, so its size no longer decides whether it can be stored; the new copy takes the place of the old one only once it is complete, and if the module loses power in the middle of that replacement the complete copy is picked up on the next start. A save that fails is now reported as a failure and appears in the log, and a restart with a scan no longer clears the catalogue before the new one has been written.
+
+---
+
+## Version 2.18.5 (2026-08-14)
+
+### Fixed
+- **Remote Firmware Update No Longer Fails On A Slow Connection**: GDV1-3821 A remote firmware update gave the download only a few seconds to open the connection and to receive the first data of the binary, far less than a loaded link needs, so the update failed while the server was answering normally and the module stayed on its old version. The download now gets the same waiting budget as every other request the module makes to the server, for opening the connection and for receiving data alike. When an update does stop, the reason it stopped is reported back to the server together with the command result and written to the update log, so a failed update is no longer the same unexplained message whatever caused it.
+
+---
+
+## Version 2.18.4 (2026-08-13)
+
+### Added
+- **Vapour Pressure Deficit Reported Next To Air Temperature And Humidity**: GDV1-3782 Every wired Modbus sensor that measures both air temperature and humidity now also reports vapour pressure deficit as an additional measurement channel of that same sensor, calculated from the pair on every reading and sent together with them, so VPD can be watched and used in rules without a separate sensor. The additional channel is announced in the module structure the device sends to the server; while the sensor cannot be read the channel is reported as disconnected instead of quietly disappearing from the packet, and when a sensor catalogue update changes which channels a sensor exposes, the device sends its structure again.
+
+### Fixed
+- **Operation-Time Window Applied To Every Rule Type**: GDV1-3807 A rule's daily operation-time window was only kept for sensor-based rules. Loop, step, pH, EC, average-sensor and dimmer rules were left without a window, so the check concluded there was none and let them run around the clock, and dimmer rules, which require a window, could never pass validation. The window is now kept and reported back for every rule type, so a rule switches its equipment only inside its configured hours.
+- **Implausible Sensor Readings No Longer Reach Rules**: GDV1-3810 A reading outside the physical range of its sensor type — the result of a broken exchange, a stuck register or a disconnected probe — was stored, sent to the server and used by rules, which switched equipment on it; a module in the field reported an air temperature of several thousand degrees this way. Such a reading is now rejected as it is read: it is not stored, does not count as a fresh reading, and leaves the sensor in its error state, so the existing protection against unreachable sensors takes over and the rejection is visible in the sensor log. Sensor types for which no physical range is configured are unaffected, and the recommended working range of a sensor is not used for this check.
+- **Dosing Cycle Count Survives A Restart**: GDV1-3811 A step (dosing) rule with a protective shutdown counted its completed cycles only while the module was running, so every restart handed the rule a fresh budget and the protective shutdown could be postponed indefinitely. The count is now kept in memory that survives a restart, and the shutdown fires at the configured cycle even if the module rebooted in between. The count is dropped when the rule is switched off, deleted or edited, when its date window has passed, when the target was reached and after a protective shutdown. A full power cut still clears it.
+- **Pressure And Water-Level Sensors Report Their Value**: GDV1-3418 A sensor that delivers its measurement over two consecutive registers — pressure and water level among them — was read as if it used a single one, so its value never came out right, and a sensor that trickles its answer out over a fraction of a second was given up on before the whole answer had arrived. The device now reads such a measurement whole and keeps collecting a slow answer until the frame is complete.
+- **Oversized Messages From The Server Are No Longer Dropped Silently**: GDV1-3813 An incoming message larger than the module can assemble was discarded without a trace: a rule too big to fit was accepted by the platform, sent to the module and simply never applied, with nothing to show why. Such a message is still dropped, but the module now logs it, reports it to the server as an error event and counts it in the module diagnostics, so the case is visible without a debug session. The size the module accepts is unchanged.
+
+---
+
 ## Version 2.18.3 (2026-08-06)
 
 ### Changed

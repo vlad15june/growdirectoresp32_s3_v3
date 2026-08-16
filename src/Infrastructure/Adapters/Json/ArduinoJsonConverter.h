@@ -248,6 +248,7 @@ public:
         doc["apiStatus"] = diagnosticData.apiStatus;
         doc["mqttStatus"] = diagnosticData.mqttStatus;
         doc["mqttFails"] = diagnosticData.mqttFails;
+        doc["mqttOversizeDrops"] = diagnosticData.mqttOversizeDrops;
         doc["apiSendFailRatio"] = diagnosticData.apiSendFailRatio;
         doc["firmware"] = diagnosticData.firmware;
         doc["freeHeap"] = diagnosticData.freeHeap;
@@ -359,6 +360,19 @@ public:
             {
                 rule.daysOfMonth.push_back(v.as<int>());
             }
+        }
+
+        // Operation time window - common for every rule type, not only sensor rules
+        if (doc.containsKey("startDayTime"))
+        {
+            std::string startDayTimeStr = doc["startDayTime"] | "";
+            rule.startDayTime = parseISOTimeToTimeT(startDayTimeStr);
+        }
+
+        if (doc.containsKey("endDayTime"))
+        {
+            std::string endDayTimeStr = doc["endDayTime"] | "";
+            rule.endDayTime = parseISOTimeToTimeT(endDayTimeStr);
         }
 
         // Type-specific properties
@@ -487,18 +501,6 @@ public:
             rule.timeToSetPoint = doc["timeToSetPoint"] | 0;
             rule.isAdvanced = doc["isAdvanced"] | false;
 
-            if (doc.containsKey("startDayTime"))
-            {
-                std::string startDayTimeStr = doc["startDayTime"] | "";
-                rule.startDayTime = parseISOTimeToTimeT(startDayTimeStr);
-            }
-
-            if (doc.containsKey("endDayTime"))
-            {
-                std::string endDayTimeStr = doc["endDayTime"] | "";
-                rule.endDayTime = parseISOTimeToTimeT(endDayTimeStr);
-            }
-
             // Parse advanced rule values
             rule.advancedRuleValues.clear();
             if (doc.containsKey("advancedRuleValues"))
@@ -618,6 +620,10 @@ public:
         {
             daysOfMonthArr.add(day);
         }
+
+        // Operation time window - common for every rule type, not only sensor rules
+        doc["startDayTime"] = timeToISOString(rule.startDayTime);
+        doc["endDayTime"] = timeToISOString(rule.endDayTime);
 
         // Type-specific properties
         if (!rule.isScheduleRule())
@@ -742,9 +748,6 @@ public:
             doc["valueHigh"] = rule.valueHigh;
             doc["timeToSetPoint"] = rule.timeToSetPoint;
             doc["isAdvanced"] = rule.isAdvanced;
-
-            doc["startDayTime"] = timeToISOString(rule.startDayTime);
-            doc["endDayTime"] = timeToISOString(rule.endDayTime);
 
             // Advanced rule values
             JsonArray advancedValuesArr = doc.createNestedArray("advancedRuleValues");
@@ -2097,13 +2100,15 @@ public:
             //Serial.printf("ArduinoJsonConverter: Output: %s\n", output.c_str());
             return output;
         }
+        // An empty string says "this sensor type could not be serialized"; "{}" looked like a valid
+        // (if useless) object and travelled into the stored catalog unnoticed (GDV1-3827).
         catch (const std::exception& e) {
             //Serial.printf("ArduinoJsonConverter: Exception in sensorTypeToJson: %s\n", e.what());
-            return "{}";
+            return "";
         }
         catch (...) {
             //Serial.printf("ArduinoJsonConverter: Unknown exception in sensorTypeToJson\n");
-            return "{}";
+            return "";
         }
     }
 
@@ -2169,17 +2174,24 @@ public:
     {
         //Serial.printf("ArduinoJsonConverter: sensorTypesToJson called with %d sensor types\n", sensorTypes.size());
         //Serial.printf("ArduinoJsonConverter: Free heap at start: %d\n", ESP.getFreeHeap());
-        
+
         try {
-            // Build the JSON array by concatenating individual sensor type JSON strings.
-            // This avoids allocating a large ArduinoJson document for the outer array,
-            // removing the ~64 KB heap constraint that could cause "[]" on low memory.
+            size_t exactSize = 2; // '[' and ']'
+            for (size_t i = 0; i < sensorTypes.size(); i++) {
+                size_t typeSize = sensorTypeToJson(sensorTypes[i]).size();
+                if (typeSize == 0) return ""; // a type that cannot be serialized fails the whole array
+                if (i > 0) exactSize += 1; // ','
+                exactSize += typeSize;
+            }
+
             std::string output;
-            output.reserve(sensorTypes.size() * 512);
+            output.reserve(exactSize);
             output += "[";
             for (size_t i = 0; i < sensorTypes.size(); i++) {
+                std::string typeJson = sensorTypeToJson(sensorTypes[i]);
+                if (typeJson.empty()) return "";
                 if (i > 0) output += ",";
-                output += sensorTypeToJson(sensorTypes[i]);
+                output += typeJson;
             }
             output += "]";
 
@@ -2188,13 +2200,15 @@ public:
 
             return output;
         }
+        // An empty string means "serialization failed", which "[]" could not say: "[]" is also the
+        // correct answer for an empty catalog, and that ambiguity is what silently emptied the file.
         catch (const std::exception& e) {
             //Serial.printf("ArduinoJsonConverter: Exception in sensorTypesToJson: %s\n", e.what());
-            return "[]";
+            return "";
         }
         catch (...) {
             //Serial.printf("ArduinoJsonConverter: Unknown exception in sensorTypesToJson\n");
-            return "[]";
+            return "";
         }
     }
 

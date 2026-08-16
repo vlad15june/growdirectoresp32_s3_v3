@@ -40,6 +40,7 @@
 #include "Core/Domain/Interfaces/UseCases/IOnConnectivityRestoredUseCase.h"
 #include "Core/Domain/Interfaces/UseCases/ICheckModuleDeletionUseCase.h"
 #include "Core/Domain/Interfaces/UseCases/ICheckFirmwareUpdateOnStartupUseCase.h"
+#include "Core/Domain/Interfaces/UseCases/ISensorStructureUseCase.h"
 #include <memory>
 #include <cstdarg>
 #include <cstdio>
@@ -91,6 +92,8 @@ private:
     ICheckFirmwareUpdateOnStartupUseCase *checkFirmwareUpdateOnStartupUseCase;
     IUdpInboundDispatcher *udpInboundDispatcher;
     IRemoteModuleCommandReceiver *remoteModuleCommandReceiver;
+
+    ISensorStructureUseCase *sensorStructureUseCase;
 
     void log(const char *format, ...);
 
@@ -193,6 +196,15 @@ public:
         IUdpInboundDispatcher *udpInboundDispatcher = nullptr,
         IRemoteModuleCommandReceiver *remoteModuleCommandReceiver = nullptr);
 
+    /**
+     * @brief Inject the builder of the sensor records of the structure (GDV1-3782)
+     *
+     * A setter and not a constructor argument: the constructor of this service is already 33
+     * positional parameters long, and globals.h wires the rest of the late dependencies the same
+     * way. The same instance is given to RepublishModuleStructureUseCase.
+     */
+    void setSensorStructureUseCase(ISensorStructureUseCase *useCase) { sensorStructureUseCase = useCase; }
+
     void setupModule() override;
     std::unique_ptr<ILoopService> getLoopService() override;
 };
@@ -264,7 +276,8 @@ inline ModuleSetupService::ModuleSetupService(
                                                        checkModuleDeletionUseCase(checkModuleDeletionUseCase),
                                                        checkFirmwareUpdateOnStartupUseCase(checkFirmwareUpdateOnStartupUseCase),
                                                        udpInboundDispatcher(udpInboundDispatcher),
-                                                       remoteModuleCommandReceiver(remoteModuleCommandReceiver)
+                                                       remoteModuleCommandReceiver(remoteModuleCommandReceiver),
+                                                       sensorStructureUseCase(nullptr)
 {
 }
 
@@ -1068,127 +1081,42 @@ inline void ModuleSetupService::createBaseNodeStructure(Node &node)
     log("SETUP: PSRAM size: %u, free: %u, internal heap free: %u", psramSize, psramFree, internalHeapFree);
 }
 
+// The records themselves are built by SensorStructureUseCase; these stay as the entry points
+// the setup flow (and its tests) already use.
 inline void ModuleSetupService::addMultiChannelModbusSensor(Node &node, const SensorEntity &sensorEntity)
 {
-    for (const auto &config : sensorEntity.modbusRegisterConfigs)
+    if (sensorStructureUseCase)
     {
-        Sensor sensor;
-        sensor.uid = sensorEntity.uid + "." + (config.channel < 10 ? "0" : "") + std::to_string(config.channel);
-        sensor.type = config.sensorType.empty() ? sensorEntity.sensorType : config.sensorType;
-        sensor.pin = sensorEntity.pin;
-        sensor.group = sensorEntity.modbusDeviceAddress;
-        sensor.modelUid = sensorEntity.sensorTypeUid;
-        log("SETUP: Adding multi-channel ModBus sensor - sensorTypeUid: %s", sensorEntity.sensorTypeUid.c_str());
-
-        // Search for existing sensor with same UID
-        bool found = false;
-        for (auto &existingSensor : node.sensors)
-        {
-            if (existingSensor.uid == sensor.uid)
-            {
-                existingSensor = sensor; // Replace existing sensor
-                found = true;
-                log("SETUP: Updated existing multi-channel ModBus sensor %s, type: %s, channel: %d, pin: %d",
-                    sensor.uid.c_str(), sensor.type.c_str(), config.channel, sensor.pin);
-                break;
-            }
-        }
-
-        if (!found)
-        {
-            node.sensors.push_back(sensor);
-            log("SETUP: Added new multi-channel ModBus sensor %s, type: %s, channel: %d, pin: %d",
-                sensor.uid.c_str(), sensor.type.c_str(), config.channel, sensor.pin);
-        }
+        sensorStructureUseCase->addMultiChannelModbusSensor(node, sensorEntity);
     }
 }
 
 inline void ModuleSetupService::addMultiChannelI2CSensor(Node &node, const SensorEntity &sensorEntity)
 {
-    for (const auto &config : sensorEntity.i2cRegisterConfigs)
+    if (sensorStructureUseCase)
     {
-        Sensor sensor;
-        sensor.uid = sensorEntity.uid + "." + (config.channel < 10 ? "0" : "") + std::to_string(config.channel);
-        sensor.type = config.sensorType.empty() ? sensorEntity.sensorType : config.sensorType;
-        sensor.pin = sensorEntity.pin;
-        sensor.group = 1; // I2C typically uses a single address/group
-        sensor.modelUid = sensorEntity.sensorTypeUid;
-
-        // Search for existing sensor with same UID
-        bool found = false;
-        for (auto &existingSensor : node.sensors)
-        {
-            if (existingSensor.uid == sensor.uid)
-            {
-                existingSensor = sensor; // Replace existing sensor
-                found = true;
-                log("SETUP: Updated existing multi-channel I2C sensor %s, type: %s, channel: %d, pin: %d",
-                    sensor.uid.c_str(), sensor.type.c_str(), config.channel, sensor.pin);
-                break;
-            }
-        }
-
-        if (!found)
-        {
-            node.sensors.push_back(sensor);
-            log("SETUP: Added new multi-channel I2C sensor %s, type: %s, channel: %d, pin: %d",
-                sensor.uid.c_str(), sensor.type.c_str(), config.channel, sensor.pin);
-        }
+        sensorStructureUseCase->addMultiChannelI2CSensor(node, sensorEntity);
     }
 }
 
 inline void ModuleSetupService::addSingleChannelSensor(Node &node, const SensorEntity &sensorEntity)
 {
-    Sensor sensor;
-    sensor.uid = sensorEntity.uid + ".01";
-    sensor.type = sensorEntity.sensorType;
-    sensor.pin = sensorEntity.pin;
-    sensor.group = 1;
-    sensor.modelUid = sensorEntity.sensorTypeUid;
-
-    // Search for existing sensor with same UID
-    bool found = false;
-    for (auto &existingSensor : node.sensors)
+    if (sensorStructureUseCase)
     {
-        if (existingSensor.uid == sensor.uid)
-        {
-            existingSensor = sensor; // Replace existing sensor
-            found = true;
-            log("SETUP: Updated existing single-channel sensor %s, type: %s, protocol: %s, pin: %d",
-                sensor.uid.c_str(), sensor.type.c_str(), sensorEntity.protocol.c_str(), sensor.pin);
-            break;
-        }
-    }
-
-    if (!found)
-    {
-        node.sensors.push_back(sensor);
-        log("SETUP: Added new single-channel sensor %s, type: %s, protocol: %s, pin: %d",
-            sensor.uid.c_str(), sensor.type.c_str(), sensorEntity.protocol.c_str(), sensor.pin);
+        sensorStructureUseCase->addSingleChannelSensor(node, sensorEntity);
     }
 }
 
 inline void ModuleSetupService::addSensorToStructure(Node &node, const SensorEntity &sensorEntity)
 {
-    if (sensorEntity.isMultiChannel())
+    if (!sensorStructureUseCase)
     {
-        if (sensorEntity.protocol == "ModBus")
-        {
-            addMultiChannelModbusSensor(node, sensorEntity);
-        }
-        else if (sensorEntity.protocol == "I2C")
-        {
-            addMultiChannelI2CSensor(node, sensorEntity);
-        }
-        else
-        {
-            log("SETUP: Unsupported protocol for multi-channel sensor: %s", sensorEntity.protocol.c_str());
-        }
+        log("SETUP: sensor structure use case is not wired - sensor %s is not added to the structure",
+            sensorEntity.uid.c_str());
+        return;
     }
-    else
-    {
-        addSingleChannelSensor(node, sensorEntity);
-    }
+
+    sensorStructureUseCase->addSensor(node, sensorEntity);
 }
 
 inline void ModuleSetupService::fillSensorModuleStructure(Node &node)

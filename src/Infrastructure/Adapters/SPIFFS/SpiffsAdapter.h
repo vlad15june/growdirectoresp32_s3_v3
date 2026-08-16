@@ -1,12 +1,14 @@
 #pragma once
 
 #include "ISpiffsAdapter.h"
+#include "SpiffsFileWriter.h"
 #include "Core/Domain/Interfaces/ILogger.h"
 #include "Core/Domain/Interfaces/IDebugSystem.h"
 #include <Arduino.h>
 #include <FS.h>
 #include <SPIFFS.h>
 #include <esp_partition.h>
+#include <memory>
 #include <stdarg.h>
 #include <string>
 
@@ -134,6 +136,41 @@ public:
         }
         log("Wrote %d bytes to file: %s", written, filePath);
         return true;
+    }
+
+    bool fileExists(const char* filePath) override {
+        return SPIFFS.exists(filePath);
+    }
+
+    bool deleteFile(const char* filePath) override {
+        if (!SPIFFS.exists(filePath)) {
+            return true;
+        }
+        if (SPIFFS.remove(filePath)) {
+            log("File removed: %s", filePath);
+            return true;
+        }
+        log("Failed to remove file: %s", filePath);
+        return false;
+    }
+
+    bool renameFile(const char* fromPath, const char* toPath) override {
+        if (SPIFFS.rename(fromPath, toPath)) {
+            log("File renamed: %s -> %s", fromPath, toPath);
+            return true;
+        }
+        log("Failed to rename file: %s -> %s", fromPath, toPath);
+        return false;
+    }
+
+    std::unique_ptr<ISpiffsFileWriter> openForRewrite(const char* filePath) override {
+        std::unique_ptr<SpiffsFileWriter> writer(new SpiffsFileWriter(filePath, this, logger, debugSystem));
+        if (!writer->isOpen()) {
+            log("Failed to open file for streaming write: %s", filePath);
+            return nullptr;
+        }
+        log("Streaming write started for file: %s", filePath);
+        return writer;
     }
 
     bool appendToFile(const char* filePath, const char* body) override {

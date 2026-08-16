@@ -16,7 +16,9 @@ SensorService::SensorService(IModuleConfig *moduleConfig,
                              IDebugSystem *debugSystem,
                              IUdpManager *udpManager,
                              IJsonConverter *jsonConverter,
-                             IMqttManager *mqttManager)
+                             IMqttManager *mqttManager,
+                             ISensorPlausibilityUseCase *plausibilityUseCase,
+                             IVirtualSensorChannelsUseCase *virtualChannelsUseCase)
     : moduleConfig(moduleConfig),
       moduleStructure(moduleStructure),
       sensorRepository(sensorRepository),
@@ -30,6 +32,8 @@ SensorService::SensorService(IModuleConfig *moduleConfig,
       udpManager(udpManager),
       jsonConverter(jsonConverter),
       mqttManager(mqttManager),
+      virtualChannelsUseCase(virtualChannelsUseCase),
+      plausibilityUseCase(plausibilityUseCase),
       lastSensorReadTime(0),
       lastSensorUpdateTime(0),
       lastUdpSendTime(0)
@@ -162,9 +166,16 @@ bool SensorService::readSensor(SensorEntity sensor)
         if (sensorReader->readMultiChannelSensor(sensor, channelValues))
         {
             std::string values;
+            int acceptedChannels = 0;
             for (const auto &pair : channelValues)
             {
+                if (!acceptReading(sensor, channelSensorTypeName(sensor, pair.first), pair.first, pair.second))
+                {
+                    continue;
+                }
+
                 sensorValueModel->setChannelValue(sensor.uid, pair.first, pair.second);
+                acceptedChannels++;
                 std::string ch = pair.first;
                 size_t dot = ch.find_last_of('.');
                 if (dot != std::string::npos)
@@ -175,6 +186,19 @@ bool SensorService::readSensor(SensorEntity sensor)
                 snprintf(item, sizeof(item), "%s=%.2f ", ch.c_str(), pair.second);
                 values += item;
             }
+
+            if (acceptedChannels == 0)
+            {
+                // Every channel of this read was implausible: the sensor is left without a fresh
+                // value, exactly as if the read had failed (GDV1-3810)
+                sensorRepository->updateSensorStatus(sensor.uid.c_str(), sensor.isActive, true);
+                return false;
+            }
+
+            // Computed channels are calculated from the RAW readings of this read and then pass the
+            // same gate as any other value (accepted order, 2026-08-13)
+            applyVirtualChannels(sensor, channelValues);
+
             sensorValueModel->setLastReadTime(sensor.uid, currentTime);
             sensorRepository->updateSensorStatus(sensor.uid.c_str(), true, false);
             log("SensorService: Read %s addr=%d %s: %s", sensor.model.c_str(), sensor.modbusDeviceAddress, sensor.uid.c_str(), values.c_str());
@@ -196,6 +220,14 @@ bool SensorService::readSensor(SensorEntity sensor)
         float value;
         if (sensorReader->readSensor(sensor, value))
         {
+            if (!acceptReading(sensor, sensor.sensorType, sensor.uid, value))
+            {
+                // Implausible reading: no value stored, no fresh read time, sensor left in the
+                // error state so the rules fall back on sensor_unreachable (GDV1-3810)
+                sensorRepository->updateSensorStatus(sensor.uid.c_str(), sensor.isActive, true);
+                return false;
+            }
+
             // For single-channel sensors, use setSensorValue
             sensorValueModel->setSensorValue(sensor.uid, value);
             sensorValueModel->setLastReadTime(sensor.uid, currentTime);
@@ -211,6 +243,110 @@ bool SensorService::readSensor(SensorEntity sensor)
             return false;
         }
     }
+}
+
+// Computed channels of one read: value from the RAW readings, stored like any other channel.
+// The value is subject to the same checks as the rest of the read (accepted order, 2026-08-13).
+void SensorService::applyVirtualChannels(const SensorEntity &sensor,
+                                         const std::map<std::string, float> &rawChannelValues)
+{
+    if (!sensorValueModel || !virtualChannelsUseCase)
+    {
+        return;
+    }
+
+    std::vector<IVirtualSensorChannelsUseCase::Channel> partial;
+    for (const auto &channel : virtualChannelsUseCase->values(sensor, rawChannelValues, partial))
+    {
+        if (!acceptReading(sensor, channel.type, channel.uid, channel.value))
+        {
+            continue;
+        }
+
+        sensorValueModel->setChannelValue(sensor.uid, channel.uid, channel.value);
+        log("SensorService: VIRTUAL_CHANNEL uid=%s type=%s value=%.3f sources=%.2f,%.2f",
+            channel.uid.c_str(), channel.type.c_str(), channel.value,
+            channel.firstSource, channel.secondSource);
+    }
+
+    // Not all sources answered this time: the cached value stays as it is, exactly like for a
+    // register channel that was not read (owner decision, 2026-08-12)
+    for (const auto &channel : partial)
+    {
+        log("SensorService: VIRTUAL_CHANNEL_SKIP uid=%s type=%s reason=partial_read",
+            channel.uid.c_str(), channel.type.c_str());
+    }
+}
+
+// A computed channel has no register config, so without this it would silently disappear from the
+// packet of a failing sensor instead of being reported as disconnected (INV-8, D-10).
+void SensorService::appendVirtualChannelDtos(const SensorEntity &sensor, UpdateDto &dto)
+{
+    if (!virtualChannelsUseCase)
+    {
+        return;
+    }
+
+    for (const auto &channel : virtualChannelsUseCase->channels(sensor))
+    {
+        SensorDto sensorDto;
+        sensorDto.uid = channel.uid;
+        sensorDto.value = 0.0f;
+        sensorDto.state = getSensorStateName(SENSOR_STATE_DISCONNECTED);
+        dto.sensors.push_back(sensorDto);
+        log("SensorService: VIRTUAL_CHANNEL_DISCONNECTED uid=%s type=%s",
+            sensorDto.uid.c_str(), channel.type.c_str());
+    }
+}
+
+bool SensorService::acceptReading(const SensorEntity &sensor,
+                                  const std::string &subSensorTypeName,
+                                  const std::string &channelUid,
+                                  float value)
+{
+    if (!plausibilityUseCase)
+    {
+        // Nothing wired in: the gate is inert, behaviour is the one from before GDV1-3810
+        return true;
+    }
+
+    ISensorPlausibilityUseCase::Limits limits;
+    if (plausibilityUseCase->isPlausible(sensor, subSensorTypeName, value, limits))
+    {
+        return true;
+    }
+
+    log("SensorService: REJECTED implausible value uid=%s type=%s value=%.2f limits=[%.2f,%.2f]",
+        channelUid.c_str(),
+        subSensorTypeName.empty() ? "-" : subSensorTypeName.c_str(),
+        value,
+        limits.min,
+        limits.max);
+
+    return false;
+}
+
+std::string SensorService::channelSensorTypeName(const SensorEntity &sensor, const std::string &channelUid) const
+{
+    for (const auto &registerConfig : sensor.modbusRegisterConfigs)
+    {
+        std::string uid = sensor.uid + "." + (registerConfig.channel < 10 ? "0" : "") + std::to_string(registerConfig.channel);
+        if (uid == channelUid)
+        {
+            return registerConfig.sensorType.empty() ? registerConfig.channelName : registerConfig.sensorType;
+        }
+    }
+
+    for (const auto &registerConfig : sensor.i2cRegisterConfigs)
+    {
+        std::string uid = sensor.uid + "." + (registerConfig.channel < 10 ? "0" : "") + std::to_string(registerConfig.channel);
+        if (uid == channelUid)
+        {
+            return registerConfig.sensorType.empty() ? registerConfig.channelName : registerConfig.sensorType;
+        }
+    }
+
+    return "";
 }
 
 bool SensorService::readAnalogSensors()
@@ -379,6 +515,8 @@ UpdateDto SensorService::createSensorUpdateDto()
                 sensorDto.state = getSensorStateName(SENSOR_STATE_DISCONNECTED);
                 dto.sensors.push_back(sensorDto);
             }
+
+            appendVirtualChannelDtos(sensor, dto);
         }
         else
         {

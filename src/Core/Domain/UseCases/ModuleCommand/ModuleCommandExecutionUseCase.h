@@ -367,9 +367,22 @@ private:
         }
         else
         {
+            // The updater knows why it stopped (HTTP code, short write, no space); without it
+            // every cause of a failed OTA reaches the backend as the same opaque sentence.
+            const char* reason = firmwareUpdater->getLastErrorMessage();
+            std::string errorMessage = "Failed to start firmware update";
+
+            if (reason != nullptr && reason[0] != '\0')
+            {
+                errorMessage += ": ";
+                errorMessage += reason;
+            }
+
             log(DebugFeatures::MODULE_COMMAND_DEBUG,
-                "ModuleCommandUseCase: Firmware update failed to start");
-            return {ModuleCommandStatus::ERROR, "Failed to start firmware update"};
+                "ModuleCommandUseCase: Firmware update failed to start (%s)",
+                (reason != nullptr && reason[0] != '\0') ? reason : "no reason reported");
+
+            return {ModuleCommandStatus::ERROR, errorMessage};
         }
     }
 
@@ -1108,22 +1121,20 @@ private:
                     "ModuleCommandUseCase: Sensor repository not available for clearing");
             }
             
-            if (sensorTypeRepository)
-            {
-                bool sensorTypesCleared = sensorTypeRepository->clear();
-                log(DebugFeatures::MODULE_COMMAND_DEBUG,
-                    "ModuleCommandUseCase: Sensor type data clear %s", sensorTypesCleared ? "successful" : "failed");
-            }
-            else
-            {
-                log(DebugFeatures::MODULE_COMMAND_DEBUG,
-                    "ModuleCommandUseCase: Sensor type repository not available for clearing");
-            }
+            log(DebugFeatures::MODULE_COMMAND_DEBUG,
+                "ModuleCommandUseCase: Sensor type data kept, sync rewrites the catalog after reboot");
         }
         
+        if (settings)
+        {
+            settings->setBootType(BOOT_TYPE_USER);
+            log(DebugFeatures::MODULE_COMMAND_DEBUG,
+                "ModuleCommandUseCase: Reboot - Set boot type to BOOT_TYPE_USER");
+        }
+
         log(DebugFeatures::MODULE_COMMAND_DEBUG,
             "ModuleCommandUseCase: Executing reboot command");
-        
+
         arduinoAdapter->restart();
         return true;
     }

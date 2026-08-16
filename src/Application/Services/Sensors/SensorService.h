@@ -18,6 +18,9 @@
 #include "Core/Domain/Interfaces/Adapters/Json/IJsonConverter.h"
 #include "Core/Domain/Interfaces/Mqtt/IMqttManager.h"
 #include "Core/Domain/UseCases/Sensors/SensorRecoveryUseCase.h"
+#include "Core/Domain/Interfaces/UseCases/IVirtualSensorChannelsUseCase.h"
+#include "Core/Domain/Interfaces/UseCases/ISensorPlausibilityUseCase.h"
+#include <map>
 
 class SensorService : public ISensorService {
 private:
@@ -34,7 +37,15 @@ private:
     IUdpManager* udpManager;
     IJsonConverter* jsonConverter;
     IMqttManager* mqttManager;
-    
+    // Injected, not known: which computed channels a sensor has and how they are calculated is
+    // IVirtualSensorChannelsUseCase, created in the composition root
+    IVirtualSensorChannelsUseCase* virtualChannelsUseCase;
+
+    // Injected, not owned: the gate is an interchangeable decision behind an interface, and a test
+    // gives the service its own verdict instead of a repository full of sensor types
+    ISensorPlausibilityUseCase* plausibilityUseCase;
+
+
     const unsigned long SENSOR_READ_INTERVAL = 15000;
     const unsigned long SENSOR_UPDATE_INTERVAL = 15000;
     const unsigned long UDP_SEND_INTERVAL = 15000;
@@ -43,13 +54,39 @@ private:
     unsigned long lastUdpSendTime = 0;
 
     SensorRecoveryUseCase _recovery;
-    
+
     std::string generateSensorUid(const SensorEntity& sensor, const std::string& channelName = "") const;
     UpdateDto createSensorUpdateDto();
     bool readAnalogSensors();
     bool readI2CSensors();
     bool readModbusSensors();
     void sendUpdateViaUdp(const UpdateDto& updateDto);
+
+    // Computed (virtual) channels of a sensor - VPD today, more later. Which channels exist and
+    // how they are calculated is the injected use case; these two only store and report.
+    void applyVirtualChannels(const SensorEntity& sensor, const std::map<std::string, float>& rawChannelValues);
+    void appendVirtualChannelDtos(const SensorEntity& sensor, UpdateDto& dto);
+
+    /**
+     * @brief Plausibility gate (GDV1-3810): drop a reading outside the sensor physical range.
+     * @param sensor Sensor being read
+     * @param subSensorTypeName Sub sensor type (channel) name the value belongs to
+     * @param channelUid UID the value would be stored under (the sensor UID for single-channel)
+     * @param value Reading to check
+     * @return true if the value may be stored and published
+     */
+    bool acceptReading(const SensorEntity& sensor,
+                       const std::string& subSensorTypeName,
+                       const std::string& channelUid,
+                       float value);
+
+    /**
+     * @brief Sub sensor type name of one channel of a multi-channel sensor.
+     * @param sensor Multi-channel sensor
+     * @param channelUid Channel UID as built by the reader (<sensor uid>.<channel>)
+     * @return Sub sensor type name, empty when the channel is not in the register configs
+     */
+    std::string channelSensorTypeName(const SensorEntity& sensor, const std::string& channelUid) const;
     
     void log(const char* format, ...)
     {
@@ -108,7 +145,9 @@ public:
                   IDebugSystem* debugSystem = nullptr,
                   IUdpManager* udpManager = nullptr,
                   IJsonConverter* jsonConverter = nullptr,
-                  IMqttManager* mqttManager = nullptr);
+                  IMqttManager* mqttManager = nullptr,
+                  ISensorPlausibilityUseCase* plausibilityUseCase = nullptr,
+                  IVirtualSensorChannelsUseCase* virtualChannelsUseCase = nullptr);
 
     ~SensorService();
     

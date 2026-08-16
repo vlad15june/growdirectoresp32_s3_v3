@@ -412,6 +412,7 @@ public:
         oss << ",\"apiStatus\":\"" << diagnosticData.apiStatus << "\"";
         oss << ",\"mqttStatus\":\"" << diagnosticData.mqttStatus << "\"";
         oss << ",\"mqttFails\":" << diagnosticData.mqttFails;
+        oss << ",\"mqttOversizeDrops\":" << diagnosticData.mqttOversizeDrops;
         oss << ",\"apiSendFailRatio\":" << diagnosticData.apiSendFailRatio;
         oss << ",\"firmware\":\"" << diagnosticData.firmware << "\"";
         oss << ",\"freeHeap\":" << diagnosticData.freeHeap;

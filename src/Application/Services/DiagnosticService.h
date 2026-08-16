@@ -616,6 +616,10 @@ public:
         // Get MQTT failures from the manager instead of using local variable
         diagnosticData.mqttFails = _mqttManager ? _mqttManager->getMqttFails() : 0;
 
+        // Inbound messages the module refused because they were over the size limit:
+        // reported here so the drop is visible without a live debug session
+        diagnosticData.mqttOversizeDrops = _mqttManager ? _mqttManager->getInboundOversizeDrops() : 0;
+
         diagnosticData.apiSendFailRatio = _restApiService ? _restApiService->getApiSendFailRatio() : 0.0f;
 
         if (_moduleConfig != nullptr)

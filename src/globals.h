@@ -37,10 +37,15 @@
 #include "Core/Domain/UseCases/DeviceControl/DeviceCommandExecutionUseCase.h"
 #include "Core/Domain/UseCases/ModuleCommand/ModuleCommandExecutionUseCase.h"
 #include "Core/Domain/UseCases/Sensors/SensorCommandUseCase.h"
+#include "Core/Domain/UseCases/Sensors/SensorPlausibilityUseCase.h"
 #include "Core/Domain/UseCases/Rules/EvaluateRulesUseCase.h"
 #include "Core/Domain/UseCases/Rules/SyncRulesUseCase.h"
 #include "Core/Domain/UseCases/Diagnostics/PreventiveRestartUseCase.h"
 #include "Core/Domain/UseCases/SensorTypes/SyncSensorTypesUseCase.h"
+#include "Core/Domain/UseCases/ModuleStructure/RepublishModuleStructureUseCase.h"
+#include "Core/Domain/UseCases/ModuleStructure/SensorStructureUseCase.h"
+#include "Core/Domain/UseCases/Sensors/VirtualSensorChannelsUseCase.h"
+#include "Core/Domain/UseCases/Sensors/VpdChannelUseCase.h"
 
 #include "Core/Domain/Data/Models/ModuleStructure.h"
 #include "Core/Domain/Data/Models/IDeviceModel.h"
@@ -54,6 +59,7 @@
 #include "Infrastructure/Logging/BootEventLog.h"
 #include "Infrastructure/Configuration/ModuleConfig.h"
 #include "Infrastructure/Configuration/Settings.h"
+#include "Infrastructure/Configuration/StepCycleStore.h"
 #include "Infrastructure/Logging/DebugSystem.h"
 #include "Infrastructure/Adapters/Time/NTPTimeAdapter.h"
 #include "Infrastructure/Adapters/Led/LedAdapter.h"
@@ -129,6 +135,21 @@ ArduinoJsonConverter jsonConverter;
 
 EepromAdapter eeprom(1024, 0);
 Settings settings(eeprom, &mqttLogger, &debugSystem);
+
+// STEP rule cycle counters (GDV1-3811) live in the RTC memory of the built-in clock, not in the
+// EEPROM: the counter is written once per completed cycle, and the EEPROM has a finite write
+// endurance (owner, review of PR #20, 2026-08-13). RTC_NOINIT_ATTR means the bytes are not zeroed
+// at boot, so the table survives every restart the module makes by itself - the nightly preventive
+// one, the technical one after an offline period, an OTA.
+// A power cut does clear it: the on-chip RTC memory is not battery backed. TO FINISH LATER: the
+// board carries an EXTERNAL clock, RV-3028, whose memory is battery backed and survives a power
+// cut too - move this table there as soon as the chip has a driver. Today there is none: only the
+// jig stubs `#init_rtc3028` / `#read_rtc3028` in BoardTest.h. The real `Rtc3028Adapter`
+// (clock source + battery-backed storage) is planned work, see the canon:
+// docs/features/workflow/jira-tickets/firmware/phase-3-1-rtc-and-basic-runtime-snapshot.md.
+// StepCycleStore does not care where the table is, so the move is a one-line change here.
+RTC_NOINIT_ATTR StepCycleTable rtcStepCycleTable;
+StepCycleStore stepCycleStore(rtcStepCycleTable, &mqttLogger, &debugSystem);
 
 LedAdapter ledAdapter(&mqttLogger, &debugSystem);
 
@@ -294,7 +315,8 @@ EvaluateRulesUseCase evaluateRulesUseCase(
     &sensorValueModel,
     &mqttLogger,
     &debugSystem,
-    &ruleStateReportingService);
+    &ruleStateReportingService,
+    &stepCycleStore);
 
 PreventiveRestartUseCase preventiveRestartUseCase(
     &moduleConfig,
@@ -417,6 +439,21 @@ BoardTest boardTest(
     &arduinoAdapter,
     &wifiAdapter);
 
+// Computed (virtual) sensor channels (GDV1-3782). VPD is the first kind: the arithmetic lives in
+// VpdChannelUseCase, the list of kinds in VirtualSensorChannelsUseCase, and everyone who publishes
+// channels - the reading path, the update packet, the module structure, the catalog sync - gets
+// them from here as interfaces. A new computed channel is a new use case plus a line in this block.
+VpdChannelUseCase vpdChannelUseCase;
+VirtualSensorChannelsUseCase virtualSensorChannelsUseCase(&vpdChannelUseCase);
+SensorStructureUseCase sensorStructureUseCase(
+    &virtualSensorChannelsUseCase,
+    &mqttLogger,
+    &debugSystem);
+
+// Plausibility gate of the reading path (GDV1-3810): resolves the physical range of a channel from
+// the sensor type catalog. Created here and handed to SensorService as ISensorPlausibilityUseCase.
+SensorPlausibilityUseCase sensorPlausibilityUseCase(&sensorTypeRepository);
+
 SensorService sensorService(
     &moduleConfig,
     &moduleStructure,
@@ -430,7 +467,9 @@ SensorService sensorService(
     &debugSystem,
     &udpManager,
     &jsonConverter,
-    &mqttManager);
+    &mqttManager,
+    &sensorPlausibilityUseCase,
+    &virtualSensorChannelsUseCase);
 
 RemoteSensorReceiver remoteSensorReceiver(
     &udpManager,
@@ -500,8 +539,18 @@ ModuleSetupService moduleSetupService(
     &udpInboundDispatcher,
     &remoteModuleCommandReceiver);
 
+RepublishModuleStructureUseCase republishModuleStructureUseCase(
+    &moduleStructure,
+    &sensorRepository,
+    &hybridApiService,
+    &sensorStructureUseCase,
+    &mqttLogger,
+    &debugSystem);
+
 void initDependencies()
 {
+    // After a power cut the RTC memory holds whatever bytes were there (GDV1-3811)
+    stepCycleStore.dropInvalidSlots();
     topicHandlerFactory.setModuleConfig(&moduleConfig);
     topicHandlerFactory.setCommandService(&commandService);
     topicHandlerFactory.setJsonConverter(&jsonConverter);
@@ -509,6 +558,9 @@ void initDependencies()
     syncRulesUseCase.setRemoteSensorReceiver(&remoteSensorReceiver);
     syncRulesUseCase.setSettings(&settings);
     commandService.setRemoteSensorReceiver(&remoteSensorReceiver);
+    moduleSetupService.setSensorStructureUseCase(&sensorStructureUseCase);
+    syncSensorTypesUseCase.setVirtualSensorChannelsUseCase(&virtualSensorChannelsUseCase);
+    syncSensorTypesUseCase.setRepublishModuleStructureUseCase(&republishModuleStructureUseCase);
     loopServiceFactory.setOtaUpdateLog(&otaUpdateLog);
     loopServiceFactory.setBootEventLog(&bootEventLog);
     loopServiceFactory.setRestartEventLog(&restartEventLog);

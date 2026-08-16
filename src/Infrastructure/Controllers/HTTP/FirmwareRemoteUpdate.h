@@ -18,6 +18,14 @@
 #define FIRMWARE_UPDATE_STATE_ERROR 4
 #define FIRMWARE_UPDATE_STATE_HTTP_ERROR 5
 
+// HTTP budget of the OTA download, ms - both for opening the connection and for waiting for
+// data. Same 30 s every other HTTP call of the firmware uses (RestApiService.h); left alone,
+// HTTPClient keeps its own default of 5 s on both (HTTPCLIENT_DEFAULT_TCP_TIMEOUT), which is
+// less than a loaded link needs either to finish the TLS handshake (the session then dies
+// with -1) or to deliver the first bytes of a 1.5 MB binary (-11), in both cases with the
+// server answering normally.
+#define FIRMWARE_UPDATE_HTTP_TIMEOUT_MS 30000
+
 class FirmwareRemoteUpdate : public IFirmwareRemoteUpdate {
 private:
     IHttpClientAdapter* _httpClient;
@@ -27,6 +35,7 @@ private:
     IOtaUpdateLog* _otaLog;
 
     char _log_buf[256];
+    char _lastErrorMessage[128];
 
     void otaWrite(const char* format, ...) {
         if (_otaLog == nullptr) {
@@ -38,6 +47,18 @@ private:
         vsnprintf(buffer, sizeof(buffer), format, args);
         va_end(args);
         _otaLog->write(buffer);
+    }
+
+    // Single place where a failure of the session is recorded: the reason is kept for the
+    // caller (it ends up in the command result the backend stores) and written to the OTA
+    // log as the `ERROR: <reason>` line it has always been.
+    void otaError(const char* format, ...) {
+        va_list args;
+        va_start(args, format);
+        vsnprintf(_lastErrorMessage, sizeof(_lastErrorMessage), format, args);
+        va_end(args);
+
+        otaWrite("ERROR: %s", _lastErrorMessage);
     }
 
     void log(const char* format, ...) {
@@ -75,6 +96,7 @@ public:
           _debugSystem(debugSystem),
           _settings(settings),
           _otaLog(otaLog) {
+        _lastErrorMessage[0] = '\0';
     }
     
     ~FirmwareRemoteUpdate() {
@@ -86,6 +108,8 @@ public:
     }
     
     bool updateFirmwareFromURL(const char* url) override {
+        _lastErrorMessage[0] = '\0';
+
         if (_otaLog) {
             _otaLog->startSession(url);
         }
@@ -93,7 +117,7 @@ public:
 
         if (WiFi.status() != WL_CONNECTED) {
             log("FIRMWARE_UPD: WiFi not connected");
-            otaWrite("ERROR: WiFi not connected at download time");
+            otaError("WiFi not connected at download time");
             return false;
         }
 
@@ -105,13 +129,23 @@ public:
             delete _httpClient;
         }
         _httpClient = createNewHttpClient();
-        
+
+        // Must be set before begin(): the client keeps the values until it is told otherwise,
+        // and a fresh client starts from the library default of 5 s on both budgets. Both are
+        // needed - opening the connection and waiting for data fail separately, with -1 and
+        // -11 respectively, and this module has been seen to lose sessions to each of them.
+        _httpClient->setConnectTimeout(FIRMWARE_UPDATE_HTTP_TIMEOUT_MS);
+        _httpClient->setTimeout(FIRMWARE_UPDATE_HTTP_TIMEOUT_MS);
+        otaWrite("HTTP timeout=%u ms connect=%u ms",
+                 (unsigned)FIRMWARE_UPDATE_HTTP_TIMEOUT_MS,
+                 (unsigned)FIRMWARE_UPDATE_HTTP_TIMEOUT_MS);
+
         bool isBegin = _httpClient->begin(url);
         log("UPDATE_FIRMWARE_DEBUG: isBegin=%s", isBegin ? "true" : "false");
 
         if (!isBegin) {
             log("FIRMWARE_UPD: Failed to begin HTTP connection");
-            otaWrite("ERROR: HTTP begin failed");
+            otaError("HTTP begin failed");
             return false;
         }
 
@@ -122,7 +156,7 @@ public:
         if (httpCode != 200) {
             String errorMessage = "HTTP error: " + String(httpCode);
             log("FIRMWARE_UPD: HTTP error: %s", errorMessage.c_str());
-            otaWrite("ERROR: HTTP code=%d", httpCode);
+            otaError("HTTP code=%d", httpCode);
 
             _httpClient->end();
             putUpdateStatus(FIRMWARE_UPDATE_STATE_HTTP_ERROR);
@@ -137,7 +171,7 @@ public:
 
         if (contentLength <= 0) {
             log("FIRMWARE_UPD: Invalid content length");
-            otaWrite("ERROR: invalid contentLength=%d", contentLength);
+            otaError("invalid contentLength=%d", contentLength);
             _httpClient->end();
             putUpdateStatus(FIRMWARE_UPDATE_STATE_ERROR);
             setFirmwareUpdateCommandResultStatus("Error", "Invalid content length");
@@ -148,7 +182,7 @@ public:
         otaWrite("Update.begin canBegin=%d", canBegin ? 1 : 0);
         if (!canBegin) {
             log("FIRMWARE_UPD: Not enough space to begin OTA");
-            otaWrite("ERROR: not enough space, contentLength=%d", contentLength);
+            otaError("not enough space, contentLength=%d", contentLength);
             _httpClient->end();
             putUpdateStatus(FIRMWARE_UPDATE_STATE_ERROR);
             setFirmwareUpdateCommandResultStatus("Error", "Not enough space to begin OTA");
@@ -166,6 +200,7 @@ public:
         WiFiClient* client = _httpClient->getStreamPtr();
         if (client == nullptr) {
             log("FIRMWARE_UPD: Failed to get stream pointer");
+            otaError("no stream pointer");
             _httpClient->end();
             putUpdateStatus(FIRMWARE_UPDATE_STATE_ERROR);
             setFirmwareUpdateCommandResultStatus("Error", "Failed to get stream pointer");
@@ -176,7 +211,7 @@ public:
         
         if (written != contentLength) {
             log("FIRMWARE_UPD: Written only : %d/%d", written, contentLength);
-            otaWrite("ERROR: written only %u/%d", (unsigned)written, contentLength);
+            otaError("written only %u/%d", (unsigned)written, contentLength);
             String errorMessage = "Written only : " + String(written) + "/" + String(contentLength);
             _httpClient->end();
             putUpdateStatus(FIRMWARE_UPDATE_STATE_ERROR);
@@ -186,7 +221,7 @@ public:
         
         if (!Update.end()) {
             log("FIRMWARE_UPD: Error Occurred. Error #: %d", Update.getError());
-            otaWrite("ERROR: Update.end failed err=%d", Update.getError());
+            otaError("Update.end failed err=%d", Update.getError());
             String errorMessage = "Error Occurred. Error #: " + String(Update.getError());
             _httpClient->end();
             putUpdateStatus(FIRMWARE_UPDATE_STATE_ERROR);
@@ -196,7 +231,7 @@ public:
         
         if (!Update.isFinished()) {
             log("FIRMWARE_UPD: Update not finished. Something went wrong!");
-            otaWrite("ERROR: Update.end ok but not finished");
+            otaError("Update.end ok but not finished");
             _httpClient->end();
             putUpdateStatus(FIRMWARE_UPDATE_STATE_ERROR);
             setFirmwareUpdateCommandResultStatus("Error", "Update not finished. Something went wrong!");
@@ -212,6 +247,10 @@ public:
     }
 
     bool isUpdateInProgress() override {
-        return Update.isRunning(); 
+        return Update.isRunning();
+    }
+
+    const char* getLastErrorMessage() const override {
+        return _lastErrorMessage;
     }
 };

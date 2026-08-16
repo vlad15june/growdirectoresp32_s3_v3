@@ -114,8 +114,17 @@ public:
             invalidateCache();
             return entities.size();
         }
-        log("SensorTypeRepository: saveAll() failed");
+        log("SensorTypeRepository: saveAll() failed (%s)", getStorageWriteErrorName(getLastSaveError()));
         return 0;
+    }
+
+    // GDV1-3827: pass the storage-level reason on, so the caller can log why nothing was written
+    StorageWriteErrorEnum getLastSaveError() const override {
+        return sensorTypeDao != nullptr ? sensorTypeDao->getLastSaveError() : STORAGE_WRITE_ERROR_NONE;
+    }
+
+    size_t getLastSaveBytes() const override {
+        return sensorTypeDao != nullptr ? sensorTypeDao->getLastSaveBytes() : 0;
     }
 
     bool remove(const char* uid) override {

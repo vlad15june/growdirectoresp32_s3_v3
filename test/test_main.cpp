@@ -49,6 +49,7 @@ extern "C" void run_ota_update_log_tests(void);
 extern "C" int run_wifi_self_reconnect_tests(void);
 extern "C" int run_check_firmware_update_on_startup_tests(void);
 extern "C" int run_sensor_recovery_tests(void);
+extern "C" int run_sensor_plausibility_limits_tests(void);
 extern "C" void run_module_to_module_reboot_tests(void);
 extern "C" void run_rule_dnf_combine_tests(void);
 extern "C" void run_rule_condition_hold_tests(void);
@@ -56,6 +57,11 @@ extern "C" void run_rule_fired_condition_tests(void);
 extern "C" int run_preventive_restart_use_case_tests(void);
 extern "C" void run_rule_operation_time_tests(void);
 extern "C" void run_rule_sensor_value_refresh_tests(void);
+extern "C" void run_mqtt_inbound_size_guard_tests(void);
+extern "C" void run_rule_step_cycle_persistence_tests(void);
+extern "C" void run_vpd_channel_tests(void);
+extern "C" void run_sensor_service_tests(void);
+extern "C" int run_sensor_types_bulk_save_tests(void);
 
 void setUp(void) {
     // set stuff up here
@@ -213,6 +219,9 @@ int main(void) {
     // Run tests for ModBus sensor power-cycle recovery (GDV1-3715)
     run_sensor_recovery_tests();
 
+    // Run tests for the sensor plausibility limits gate (GDV1-3810)
+    run_sensor_plausibility_limits_tests();
+
     // Run tests for module-to-module reboot over UDP (GDV1-3707)
     run_module_to_module_reboot_tests();
 
@@ -231,6 +240,20 @@ int main(void) {
     run_rule_operation_time_tests();
 
     run_rule_sensor_value_refresh_tests();
+
+    // Run tests for the inbound MQTT size limit (GDV1-3813)
+    run_mqtt_inbound_size_guard_tests();
+
+    // Run tests for the STEP cycle counter surviving a reboot (GDV1-3811)
+    run_rule_step_cycle_persistence_tests();
+
+    // Run tests for the computed VPD sensor channel (GDV1-3782)
+    run_vpd_channel_tests();
+
+    run_sensor_service_tests();
+
+    // Run tests for always storing the sensor type catalog (GDV1-3827)
+    run_sensor_types_bulk_save_tests();
 
     return UNITY_END();
 }

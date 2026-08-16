@@ -1,6 +1,9 @@
 #include <unity.h>
 #include "Mock/ArduinoMock.h"
 #include "Application/Services/ModuleSetupService.h"
+#include "Core/Domain/UseCases/ModuleStructure/SensorStructureUseCase.h"
+#include "Core/Domain/UseCases/Sensors/VirtualSensorChannelsUseCase.h"
+#include "Core/Domain/UseCases/Sensors/VpdChannelUseCase.h"
 #include "Mock/Infrastructure/Logging/MockLogger.h"
 #include "Mock/Infrastructure/Logging/MockDebugSystem.h"
 #include "Mock/Infrastructure/Led/MockLedAdapter.h"
@@ -48,6 +51,12 @@ public:
             service->handleModuleMode();
         }
     }
+
+    static void callAddSensorToStructure(ModuleSetupService* service, Node& node, const SensorEntity& sensorEntity) {
+        if (service) {
+            service->addSensorToStructure(node, sensorEntity);
+        }
+    }
 };
 
 // Global test variables
@@ -65,6 +74,10 @@ static MockSettings g_mockSettings;
 static MockMqttManager g_mockMqttManager;
 static MockMessageProcessor g_mockMessageProcessor;
 static MockDeviceService g_mockDeviceService;
+// The structure records are built by an injected use case, wired here the way globals.h wires it
+static VpdChannelUseCase g_vpdChannelUseCase;
+static VirtualSensorChannelsUseCase g_virtualChannels(&g_vpdChannelUseCase);
+static SensorStructureUseCase g_sensorStructureUseCase(&g_virtualChannels);
 static ModuleSetupService* g_moduleSetupService;
 static FILE* debug_file = nullptr;
 
@@ -113,6 +126,7 @@ static void module_setup_service_setup(void) {
         nullptr,
         &g_mockDeviceService  // Add the device service
     );
+    g_moduleSetupService->setSensorStructureUseCase(&g_sensorStructureUseCase);
 }
 
 static void module_setup_service_teardown(void) {
@@ -198,6 +212,7 @@ static void test_setup_module_without_led_adapter(void) {
         &g_mockLoopServiceFactory,
         &g_mockMqttManager
     );
+    g_moduleSetupService->setSensorStructureUseCase(&g_sensorStructureUseCase);
 
     // This should not crash and should still initialize the config
     g_moduleSetupService->setupModule();
@@ -227,6 +242,7 @@ static void test_setup_module_without_config(void) {
         &g_mockLoopServiceFactory,
         &g_mockMqttManager
     );
+    g_moduleSetupService->setSensorStructureUseCase(&g_sensorStructureUseCase);
     
     // This should not crash and should log an error
     g_moduleSetupService->setupModule();
@@ -270,6 +286,7 @@ static void test_setup_module_without_led_use_cases(void) {
         &g_mockLoopServiceFactory,
         &g_mockMqttManager
     );
+    g_moduleSetupService->setSensorStructureUseCase(&g_sensorStructureUseCase);
 
     // This should not crash and should still initialize the config and LEDs
     g_moduleSetupService->setupModule();
@@ -412,6 +429,7 @@ static void test_setup_module_without_web_server_launcher(void) {
         &g_mockLoopServiceFactory,
         &g_mockMqttManager
     );
+    g_moduleSetupService->setSensorStructureUseCase(&g_sensorStructureUseCase);
     
     // Set up the mock to simulate USER_CAN_CONFIGURE mode
     g_mockSettings.setConfigured(ModuleModeEnum::USER_CAN_CONFIGURE);
@@ -846,6 +864,7 @@ static void test_setup_ap_handles_missing_wifi_adapter() {
         &g_mockLoopServiceFactory,
         &g_mockMqttManager
     );
+    g_moduleSetupService->setSensorStructureUseCase(&g_sensorStructureUseCase);
     
     // This should not crash and should log an error
     ModuleSetupServiceTestHelper::callSetupAP(g_moduleSetupService);
@@ -932,6 +951,7 @@ static void test_setup_web_server_handles_null_launcher() {
         &g_mockWiFiManager,
         nullptr  // Pass null web server launcher
     );
+    g_moduleSetupService->setSensorStructureUseCase(&g_sensorStructureUseCase);
     
     // This should not crash and should log an error
     ModuleSetupServiceTestHelper::callSetupWebServer(g_moduleSetupService);
@@ -987,6 +1007,7 @@ static void test_get_loop_service_handles_null_factory() {
         &g_mockWebServerLauncher,
         nullptr  // Null factory
     );
+    g_moduleSetupService->setSensorStructureUseCase(&g_sensorStructureUseCase);
     
     // Call getLoopService - should not crash
     auto loopService = g_moduleSetupService->getLoopService();
@@ -1020,6 +1041,7 @@ static void test_get_loop_service_handles_null_config() {
         &g_mockWebServerLauncher,
         &g_mockLoopServiceFactory
     );
+    g_moduleSetupService->setSensorStructureUseCase(&g_sensorStructureUseCase);
     
     // Call getLoopService - should not crash
     auto loopService = g_moduleSetupService->getLoopService();
@@ -1130,6 +1152,7 @@ static void test_configure_done_mode_configure_sets_up_mqtt_connection() {
         &g_mockLoopServiceFactory,
         &g_mockMqttManager
     );
+    g_moduleSetupService->setSensorStructureUseCase(&g_sensorStructureUseCase);
     
     // Set up mocks for success case
     g_mockMqttManager.reset();
@@ -1166,6 +1189,7 @@ static void test_configure_done_mode_configure_handles_mqtt_connection_subscribe
         &g_mockLoopServiceFactory,
         &g_mockMqttManager
     );
+    g_moduleSetupService->setSensorStructureUseCase(&g_sensorStructureUseCase);
     
     // Set up mocks for failure case
     g_mockMqttManager.reset();
@@ -1206,6 +1230,7 @@ static void test_configure_done_mode_configure_handles_missing_mqtt_manager() {
         &g_mockLoopServiceFactory,
         nullptr  // No MQTT manager
     );
+    g_moduleSetupService->setSensorStructureUseCase(&g_sensorStructureUseCase);
     
     // Call the method under test
     ModuleSetupServiceTestHelper::callConfigureDoneModeConfigure(g_moduleSetupService);
@@ -1277,6 +1302,7 @@ static void test_configure_done_mode_configure_handles_missing_wifi_manager() {
         &g_mockLoopServiceFactory,
         &g_mockMqttManager
     );
+    g_moduleSetupService->setSensorStructureUseCase(&g_sensorStructureUseCase);
     
     // Call the method under test
     ModuleSetupServiceTestHelper::callConfigureDoneModeConfigure(g_moduleSetupService);
@@ -1400,6 +1426,7 @@ static void test_configure_done_mode_configure_handles_null_device_service() {
         nullptr,
         nullptr  // No device service
     );
+    g_moduleSetupService->setSensorStructureUseCase(&g_sensorStructureUseCase);
     
     // Call the method directly
     ModuleSetupServiceTestHelper::callConfigureDoneModeConfigure(g_moduleSetupService);
@@ -1466,6 +1493,7 @@ static void test_configure_done_mode_configure_sets_up_mqtt_topic_handlers_on_su
         &g_mockLoopServiceFactory,
         &g_mockMqttManager
     );
+    g_moduleSetupService->setSensorStructureUseCase(&g_sensorStructureUseCase);
     
     // Set up mocks for successful connection
     g_mockMqttManager.reset();
@@ -1506,6 +1534,7 @@ static void test_configure_done_mode_configure_do_not_sets_up_mqtt_topic_handler
         &g_mockLoopServiceFactory,
         &g_mockMqttManager
     );
+    g_moduleSetupService->setSensorStructureUseCase(&g_sensorStructureUseCase);
     
     // Set up mocks for failed connection
     g_mockMqttManager.reset();
@@ -1601,6 +1630,7 @@ static void build_service_with_deletion_fork(void) {
         nullptr,
         &g_mockCheckModuleDeletionUseCase,
         &g_mockCheckFirmwareUpdateOnStartupUseCase);
+    g_moduleSetupService->setSensorStructureUseCase(&g_sensorStructureUseCase);
 }
 
 static void test_configure_done_skips_deletion_when_update_applied() {
@@ -1642,6 +1672,148 @@ static void test_configure_done_runs_deletion_when_no_update() {
 
     TEST_ASSERT_TRUE(g_mockCheckFirmwareUpdateOnStartupUseCase.runCalled);
     TEST_ASSERT_TRUE(g_mockCheckModuleDeletionUseCase.evaluateCalled);
+
+    module_setup_service_teardown();
+}
+
+// --- GDV1-3782: computed VPD channel in the module structure ---
+
+static ModbusRegisterConfig makeVpdTestConfig(uint8_t channel, const std::string& sensorType) {
+    ModbusRegisterConfig config;
+    config.functionCode = 3;
+    config.startRegister = 0;
+    config.numRegisters = 1;
+    config.multiplier = 0.1f;
+    config.offset = 0.0f;
+    config.channelName = sensorType;
+    config.channel = channel;
+    config.sensorType = sensorType;
+    config.canConnectMinValue = 0.0f;
+    config.canConnectMaxValue = 100.0f;
+    return config;
+}
+
+static SensorEntity makeVpdTestAirSensor(const std::string& uid, int pin, int address) {
+    SensorEntity sensor;
+    sensor.uid = uid;
+    sensor.model = "ry_ws301";
+    sensor.protocol = "ModBus";
+    sensor.pin = pin;
+    sensor.modbusDeviceAddress = address;
+    sensor.sensorTypeUid = "model-uid-ry-ws301";
+    sensor.modbusRegisterConfigs.push_back(makeVpdTestConfig(1, "air_temp"));
+    sensor.modbusRegisterConfigs.push_back(makeVpdTestConfig(2, "humidity"));
+    return sensor;
+}
+
+static int countSensorsOfType(const Node& node, const std::string& type) {
+    int count = 0;
+    for (const auto& sensor : node.sensors) {
+        if (sensor.type == type) count++;
+    }
+    return count;
+}
+
+static const Sensor* findStructureSensor(const Node& node, const std::string& uid) {
+    for (const auto& sensor : node.sensors) {
+        if (sensor.uid == uid) return &sensor;
+    }
+    return nullptr;
+}
+
+// INV-1, INV-6, INV-9: a sensor with the air pair gets exactly one vpd record, parent pin/group/model
+static void test_structure_adds_vpd_channel_for_air_sensor(void) {
+    module_setup_service_setup();
+
+    Node node;
+    SensorEntity sensor = makeVpdTestAirSensor("AA:BB:CC:DD:EE:FF.00", 0, 1);
+    ModuleSetupServiceTestHelper::callAddSensorToStructure(g_moduleSetupService, node, sensor);
+
+    TEST_ASSERT_EQUAL(3, node.sensors.size());
+    TEST_ASSERT_EQUAL(1, countSensorsOfType(node, "vpd"));
+
+    const Sensor* vpd = findStructureSensor(node, "AA:BB:CC:DD:EE:FF.00.03");
+    TEST_ASSERT_NOT_NULL(vpd);
+    TEST_ASSERT_EQUAL_STRING("vpd", vpd->type.c_str());
+    TEST_ASSERT_EQUAL(0, vpd->pin);
+    TEST_ASSERT_EQUAL(1, vpd->group);
+    TEST_ASSERT_EQUAL_STRING("model-uid-ry-ws301", vpd->modelUid.c_str());
+
+    module_setup_service_teardown();
+}
+
+// INV-1: a soil sensor has no air pair, so no vpd record is created
+static void test_structure_has_no_vpd_channel_without_pair(void) {
+    module_setup_service_setup();
+
+    Node node;
+    SensorEntity sensor;
+    sensor.uid = "AA:BB:CC:DD:EE:FF.01";
+    sensor.protocol = "ModBus";
+    sensor.pin = 1;
+    sensor.modbusDeviceAddress = 1;
+    sensor.modbusRegisterConfigs.push_back(makeVpdTestConfig(1, "soil_temp"));
+    sensor.modbusRegisterConfigs.push_back(makeVpdTestConfig(2, "soil_moisture"));
+
+    ModuleSetupServiceTestHelper::callAddSensorToStructure(g_moduleSetupService, node, sensor);
+
+    TEST_ASSERT_EQUAL(2, node.sensors.size());
+    TEST_ASSERT_EQUAL(0, countSensorsOfType(node, "vpd"));
+
+    module_setup_service_teardown();
+}
+
+// INV-3: two air sensors -> two independent vpd records
+static void test_structure_two_air_sensors_get_own_vpd(void) {
+    module_setup_service_setup();
+
+    Node node;
+    SensorEntity first = makeVpdTestAirSensor("AA:BB:CC:DD:EE:FF.00", 0, 1);
+    SensorEntity second = makeVpdTestAirSensor("AA:BB:CC:DD:EE:FF.01", 1, 2);
+    second.modbusRegisterConfigs.push_back(makeVpdTestConfig(3, "co2"));
+
+    ModuleSetupServiceTestHelper::callAddSensorToStructure(g_moduleSetupService, node, first);
+    ModuleSetupServiceTestHelper::callAddSensorToStructure(g_moduleSetupService, node, second);
+
+    TEST_ASSERT_EQUAL(2, countSensorsOfType(node, "vpd"));
+    TEST_ASSERT_NOT_NULL(findStructureSensor(node, "AA:BB:CC:DD:EE:FF.00.03"));
+    TEST_ASSERT_NOT_NULL(findStructureSensor(node, "AA:BB:CC:DD:EE:FF.01.04"));
+
+    module_setup_service_teardown();
+}
+
+// INV-6: rebuilding the same structure replaces the record instead of duplicating it
+static void test_structure_vpd_channel_is_not_duplicated(void) {
+    module_setup_service_setup();
+
+    Node node;
+    SensorEntity sensor = makeVpdTestAirSensor("AA:BB:CC:DD:EE:FF.00", 0, 1);
+    ModuleSetupServiceTestHelper::callAddSensorToStructure(g_moduleSetupService, node, sensor);
+    ModuleSetupServiceTestHelper::callAddSensorToStructure(g_moduleSetupService, node, sensor);
+
+    TEST_ASSERT_EQUAL(3, node.sensors.size());
+    TEST_ASSERT_EQUAL(1, countSensorsOfType(node, "vpd"));
+
+    module_setup_service_teardown();
+}
+
+// INV-5: the number must fit two digits, otherwise no channel is created
+static void test_structure_skips_vpd_channel_on_overflow(void) {
+    module_setup_service_setup();
+
+    Node node;
+    SensorEntity sensor;
+    sensor.uid = "AA:BB:CC:DD:EE:FF.00";
+    sensor.protocol = "ModBus";
+    sensor.pin = 0;
+    sensor.modbusDeviceAddress = 1;
+    sensor.modbusRegisterConfigs.push_back(makeVpdTestConfig(1, "air_temp"));
+    sensor.modbusRegisterConfigs.push_back(makeVpdTestConfig(99, "humidity"));
+
+    ModuleSetupServiceTestHelper::callAddSensorToStructure(g_moduleSetupService, node, sensor);
+
+    TEST_ASSERT_EQUAL(2, node.sensors.size());
+    TEST_ASSERT_EQUAL(0, countSensorsOfType(node, "vpd"));
 
     module_setup_service_teardown();
 }
@@ -1707,6 +1879,13 @@ extern "C" int run_module_setup_service_tests(void) {
 
     RUN_TEST(test_configure_done_skips_deletion_when_update_applied);
     RUN_TEST(test_configure_done_runs_deletion_when_no_update);
+
+    // Computed VPD channel in the module structure (GDV1-3782)
+    RUN_TEST(test_structure_adds_vpd_channel_for_air_sensor);
+    RUN_TEST(test_structure_has_no_vpd_channel_without_pair);
+    RUN_TEST(test_structure_two_air_sensors_get_own_vpd);
+    RUN_TEST(test_structure_vpd_channel_is_not_duplicated);
+    RUN_TEST(test_structure_skips_vpd_channel_on_overflow);
 
     if (debug_file != nullptr) fprintf(debug_file, "\n----- ModuleSetupService Tests Complete -----\n");
     

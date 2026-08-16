@@ -2,6 +2,7 @@
 #define I_MQTT_MANAGER_H
 
 #include "IMessageProcessor.h"
+#include <cstdint>
 
 class IMqttManager
 {
@@ -40,6 +41,9 @@ public:
     
     // Reset MQTT failures counter
     virtual void resetMqttFails() = 0;
+
+    // Get number of inbound messages dropped for exceeding the inbound size limit
+    virtual uint32_t getInboundOversizeDrops() const = 0;
 
     // Get MQTT client ID
     virtual const char* getClientId() const = 0;

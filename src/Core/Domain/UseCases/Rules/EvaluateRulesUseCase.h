@@ -12,6 +12,7 @@
 #include "Application/Services/Rules/RuleValidator.h"
 #include "Core/Domain/Data/Models/RuleEvaluationResult.h"
 #include "Core/Domain/Interfaces/Rules/IRuleStateNotifier.h"
+#include "Core/Domain/Interfaces/IStepCycleStore.h"
 #include "Core/Utils/WindArc.h"
 #include <map>
 #include <set>
@@ -202,6 +203,7 @@ private:
     IArduinoAdapter* _arduinoAdapter;
     INTPTimeAdapter* _ntpTimeAdapter;
     IRuleStateNotifier* _ruleStateNotifier;
+    IStepCycleStore* _stepCycleStore;
     RuleValidator _ruleValidator;
 
     // Rule state tracking
@@ -213,6 +215,10 @@ private:
     std::map<std::string, int> _deletePurgeRetries;
     std::map<std::string, unsigned long> _sensorWaitSince;
     std::map<std::string, std::vector<bool>> _conditionHoldStates;
+    // Rules whose persisted cycle counter has already been looked at since boot (GDV1-3811)
+    std::set<std::string> _stepCycleRestored;
+    // Rules whose persisted cycle counter has already been dropped for being out of play
+    std::set<std::string> _stepCycleDropped;
 
     static const int DELETING_PURGE_MAX_RETRIES = 3;
     static const unsigned long SENSOR_FRESHNESS_WINDOW_MS = 300000;
@@ -322,6 +328,131 @@ private:
         }
     }
 
+    // --- Persisted STEP cycle counter (GDV1-3811) ---------------------------------------------
+    // currentCycle lives on the device entity, i.e. in RAM, and used to be lost on every reboot:
+    // the protective shutdown could then only ever see the cycles run since the last restart.
+    // The counter is written to IStepCycleStore while a tracked step run is in progress and
+    // restored at boot, so the count continues across a restart. The store is NOT the EEPROM: the
+    // value changes once per completed cycle and the EEPROM has a finite write endurance (owner,
+    // review of PR #20, 2026-08-13) - it lives in the memory of the clock, see StepCycleStore.
+    // Until the external RV-3028 clock has a driver, that is the on-chip clock memory, so a power
+    // cut resets the count; moving the table to the battery-backed chip is the remaining work.
+
+    // Only a step rule whose protective shutdown is armed with a cycle limit is worth a write.
+    static bool isStepCycleTracked(const Rule& rule) {
+        return rule.ruleType == RuleType::STEP &&
+               rule.protectiveShutdown &&
+               rule.cyclesToSetPoint > 0 &&
+               !rule.deviceUid.empty();
+    }
+
+    // A stored record belongs to this rule only if the rule uid and the configured limit still
+    // match; anything else is a leftover of an edited or replaced rule and gets dropped.
+    bool loadStepCycle(const Rule& rule, int& storedCycle) {
+        storedCycle = 0;
+        if (!_stepCycleStore || !isStepCycleTracked(rule)) {
+            return false;
+        }
+
+        StepCycleCounter stored;
+        if (!_stepCycleStore->getStepCycleCounter(rule.deviceUid.c_str(), stored)) {
+            return false;
+        }
+
+        if (stored.ruleUid != rule.uid || stored.cyclesToSetPoint != rule.cyclesToSetPoint) {
+            log("EVALUATE_RULES: STEP_CYCLE_DROPPED uid=%s deviceUid=%s storedRule=%s storedCap=%d cap=%d",
+                rule.uid.c_str(), rule.deviceUid.c_str(), stored.ruleUid.c_str(),
+                stored.cyclesToSetPoint, rule.cyclesToSetPoint);
+            _stepCycleStore->clearStepCycleCounter(rule.deviceUid.c_str());
+            return false;
+        }
+
+        storedCycle = stored.currentCycle;
+        return storedCycle > 0;
+    }
+
+    void persistStepCycle(const Rule& rule, int currentCycle) {
+        if (!_stepCycleStore || !isStepCycleTracked(rule) || currentCycle <= 0) {
+            return;
+        }
+
+        StepCycleCounter stored;
+        if (_stepCycleStore->getStepCycleCounter(rule.deviceUid.c_str(), stored) &&
+            stored.ruleUid == rule.uid &&
+            stored.cyclesToSetPoint == rule.cyclesToSetPoint &&
+            stored.currentCycle == currentCycle) {
+            return;  // nothing changed - do not spend a flash write
+        }
+
+        StepCycleCounter counter;
+        counter.deviceUid = rule.deviceUid;
+        counter.ruleUid = rule.uid;
+        counter.cyclesToSetPoint = rule.cyclesToSetPoint;
+        counter.currentCycle = currentCycle;
+        _stepCycleStore->setStepCycleCounter(counter);
+
+        log("EVALUATE_RULES: STEP_CYCLE_STORED uid=%s deviceUid=%s cycle=%d/%d",
+            rule.uid.c_str(), rule.deviceUid.c_str(), currentCycle, rule.cyclesToSetPoint);
+    }
+
+    // Called whenever the run this counter belongs to is over: the next run starts from scratch.
+    void clearStepCycle(const Rule& rule) {
+        if (!_stepCycleStore || rule.deviceUid.empty()) {
+            return;
+        }
+
+        StepCycleCounter stored;
+        if (!_stepCycleStore->getStepCycleCounter(rule.deviceUid.c_str(), stored) ||
+            stored.ruleUid != rule.uid) {
+            return;
+        }
+
+        _stepCycleStore->clearStepCycleCounter(rule.deviceUid.c_str());
+        log("EVALUATE_RULES: STEP_CYCLE_CLEARED uid=%s deviceUid=%s", rule.uid.c_str(), rule.deviceUid.c_str());
+    }
+
+    // Drop the record of a rule that is out of play (switched off, out of its date window) and
+    // mark the rule as handled, so it is neither re-read every tick nor restored if it comes back.
+    void dropStepCycleOnce(const Rule& rule) {
+        if (!_stepCycleStore || !isStepCycleTracked(rule) || _stepCycleDropped.count(rule.uid)) {
+            return;
+        }
+
+        _stepCycleDropped.insert(rule.uid);
+        _stepCycleRestored.insert(rule.uid);
+        clearStepCycle(rule);
+    }
+
+    // Once per boot per rule: put the persisted counter back on the device entity, so that every
+    // consumer of currentCycle - the protective shutdown and hardware/update alike - sees the real
+    // progress instead of a zero. Done before the rule is evaluated, so a module that comes up
+    // already at the cycle cap stops instead of getting a fresh budget.
+    void restoreStepCycle(const Rule& rule) {
+        if (!isStepCycleTracked(rule) || _stepCycleRestored.count(rule.uid)) {
+            return;
+        }
+
+        Device* device = _deviceModel ? _deviceModel->getDeviceByUid(rule.deviceUid.c_str()) : nullptr;
+        if (!device) {
+            return;  // devices are not built yet - try again on the next tick
+        }
+
+        _stepCycleRestored.insert(rule.uid);
+
+        if (device->deviceType == DeviceTypeEnum::DEVICE_TYPE_ANALOG || isStepCycleState(device->state)) {
+            return;
+        }
+
+        int storedCycle = 0;
+        if (!loadStepCycle(rule, storedCycle)) {
+            return;
+        }
+
+        static_cast<DeviceDigitalOut*>(device)->currentCycle = storedCycle;
+        log("EVALUATE_RULES: STEP_CYCLE_RESTORED uid=%s deviceUid=%s cycle=%d/%d",
+            rule.uid.c_str(), rule.deviceUid.c_str(), storedCycle, rule.cyclesToSetPoint);
+    }
+
     void purgeDeletingRules() {
         if (!_ruleRepository) {
             return;
@@ -358,11 +489,14 @@ private:
                     rule.uid.c_str(), rule.deviceUid.c_str());
             }
 
+            clearStepCycle(rule);
+
             _ruleActiveStates.erase(rule.uid);
             _lastEvaluationResults.erase(rule.uid);
             _ruleLastEvaluated.erase(rule.uid);
             _delayTimers.erase(rule.uid);
             _conditionHoldStates.erase(rule.uid);
+            _stepCycleRestored.erase(rule.uid);
 
             if (_ruleRepository->remove(rule.uid.c_str())) {
                 _deletePurgeRetries.erase(rule.uid);
@@ -392,6 +526,10 @@ private:
             if (activeUids.count(rule.uid)) {
                 continue;
             }
+
+            // Switched off by the user - the stored counter dies with the run, whether the rule
+            // was running in this uptime or was already off when the module booted (GDV1-3811).
+            dropStepCycleOnce(rule);
 
             auto it = _ruleActiveStates.find(rule.uid);
             bool wasOn = it != _ruleActiveStates.end() && it->second.isDeviceOn();
@@ -457,6 +595,9 @@ private:
             off.sensorValueHigh = rule.valueHigh;
             off.switchedAt = sensorEventTimestamp();
             executeDeviceAction(rule.deviceUid, off);
+
+            // The run was cut short by the rule's own window, not by a restart: it does not resume.
+            clearStepCycle(rule);
 
             _ruleActiveStates.erase(rule.uid);
             _lastEvaluationResults.erase(rule.uid);
@@ -557,7 +698,8 @@ public:
         ISensorValueModel* sensorValueModel,
         ILogger* logger = nullptr,
         IDebugSystem* debugSystem = nullptr,
-        IRuleStateNotifier* ruleStateNotifier = nullptr
+        IRuleStateNotifier* ruleStateNotifier = nullptr,
+        IStepCycleStore* stepCycleStore = nullptr
     ) : _deviceModel(deviceModel),
         _ruleRepository(ruleRepository),
         _sensorValueModel(sensorValueModel),
@@ -566,6 +708,7 @@ public:
         _arduinoAdapter(arduinoAdapter),
         _ntpTimeAdapter(ntpTimeAdapter),
         _ruleStateNotifier(ruleStateNotifier),
+        _stepCycleStore(stepCycleStore),
         _ruleValidator(logger, debugSystem),
         _lastEvaluationTime(0) {
         
@@ -647,6 +790,8 @@ public:
         for (const auto& rule : activeRules) {
             activeUids.insert(rule.uid);
             if (rule.state == RuleState::SYNCHRONIZED) {
+                _stepCycleDropped.erase(rule.uid);  // active again: a later switch-off drops anew
+                restoreStepCycle(rule);
                 FreshnessVerdict freshness = ruleSensorFreshness(rule, now);
                 if (freshness == FreshnessVerdict::STALE) {
                     transitionToSensorUnreachable(rule);
@@ -1614,7 +1759,10 @@ private:
                 result.mixTime = rule.waitingTime * 1000;
                 result.needToSwitchBack = true;
                 result.cyclesToSetPoint = rule.cyclesToSetPoint;
-                result.currentCycle = 1;
+                // A run interrupted by a reboot continues counting from where it stopped; a run
+                // that ended on its own left no record, so it starts from one (GDV1-3811).
+                int restoredCycle = 0;
+                result.currentCycle = loadStepCycle(rule, restoredCycle) ? restoredCycle : 1;
                 result.sensorValueLow = rule.valueLow;
                 result.sensorValueHigh = rule.valueHigh;
                 if (!rule.sensorUid.empty()) {
@@ -1624,7 +1772,9 @@ private:
                 applyFiredConditionDescriptor(rule, firedIndex, result);
                 result.ruleSensorStartAt = sensorEventTimestamp();
                 result.ruleSensorValueStart = result.sensorValue;
-                log("EVALUATE_RULES: STEP_START uid=%s cyclesCap=%d", rule.uid.c_str(), rule.cyclesToSetPoint);
+                persistStepCycle(rule, result.currentCycle);
+                log("EVALUATE_RULES: STEP_START uid=%s cyclesCap=%d cycle=%d",
+                    rule.uid.c_str(), rule.cyclesToSetPoint, result.currentCycle);
             } else {
                 result.state = DEVICE_STATE_OFF;
                 result.isRuleTurnOnDevice = false;
@@ -1645,6 +1795,8 @@ private:
             }
             result.isRuleTurnOnDevice = false;
             result.ruleStopReason = "setpoint_reach";
+            // The device did what it was asked to do: this run is over and its counter with it.
+            clearStepCycle(rule);
             log("EVALUATE_RULES: STEP_STOP uid=%s reason=setpoint_reach cycle=%d", rule.uid.c_str(), currentCycle);
         } else if (rule.cyclesToSetPoint > 0 && currentCycle >= rule.cyclesToSetPoint) {
             if (digitalDevice) {
@@ -1662,6 +1814,8 @@ private:
                 digitalDevice->isRuleTurnOnDevice = true;
             }
             result.isRuleTurnOnDevice = true;
+            // At most one write per completed cycle: the value only changes when a cycle ends.
+            persistStepCycle(rule, currentCycle);
             log("EVALUATE_RULES: STEP_RUN uid=%s cycle=%d/%d firing=1",
                 rule.uid.c_str(), currentCycle, rule.cyclesToSetPoint);
         }
@@ -1884,6 +2038,8 @@ private:
         if (digitalDevice) {
             digitalDevice->currentCycle = 0;
         }
+        // The rule is now waiting for the user; a restart must not bring the old count back.
+        clearStepCycle(rule);
 
         _ruleActiveStates.erase(rule.uid);
         _lastEvaluationResults.erase(rule.uid);
