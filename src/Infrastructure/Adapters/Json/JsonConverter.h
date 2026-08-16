@@ -64,7 +64,10 @@ static std::string extractArray(const std::string &src, const std::string &key)
     return src.substr(start, end - start);
 }
 
-static std::vector<std::string> splitObjects(const std::string &arrayStr)
+// endedInsideObject, when asked for, reports that the text stopped before the last object closed,
+// i.e. what arrived is a prefix and not a whole array. Callers that must not act on a partial list
+// (sensorTypesFromJson) ask; the rest keep taking whatever closed.
+static std::vector<std::string> splitObjects(const std::string &arrayStr, bool *endedInsideObject = nullptr)
 {
     std::vector<std::string> result;
     int depth = 0;
@@ -86,6 +89,8 @@ static std::vector<std::string> splitObjects(const std::string &arrayStr)
             }
         }
     }
+    if (endedInsideObject != nullptr)
+        *endedInsideObject = (depth != 0);
     return result;
 }
 
@@ -2134,14 +2139,26 @@ private:
     bool sensorTypesFromJson(const std::string &jsonStr, std::vector<SensorType> &sensorTypes) override
     {
         sensorTypes.clear();
-        auto typeObjs = splitObjects(jsonStr);
+
+        // All-or-nothing, the same rule the serializer already applies (ArduinoJsonConverter's
+        // sensorTypesToJson: "a type that cannot be serialized fails the whole array"). Both
+        // implementations of IJsonConverter have to answer the same way here: a short catalog is
+        // indistinguishable from a complete one at the call site, and since GDV1-3829 the sync
+        // prunes by absence, so a parsed prefix would delete the missing types from the module.
+        bool endedInsideObject = false;
+        auto typeObjs = splitObjects(jsonStr, &endedInsideObject);
+        if (endedInsideObject)
+            return false;
+
         for (const auto &typeStr : typeObjs)
         {
             SensorType sensorType;
-            if (sensorTypeFromJson(typeStr, sensorType))
+            if (!sensorTypeFromJson(typeStr, sensorType))
             {
-                sensorTypes.push_back(sensorType);
+                sensorTypes.clear();
+                return false;
             }
+            sensorTypes.push_back(sensorType);
         }
         return !sensorTypes.empty();
     }

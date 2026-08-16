@@ -2117,6 +2117,14 @@ public:
         // array into a single ArduinoJson document.  This removes the ~64 KB heap
         // constraint (which caused "[]" writes on low memory) and allows files of
         // any size to be read correctly.
+        //
+        // Reading is all-or-nothing, the same rule sensorTypesToJson below already applies to
+        // writing ("a type that cannot be serialized fails the whole array"). A body that ends
+        // inside an object, or a type this parser cannot take (the fixed 8 KB document in
+        // sensorTypeFromJson is the documented casualty of heap pressure, GDV1-3827), used to
+        // leave the parsed prefix behind and still report success — and a short catalog is
+        // indistinguishable from a complete one at the call site. Since GDV1-3829 the sync prunes
+        // by absence, so that prefix would delete the missing types from the module.
         const size_t len = jsonStr.size();
         size_t pos = 0;
         while (pos < len) {
@@ -2145,14 +2153,19 @@ public:
                     ++end;
                 }
             }
-            if (depth != 0) break; // malformed JSON
+            if (depth != 0) {
+                sensorTypes.clear();
+                return false;
+            }
 
             std::string typeJson = jsonStr.substr(start, end - start + 1);
             SensorType sensorType;
-            if (sensorTypeFromJson(typeJson, sensorType)) {
-                sensorTypes.push_back(sensorType);
-                //Serial.printf("ArduinoJsonConverter: Successfully parsed sensor type '%s'\n", sensorType.name.c_str());
+            if (!sensorTypeFromJson(typeJson, sensorType)) {
+                sensorTypes.clear();
+                return false;
             }
+            sensorTypes.push_back(sensorType);
+            //Serial.printf("ArduinoJsonConverter: Successfully parsed sensor type '%s'\n", sensorType.name.c_str());
             pos = end + 1;
         }
 
