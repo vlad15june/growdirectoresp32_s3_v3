@@ -450,7 +450,9 @@ struct SensorModelStructureFixture {
     SensorStructureUseCase sensorStructure;
     ModuleCommandExecutionUseCase useCase;
 
-    SensorModelStructureFixture()
+    // wireSensorStructureUseCase = false leaves the dependency unset, the way the use case comes
+    // out of its constructor before the composition root calls the setter (src/globals.h)
+    explicit SensorModelStructureFixture(bool wireSensorStructureUseCase = true)
         : virtualChannels(&vpdChannel),
           sensorStructure(&virtualChannels, &logger, &debugSystem),
           useCase(&logger, &debugSystem, nullptr, nullptr, nullptr,
@@ -465,7 +467,9 @@ struct SensorModelStructureFixture {
         // The module always has exactly one node
         moduleStructure.nodes.push_back(Node());
 
-        useCase.setSensorStructureUseCase(&sensorStructure);
+        if (wireSensorStructureUseCase) {
+            useCase.setSensorStructureUseCase(&sensorStructure);
+        }
     }
 
     // Sensor type of two ModBus register channels, e.g. the air temperature + humidity of RY-WS301
@@ -599,6 +603,29 @@ void test_delete_sensors_removes_virtual_channel_too(void) {
     TEST_ASSERT_EQUAL(0, static_cast<int>(f.moduleStructure.nodes[0].sensors.size()));
 }
 
+// The builder is handed over by a setter, so a use case whose setter was never called holds a null
+// pointer on the same path a command walks. The helper has to leave the structure alone and let the
+// command finish instead of following that pointer, and it has to say so in the log - otherwise the
+// unchanged structure looks exactly like a sensor that had nothing to add.
+void test_set_sensor_model_without_structure_use_case_changes_nothing(void) {
+    SensorModelStructureFixture f(false);
+    f.addModbusType("model-air", "air_temp", "humidity");
+
+    auto results = f.useCase.executeCommands({SensorModelStructureFixture::setSensorModelCommand(
+        "cmd-set-model-4", "model-air")});
+
+    // The sensor is still saved: the missing dependency does not fail the command
+    TEST_ASSERT_EQUAL(1, static_cast<int>(results.size()));
+    TEST_ASSERT_EQUAL_STRING("Done", results[0].status.c_str());
+
+    // Nothing is published: neither the register channels nor the computed one reach the structure
+    TEST_ASSERT_EQUAL(0, static_cast<int>(f.moduleStructure.nodes[0].sensors.size()));
+    TEST_ASSERT_NULL(f.findSensor("test_module_uid.00.01"));
+    TEST_ASSERT_NULL(f.findSensor("test_module_uid.00.03"));
+
+    TEST_ASSERT_TRUE(f.logger.hasMessageContaining("sensor structure use case is not wired"));
+}
+
 extern "C" int run_module_command_execution_use_case_tests(void) {
     RUN_TEST(test_add_wifi_success);
     RUN_TEST(test_add_wifi_failure);
@@ -620,5 +647,6 @@ extern "C" int run_module_command_execution_use_case_tests(void) {
     RUN_TEST(test_set_sensor_model_without_air_pair_adds_no_virtual_channel);
     RUN_TEST(test_scan_sensors_adds_virtual_channel_to_structure);
     RUN_TEST(test_delete_sensors_removes_virtual_channel_too);
+    RUN_TEST(test_set_sensor_model_without_structure_use_case_changes_nothing);
     return 0;
 }
