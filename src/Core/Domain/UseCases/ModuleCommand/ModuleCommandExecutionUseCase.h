@@ -289,8 +289,8 @@ private:
      * @brief Add a sensor to the module structure exactly the way the setup flow does
      *
      * GDV1-3782: the records of a sensor include its computed channels (VPD), and the only place
-     * that knows about them is ISensorStructureUseCase. ModuleStructure::addSensor builds one
-     * record per register config and nothing else, so a sensor added by a command reached the
+     * that knows about them is ISensorStructureUseCase. Building the records anywhere else gives
+     * one record per register config and nothing more, so a sensor added by a command reached the
      * backend without its computed channel until the next restart rebuilt the whole structure -
      * the user picked the model in the app and VPD was missing from the structure that went out
      * right after. Building the records in one place is what keeps the two flows identical.
