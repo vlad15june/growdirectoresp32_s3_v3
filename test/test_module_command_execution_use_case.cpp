@@ -11,6 +11,13 @@
 #include "Mock/Infrastructure/Configuration/MockModuleConfig.h"
 #include "Mock/Infrastructure/Configuration/MockSettings.h"
 #include "Mock/Infrastructure/MockArduinoAdapter.h"
+#include "Mock/Infrastructure/Repositories/MockSensorRepository.h"
+#include "Mock/Infrastructure/SPIFFS/MockSensorTypeRepository.h"
+#include "Mock/Core/Domain/Adapters/Sensors/MockSensorReader.h"
+#include "Core/Domain/Data/Models/ModuleStructure.h"
+#include "Core/Domain/UseCases/ModuleStructure/SensorStructureUseCase.h"
+#include "Core/Domain/UseCases/Sensors/VirtualSensorChannelsUseCase.h"
+#include "Core/Domain/UseCases/Sensors/VpdChannelUseCase.h"
 #include "Application/DTOs/ModuleCommandDto.h"
 #include "Core/Domain/Enums/BootTypeEnum.h"
 #include "Core/Domain/Enums/ModuleCommandStatus.h"
@@ -423,6 +430,175 @@ void test_reboot_without_settings_still_restarts(void) {
     TEST_ASSERT_TRUE(arduinoAdapter.restartCalled);
 }
 
+// GDV1-3782. Picking the sensor model in the app publishes the structure right after the command,
+// and that structure used to carry only the register channels: the module built the records with
+// ModuleStructure::addSensor, which knows nothing about computed channels. VPD was calculated and
+// sent in hardware/update from the first read, but the backend had never been told the channel
+// exists, so the app showed no VPD until the module restarted and rebuilt the whole structure
+// (module 9C:13:9E:9A:51:9C, firmware 2.18.6, 2026-08-15). The command path has to build the
+// records the same way the setup flow does.
+struct SensorModelStructureFixture {
+    MockLogger logger;
+    MockDebugSystem debugSystem;
+    MockModuleConfig moduleConfig;
+    MockSensorRepository sensorRepository;
+    MockSensorTypeRepository sensorTypeRepository;
+    MockSensorReader sensorReader;
+    ModuleStructure moduleStructure;
+    VpdChannelUseCase vpdChannel;
+    VirtualSensorChannelsUseCase virtualChannels;
+    SensorStructureUseCase sensorStructure;
+    ModuleCommandExecutionUseCase useCase;
+
+    SensorModelStructureFixture()
+        : virtualChannels(&vpdChannel),
+          sensorStructure(&virtualChannels, &logger, &debugSystem),
+          useCase(&logger, &debugSystem, nullptr, nullptr, nullptr,
+                  &sensorRepository, &sensorTypeRepository, &sensorReader,
+                  &moduleConfig, nullptr, nullptr, nullptr, &moduleStructure) {
+        debugSystem.registerFeature(DebugFeatures::MODULE_COMMAND_DEBUG);
+        debugSystem.registerFeature(DebugFeatures::SETUP_DEBUG);
+
+        // Pins exist only on a sensor module
+        moduleConfig.setModuleType(MODULE_TYPE_SENSOR);
+
+        // The module always has exactly one node
+        moduleStructure.nodes.push_back(Node());
+
+        useCase.setSensorStructureUseCase(&sensorStructure);
+    }
+
+    // Sensor type of two ModBus register channels, e.g. the air temperature + humidity of RY-WS301
+    void addModbusType(const char* uid, const char* firstType, const char* secondType) {
+        SensorType sensorType;
+        sensorType.uid = uid;
+        sensorType.name = "test_modbus_sensor";
+        sensorType.protocol = SensorProtocol::MODBUS_PROTOCOL;
+        sensorType.modbusDeviceAddress = 1;
+
+        ModbusRegisterConfig first;
+        first.channel = 1;
+        first.sensorType = firstType;
+        ModbusRegisterConfig second;
+        second.channel = 2;
+        second.sensorType = secondType;
+
+        sensorType.modbusRegisterConfig.push_back(first);
+        sensorType.modbusRegisterConfig.push_back(second);
+
+        sensorTypeRepository.addSensorType(sensorType);
+    }
+
+    const Sensor* findSensor(const std::string& uid) const {
+        for (const auto& sensor : moduleStructure.nodes[0].sensors) {
+            if (sensor.uid == uid) {
+                return &sensor;
+            }
+        }
+        return nullptr;
+    }
+
+    // Pin 4 in the command payload is pin 0 of the module
+    static ModuleCommandDto setSensorModelCommand(const char* uid, const char* modelUid) {
+        ModuleCommandDto cmd;
+        cmd.uid = uid;
+        cmd.command = "SetSensorModel";
+        cmd.options = std::string("{\"pin\":4,\"uid\":\"") + modelUid + "\"}";
+        cmd.createdAt = "";
+        return cmd;
+    }
+};
+
+// The pair air_temp + humidity -> the structure carries the computed VPD channel immediately
+void test_set_sensor_model_adds_virtual_channel_to_structure(void) {
+    SensorModelStructureFixture f;
+    f.addModbusType("model-air", "air_temp", "humidity");
+
+    auto results = f.useCase.executeCommands({SensorModelStructureFixture::setSensorModelCommand(
+        "cmd-set-model-1", "model-air")});
+
+    TEST_ASSERT_EQUAL(1, static_cast<int>(results.size()));
+    TEST_ASSERT_EQUAL_STRING("Done", results[0].status.c_str());
+
+    // Two register channels plus the computed one, and nothing else
+    TEST_ASSERT_EQUAL(3, static_cast<int>(f.moduleStructure.nodes[0].sensors.size()));
+
+    const Sensor* vpd = f.findSensor("test_module_uid.00.03");
+    TEST_ASSERT_NOT_NULL(vpd);
+    TEST_ASSERT_EQUAL_STRING("vpd", vpd->type.c_str());
+    TEST_ASSERT_EQUAL(0, vpd->pin);
+
+    TEST_ASSERT_NOT_NULL(f.findSensor("test_module_uid.00.01"));
+    TEST_ASSERT_NOT_NULL(f.findSensor("test_module_uid.00.02"));
+}
+
+// No air pair -> no computed channel is invented
+void test_set_sensor_model_without_air_pair_adds_no_virtual_channel(void) {
+    SensorModelStructureFixture f;
+    f.addModbusType("model-soil", "soil_temp", "ec");
+
+    auto results = f.useCase.executeCommands({SensorModelStructureFixture::setSensorModelCommand(
+        "cmd-set-model-2", "model-soil")});
+
+    TEST_ASSERT_EQUAL(1, static_cast<int>(results.size()));
+    TEST_ASSERT_EQUAL_STRING("Done", results[0].status.c_str());
+
+    TEST_ASSERT_EQUAL(2, static_cast<int>(f.moduleStructure.nodes[0].sensors.size()));
+    TEST_ASSERT_NULL(f.findSensor("test_module_uid.00.03"));
+    TEST_ASSERT_NOT_NULL(f.findSensor("test_module_uid.00.01"));
+    TEST_ASSERT_NOT_NULL(f.findSensor("test_module_uid.00.02"));
+}
+
+// ScanSensors adds the sensor it detected through the same builder, so it has the same channels
+void test_scan_sensors_adds_virtual_channel_to_structure(void) {
+    SensorModelStructureFixture f;
+    f.addModbusType("model-air", "air_temp", "humidity");
+
+    ModuleCommandDto cmd;
+    cmd.uid = "cmd-scan-1";
+    cmd.command = "ScanSensors";
+    cmd.options = "{\"pin\":4}";
+    cmd.createdAt = "";
+
+    auto results = f.useCase.executeCommands({cmd});
+
+    TEST_ASSERT_EQUAL(1, static_cast<int>(results.size()));
+    TEST_ASSERT_EQUAL_STRING("Done", results[0].status.c_str());
+
+    const Sensor* vpd = f.findSensor("test_module_uid.00.03");
+    TEST_ASSERT_NOT_NULL(vpd);
+    TEST_ASSERT_EQUAL_STRING("vpd", vpd->type.c_str());
+}
+
+// DeleteSensors clears the pin, and a computed channel carries the pin of its sensor - so it goes
+// with the register channels and needs no separate handling.
+void test_delete_sensors_removes_virtual_channel_too(void) {
+    SensorModelStructureFixture f;
+    f.addModbusType("model-air", "air_temp", "humidity");
+
+    f.useCase.executeCommands({SensorModelStructureFixture::setSensorModelCommand(
+        "cmd-set-model-3", "model-air")});
+    TEST_ASSERT_EQUAL(3, static_cast<int>(f.moduleStructure.nodes[0].sensors.size()));
+
+    // The repository has to report the sensor for DeleteSensors to find anything on the pin
+    SensorEntity stored;
+    stored.uid = "test_module_uid.00";
+    stored.pin = 0;
+    f.sensorRepository.sensors.push_back(stored);
+
+    ModuleCommandDto cmd;
+    cmd.uid = "cmd-delete-1";
+    cmd.command = "DeleteSensors";
+    cmd.options = "{\"pin\":4}";
+    cmd.createdAt = "";
+
+    auto results = f.useCase.executeCommands({cmd});
+
+    TEST_ASSERT_EQUAL(1, static_cast<int>(results.size()));
+    TEST_ASSERT_EQUAL_STRING("Done", results[0].status.c_str());
+    TEST_ASSERT_EQUAL(0, static_cast<int>(f.moduleStructure.nodes[0].sensors.size()));
+}
+
 extern "C" int run_module_command_execution_use_case_tests(void) {
     RUN_TEST(test_add_wifi_success);
     RUN_TEST(test_add_wifi_failure);
@@ -440,5 +616,9 @@ extern "C" int run_module_command_execution_use_case_tests(void) {
     RUN_TEST(test_reboot_command_sets_user_boot_type);
     RUN_TEST(test_reboot_via_execute_sets_user_boot_type);
     RUN_TEST(test_reboot_without_settings_still_restarts);
+    RUN_TEST(test_set_sensor_model_adds_virtual_channel_to_structure);
+    RUN_TEST(test_set_sensor_model_without_air_pair_adds_no_virtual_channel);
+    RUN_TEST(test_scan_sensors_adds_virtual_channel_to_structure);
+    RUN_TEST(test_delete_sensors_removes_virtual_channel_too);
     return 0;
 }

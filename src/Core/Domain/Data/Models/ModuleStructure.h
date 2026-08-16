@@ -86,8 +86,16 @@ public:
     
     std::string getDeviceType() const;
     
+    /**
+     * @brief Register channels of a sensor only - NOT the records the backend expects
+     *
+     * Computed channels (VPD) have no register config, so this method cannot know about them and
+     * never adds them. Whoever fills the structure for publishing uses ISensorStructureUseCase
+     * instead; adding a sensor here left it without its computed channel until the next restart
+     * (GDV1-3782). Kept for the data-model tests, no production caller.
+     */
     void addSensor(const SensorEntity& sensor);
-    
+
     void removeSensorsByPin(int pin);
 
 private:

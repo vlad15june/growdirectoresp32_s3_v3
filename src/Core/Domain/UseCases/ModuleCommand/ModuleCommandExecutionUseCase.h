@@ -15,6 +15,7 @@
 #include "Core/Domain/Interfaces/IWifiManager.h"
 #include "Core/Domain/Interfaces/UseCases/ILedUseCases.h"
 #include "Core/Domain/Interfaces/UseCases/ICheckModuleDeletionUseCase.h"
+#include "Core/Domain/Interfaces/UseCases/ISensorStructureUseCase.h"
 #include "Core/Domain/Interfaces/Adapters/Sensors/IRawBusAccess.h"
 #include "Core/Domain/Interfaces/Udp/IRemoteModuleCommandSender.h"
 #include "Core/Utils/HexCodec.h"
@@ -56,6 +57,7 @@ private:
     IRawBusAccess *rawBus;
     ICheckModuleDeletionUseCase *checkModuleDeletionUseCase;
     IRemoteModuleCommandSender *remoteModuleCommandSender = nullptr;
+    ISensorStructureUseCase *sensorStructureUseCase = nullptr;
     static const unsigned long commandMaxAgeSeconds = 300;
     static const unsigned long rawReadTimeoutMs = 1000;
 
@@ -66,6 +68,15 @@ public:
     virtual ~ModuleCommandExecutionUseCase() = default;
 
     void setRemoteModuleCommandSender(IRemoteModuleCommandSender* sender) { remoteModuleCommandSender = sender; }
+
+    /**
+     * @brief The builder of the sensor records of the module structure
+     *
+     * A setter and not a constructor parameter because the composition root creates this use case
+     * before the structure builder (src/globals.h), and the constructor already carries 19
+     * positional dependencies - the same reason ModuleSetupService receives it this way.
+     */
+    void setSensorStructureUseCase(ISensorStructureUseCase* useCase) { sensorStructureUseCase = useCase; }
 
     /**
      * @brief Execute module commands from JSON options
@@ -273,6 +284,34 @@ private:
         CommandExecutionResult(ModuleCommandStatus status, const std::string& errorMessage, const ModuleCommandResult& result)
             : status(status), errorMessage(errorMessage), result(result) {}
     };
+
+    /**
+     * @brief Add a sensor to the module structure exactly the way the setup flow does
+     *
+     * GDV1-3782: the records of a sensor include its computed channels (VPD), and the only place
+     * that knows about them is ISensorStructureUseCase. ModuleStructure::addSensor builds one
+     * record per register config and nothing else, so a sensor added by a command reached the
+     * backend without its computed channel until the next restart rebuilt the whole structure -
+     * the user picked the model in the app and VPD was missing from the structure that went out
+     * right after. Building the records in one place is what keeps the two flows identical.
+     */
+    void addSensorToStructure(const SensorEntity& sensorEntity)
+    {
+        if (!moduleStructure || moduleStructure->nodes.empty())
+        {
+            return;
+        }
+
+        if (!sensorStructureUseCase)
+        {
+            log(DebugFeatures::MODULE_COMMAND_DEBUG,
+                "ModuleCommandUseCase: sensor structure use case is not wired - sensor %s is not added to the structure",
+                sensorEntity.uid.c_str());
+            return;
+        }
+
+        sensorStructureUseCase->addSensor(moduleStructure->nodes[0], sensorEntity);
+    }
 
     /**
      * @brief Handle AddWifi command
@@ -709,7 +748,7 @@ private:
         // Update module structure - add new sensor
         if (moduleStructure)
         {
-            moduleStructure->addSensor(newSensorEntity);
+            addSensorToStructure(newSensorEntity);
             log(DebugFeatures::MODULE_COMMAND_DEBUG,
                 "ModuleCommandUseCase: Added new sensor to moduleStructure on pin %d", pin);
         }
@@ -961,7 +1000,7 @@ private:
                         // Update module structure - add detected sensor
                         if (moduleStructure)
                         {
-                            moduleStructure->addSensor(tempSensor);
+                            addSensorToStructure(tempSensor);
                             log(DebugFeatures::MODULE_COMMAND_DEBUG,
                                 "ModuleCommandUseCase: Added detected sensor to moduleStructure on pin %d", pin);
                         }
@@ -1028,7 +1067,7 @@ private:
                                 // Update module structure - add detected sensor
                                 if (moduleStructure)
                                 {
-                                    moduleStructure->addSensor(tempSensor);
+                                    addSensorToStructure(tempSensor);
                                     log(DebugFeatures::MODULE_COMMAND_DEBUG,
                                         "ModuleCommandUseCase: Added detected sensor to moduleStructure on pin %d", pin);
                                 }
