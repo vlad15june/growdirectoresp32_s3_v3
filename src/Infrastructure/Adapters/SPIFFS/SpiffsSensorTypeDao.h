@@ -52,25 +52,6 @@ protected:
         return jsonConverter->sensorTypeFromJson(jsonStr, sensorType);
     }
 
-    std::string entitiesToJson(const std::vector<SensorType>& sensorTypes) {
-        log("SpiffsSensorTypeDao: entitiesToJson called with %d sensor types", sensorTypes.size());
-#ifdef ESP_PLATFORM
-        log("SpiffsSensorTypeDao: Free heap before JSON conversion: %d", ESP.getFreeHeap());
-#endif
-        
-        try {
-            std::string result = jsonConverter->sensorTypesToJson(sensorTypes);
-            log("SpiffsSensorTypeDao: JSON conversion successful, result length: %d", result.length());
-#ifdef ESP_PLATFORM
-            log("SpiffsSensorTypeDao: Free heap after JSON conversion: %d", ESP.getFreeHeap());
-#endif
-            return result;
-        } catch (...) {
-            log("SpiffsSensorTypeDao: ERROR - Exception in jsonConverter->sensorTypesToJson!");
-            return "[]";
-        }
-    }
-
     bool jsonToEntities(const std::string& jsonStr, std::vector<SensorType>& sensorTypes) {
         return jsonConverter->sensorTypesFromJson(jsonStr, sensorTypes);
     }
@@ -221,44 +202,58 @@ public:
         }
         
         log("SpiffsSensorTypeDao: Starting JSON serialization...");
+        // Serialize each entity individually first. This keeps allocations small
+        // (one 16KB JSON document at a time) and avoids building a single large
+        // contiguous string for the whole array, which fails with std::bad_alloc
+        // on fragmented heaps (no PSRAM) and previously produced an empty file.
+        std::vector<std::string> entityJsons;
+        entityJsons.reserve(entities.size());
         for (size_t i = 0; i < entities.size(); i++) {
             log("SpiffsSensorTypeDao: Processing entity %d - UID: %s, Name: %s", 
                 i, entities[i].uid.c_str(), entities[i].name.c_str());
             log("SpiffsSensorTypeDao: Entity %d has %d sub-sensor types, %d modbus configs", 
                 i, entities[i].sensorTypes.size(), entities[i].modbusRegisterConfig.size());
-        }
-        
-        std::string jsonStr;
-        try {
-            log("SpiffsSensorTypeDao: Calling entitiesToJson...");
-            jsonStr = entitiesToJson(entities);
-            log("SpiffsSensorTypeDao: JSON serialization complete, length: %d", jsonStr.length());
-#ifdef ESP_PLATFORM
-            log("SpiffsSensorTypeDao: Free heap after JSON: %d", ESP.getFreeHeap());
-#endif
-        } catch (...) {
-            log("SpiffsSensorTypeDao: ERROR - Exception in JSON serialization!");
-            return false;
-        }
 
-        // Guard: if entities are non-empty but serialization produced "[]" or empty,
-        // something went wrong — abort to avoid overwriting valid data with an empty file.
-        if (!entities.empty() && (jsonStr.empty() || jsonStr == "[]")) {
-            log("SpiffsSensorTypeDao: ERROR - JSON serialization produced empty result for %d entities, aborting write",
-                static_cast<int>(entities.size()));
-            return false;
+            std::string entityJson;
+            try {
+                entityJson = entityToJson(entities[i]);
+            } catch (...) {
+                log("SpiffsSensorTypeDao: ERROR - Exception serializing entity %d, aborting write", static_cast<int>(i));
+                return false;
+            }
+            if (entityJson.empty() || entityJson == "{}") {
+                log("SpiffsSensorTypeDao: ERROR - Serialization produced empty result for entity %d (UID: %s), aborting write",
+                    static_cast<int>(i), entities[i].uid.c_str());
+                return false;
+            }
+            entityJsons.push_back(entityJson);
         }
-        
+#ifdef ESP_PLATFORM
+        log("SpiffsSensorTypeDao: Free heap after JSON: %d", ESP.getFreeHeap());
+#endif
+
+        // Write incrementally: "[" then each entity, then "]". appendToFile adds
+        // a newline after each chunk, which is valid JSON whitespace.
         log("SpiffsSensorTypeDao: Starting file write to: %s", filePath.c_str());
         try {
-            bool writeOk = spiffsAdapter->rewriteToFile(filePath.c_str(), jsonStr.c_str());
-#ifdef ESP_PLATFORM
-            log("SpiffsSensorTypeDao: Free heap after file write: %d", ESP.getFreeHeap());
-#endif
-            if (!writeOk) {
+            if (!spiffsAdapter->rewriteToFile(filePath.c_str(), "[")) {
                 log("SpiffsSensorTypeDao: ERROR - File write failed for %s", filePath.c_str());
                 return false;
             }
+            for (size_t i = 0; i < entityJsons.size(); i++) {
+                std::string chunk = (i == 0) ? entityJsons[i] : "," + entityJsons[i];
+                if (!spiffsAdapter->appendToFile(filePath.c_str(), chunk.c_str())) {
+                    log("SpiffsSensorTypeDao: ERROR - File append failed for %s", filePath.c_str());
+                    return false;
+                }
+            }
+            if (!spiffsAdapter->appendToFile(filePath.c_str(), "]")) {
+                log("SpiffsSensorTypeDao: ERROR - File append failed for %s", filePath.c_str());
+                return false;
+            }
+#ifdef ESP_PLATFORM
+            log("SpiffsSensorTypeDao: Free heap after file write: %d", ESP.getFreeHeap());
+#endif
             log("SpiffsSensorTypeDao: File write complete");
         } catch (...) {
             log("SpiffsSensorTypeDao: ERROR - Exception in file write!");

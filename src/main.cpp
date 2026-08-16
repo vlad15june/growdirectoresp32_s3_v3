@@ -281,8 +281,8 @@ void setup()
                   millis(), wdtInitRc, wdtAddRc);
   }
 
-   //settings.begin();
-   //settings.setConfigured(ModuleModeEnum::USER_CAN_CONFIGURE);
+  // settings.begin();
+  // settings.setConfigured(ModuleModeEnum::USER_CAN_CONFIGURE);
 
   // settings.begin();
   // settings.setConfigured(ModuleModeEnum::AP_TEST_MODE);

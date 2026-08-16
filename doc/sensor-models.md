@@ -17,6 +17,7 @@ This page contains the current list of supported sensor models in the GrowDirect
 | XF600A Compact Weather Station | xf600a | Modbus | 9600 | 255 (0xFF) | ✓ | ✓ | Air Temperature, Humidity, Pressure, Wind Speed/Direction, Rainfall |
 | RY-WS12S Component Temperature Sensor | ry-ws12s | Modbus | 9600 | 1 | ✓ | ✓ | Surface/Component Temperature (°C) |
 | CC-FL-120W Water Flow Meter | cc-fl-120w | Modbus | 9600 | 1 | ✓ | ✓ | Water Flow (m³), Valve Control |
+| RK900-11 Ultrasonic Weather Station | rk900-11 | Modbus | 9600 | 1 (0x01, fixed) | ✓ | ✗ | Air Temperature, Humidity, Pressure, Wind Speed/Direction, Rainfall, Solar Radiation, Illuminance |
 
 ---
 
@@ -540,6 +541,63 @@ Response: 01 01 00 01 00 FF/00 XX XX (FF=open, 00=closed)
 - Position faucet higher than water meter
 - Avoid direct sunlight, freezing, and flooding
 - Install valves before and after for maintenance
+
+---
+
+### RK900-11 Ultrasonic Weather Station (Rika Sensors)
+
+**Description**: Compact ultrasonic weather station measuring air temperature, relative humidity, atmospheric pressure, wind speed and direction (ultrasonic, no moving parts), accumulated rainfall, solar radiation, and illuminance.
+
+* **UID**: 3f8a2c1e-9b4d-4e7a-8c2f-5d6e7f8a9b01
+* **Protocol**: Modbus RTU (read-only, Function Code 03)
+* **Baud Rate**: 9600
+* **Data Bits**: 8
+* **Stop Bits**: 1
+* **Parity**: None after provisioning (factory default is Even — 9600 8-E-1; switch with the `>CUS 9600 8-N-1` ASCII service command)
+* **Default Modbus Address**: 1 (0x01), fixed — the device has no Modbus address register; the address can only be changed via ASCII service commands (see `docs/features/sensor/modbus-sensor-address-commands.md` in the specs repo)
+* **Power Supply**: DC 7-30V
+* **Power Consumption**: 1.7W
+* **Can Scan**: No — the model uses a fixed Modbus address and is excluded from auto-scan and address reassignment; it is assigned manually (SetSensorModel)
+
+**Sensor Types**:
+
+| Parameter | Range | Unit |
+| --- | --- | --- |
+| Air Temperature | -40 to 80 | °C |
+| Air Humidity | 0-100 | %RH |
+| Atmospheric Pressure | 300-1100 | hPa |
+| Wind Speed | 0-40 | m/s |
+| Wind Direction | 0-359 | ° |
+| Rainfall (accumulated) | 0-200 | mm |
+| Solar Radiation | 0-2000 | W/m² |
+| Illuminance | 0-200,000 | lx |
+
+**Modbus Registers** (Function Code 03 only; 0-based addresses — the manual table §6.1 is 1-based, address = register number − 1). All channels use multiplier 1 and offset 0: values are already in physical units.
+
+| Address | Parameter | Data Type |
+| --- | --- | --- |
+| 0x0000 | Device Status (bitmask of installed options; always responds — used as ping register) | u16 |
+| 0x0001 | Wind Direction | u16 |
+| 0x0002-0x0003 | Wind Speed | f32 (CDAB) |
+| 0x0004-0x0005 | Air Temperature | f32 (CDAB) |
+| 0x0006-0x0007 | Air Humidity | f32 (CDAB) |
+| 0x0008-0x0009 | Atmospheric Pressure | f32 (CDAB) |
+| 0x000C-0x000D | Rainfall (accumulated) | f32 (CDAB) |
+| 0x001D-0x001E | Illuminance | f32 (CDAB) |
+| 0x0021-0x0022 | Solar Radiation | f32 (CDAB) |
+
+**Float32 word order**: float32 values are CDAB (low word first) — the first register of a pair holds the **low** 16 bits of the IEEE754 float, the second register the high 16 bits; bytes within each register are big-endian. Example from the manual: wire bytes `33 33 41 E7` decode as `0x41E73333` = 28.9 °C.
+
+**Wiring Definition (RS485)**:
+
+| Wire Color | Function |
+| --- | --- |
+| Red | V+ (Power Supply) |
+| Black | V- (GND) |
+| Yellow | RS485-A |
+| Green | RS485-B |
+
+**Note**: RS485-B is **green** here — this differs from the XF600A/XF700A cable, where B is blue. Verify the actual cable crimp on the bench.
 
 ---
 
