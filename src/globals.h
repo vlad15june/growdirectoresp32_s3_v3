@@ -560,6 +560,7 @@ void initDependencies()
     syncRulesUseCase.setSettings(&settings);
     commandService.setRemoteSensorReceiver(&remoteSensorReceiver);
     moduleSetupService.setSensorStructureUseCase(&sensorStructureUseCase);
+    moduleCommandExecutionUseCase.setSensorStructureUseCase(&sensorStructureUseCase);
     syncSensorTypesUseCase.setVirtualSensorChannelsUseCase(&virtualSensorChannelsUseCase);
     syncSensorTypesUseCase.setRepublishModuleStructureUseCase(&republishModuleStructureUseCase);
     loopServiceFactory.setOtaUpdateLog(&otaUpdateLog);

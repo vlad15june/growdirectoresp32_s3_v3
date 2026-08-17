@@ -15,6 +15,7 @@
 #include "Core/Domain/Interfaces/IWifiManager.h"
 #include "Core/Domain/Interfaces/UseCases/ILedUseCases.h"
 #include "Core/Domain/Interfaces/UseCases/ICheckModuleDeletionUseCase.h"
+#include "Core/Domain/Interfaces/UseCases/ISensorStructureUseCase.h"
 #include "Core/Domain/Interfaces/Adapters/Sensors/IRawBusAccess.h"
 #include "Core/Domain/Interfaces/Udp/IRemoteModuleCommandSender.h"
 #include "Core/Utils/HexCodec.h"
@@ -56,6 +57,7 @@ private:
     IRawBusAccess *rawBus;
     ICheckModuleDeletionUseCase *checkModuleDeletionUseCase;
     IRemoteModuleCommandSender *remoteModuleCommandSender = nullptr;
+    ISensorStructureUseCase *sensorStructureUseCase = nullptr;
     static const unsigned long commandMaxAgeSeconds = 300;
     static const unsigned long rawReadTimeoutMs = 1000;
 
@@ -66,6 +68,8 @@ public:
     virtual ~ModuleCommandExecutionUseCase() = default;
 
     void setRemoteModuleCommandSender(IRemoteModuleCommandSender* sender) { remoteModuleCommandSender = sender; }
+
+    void setSensorStructureUseCase(ISensorStructureUseCase* useCase) { sensorStructureUseCase = useCase; }
 
     /**
      * @brief Execute module commands from JSON options
@@ -273,6 +277,28 @@ private:
         CommandExecutionResult(ModuleCommandStatus status, const std::string& errorMessage, const ModuleCommandResult& result)
             : status(status), errorMessage(errorMessage), result(result) {}
     };
+
+    /**
+     * @brief Add a sensor to the module structure through the builder the setup flow uses
+     * @param sensorEntity Sensor the command has just saved
+     */
+    void addSensorToStructure(const SensorEntity& sensorEntity)
+    {
+        if (!moduleStructure || moduleStructure->nodes.empty())
+        {
+            return;
+        }
+
+        if (!sensorStructureUseCase)
+        {
+            log(DebugFeatures::MODULE_COMMAND_DEBUG,
+                "ModuleCommandUseCase: sensor structure use case is not wired - sensor %s is not added to the structure",
+                sensorEntity.uid.c_str());
+            return;
+        }
+
+        sensorStructureUseCase->addSensor(moduleStructure->nodes[0], sensorEntity);
+    }
 
     /**
      * @brief Handle AddWifi command
@@ -709,7 +735,7 @@ private:
         // Update module structure - add new sensor
         if (moduleStructure)
         {
-            moduleStructure->addSensor(newSensorEntity);
+            addSensorToStructure(newSensorEntity);
             log(DebugFeatures::MODULE_COMMAND_DEBUG,
                 "ModuleCommandUseCase: Added new sensor to moduleStructure on pin %d", pin);
         }
@@ -961,7 +987,7 @@ private:
                         // Update module structure - add detected sensor
                         if (moduleStructure)
                         {
-                            moduleStructure->addSensor(tempSensor);
+                            addSensorToStructure(tempSensor);
                             log(DebugFeatures::MODULE_COMMAND_DEBUG,
                                 "ModuleCommandUseCase: Added detected sensor to moduleStructure on pin %d", pin);
                         }
@@ -1028,7 +1054,7 @@ private:
                                 // Update module structure - add detected sensor
                                 if (moduleStructure)
                                 {
-                                    moduleStructure->addSensor(tempSensor);
+                                    addSensorToStructure(tempSensor);
                                     log(DebugFeatures::MODULE_COMMAND_DEBUG,
                                         "ModuleCommandUseCase: Added detected sensor to moduleStructure on pin %d", pin);
                                 }
