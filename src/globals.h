@@ -352,7 +352,7 @@ RemoteModuleCommandSender remoteModuleCommandSender(&udpManager, &jsonConverter,
 
 RemoteModuleCommandReceiver remoteModuleCommandReceiver(&udpInboundDispatcher, &moduleConfig, &settings, &jsonConverter, &mqttLogger, &debugSystem);
 
-FirmwareUpdateRecoveryUseCase firmwareUpdateRecoveryUseCase(&diagnosticService, &moduleConfig, &settings, &mqttLogger, &debugSystem);
+FirmwareUpdateRecoveryUseCase firmwareUpdateRecoveryUseCase(&diagnosticService, &moduleConfig, &settings, &mqttLogger, &debugSystem, &otaUpdateLog);
 
 ModuleCommandExecutionUseCase moduleCommandExecutionUseCase(&mqttLogger, &debugSystem, &ntpTimeAdapter, &firmwareRemoteUpdate, &arduinoAdapter, &sensorRepository, &sensorTypeRepository, &sensorReader, &moduleConfig, &settings, &hybridApiService, &clearModuleDataService, &moduleStructure, &sensorValueModel, &wifiManager, &ledUseCases, &rawBusAccessAdapter, &checkModuleDeletionUseCase, &remoteModuleCommandSender, &firmwareUpdateRecoveryUseCase);
 

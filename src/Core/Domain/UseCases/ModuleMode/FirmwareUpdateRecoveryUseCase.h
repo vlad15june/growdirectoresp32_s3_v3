@@ -10,6 +10,7 @@
 #include "Core/Domain/Interfaces/ISettings.h"
 #include "Core/Domain/Interfaces/ILogger.h"
 #include "Core/Domain/Interfaces/IDebugSystem.h"
+#include "Core/Domain/Interfaces/IOtaUpdateLog.h"
 #include "Core/Domain/Enums/BootTypeEnum.h"
 #include "Core/Domain/Enums/FirmwareUpdateStateEnum.h"
 #include "Core/Domain/Enums/ModuleCommandEnum.h"
@@ -23,6 +24,18 @@ private:
     ISettings *_settings;
     ILogger *_logger;
     IDebugSystem *_debugSystem;
+    IOtaUpdateLog *_otaUpdateLog;
+
+    // UPDATE_FIRMWARE_DEBUG is registered SerialOnly, so the decision to restart is invisible
+    // from the outside. The OTA log is the one channel that survives the restart and reaches
+    // MQTT afterwards, so the line that explains the reboot goes next to the session it broke.
+    void writeOtaLog(const char *message)
+    {
+        if (_otaUpdateLog != nullptr)
+        {
+            _otaUpdateLog->write(message);
+        }
+    }
 
     void log(const char *format, ...)
     {
@@ -49,12 +62,14 @@ public:
         IModuleConfig *moduleConfig = nullptr,
         ISettings *settings = nullptr,
         ILogger *logger = nullptr,
-        IDebugSystem *debugSystem = nullptr)
+        IDebugSystem *debugSystem = nullptr,
+        IOtaUpdateLog *otaUpdateLog = nullptr)
         : _networkStatusProvider(networkStatusProvider),
           _moduleConfig(moduleConfig),
           _settings(settings),
           _logger(logger),
-          _debugSystem(debugSystem)
+          _debugSystem(debugSystem),
+          _otaUpdateLog(otaUpdateLog)
     {
     }
 
@@ -105,8 +120,12 @@ public:
         _settings->setBootType(BOOT_TYPE_FIRMWARE_UPDATE);
         _moduleConfig->setRequestedModuleMode(CONFIGURED_NEED_RESTART);
 
-        log("UPDATE_RECOVERY: kept update uid=%s version=%s, restarting first",
-            commandUid.c_str(), version.c_str());
+        char kept[256];
+        snprintf(kept, sizeof(kept),
+                 "UPDATE_RECOVERY: kept update uid=%s version=%s, restarting first",
+                 commandUid.c_str(), version.c_str());
+        log("%s", kept);
+        writeOtaLog(kept);
         return true;
     }
 

@@ -72,10 +72,14 @@ public:
         }
 
         char header[320];
-        snprintf(header, sizeof(header), "===== OTA SESSION mac=%s url=%s =====\n",
+        snprintf(header, sizeof(header), "===== OTA SESSION mac=%s url=%s =====",
                  _wifi ? _wifi->getMACAddress() : "", url ? url : "");
-        _spiffs->rewriteToFile(OTA_LOG_FILE, header);
-        serialDebug(header);
+        // Appended, not rewritten. Since GDV1-3834 a failed attempt is followed by a restart
+        // within a second, while the log reaches MQTT once every 5 s and only from
+        // CONFIGURE_DONE - so rewriting here threw away the session that had just failed,
+        // which is the one worth reading. BootEventLog keeps its lines across boots the same
+        // way; the file is still emptied by the flush and by the OTA_LOG_SIZE ceiling.
+        appendLine(header);
 
         _throttle.reset();
         write("OTA REQUESTED");
