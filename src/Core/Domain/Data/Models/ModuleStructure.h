@@ -4,9 +4,6 @@
 #include <string>
 #include <vector>
 
-// Forward declaration
-class SensorEntity;
-
 class Sensor {
 public:
     Sensor() : pin(0), group(0) {}
@@ -85,9 +82,7 @@ public:
     std::vector<Pump*> getAllPumps();
     
     std::string getDeviceType() const;
-    
-    void addSensor(const SensorEntity& sensor);
-    
+
     void removeSensorsByPin(int pin);
 
 private:

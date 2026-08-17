@@ -7,6 +7,7 @@
 #include "Core/Domain/Interfaces/Repositories/ISensorRepository.h"
 #include "Core/Domain/Interfaces/ILogger.h"
 #include "Core/Domain/Interfaces/IDebugSystem.h"
+#include "Core/Domain/Interfaces/IModuleConfig.h"
 #include "Core/Domain/Interfaces/Adapters/IArduinoAdapter.h"
 #include "Core/Domain/Interfaces/Adapters/Json/IJsonConverter.h"
 #include "Infrastructure/Adapters/Time/INTPTimeAdapter.h"
@@ -31,7 +32,8 @@ private:
     IArduinoAdapter* _arduinoAdapter;
     INTPTimeAdapter* _ntpTimeAdapter;
     IJsonConverter* _jsonConverter;
-    
+    IModuleConfig* _moduleConfig;
+
     // Sync timing - longer interval for sensor types as they change less frequently
     const int SYNC_INTERVAL_MS = 300000; // 5 minutes
     unsigned long _lastSyncTime;
@@ -64,6 +66,10 @@ private:
         }
     }
 
+    bool moduleTypeHasLocalSensors() const {
+        return !_moduleConfig || _moduleConfig->getSensorPinCount() > 0;
+    }
+
 public:
     SyncSensorTypesUseCase(
         IHybridAPIService* apiService,
@@ -73,7 +79,8 @@ public:
         IJsonConverter* jsonConverter = nullptr,
         ILogger* logger = nullptr,
         IDebugSystem* debugSystem = nullptr,
-        ISensorRepository* sensorRepository = nullptr
+        ISensorRepository* sensorRepository = nullptr,
+        IModuleConfig* moduleConfig = nullptr
     ) : _apiService(apiService),
         _sensorTypeRepository(sensorTypeRepository),
         _sensorRepository(sensorRepository),
@@ -82,6 +89,7 @@ public:
         _arduinoAdapter(arduinoAdapter),
         _ntpTimeAdapter(ntpTimeAdapter),
         _jsonConverter(jsonConverter),
+        _moduleConfig(moduleConfig),
         _lastSyncTime(0) {
         
         if (_arduinoAdapter) {
@@ -130,7 +138,14 @@ public:
         if (!_arduinoAdapter) {
             return;
         }
-        
+
+        if (!moduleTypeHasLocalSensors()) {
+            _forceSyncRequested = false;
+            log("SYNC_SENSOR_TYPES: Module type %d has no local sensor pins, skipping catalog sync",
+                _moduleConfig->getModuleType());
+            return;
+        }
+
         unsigned long now = _arduinoAdapter->millis();
         unsigned long elapsed = now - _lastSyncTime;
         
@@ -159,6 +174,12 @@ public:
     }
     
     bool forceSync() override {
+        if (!moduleTypeHasLocalSensors()) {
+            log("SYNC_SENSOR_TYPES: Module type %d has no local sensor pins, skipping catalog sync",
+                _moduleConfig->getModuleType());
+            return true;
+        }
+
         log("SYNC_SENSOR_TYPES: Force sync requested");
         _forceSyncRequested = true;
 

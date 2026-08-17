@@ -36,6 +36,7 @@ private:
 
     char _log_buf[256];
     char _lastErrorMessage[128];
+    int _lastHttpCode = 0;
 
     void otaWrite(const char* format, ...) {
         if (_otaLog == nullptr) {
@@ -109,6 +110,7 @@ public:
     
     bool updateFirmwareFromURL(const char* url) override {
         _lastErrorMessage[0] = '\0';
+        _lastHttpCode = 0;
 
         if (_otaLog) {
             _otaLog->startSession(url);
@@ -150,6 +152,7 @@ public:
         }
 
         int httpCode = _httpClient->GET();
+        _lastHttpCode = httpCode;
         log("UPDATE_FIRMWARE_DEBUG: updateFirmwareFromURL get firmware httpCode=%d", httpCode);
         otaWrite("HTTP begin=%d GET code=%d", isBegin ? 1 : 0, httpCode);
 
@@ -252,5 +255,9 @@ public:
 
     const char* getLastErrorMessage() const override {
         return _lastErrorMessage;
+    }
+
+    int getLastHttpCode() const override {
+        return _lastHttpCode;
     }
 };
