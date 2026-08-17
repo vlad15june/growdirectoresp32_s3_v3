@@ -17,7 +17,7 @@ This page contains the current list of supported sensor models in the GrowDirect
 | XF600A Compact Weather Station | xf600a | Modbus | 9600 | 255 (0xFF) | ✓ | ✓ | Air Temperature, Humidity, Pressure, Wind Speed/Direction, Rainfall |
 | RY-WS12S Component Temperature Sensor | ry-ws12s | Modbus | 9600 | 1 | ✓ | ✓ | Surface/Component Temperature (°C) |
 | CC-FL-120W Water Flow Meter | cc-fl-120w | Modbus | 9600 | 1 | ✓ | ✓ | Water Flow (m³), Valve Control |
-| RK900-11 Ultrasonic Weather Station | rk900-11 | Modbus | 9600 | 1 (0x01, fixed) | ✓ | ✗ | Air Temperature, Humidity, Pressure, Wind Speed/Direction, Rainfall, Solar Radiation, Illuminance |
+| RK520-02 Soil Moisture, Temperature & EC Sensor | rk520-02 | Modbus | 9600 | 1 (0x01) | ✓ | ✓ | Soil Temperature (°C), Soil Moisture (%), Soil EC (mS/cm) |
 
 ---
 
@@ -544,60 +544,66 @@ Response: 01 01 00 01 00 FF/00 XX XX (FF=open, 00=closed)
 
 ---
 
-### RK900-11 Ultrasonic Weather Station (Rika Sensors)
+### RK520-02 Soil Moisture, Temperature & EC Sensor (Rika Sensors)
 
-**Description**: Compact ultrasonic weather station measuring air temperature, relative humidity, atmospheric pressure, wind speed and direction (ultrasonic, no moving parts), accumulated rainfall, solar radiation, and illuminance.
+**Description**: Insertion probe measuring soil moisture, soil temperature, and soil electrical conductivity (EC) over RS485. IP68, 316L stainless steel probe.
 
-* **UID**: 3f8a2c1e-9b4d-4e7a-8c2f-5d6e7f8a9b01
-* **Protocol**: Modbus RTU (read-only, Function Code 03)
+* **UID**: *To be assigned* (issued by the server when the model is created)
+* **Protocol**: Modbus RTU (Function Codes 03 read / 06 write)
 * **Baud Rate**: 9600
 * **Data Bits**: 8
 * **Stop Bits**: 1
-* **Parity**: None after provisioning (factory default is Even — 9600 8-E-1; switch with the `>CUS 9600 8-N-1` ASCII service command)
-* **Default Modbus Address**: 1 (0x01), fixed — the device has no Modbus address register; the address can only be changed via ASCII service commands (see `docs/features/sensor/modbus-sensor-address-commands.md` in the specs repo)
-* **Power Supply**: DC 7-30V
-* **Power Consumption**: 1.7W
-* **Can Scan**: No — the model uses a fixed Modbus address and is excluded from auto-scan and address reassignment; it is assigned manually (SetSensorModel)
+* **Parity**: None (8-N-1)
+* **Default Modbus Address**: 1 (0x01), range 0x00-0xFF
+* **Broadcast Address**: 0xFE (vendor-specific — **not** 0x00)
+* **Power Supply**: DC 12-24V
+* **Housing**: ABS, 45 × 15 × 145 mm, IP68
 
 **Sensor Types**:
 
 | Parameter | Range | Unit |
 | --- | --- | --- |
-| Air Temperature | -40 to 80 | °C |
-| Air Humidity | 0-100 | %RH |
-| Atmospheric Pressure | 300-1100 | hPa |
-| Wind Speed | 0-40 | m/s |
-| Wind Direction | 0-359 | ° |
-| Rainfall (accumulated) | 0-200 | mm |
-| Solar Radiation | 0-2000 | W/m² |
-| Illuminance | 0-200,000 | lx |
+| Soil Temperature | -30 to +70 | °C |
+| Soil Moisture | 0-100 | % (m³/m³) |
+| Soil EC | 0-10 | mS/cm |
 
-**Modbus Registers** (Function Code 03 only; 0-based addresses — the manual table §6.1 is 1-based, address = register number − 1). All channels use multiplier 1 and offset 0: values are already in physical units.
+**Modbus Registers** (Function Code 03; all channels are single 16-bit registers):
 
-| Address | Parameter | Data Type |
-| --- | --- | --- |
-| 0x0000 | Device Status (bitmask of installed options; always responds — used as ping register) | u16 |
-| 0x0001 | Wind Direction | u16 |
-| 0x0002-0x0003 | Wind Speed | f32 (CDAB) |
-| 0x0004-0x0005 | Air Temperature | f32 (CDAB) |
-| 0x0006-0x0007 | Air Humidity | f32 (CDAB) |
-| 0x0008-0x0009 | Atmospheric Pressure | f32 (CDAB) |
-| 0x000C-0x000D | Rainfall (accumulated) | f32 (CDAB) |
-| 0x001D-0x001E | Illuminance | f32 (CDAB) |
-| 0x0021-0x0022 | Solar Radiation | f32 (CDAB) |
+| Address | Contents | Data Type | Formula |
+| --- | --- | --- | --- |
+| 0x0000 | Soil Temperature | s16 (two's complement) | value / 10 = °C |
+| 0x0001 | Soil Moisture | u16 | value / 10 = % |
+| 0x0002 | Soil EC | u16 | value / 1000 = mS/cm |
+| 0x0200 | Device Address | Read/Write (03/06) | Range 0x00-0xFF, default 0x01 |
 
-**Float32 word order**: float32 values are CDAB (low word first) — the first register of a pair holds the **low** 16 bits of the IEEE754 float, the second register the high 16 bits; bytes within each register are big-endian. Example from the manual: wire bytes `33 33 41 E7` decode as `0x41E73333` = 28.9 °C.
+**Negative temperatures**: the temperature register is signed (two's complement). Example: 0xFF05 = -251 → -25.1 °C. The sensor model must declare the temperature channel as `dataType: "s16"` — decoding it as u16 yields ~6553 °C instead.
 
-**Wiring Definition (RS485)**:
+**Address change**: FC06 to register 0x0200. Critical detail from the manual: *"After the restart sensor changes to take effect"* — the new address applies **only after a power cycle**. The firmware handles this via the model flag `applyAddressAfterPowerCycle` (see `docs/contracts/backend-firmware/hardware-api.md` in the specs repo): after writing the address, the port is power-cycled and the new address is pinged again.
 
-| Wire Color | Function |
+**Communication Examples**:
+
+Read all 3 values (address 01):
+```
+Request:  01 03 00 00 00 03 05 CB
+Response: 01 03 06 01 16 03 E8 01 1E 68 8F
+Calculation: 0x0116 = 278 → 27.8 °C; 0x03E8 = 1000 → 100.0 %; 0x011E = 286 → 0.286 mS/cm
+```
+
+Change address 01 → 02:
+```
+Request:  01 06 02 00 00 02 09 B3
+Response: 01 06 02 00 00 02 09 B3 (echo)
+Note: address takes effect only after a sensor restart (power cycle)
+```
+
+**Wiring Definition (RS485)** — connector version per GrowDirector wiring (the vendor manual shows the wire-color version: red V+, black V-, yellow RS485-A, green RS485-B):
+
+| Pin | Function |
 | --- | --- |
-| Red | V+ (Power Supply) |
-| Black | V- (GND) |
-| Yellow | RS485-A |
-| Green | RS485-B |
-
-**Note**: RS485-B is **green** here — this differs from the XF600A/XF700A cable, where B is blue. Verify the actual cable crimp on the bench.
+| Pin 3 | V+ |
+| Pin 4 | V- (GND) |
+| Pin 2 | RS485-A |
+| Pin 6 | RS485-B |
 
 ---
 

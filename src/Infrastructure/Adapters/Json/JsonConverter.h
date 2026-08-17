@@ -1486,6 +1486,7 @@ public:
         sensor.modbusPingAddress = static_cast<uint16_t>(extractIntValue(jsonStr, "modbusPingAddress"));
         sensor.registerToStoreModbusDeviceAddress = static_cast<uint16_t>(extractIntValue(jsonStr, "registerToStoreModbusDeviceAddress"));
         sensor.writeRegistersCommand = static_cast<uint8_t>(extractIntValue(jsonStr, "writeRegistersCommand"));
+        sensor.applyAddressAfterPowerCycle = extractBoolValue(jsonStr, "applyAddressAfterPowerCycle");
         sensor.i2cAddress = extractValue(jsonStr, "i2cAddress");
         sensor.chipType = extractValue(jsonStr, "chipType");
         
@@ -1556,6 +1557,7 @@ public:
         oss << ",\"modbusPingAddress\":" << sensor.modbusPingAddress;
         oss << ",\"registerToStoreModbusDeviceAddress\":" << sensor.registerToStoreModbusDeviceAddress;
         oss << ",\"writeRegistersCommand\":" << static_cast<int>(sensor.writeRegistersCommand);
+        oss << ",\"applyAddressAfterPowerCycle\":" << (sensor.applyAddressAfterPowerCycle ? "true" : "false");
         oss << ",\"i2cAddress\":\"" << sensor.i2cAddress << "\"";
         oss << ",\"chipType\":\"" << sensor.chipType << "\"";
         oss << ",\"currentValue\":" << sensor.currentValue;
@@ -2053,6 +2055,7 @@ private:
         sensorType.modbusPingAddress = static_cast<uint16_t>(extractIntValue(jsonStr, "modbusPingAddress"));
         sensorType.registerToStoreModbusDeviceAddress = static_cast<uint16_t>(extractIntValue(jsonStr, "registerToStoreModbusDeviceAddress"));
         sensorType.writeRegistersCommand = static_cast<uint8_t>(extractIntValue(jsonStr, "writeRegistersCommand"));
+        sensorType.applyAddressAfterPowerCycle = extractBoolValue(jsonStr, "applyAddressAfterPowerCycle");
         sensorType.priorityForScan = extractIntValue(jsonStr, "priorityForScan");
 
         // Legacy id for backward compatibility
@@ -2109,6 +2112,7 @@ private:
         oss << ",\"modbusPingAddress\":" << sensorType.modbusPingAddress;
         oss << ",\"registerToStoreModbusDeviceAddress\":" << sensorType.registerToStoreModbusDeviceAddress;
         oss << ",\"writeRegistersCommand\":" << static_cast<int>(sensorType.writeRegistersCommand);
+        oss << ",\"applyAddressAfterPowerCycle\":" << (sensorType.applyAddressAfterPowerCycle ? "true" : "false");
         oss << ",\"priorityForScan\":" << sensorType.priorityForScan;
         
         // Add sensorTypes array - simplified (for complex serialization use ArduinoJsonConverter)

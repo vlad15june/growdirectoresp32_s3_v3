@@ -1484,6 +1484,7 @@ public:
         sensor.modbusPingAddress = doc["modbusPingAddress"] | 0;
         sensor.registerToStoreModbusDeviceAddress = doc["registerToStoreModbusDeviceAddress"] | 0;
         sensor.writeRegistersCommand = doc["writeRegistersCommand"] | 0;
+        sensor.applyAddressAfterPowerCycle = doc["applyAddressAfterPowerCycle"] | false;
         sensor.i2cAddress = doc["i2cAddress"] | "";
         sensor.chipType = doc["chipType"] | "";
         
@@ -1512,7 +1513,7 @@ public:
                 config.sensorType = configObj["sensorType"] | "";
                 config.canConnectMinValue = configObj["canConnectMinValue"] | 0.0f;
                 config.canConnectMaxValue = configObj["canConnectMaxValue"] | 100.0f;
-                config.dataType = modbusDataTypeFromString(configObj["dataType"] | "uint16");
+                config.dataType = modbusDataTypeFromString(configObj["dataType"] | "u16");
                 sensor.modbusRegisterConfigs.push_back(config);
             }
         }
@@ -1557,6 +1558,7 @@ public:
         doc["modbusPingAddress"] = sensor.modbusPingAddress;
         doc["registerToStoreModbusDeviceAddress"] = sensor.registerToStoreModbusDeviceAddress;
         doc["writeRegistersCommand"] = sensor.writeRegistersCommand;
+        doc["applyAddressAfterPowerCycle"] = sensor.applyAddressAfterPowerCycle;
         doc["i2cAddress"] = sensor.i2cAddress;
         doc["chipType"] = sensor.chipType;
         
@@ -1678,7 +1680,7 @@ public:
         config.sensorType = doc["sensorType"] | "";
         config.canConnectMinValue = doc["canConnectMinValue"] | 0.0f;
         config.canConnectMaxValue = doc["canConnectMaxValue"] | 100.0f;
-        config.dataType = modbusDataTypeFromString(doc["dataType"] | "uint16");
+        config.dataType = modbusDataTypeFromString(doc["dataType"] | "u16");
 
         return true;
     }
@@ -1728,7 +1730,7 @@ public:
                 config.sensorType = configObj["sensorType"] | "";
                 config.canConnectMinValue = configObj["canConnectMinValue"] | 0.0f;
                 config.canConnectMaxValue = configObj["canConnectMaxValue"] | 100.0f;
-                config.dataType = modbusDataTypeFromString(configObj["dataType"] | "uint16");
+                config.dataType = modbusDataTypeFromString(configObj["dataType"] | "u16");
                 
                 configs.push_back(config);
             }
@@ -1879,6 +1881,7 @@ public:
         sensorType.modbusPingAddress = doc["modbusPingAddress"] | 0;
         sensorType.registerToStoreModbusDeviceAddress = doc["registerToStoreModbusDeviceAddress"] | 0;
         sensorType.writeRegistersCommand = doc["writeRegistersCommand"] | 0;
+        sensorType.applyAddressAfterPowerCycle = doc["applyAddressAfterPowerCycle"] | false;
         sensorType.priorityForScan = doc["priorityForScan"] | 0;
 
         // Parse legacy id for backward compatibility
@@ -1943,7 +1946,7 @@ public:
                 config.sensorType = configObj["sensorType"] | "";
                 config.canConnectMinValue = configObj["canConnectMinValue"] | 0.0f;
                 config.canConnectMaxValue = configObj["canConnectMaxValue"] | 100.0f;
-                config.dataType = modbusDataTypeFromString(configObj["dataType"] | "uint16");
+                config.dataType = modbusDataTypeFromString(configObj["dataType"] | "u16");
                 sensorType.modbusRegisterConfig.push_back(config);
             }
         }
@@ -2006,6 +2009,7 @@ public:
             doc["modbusPingAddress"] = sensorType.modbusPingAddress;
             doc["registerToStoreModbusDeviceAddress"] = sensorType.registerToStoreModbusDeviceAddress;
             doc["writeRegistersCommand"] = sensorType.writeRegistersCommand;
+            doc["applyAddressAfterPowerCycle"] = sensorType.applyAddressAfterPowerCycle;
             doc["priorityForScan"] = sensorType.priorityForScan;
 
             // Legacy id for backward compatibility (if needed)

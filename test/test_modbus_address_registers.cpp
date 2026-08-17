@@ -1,3 +1,8 @@
+// Arduino.h is stubbed for the host in test/Mock/native (see platformio.ini,
+// env:native). It has to come first: ArduinoJsonConverter.h pulls in headers
+// that expect the Arduino core to be present.
+#include <Arduino.h>
+
 #include <unity.h>
 #include <cstdint>
 #include <cstddef>
@@ -9,6 +14,7 @@
 #include "Infrastructure/Adapters/Sensors/HardwareSensors/ModbusSensors/ModbusSensorReader.h"
 #include "Infrastructure/Adapters/Sensors/SensorReader.h"
 #include "Infrastructure/Adapters/Json/JsonConverter.h"
+#include "Infrastructure/Adapters/Json/ArduinoJsonConverter.h"
 #include "Core/Domain/Interfaces/Adapters/Json/IJsonConverter.h"
 #include "Mock/Infrastructure/MockArduinoAdapter.h"
 #include "Core/Domain/Data/Entities/Sensor/Sensor.h"
@@ -84,6 +90,60 @@ public:
 };
 
 } // namespace
+
+// SensorReader must forward the model's power-cycle flag together with the
+// three addressing fields into the Modbus reader.
+void test_sensor_reader_forwards_addressing_fields_and_power_cycle_flag(void) {
+    class RecordingModbusReader : public IModbusSensorReader {
+    public:
+        bool called = false;
+        int currentAddress = -1;
+        uint16_t storeRegister = 0;
+        uint8_t writeCommand = 0;
+        uint16_t pingRegister = 0;
+        bool powerCycleToApply = false;
+
+        void init(unsigned long) override {}
+        bool readRegister(uint8_t, const ModbusRegisterConfig &, float &, int) override { return false; }
+        bool pingAddress(uint8_t, const ModbusRegisterConfig &, int) override { return false; }
+        bool writeSensorAddress(int current, int, int, uint16_t store, uint8_t command,
+                                uint16_t ping, bool powerCycle) override {
+            called = true;
+            currentAddress = current;
+            storeRegister = store;
+            writeCommand = command;
+            pingRegister = ping;
+            powerCycleToApply = powerCycle;
+            return true;
+        }
+        bool powerOnPort(int) override { return false; }
+        bool powerOffPort(int) override { return false; }
+        bool writeHoldingRegister(uint8_t, uint16_t, uint16_t, int) override { return false; }
+        bool readHoldingRegister(uint8_t, uint16_t, uint16_t &, int) override { return false; }
+    };
+
+    RecordingModbusReader modbusReader;
+    MockArduinoAdapter arduino;
+    SensorReader sensorReader(nullptr, &modbusReader, &arduino, nullptr, nullptr);
+
+    SensorEntity sensor;
+    sensor.protocol = "ModBus";
+    sensor.pin = 0;
+    sensor.modbusDeviceAddress = 1;
+    sensor.modbusPingAddress = 0x0000;
+    sensor.registerToStoreModbusDeviceAddress = 0x0200;
+    sensor.writeRegistersCommand = 6;
+    sensor.applyAddressAfterPowerCycle = true;
+
+    TEST_ASSERT_TRUE(sensorReader.writeSensorAddress(sensor, 0x70));
+
+    TEST_ASSERT_TRUE(modbusReader.called);
+    TEST_ASSERT_EQUAL_INT(1, modbusReader.currentAddress);
+    TEST_ASSERT_EQUAL_UINT16(0x0200, modbusReader.storeRegister);
+    TEST_ASSERT_EQUAL_UINT8(6, modbusReader.writeCommand);
+    TEST_ASSERT_EQUAL_UINT16(0x0000, modbusReader.pingRegister);
+    TEST_ASSERT_TRUE(modbusReader.powerCycleToApply);
+}
 
 // INV-2 + INV-1: primary FC16 write targets the configured register on the
 // device's current (non-broadcast) address, then verifies on the ping register.
@@ -360,7 +420,7 @@ void test_read_register_signed_int16(void) {
     cfg.numRegisters = 1;
     cfg.multiplier = 0.1f;
     cfg.offset = 0.0f;
-    cfg.dataType = ModbusDataType::Int16;
+    cfg.dataType = ModbusDataType::S16;
 
     float value = 0.0f;
     bool ok = reader.readRegister(0x01, cfg, value, 0);
@@ -369,7 +429,8 @@ void test_read_register_signed_int16(void) {
     TEST_ASSERT_FLOAT_WITHIN(0.01f, -5.0f, value);
 }
 
-// Some sensors (e.g. RK520-02) only apply a new Modbus address after a power cycle.
+// Some sensors (e.g. RK520-02) only apply a new Modbus address after a power
+// cycle. The retry-through-power-cycle runs only when the model asks for it.
 void test_primary_write_confirms_after_power_cycle(void) {
     FakeModbusRS485 fake;
     fake.respondingAddresses.insert(22);
@@ -379,7 +440,7 @@ void test_primary_write_confirms_after_power_cycle(void) {
     MockArduinoAdapter arduino;
     ModbusSensorReader reader(ports, arduino, nullptr, nullptr);
 
-    bool ok = reader.writeSensorAddress(10, 22, 0, 0x0200, 6, 0x0000);
+    bool ok = reader.writeSensorAddress(10, 22, 0, 0x0200, 6, 0x0000, /*powerCycleToApply=*/true);
 
     TEST_ASSERT_TRUE(ok);
     TEST_ASSERT_EQUAL_INT(2, fake.powerOnCount);
@@ -388,6 +449,25 @@ void test_primary_write_confirms_after_power_cycle(void) {
     TEST_ASSERT_EQUAL_INT(10, fake.writes[0].slave);
     TEST_ASSERT_EQUAL_INT(0x0200, fake.writes[0].reg);
     TEST_ASSERT_EQUAL_UINT16(22, fake.writes[0].value);
+}
+
+// Models without the flag keep the previous behaviour: a failed ping after the
+// write goes straight to the next fallback stage, no port power cycle.
+void test_primary_write_no_power_cycle_without_flag(void) {
+    FakeModbusRS485 fake;
+    // The device would answer at 22 only after a power cycle; without the flag
+    // the reader must not power-cycle, so the write stays unconfirmed.
+    fake.respondingAddresses.insert(22);
+    fake.requiresSecondPowerOn = true;
+
+    std::vector<IModbusRS485 *> ports{ &fake };
+    MockArduinoAdapter arduino;
+    ModbusSensorReader reader(ports, arduino, nullptr, nullptr);
+
+    bool ok = reader.writeSensorAddress(10, 22, 0, 0x0200, 6, 0x0000, /*powerCycleToApply=*/false);
+
+    TEST_ASSERT_FALSE(ok);
+    TEST_ASSERT_EQUAL_INT(1, fake.powerOnCount);
 }
 
 void test_sensor_entity_json_round_trip_with_data_type(void) {
@@ -410,14 +490,14 @@ void test_sensor_entity_json_round_trip_with_data_type(void) {
     cfg.sensorType = "soil_temp";
     cfg.canConnectMinValue = -30.0f;
     cfg.canConnectMaxValue = 70.0f;
-    cfg.dataType = ModbusDataType::Int16;
+    cfg.dataType = ModbusDataType::S16;
     sensor.modbusRegisterConfigs.push_back(cfg);
 
     std::string json = converter.sensorToJson(sensor);
     SensorEntity parsed;
     TEST_ASSERT_TRUE(converter.sensorFromJson(json, parsed));
     TEST_ASSERT_EQUAL(1, (int)parsed.modbusRegisterConfigs.size());
-    TEST_ASSERT_TRUE(parsed.modbusRegisterConfigs[0].dataType == ModbusDataType::Int16);
+    TEST_ASSERT_TRUE(parsed.modbusRegisterConfigs[0].dataType == ModbusDataType::S16);
 }
 
 void test_sensor_entity_json_defaults_data_type_to_uint16(void) {
@@ -434,7 +514,90 @@ void test_sensor_entity_json_defaults_data_type_to_uint16(void) {
     SensorEntity sensor;
     TEST_ASSERT_TRUE(converter.sensorFromJson(json, sensor));
     TEST_ASSERT_EQUAL(1, (int)sensor.modbusRegisterConfigs.size());
-    TEST_ASSERT_TRUE(sensor.modbusRegisterConfigs[0].dataType == ModbusDataType::UInt16);
+    TEST_ASSERT_TRUE(sensor.modbusRegisterConfigs[0].dataType == ModbusDataType::U16);
+}
+
+// The hardware parses the sensor model catalog with ArduinoJsonConverter, so
+// the addressing fields and dataType must be covered through it, not only
+// through the test-side JsonConverter.
+void test_sensor_type_arduino_json_round_trip(void) {
+    ArduinoJsonConverter converter;
+
+    std::string json =
+        "{\"uid\":\"u1\",\"name\":\"rk520-02\",\"protocol\":\"ModBus\","
+        "\"modbusDeviceAddress\":1,\"baudRate\":9600,"
+        "\"modbusPingAddress\":0,\"registerToStoreModbusDeviceAddress\":512,"
+        "\"writeRegistersCommand\":6,\"applyAddressAfterPowerCycle\":true,"
+        "\"modbusRegisterConfigs\":[{"
+        "\"functionCode\":3,\"startRegister\":0,\"numRegisters\":1,"
+        "\"multiplier\":0.1,\"offset\":0,"
+        "\"channelName\":\"Soil Temperature\",\"channel\":0,\"sensorType\":\"soil_temp\","
+        "\"canConnectMinValue\":-30,\"canConnectMaxValue\":70,\"dataType\":\"s16\"}]}";
+
+    SensorType parsed;
+    TEST_ASSERT_TRUE(converter.sensorTypeFromJson(json, parsed));
+    TEST_ASSERT_EQUAL_UINT16(0, parsed.modbusPingAddress);
+    TEST_ASSERT_EQUAL_UINT16(512, parsed.registerToStoreModbusDeviceAddress);
+    TEST_ASSERT_EQUAL_UINT8(6, parsed.writeRegistersCommand);
+    TEST_ASSERT_TRUE(parsed.applyAddressAfterPowerCycle);
+    TEST_ASSERT_EQUAL(1, (int)parsed.modbusRegisterConfig.size());
+    TEST_ASSERT_TRUE(parsed.modbusRegisterConfig[0].dataType == ModbusDataType::S16);
+
+    std::string serialized = converter.sensorTypeToJson(parsed);
+    SensorType reparsed;
+    TEST_ASSERT_TRUE(converter.sensorTypeFromJson(serialized, reparsed));
+    TEST_ASSERT_EQUAL_UINT16(512, reparsed.registerToStoreModbusDeviceAddress);
+    TEST_ASSERT_EQUAL_UINT8(6, reparsed.writeRegistersCommand);
+    TEST_ASSERT_TRUE(reparsed.applyAddressAfterPowerCycle);
+    TEST_ASSERT_EQUAL(1, (int)reparsed.modbusRegisterConfig.size());
+    TEST_ASSERT_TRUE(reparsed.modbusRegisterConfig[0].dataType == ModbusDataType::S16);
+
+    // A model without the new fields behaves exactly as before.
+    std::string legacy = "{\"uid\":\"u2\",\"name\":\"legacy\",\"protocol\":\"ModBus\"}";
+    SensorType legacyType;
+    TEST_ASSERT_TRUE(converter.sensorTypeFromJson(legacy, legacyType));
+    TEST_ASSERT_EQUAL_UINT16(0, legacyType.modbusPingAddress);
+    TEST_ASSERT_EQUAL_UINT16(0, legacyType.registerToStoreModbusDeviceAddress);
+    TEST_ASSERT_EQUAL_UINT8(0, legacyType.writeRegistersCommand);
+    TEST_ASSERT_FALSE(legacyType.applyAddressAfterPowerCycle);
+}
+
+// Same coverage for the persisted sensor entity: the power-cycle flag and the
+// channel dataType survive the ArduinoJsonConverter round-trip.
+void test_sensor_entity_arduino_json_round_trip_with_flags(void) {
+    ArduinoJsonConverter converter;
+
+    SensorEntity sensor;
+    sensor.uid = "mod.00";
+    sensor.protocol = "ModBus";
+    sensor.modbusDeviceAddress = 1;
+    sensor.modbusPingAddress = 0;
+    sensor.registerToStoreModbusDeviceAddress = 512;
+    sensor.writeRegistersCommand = 6;
+    sensor.applyAddressAfterPowerCycle = true;
+
+    ModbusRegisterConfig cfg;
+    cfg.functionCode = 0x03;
+    cfg.startRegister = 0x0000;
+    cfg.numRegisters = 1;
+    cfg.multiplier = 0.1f;
+    cfg.offset = 0.0f;
+    cfg.channelName = "temp";
+    cfg.channel = 0;
+    cfg.sensorType = "soil_temp";
+    cfg.canConnectMinValue = -30.0f;
+    cfg.canConnectMaxValue = 70.0f;
+    cfg.dataType = ModbusDataType::S16;
+    sensor.modbusRegisterConfigs.push_back(cfg);
+
+    std::string json = converter.sensorToJson(sensor);
+    SensorEntity parsed;
+    TEST_ASSERT_TRUE(converter.sensorFromJson(json, parsed));
+    TEST_ASSERT_EQUAL_UINT16(512, parsed.registerToStoreModbusDeviceAddress);
+    TEST_ASSERT_EQUAL_UINT8(6, parsed.writeRegistersCommand);
+    TEST_ASSERT_TRUE(parsed.applyAddressAfterPowerCycle);
+    TEST_ASSERT_EQUAL(1, (int)parsed.modbusRegisterConfigs.size());
+    TEST_ASSERT_TRUE(parsed.modbusRegisterConfigs[0].dataType == ModbusDataType::S16);
 }
 
 extern "C" int run_modbus_address_registers_tests(void) {
@@ -444,12 +607,16 @@ extern "C" int run_modbus_address_registers_tests(void) {
     RUN_TEST(test_unconfirmed_primary_falls_back_to_legacy_broadcast);
     RUN_TEST(test_zero_fields_skip_primary_and_use_legacy);
     RUN_TEST(test_scan_ping_uses_configured_ping_register);
+    RUN_TEST(test_sensor_reader_forwards_addressing_fields_and_power_cycle_flag);
     RUN_TEST(test_non_modbus_sensor_does_not_write_address);
     RUN_TEST(test_sensor_type_json_round_trip);
     RUN_TEST(test_sensor_entity_json_round_trip);
     RUN_TEST(test_read_register_signed_int16);
     RUN_TEST(test_primary_write_confirms_after_power_cycle);
+    RUN_TEST(test_primary_write_no_power_cycle_without_flag);
     RUN_TEST(test_sensor_entity_json_round_trip_with_data_type);
     RUN_TEST(test_sensor_entity_json_defaults_data_type_to_uint16);
+    RUN_TEST(test_sensor_type_arduino_json_round_trip);
+    RUN_TEST(test_sensor_entity_arduino_json_round_trip_with_flags);
     return 0;
 }

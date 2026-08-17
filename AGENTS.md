@@ -34,8 +34,6 @@ Before changing architecture, contracts, or cross-component behavior:
    - `docs/contracts/backend-firmware/index.md`
    - `docs/features/workflow/index.md` when the task touches workflow behavior
 
-Current local state: on this machine `.specs-repo.local` exists and points to `/home/vlad/dev/growdirector-specs`, a valid specs checkout whose docs resolve correctly (including `docs/components/firmware/`, `docs/contracts/backend-firmware/index.md`, and `docs/features/workflow/index.md`).
-
 Resolver rules:
 
 - Use `.specs-repo.local` as the source of truth when it exists; otherwise fall back to the committed default in `.specs-repo`.

@@ -27,6 +27,9 @@ public:
     uint16_t modbusPingAddress = 0;
     uint16_t registerToStoreModbusDeviceAddress = 0;
     uint8_t writeRegistersCommand = 0;
+    // copied from the sensor model: true when the device applies a newly written
+    // Modbus address only after a power cycle (e.g. RK520-02)
+    bool applyAddressAfterPowerCycle = false;
     std::vector<ModbusRegisterConfig> modbusRegisterConfigs;
     
     std::string i2cAddress;

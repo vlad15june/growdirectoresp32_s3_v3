@@ -80,6 +80,9 @@ public:
     uint16_t modbusPingAddress;
     uint16_t registerToStoreModbusDeviceAddress;
     uint8_t writeRegistersCommand;
+    // true for models that apply a newly written Modbus address only after a
+    // restart (e.g. RK520-02): the scan power-cycles the port to confirm the write
+    bool applyAddressAfterPowerCycle;
     std::vector<ModbusRegisterConfig> modbusRegisterConfig;
     
     std::vector<AnalogPinConfig> analogPinConfig;
@@ -99,6 +102,7 @@ public:
         modbusPingAddress(0),
         registerToStoreModbusDeviceAddress(0),
         writeRegistersCommand(0),
+        applyAddressAfterPowerCycle(false),
         priorityForScan(0),
         id(0) {}
 

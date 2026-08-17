@@ -491,6 +491,7 @@ private:
             tempSensor.modbusPingAddress = sensorType.modbusPingAddress;
             tempSensor.registerToStoreModbusDeviceAddress = sensorType.registerToStoreModbusDeviceAddress;
             tempSensor.writeRegistersCommand = sensorType.writeRegistersCommand;
+            tempSensor.applyAddressAfterPowerCycle = sensorType.applyAddressAfterPowerCycle;
             tempSensor.i2cAddress = sensorType.i2cAddress;
             tempSensor.chipType = sensorType.chipType;
             tempSensor.modbusRegisterConfigs = sensorType.modbusRegisterConfig;
@@ -932,6 +933,7 @@ private:
             tempSensor.modbusPingAddress = sensorType.modbusPingAddress;
             tempSensor.registerToStoreModbusDeviceAddress = sensorType.registerToStoreModbusDeviceAddress;
             tempSensor.writeRegistersCommand = sensorType.writeRegistersCommand;
+            tempSensor.applyAddressAfterPowerCycle = sensorType.applyAddressAfterPowerCycle;
             tempSensor.i2cAddress = sensorType.i2cAddress;
             tempSensor.chipType = sensorType.chipType;
             tempSensor.modbusRegisterConfigs = sensorType.modbusRegisterConfig;

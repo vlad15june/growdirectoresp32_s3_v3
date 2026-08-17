@@ -5,35 +5,31 @@
 #include <string>
 
 // Data type of a Modbus register channel.
-// The default is UInt16 to preserve existing single-register behaviour.
+// The default is U16 to preserve existing single-register behaviour.
+// Wider types (u32/s32/f32 with word order) are added by the RK900-11 ticket.
 enum class ModbusDataType : uint8_t
 {
-    UInt16 = 0,
-    Int16 = 1,
-    Float32 = 2
+    U16 = 0,
+    S16 = 1
 };
 
 inline const char *modbusDataTypeToString(ModbusDataType type)
 {
     switch (type)
     {
-        case ModbusDataType::Int16:
-            return "int16";
-        case ModbusDataType::Float32:
-            return "float32";
-        case ModbusDataType::UInt16:
+        case ModbusDataType::S16:
+            return "s16";
+        case ModbusDataType::U16:
         default:
-            return "uint16";
+            return "u16";
     }
 }
 
 inline ModbusDataType modbusDataTypeFromString(const std::string &value)
 {
-    if (value == "int16")
-        return ModbusDataType::Int16;
-    if (value == "float32")
-        return ModbusDataType::Float32;
-    return ModbusDataType::UInt16;
+    if (value == "s16")
+        return ModbusDataType::S16;
+    return ModbusDataType::U16;
 }
 
 // Register config
@@ -49,8 +45,7 @@ struct ModbusRegisterConfig
     std::string sensorType;
     float canConnectMinValue = 0.0f;
     float canConnectMaxValue = 0.0f;
-    ModbusDataType dataType = ModbusDataType::UInt16;
+    ModbusDataType dataType = ModbusDataType::U16;
 };
 
 #endif
-

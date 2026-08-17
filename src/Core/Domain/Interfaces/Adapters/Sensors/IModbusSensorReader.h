@@ -24,10 +24,14 @@ public:
      * @param storeRegister Per-model register the device address is written to (primary path)
      * @param writeCommand Per-model Modbus function code used for the primary write
      * @param pingRegister Per-model register read to verify a device responds
+     * @param powerCycleToApply true for models that apply the new address only after
+     *        a power cycle (e.g. RK520-02): on a failed ping the port is power-cycled
+     *        and the ping retried. false keeps the previous behaviour (no power cycle).
      * @return true if address was written successfully, false otherwise
      */
     virtual bool writeSensorAddress(int currentAddress, int newAddress, int portIndex,
-                                    uint16_t storeRegister, uint8_t writeCommand, uint16_t pingRegister) = 0;
+                                    uint16_t storeRegister, uint8_t writeCommand, uint16_t pingRegister,
+                                    bool powerCycleToApply = false) = 0;
 
     /**
      * @brief Power on specific port
