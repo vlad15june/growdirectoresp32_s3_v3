@@ -5,6 +5,7 @@
 #include "Core/Domain/Interfaces/IDebugSystem.h"
 #include "Core/Domain/Interfaces/ISettings.h"
 #include "Core/Domain/Interfaces/IOtaUpdateLog.h"
+#include "Core/Domain/Enums/FirmwareUpdateStateEnum.h"
 #include "Infrastructure/Adapters/Http/IHttpClientAdapter.h"
 #include "Infrastructure/Adapters/Http/HttpClientAdapter.h"
 #include <WiFi.h>
@@ -12,11 +13,6 @@
 #include "esp_task_wdt.h"
 #include <cstdarg>
 #include <cstdio>
-
-// Firmware update status constants
-#define FIRMWARE_UPDATE_STATE_DONE 3
-#define FIRMWARE_UPDATE_STATE_ERROR 4
-#define FIRMWARE_UPDATE_STATE_HTTP_ERROR 5
 
 // HTTP budget of the OTA download, ms - both for opening the connection and for waiting for
 // data. Same 30 s every other HTTP call of the firmware uses (RestApiService.h); left alone,
@@ -36,6 +32,7 @@ private:
 
     char _log_buf[256];
     char _lastErrorMessage[128];
+    int _lastHttpCode = 0;
 
     void otaWrite(const char* format, ...) {
         if (_otaLog == nullptr) {
@@ -109,6 +106,7 @@ public:
     
     bool updateFirmwareFromURL(const char* url) override {
         _lastErrorMessage[0] = '\0';
+        _lastHttpCode = 0;
 
         if (_otaLog) {
             _otaLog->startSession(url);
@@ -150,6 +148,7 @@ public:
         }
 
         int httpCode = _httpClient->GET();
+        _lastHttpCode = httpCode;
         log("UPDATE_FIRMWARE_DEBUG: updateFirmwareFromURL get firmware httpCode=%d", httpCode);
         otaWrite("HTTP begin=%d GET code=%d", isBegin ? 1 : 0, httpCode);
 
@@ -252,5 +251,9 @@ public:
 
     const char* getLastErrorMessage() const override {
         return _lastErrorMessage;
+    }
+
+    int getLastHttpCode() const override {
+        return _lastHttpCode;
     }
 };

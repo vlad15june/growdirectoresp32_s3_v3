@@ -48,6 +48,7 @@ extern "C" void run_rule_completion_fields_tests(void);
 extern "C" void run_ota_update_log_tests(void);
 extern "C" int run_wifi_self_reconnect_tests(void);
 extern "C" int run_check_firmware_update_on_startup_tests(void);
+extern "C" int run_firmware_update_recovery_tests(void);
 extern "C" int run_sensor_recovery_tests(void);
 extern "C" int run_sensor_plausibility_limits_tests(void);
 extern "C" void run_module_to_module_reboot_tests(void);
@@ -215,6 +216,9 @@ int main(void) {
     run_wifi_self_reconnect_tests();
 
     run_check_firmware_update_on_startup_tests();
+
+    // Run tests for the update that survives a restart when the link is down (GDV1-3834)
+    run_firmware_update_recovery_tests();
 
     // Run tests for ModBus sensor power-cycle recovery (GDV1-3715)
     run_sensor_recovery_tests();

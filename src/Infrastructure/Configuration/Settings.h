@@ -47,6 +47,9 @@ private:
     static const int EEPROM_WAS_INITIAL_SYNC_COMPLETED = 556;
     static const int EEPROM_NEED_CLEAR_SPIFFS = 558;
     static const int EEPROM_PREVENTIVE_RESTART_DAY = 560;
+    // Free tail of the 1024-byte EEPROM (globals.h): the block below 560 is the layout S2 shares,
+    // and the update version has no address there.
+    static const int EEPROM_ADDRES_UPDATE_VERSION = 562;
 
     void log(const char *format, ...)
     {
@@ -232,6 +235,17 @@ public:
     void setUpdateLink(const char *link)
     {
         _eeprom.writeString(EEPROM_ADDRES_UPDATE_LINK, link);
+        _eeprom.commit();
+    }
+
+    void getUpdateVersion(char *buffer, int bufferSize = BUFSIZE)
+    {
+        _eeprom.readString(EEPROM_ADDRES_UPDATE_VERSION, buffer, bufferSize);
+    }
+
+    void setUpdateVersion(const char *version)
+    {
+        _eeprom.writeString(EEPROM_ADDRES_UPDATE_VERSION, version);
         _eeprom.commit();
     }
 

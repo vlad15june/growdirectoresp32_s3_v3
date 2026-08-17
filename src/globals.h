@@ -33,6 +33,7 @@
 #include "Core/Domain/UseCases/ModuleMode/OnConnectivityRestoredUseCase.h"
 #include "Core/Domain/UseCases/ModuleMode/CheckModuleDeletionUseCase.h"
 #include "Core/Domain/UseCases/ModuleMode/CheckFirmwareUpdateOnStartupUseCase.h"
+#include "Core/Domain/UseCases/ModuleMode/FirmwareUpdateRecoveryUseCase.h"
 #include "Core/Domain/UseCases/DeviceControl/ProcessDeviceStateUseCaseFactory.h"
 #include "Core/Domain/UseCases/DeviceControl/DeviceCommandExecutionUseCase.h"
 #include "Core/Domain/UseCases/ModuleCommand/ModuleCommandExecutionUseCase.h"
@@ -351,13 +352,16 @@ RemoteModuleCommandSender remoteModuleCommandSender(&udpManager, &jsonConverter,
 
 RemoteModuleCommandReceiver remoteModuleCommandReceiver(&udpInboundDispatcher, &moduleConfig, &settings, &jsonConverter, &mqttLogger, &debugSystem);
 
-ModuleCommandExecutionUseCase moduleCommandExecutionUseCase(&mqttLogger, &debugSystem, &ntpTimeAdapter, &firmwareRemoteUpdate, &arduinoAdapter, &sensorRepository, &sensorTypeRepository, &sensorReader, &moduleConfig, &settings, &hybridApiService, &clearModuleDataService, &moduleStructure, &sensorValueModel, &wifiManager, &ledUseCases, &rawBusAccessAdapter, &checkModuleDeletionUseCase, &remoteModuleCommandSender);
+FirmwareUpdateRecoveryUseCase firmwareUpdateRecoveryUseCase(&diagnosticService, &moduleConfig, &settings, &mqttLogger, &debugSystem);
+
+ModuleCommandExecutionUseCase moduleCommandExecutionUseCase(&mqttLogger, &debugSystem, &ntpTimeAdapter, &firmwareRemoteUpdate, &arduinoAdapter, &sensorRepository, &sensorTypeRepository, &sensorReader, &moduleConfig, &settings, &hybridApiService, &clearModuleDataService, &moduleStructure, &sensorValueModel, &wifiManager, &ledUseCases, &rawBusAccessAdapter, &checkModuleDeletionUseCase, &remoteModuleCommandSender, &firmwareUpdateRecoveryUseCase);
 
 CheckFirmwareUpdateOnStartupUseCase checkFirmwareUpdateOnStartupUseCase(
     &hybridApiService,
     &moduleCommandExecutionUseCase,
     &mqttLogger,
-    &debugSystem);
+    &debugSystem,
+    &firmwareUpdateRecoveryUseCase);
 
 CommandService commandService(
     &deviceCommandExecutionUseCase,
