@@ -64,7 +64,13 @@ static std::string extractArray(const std::string &src, const std::string &key)
     return src.substr(start, end - start);
 }
 
-static std::vector<std::string> splitObjects(const std::string &arrayStr)
+/**
+ * Split a JSON array body into the source text of its top-level objects.
+ *
+ * @param endedInsideObject Set when the text stopped before the last object closed, i.e. what
+ *        arrived is a prefix and not a whole array. Optional.
+ */
+static std::vector<std::string> splitObjects(const std::string &arrayStr, bool *endedInsideObject = nullptr)
 {
     std::vector<std::string> result;
     int depth = 0;
@@ -86,6 +92,8 @@ static std::vector<std::string> splitObjects(const std::string &arrayStr)
             }
         }
     }
+    if (endedInsideObject != nullptr)
+        *endedInsideObject = (depth != 0);
     return result;
 }
 
@@ -2134,14 +2142,21 @@ private:
     bool sensorTypesFromJson(const std::string &jsonStr, std::vector<SensorType> &sensorTypes) override
     {
         sensorTypes.clear();
-        auto typeObjs = splitObjects(jsonStr);
+
+        bool endedInsideObject = false;
+        auto typeObjs = splitObjects(jsonStr, &endedInsideObject);
+        if (endedInsideObject)
+            return false;
+
         for (const auto &typeStr : typeObjs)
         {
             SensorType sensorType;
-            if (sensorTypeFromJson(typeStr, sensorType))
+            if (!sensorTypeFromJson(typeStr, sensorType))
             {
-                sensorTypes.push_back(sensorType);
+                sensorTypes.clear();
+                return false;
             }
+            sensorTypes.push_back(sensorType);
         }
         return !sensorTypes.empty();
     }

@@ -124,6 +124,7 @@ public:
             lastSaveBytes = 0;
             return 0;
         }
+        sensorTypes.clear();
         int count = 0;
         for (const auto& entity : entities) {
             if (save(entity)) {
@@ -240,6 +241,7 @@ public:
     }
 
     bool clear() override {
+        clearCalled = true;
         sensorTypes.clear();
         return true;
     }

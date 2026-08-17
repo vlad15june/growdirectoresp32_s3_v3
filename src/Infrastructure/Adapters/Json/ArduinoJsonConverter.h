@@ -2145,14 +2145,18 @@ public:
                     ++end;
                 }
             }
-            if (depth != 0) break; // malformed JSON
+            if (depth != 0) {
+                sensorTypes.clear();
+                return false;
+            }
 
             std::string typeJson = jsonStr.substr(start, end - start + 1);
             SensorType sensorType;
-            if (sensorTypeFromJson(typeJson, sensorType)) {
-                sensorTypes.push_back(sensorType);
-                //Serial.printf("ArduinoJsonConverter: Successfully parsed sensor type '%s'\n", sensorType.name.c_str());
+            if (!sensorTypeFromJson(typeJson, sensorType)) {
+                sensorTypes.clear();
+                return false;
             }
+            sensorTypes.push_back(sensorType);
             pos = end + 1;
         }
 

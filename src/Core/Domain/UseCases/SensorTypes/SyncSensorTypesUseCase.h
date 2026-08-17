@@ -16,6 +16,8 @@
 #include "Core/Domain/Enums/StorageWriteErrorEnum.h"
 #include <cstdarg>
 #include <unordered_map>
+#include <utility>
+#include <vector>
 
 /**
  * Use case for synchronizing sensor types with the server
@@ -236,7 +238,7 @@ private:
         // Store valid sensor types in repository
         bool syncSuccess = false;
         if (!validSensorTypes.empty()) {
-            int syncedCount = synchronizeSensorTypes(validSensorTypes);
+            int syncedCount = synchronizeSensorTypes(validSensorTypes, serverSensorTypes);
             syncSuccess = (syncedCount > 0);
             log("SYNC_SENSOR_TYPES: Synchronized %d/%d sensor types successfully", syncedCount, static_cast<int>(validSensorTypes.size()));
         }
@@ -261,7 +263,20 @@ private:
         return true;
     }
     
-    int synchronizeSensorTypes(const std::vector<SensorType>& serverSensorTypes) {
+    /**
+     * Merge the server catalog into the local one, prune what the server no longer publishes and
+     * write the result in a single bulk write.
+     *
+     * @param publishedSensorTypes The raw server response, not the validated subset: a type that
+     *        failed validateSensorType() is not a retired type and must not be pruned.
+     */
+    int synchronizeSensorTypes(const std::vector<SensorType>& serverSensorTypes,
+                               const std::vector<SensorType>& publishedSensorTypes) {
+        if (serverSensorTypes.empty() || publishedSensorTypes.empty()) {
+            log("SYNC_SENSOR_TYPES: Empty server sensor type list, catalog left untouched");
+            return 0;
+        }
+
         // Load existing sensor types once into an in-memory map
         std::vector<SensorType> toSave = _sensorTypeRepository->getAll();
         std::unordered_map<std::string, size_t> toSaveIndex;
@@ -299,6 +314,11 @@ private:
             }
         }
 
+        int removedCount = countAndCompactRetiredSensorTypes(toSave, toSaveIndex, publishedSensorTypes);
+        if (removedCount > 0) {
+            changed = true;
+        }
+
         if (!changed) {
             log("SYNC_SENSOR_TYPES: No changes detected, skipping save");
             return 0;
@@ -307,8 +327,8 @@ private:
         // Single bulk write — 1 SPIFFS read (getAll above) + 1 SPIFFS write
         int saved = _sensorTypeRepository->saveAll(toSave);
         if (saved != static_cast<int>(toSave.size())) {
-            log("SYNC_SENSOR_TYPES: saveAll wrote %d of %d sensor types, reason=%s, bytes=%d, freeHeap=%d, maxAllocHeap=%d",
-                saved, static_cast<int>(toSave.size()),
+            log("SYNC_SENSOR_TYPES: saveAll wrote %d of %d sensor types, removed=%d, reason=%s, bytes=%d, freeHeap=%d, maxAllocHeap=%d",
+                saved, static_cast<int>(toSave.size()), removedCount,
                 getStorageWriteErrorName(_sensorTypeRepository->getLastSaveError()),
                 static_cast<int>(_sensorTypeRepository->getLastSaveBytes()),
                 _arduinoAdapter ? static_cast<int>(_arduinoAdapter->getFreeHeap()) : -1,
@@ -316,8 +336,8 @@ private:
             return 0;
         }
 
-        log("SYNC_SENSOR_TYPES: Bulk saved %d sensor types to storage, bytes=%d, freeHeap=%d, maxAllocHeap=%d",
-            saved, static_cast<int>(_sensorTypeRepository->getLastSaveBytes()),
+        log("SYNC_SENSOR_TYPES: Bulk saved %d sensor types to storage, removed=%d, bytes=%d, freeHeap=%d, maxAllocHeap=%d",
+            saved, removedCount, static_cast<int>(_sensorTypeRepository->getLastSaveBytes()),
             _arduinoAdapter ? static_cast<int>(_arduinoAdapter->getFreeHeap()) : -1,
             _arduinoAdapter ? static_cast<int>(_arduinoAdapter->getMaxAllocHeap()) : -1);
 
@@ -326,7 +346,50 @@ private:
             updateSensorsForChangedSensorTypes(changedSensorTypes);
         }
 
-        return syncedCount;
+        return syncedCount + removedCount;
+    }
+
+    /**
+     * Drop from `toSave` every type whose uid is absent from `publishedSensorTypes`, in place.
+     * `toSaveIndex` is left cleared when anything was dropped: the compaction invalidates it.
+     *
+     * @return how many types were dropped
+     */
+    int countAndCompactRetiredSensorTypes(std::vector<SensorType>& toSave,
+                                          std::unordered_map<std::string, size_t>& toSaveIndex,
+                                          const std::vector<SensorType>& publishedSensorTypes) {
+        std::vector<bool> stillPublished(toSave.size(), false);
+        for (const auto& publishedSensorType : publishedSensorTypes) {
+            if (publishedSensorType.uid.empty()) {
+                continue;
+            }
+            auto it = toSaveIndex.find(publishedSensorType.uid);
+            if (it != toSaveIndex.end()) {
+                stillPublished[it->second] = true;
+            }
+        }
+
+        int removedCount = 0;
+        size_t kept = 0;
+        for (size_t i = 0; i < toSave.size(); i++) {
+            if (stillPublished[i]) {
+                if (kept != i) {
+                    toSave[kept] = std::move(toSave[i]);
+                }
+                kept++;
+            } else {
+                removedCount++;
+                log("SYNC_SENSOR_TYPES: Marked sensor type %s for removal, no longer published by server",
+                    toSave[i].uid.c_str());
+            }
+        }
+
+        if (removedCount > 0) {
+            toSave.resize(kept);
+            toSaveIndex.clear();
+        }
+
+        return removedCount;
     }
 
     void updateSensorsForChangedSensorTypes(const std::vector<SensorType>& changedSensorTypes) {
