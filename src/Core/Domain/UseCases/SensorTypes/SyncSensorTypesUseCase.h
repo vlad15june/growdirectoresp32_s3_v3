@@ -64,15 +64,7 @@ private:
         }
     }
 
-    // GDV1-3828: the sensor type catalog only ever feeds consumers that read a LOCAL sensor pin.
-    // Module types that have no such pins (MODULE_TYPE_DEVICE, MODULE_TYPE_ANALOG_INPUT_DEVICE)
-    // reach none of them — the scan/ping/set-model commands reject every pin on them
-    // (ModuleCommandExecutionUseCase.h:446,549,866) and fillSensorModuleStructure is dispatched
-    // only for MODULE_TYPE_SENSOR (ModuleSetupService.h:1467) — so such a module must not fetch,
-    // store or re-sync the catalog at all. The gate is by module type only: getSensorPinCount()
-    // is a pure function of it (SENSOR_PIN_COUNT for MODULE_TYPE_SENSOR / MODULE_TYPE_HYDRO,
-    // 0 otherwise — ModuleConfig.h:421-429), not runtime "have I ever found a sensor" state.
-    // No module config injected -> behave as before and sync.
+    // No module config injected: the type is unknown, so keep syncing as before the gate
     bool moduleTypeHasLocalSensors() const {
         return !_moduleConfig || _moduleConfig->getSensorPinCount() > 0;
     }

@@ -1,7 +1,6 @@
-// GDV1-3828: a module whose TYPE has no local sensor pins must not fetch, store or re-sync the
-// sensor type catalog at all. The gate is by module type only (getSensorPinCount() is a pure
-// function of it: SENSOR_PIN_COUNT for MODULE_TYPE_SENSOR / MODULE_TYPE_HYDRO, 0 otherwise —
-// ModuleConfig.h:421-429), never by runtime "have I ever found a sensor" state.
+// GDV1-3828: a module whose type has no local sensor pins has no consumer for the sensor type
+// catalog, so it must not fetch, store or re-sync it. Every module of the current S3 fleet is
+// such a module, and each of them paid for the catalog on every IP reconnect.
 #include <unity.h>
 #include "Core/Domain/UseCases/SensorTypes/SyncSensorTypesUseCase.h"
 #include "Mock/Infrastructure/Api/MockHybridAPIService.h"
@@ -76,7 +75,6 @@ static void sync_gate_teardown(void) {
 }
 
 // A drycontact module (MODULE_TYPE_DEVICE) neither fetches nor writes the catalog on forceSync().
-// This is the path that fires on the whole current S3 fleet: OnChangeLocalIpUseCase.h:130.
 void test_sync_gate_device_module_does_not_fetch_on_force_sync(void) {
     sync_gate_setup(MODULE_TYPE_DEVICE);
 
