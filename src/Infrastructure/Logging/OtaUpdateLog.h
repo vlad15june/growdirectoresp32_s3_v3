@@ -72,10 +72,9 @@ public:
         }
 
         char header[320];
-        snprintf(header, sizeof(header), "===== OTA SESSION mac=%s url=%s =====\n",
+        snprintf(header, sizeof(header), "===== OTA SESSION mac=%s url=%s =====",
                  _wifi ? _wifi->getMACAddress() : "", url ? url : "");
-        _spiffs->rewriteToFile(OTA_LOG_FILE, header);
-        serialDebug(header);
+        appendLine(header);
 
         _throttle.reset();
         write("OTA REQUESTED");

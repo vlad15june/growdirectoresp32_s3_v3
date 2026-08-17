@@ -15,6 +15,7 @@
 #include "Core/Domain/Interfaces/IWifiManager.h"
 #include "Core/Domain/Interfaces/UseCases/ILedUseCases.h"
 #include "Core/Domain/Interfaces/UseCases/ICheckModuleDeletionUseCase.h"
+#include "Core/Domain/Interfaces/UseCases/IFirmwareUpdateRecoveryUseCase.h"
 #include "Core/Domain/Interfaces/UseCases/ISensorStructureUseCase.h"
 #include "Core/Domain/Interfaces/Adapters/Sensors/IRawBusAccess.h"
 #include "Core/Domain/Interfaces/Udp/IRemoteModuleCommandSender.h"
@@ -57,13 +58,14 @@ private:
     IRawBusAccess *rawBus;
     ICheckModuleDeletionUseCase *checkModuleDeletionUseCase;
     IRemoteModuleCommandSender *remoteModuleCommandSender = nullptr;
+    IFirmwareUpdateRecoveryUseCase *firmwareUpdateRecoveryUseCase = nullptr;
     ISensorStructureUseCase *sensorStructureUseCase = nullptr;
     static const unsigned long commandMaxAgeSeconds = 300;
     static const unsigned long rawReadTimeoutMs = 1000;
 
 public:
-    ModuleCommandExecutionUseCase(ILogger *logger = nullptr, IDebugSystem *debugSystem = nullptr, INTPTimeAdapter *timeAdapter = nullptr, IFirmwareRemoteUpdate *firmwareUpdater = nullptr, IArduinoAdapter *arduinoAdapter = nullptr, ISensorRepository *sensorRepository = nullptr, ISensorTypeRepository *sensorTypeRepository = nullptr, ISensorReader *sensorReader = nullptr, IModuleConfig *moduleConfig = nullptr, ISettings *settings = nullptr, IHybridAPIService *hybridApiService = nullptr, IClearModuleDataService *clearModuleDataService = nullptr, ModuleStructure *moduleStructure = nullptr, ISensorValueModel *sensorValueModel = nullptr, IWifiManager *wifiManager = nullptr, ILedUseCases *ledUseCases = nullptr, IRawBusAccess *rawBus = nullptr, ICheckModuleDeletionUseCase *checkModuleDeletionUseCase = nullptr, IRemoteModuleCommandSender *remoteModuleCommandSender = nullptr)
-        : logger(logger), debugSystem(debugSystem), timeAdapter(timeAdapter), firmwareUpdater(firmwareUpdater), arduinoAdapter(arduinoAdapter), sensorRepository(sensorRepository), sensorTypeRepository(sensorTypeRepository), sensorReader(sensorReader), moduleConfig(moduleConfig), settings(settings), hybridApiService(hybridApiService), clearModuleDataService(clearModuleDataService), moduleStructure(moduleStructure), sensorValueModel(sensorValueModel), wifiManager(wifiManager), ledUseCases(ledUseCases), rawBus(rawBus), checkModuleDeletionUseCase(checkModuleDeletionUseCase), remoteModuleCommandSender(remoteModuleCommandSender) {}
+    ModuleCommandExecutionUseCase(ILogger *logger = nullptr, IDebugSystem *debugSystem = nullptr, INTPTimeAdapter *timeAdapter = nullptr, IFirmwareRemoteUpdate *firmwareUpdater = nullptr, IArduinoAdapter *arduinoAdapter = nullptr, ISensorRepository *sensorRepository = nullptr, ISensorTypeRepository *sensorTypeRepository = nullptr, ISensorReader *sensorReader = nullptr, IModuleConfig *moduleConfig = nullptr, ISettings *settings = nullptr, IHybridAPIService *hybridApiService = nullptr, IClearModuleDataService *clearModuleDataService = nullptr, ModuleStructure *moduleStructure = nullptr, ISensorValueModel *sensorValueModel = nullptr, IWifiManager *wifiManager = nullptr, ILedUseCases *ledUseCases = nullptr, IRawBusAccess *rawBus = nullptr, ICheckModuleDeletionUseCase *checkModuleDeletionUseCase = nullptr, IRemoteModuleCommandSender *remoteModuleCommandSender = nullptr, IFirmwareUpdateRecoveryUseCase *firmwareUpdateRecoveryUseCase = nullptr)
+        : logger(logger), debugSystem(debugSystem), timeAdapter(timeAdapter), firmwareUpdater(firmwareUpdater), arduinoAdapter(arduinoAdapter), sensorRepository(sensorRepository), sensorTypeRepository(sensorTypeRepository), sensorReader(sensorReader), moduleConfig(moduleConfig), settings(settings), hybridApiService(hybridApiService), clearModuleDataService(clearModuleDataService), moduleStructure(moduleStructure), sensorValueModel(sensorValueModel), wifiManager(wifiManager), ledUseCases(ledUseCases), rawBus(rawBus), checkModuleDeletionUseCase(checkModuleDeletionUseCase), remoteModuleCommandSender(remoteModuleCommandSender), firmwareUpdateRecoveryUseCase(firmwareUpdateRecoveryUseCase) {}
     
     virtual ~ModuleCommandExecutionUseCase() = default;
 
@@ -377,6 +379,13 @@ private:
             return {ModuleCommandStatus::ERROR, "Firmware updater not available"};
         }
 
+        if (firmwareUpdateRecoveryUseCase &&
+            firmwareUpdateRecoveryUseCase->isHttpConnectionDown() &&
+            firmwareUpdateRecoveryUseCase->keepForNextBoot(url, version, moduleCommand.uid))
+        {
+            return {ModuleCommandStatus::IN_PROGRESS, ""};
+        }
+
         // Execute firmware update
         bool updateResult = firmwareUpdater->updateFirmwareFromURL(url.c_str());
         
@@ -393,6 +402,13 @@ private:
         }
         else
         {
+            if (firmwareUpdateRecoveryUseCase &&
+                firmwareUpdater->getLastHttpCode() == FIRMWARE_UPDATE_HTTP_NOT_CONNECTED &&
+                firmwareUpdateRecoveryUseCase->keepForNextBoot(url, version, moduleCommand.uid))
+            {
+                return {ModuleCommandStatus::IN_PROGRESS, ""};
+            }
+
             // The updater knows why it stopped (HTTP code, short write, no space); without it
             // every cause of a failed OTA reaches the backend as the same opaque sentence.
             const char* reason = firmwareUpdater->getLastErrorMessage();
