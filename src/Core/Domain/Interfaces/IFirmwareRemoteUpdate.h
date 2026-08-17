@@ -1,8 +1,6 @@
 #pragma once
 
-// HTTPClient answers this when it could not open the connection at all (HTTPC_ERROR_CONNECTION_REFUSED
-// in the Arduino library). It is the one failure a restart is known to cure: the download itself
-// never started, and the very next attempt after a reboot has always succeeded (GDV1-3834).
+// HTTPC_ERROR_CONNECTION_REFUSED of the Arduino HTTPClient: the connection was never opened.
 constexpr int FIRMWARE_UPDATE_HTTP_NOT_CONNECTED = -1;
 
 class IFirmwareRemoteUpdate {
@@ -36,12 +34,7 @@ public:
 
     /**
      * @brief HTTP code the last download attempt got back
-     *
-     * Zero when the attempt never reached the request (no WiFi, bad URL). Negative values are
-     * HTTPClient errors, and FIRMWARE_UPDATE_HTTP_NOT_CONNECTED separates "the link is not
-     * usable right now" from a server answer such as 404 or 500, which a restart would not fix.
-     *
-     * @return HTTP code of the last attempt, 0 if no request was made
+     * @return Code of the last request, negative for HTTPClient errors, 0 if no request was made
      */
     virtual int getLastHttpCode() const = 0;
 };

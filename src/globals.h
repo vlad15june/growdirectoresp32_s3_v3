@@ -59,6 +59,7 @@
 #include "Infrastructure/Logging/OtaUpdateLog.h"
 #include "Infrastructure/Logging/BootEventLog.h"
 #include "Infrastructure/Configuration/ModuleConfig.h"
+#include "Infrastructure/Configuration/PendingFirmwareUpdateStore.h"
 #include "Infrastructure/Configuration/Settings.h"
 #include "Infrastructure/Configuration/StepCycleStore.h"
 #include "Infrastructure/Logging/DebugSystem.h"
@@ -204,6 +205,8 @@ BootEventLog bootEventLog(&spiffsAdapter, &mqttLogger, &ntpTimeAdapter, &arduino
 BootEventLog restartEventLog(&spiffsAdapter, &mqttLogger, &ntpTimeAdapter, &arduinoAdapter, &wifiAdapter, "restart");
 
 FirmwareRemoteUpdate firmwareRemoteUpdate(&mqttLogger, &debugSystem, &settings, &otaUpdateLog);
+
+PendingFirmwareUpdateStore pendingFirmwareUpdateStore(&spiffsAdapter, &jsonConverter);
 
 WiFiManager wifiManager(&wifiAdapter, &settings, &mqttLogger, &debugSystem, &spiffsAdapter, &jsonConverter);
 
@@ -352,7 +355,7 @@ RemoteModuleCommandSender remoteModuleCommandSender(&udpManager, &jsonConverter,
 
 RemoteModuleCommandReceiver remoteModuleCommandReceiver(&udpInboundDispatcher, &moduleConfig, &settings, &jsonConverter, &mqttLogger, &debugSystem);
 
-FirmwareUpdateRecoveryUseCase firmwareUpdateRecoveryUseCase(&diagnosticService, &moduleConfig, &settings, &mqttLogger, &debugSystem, &otaUpdateLog);
+FirmwareUpdateRecoveryUseCase firmwareUpdateRecoveryUseCase(&diagnosticService, &moduleConfig, &settings, &pendingFirmwareUpdateStore, &mqttLogger, &debugSystem, &otaUpdateLog);
 
 ModuleCommandExecutionUseCase moduleCommandExecutionUseCase(&mqttLogger, &debugSystem, &ntpTimeAdapter, &firmwareRemoteUpdate, &arduinoAdapter, &sensorRepository, &sensorTypeRepository, &sensorReader, &moduleConfig, &settings, &hybridApiService, &clearModuleDataService, &moduleStructure, &sensorValueModel, &wifiManager, &ledUseCases, &rawBusAccessAdapter, &checkModuleDeletionUseCase, &remoteModuleCommandSender, &firmwareUpdateRecoveryUseCase);
 

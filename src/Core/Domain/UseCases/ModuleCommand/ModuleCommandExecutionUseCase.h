@@ -353,9 +353,6 @@ private:
             return {ModuleCommandStatus::ERROR, "Firmware updater not available"};
         }
 
-        // GDV1-3834. The module already tells everyone whether its HTTP link works; when it says
-        // the link is down, the download would not open a connection either, and only a restart
-        // has ever brought it back. The command stays in progress and finishes after the reboot.
         if (firmwareUpdateRecoveryUseCase &&
             firmwareUpdateRecoveryUseCase->isHttpConnectionDown() &&
             firmwareUpdateRecoveryUseCase->keepForNextBoot(url, version, moduleCommand.uid))
@@ -379,9 +376,6 @@ private:
         }
         else
         {
-            // The link died on the way, so the same treatment applies: restart, then let the
-            // startup check finish this very command instead of asking for Update to be pressed
-            // again. Any other code is a server answer, which a restart would not change.
             if (firmwareUpdateRecoveryUseCase &&
                 firmwareUpdater->getLastHttpCode() == FIRMWARE_UPDATE_HTTP_NOT_CONNECTED &&
                 firmwareUpdateRecoveryUseCase->keepForNextBoot(url, version, moduleCommand.uid))

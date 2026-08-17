@@ -5,7 +5,6 @@
 #include "Core/Domain/Interfaces/IDebugSystem.h"
 #include "Core/Domain/Interfaces/ISettings.h"
 #include "Core/Domain/Interfaces/IOtaUpdateLog.h"
-#include "Core/Domain/Enums/FirmwareUpdateStateEnum.h"
 #include "Infrastructure/Adapters/Http/IHttpClientAdapter.h"
 #include "Infrastructure/Adapters/Http/HttpClientAdapter.h"
 #include <WiFi.h>
@@ -13,6 +12,11 @@
 #include "esp_task_wdt.h"
 #include <cstdarg>
 #include <cstdio>
+
+// Firmware update status constants
+#define FIRMWARE_UPDATE_STATE_DONE 3
+#define FIRMWARE_UPDATE_STATE_ERROR 4
+#define FIRMWARE_UPDATE_STATE_HTTP_ERROR 5
 
 // HTTP budget of the OTA download, ms - both for opening the connection and for waiting for
 // data. Same 30 s every other HTTP call of the firmware uses (RestApiService.h); left alone,

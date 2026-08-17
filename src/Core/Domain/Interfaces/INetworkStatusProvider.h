@@ -7,11 +7,7 @@ public:
     virtual bool isNetworkOffline() = 0;
 
     /**
-     * @brief The `httpDown` flag the module already publishes in its diagnostics
-     *
-     * The same value that goes out in the OFFLINE_INDICATION line and as `apiStatus`, so anything
-     * that has to decide whether the link is usable reads what the module reports instead of
-     * counting failures of its own.
+     * @brief The httpDown flag the module already publishes in OFFLINE_INDICATION and apiStatus
      */
     virtual bool isHttpConnectionDown() = 0;
 };

@@ -50,7 +50,6 @@ private:
         _stringValues["user"] = "MockUser";
         _stringValues["token"] = "MockToken";
         _stringValues["updateLink"] = "http://example.com/update";
-        _stringValues["updateVersion"] = "0.0.0";
         _stringValues["moduleCommandUid"] = "mock-command-uid";
         _stringValues["accountUid"] = "mock-account-uid";
         _stringValues["serverUrl"] = "mqtt.example.com";
@@ -200,17 +199,6 @@ public:
     void setUpdateLink(const char *link) override
     {
         _stringValues["updateLink"] = link;
-    }
-
-    void getUpdateVersion(char *buffer, int bufferSize = BUFSIZE) override
-    {
-        strncpy(buffer, _stringValues["updateVersion"].c_str(), bufferSize);
-        buffer[bufferSize - 1] = '\0';
-    }
-
-    void setUpdateVersion(const char *version) override
-    {
-        _stringValues["updateVersion"] = version;
     }
 
     void getModuleCommandUid(char *buffer, int bufferSize = BUFSIZE) override
@@ -414,8 +402,6 @@ public:
             if (key == "token" && _stringValues[key] != "MockToken")
                 return true;
             if (key == "updateLink" && _stringValues[key] != "http://example.com/update")
-                return true;
-            if (key == "updateVersion" && _stringValues[key] != "0.0.0")
                 return true;
             if (key == "moduleCommandUid" && _stringValues[key] != "mock-command-uid")
                 return true;

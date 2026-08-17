@@ -48,8 +48,6 @@ private:
         }
     }
 
-    // Shared by both ways an update reaches this boot: the one the server still has as New, and
-    // the one the module kept for itself before restarting because the link was not usable.
     bool applyUpdateCommands(const std::vector<ModuleCommandDto> &updateCommands)
     {
         std::vector<ModuleCommandExecutionResult> results =
@@ -110,17 +108,12 @@ public:
 
         _hybridApiService->init();
 
-        // GDV1-3834. An update the module could not start because the link was down was kept
-        // here and restarted the module on purpose; this is where it is finished, so the user
-        // does not press Update a second time.
         ModuleCommandDto keptUpdate;
         if (_firmwareUpdateRecoveryUseCase != nullptr &&
             _firmwareUpdateRecoveryUseCase->takeKeptUpdate(keptUpdate))
         {
             log("BOOT_UPDATE: resuming kept UpdateFirmware uid=%s", keptUpdate.uid.c_str());
-            bool resumed = applyUpdateCommands({keptUpdate});
-            _firmwareUpdateRecoveryUseCase->finishKeptUpdate();
-            return resumed;
+            return applyUpdateCommands({keptUpdate});
         }
 
         std::vector<ModuleCommandDto> commands = _hybridApiService->getModuleCommand();

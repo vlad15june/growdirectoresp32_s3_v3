@@ -6,11 +6,6 @@
 // Buffer size for string operations
 #define BUFSIZE 40
 
-// The firmware download URL is around 90 characters, so it does not fit BUFSIZE; these are the
-// sizes the EEPROM reserves for the update the module carries across a restart.
-#define UPDATE_LINK_BUFSIZE 118
-#define UPDATE_VERSION_BUFSIZE 24
-
 // Sentinel byte written to EEPROM to request SPIFFS files removal on next boot
 #define NEED_CLEAR_SPIFFS_MARKER 0xA5
 
@@ -60,8 +55,6 @@ public:
     virtual void setToken(const char* token) = 0;
     virtual void getUpdateLink(char* buffer, int bufferSize = BUFSIZE) = 0;
     virtual void setUpdateLink(const char* link) = 0;
-    virtual void getUpdateVersion(char* buffer, int bufferSize = BUFSIZE) = 0;
-    virtual void setUpdateVersion(const char* version) = 0;
     virtual void getModuleCommandUid(char* buffer, int bufferSize = BUFSIZE) = 0;
     virtual void setModuleCommandUid(const char* uid) = 0;
     virtual void getAccountUid(char* buffer, int bufferSize = BUFSIZE) = 0;

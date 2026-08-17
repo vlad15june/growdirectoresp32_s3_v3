@@ -7,12 +7,12 @@
 #include "Core/Domain/Interfaces/UseCases/IFirmwareUpdateRecoveryUseCase.h"
 #include "Core/Domain/Interfaces/INetworkStatusProvider.h"
 #include "Core/Domain/Interfaces/IModuleConfig.h"
+#include "Core/Domain/Interfaces/IPendingFirmwareUpdateStore.h"
 #include "Core/Domain/Interfaces/ISettings.h"
 #include "Core/Domain/Interfaces/ILogger.h"
 #include "Core/Domain/Interfaces/IDebugSystem.h"
 #include "Core/Domain/Interfaces/IOtaUpdateLog.h"
 #include "Core/Domain/Enums/BootTypeEnum.h"
-#include "Core/Domain/Enums/FirmwareUpdateStateEnum.h"
 #include "Core/Domain/Enums/ModuleCommandEnum.h"
 #include "Core/Domain/Enums/ModuleModeEnum.h"
 
@@ -22,13 +22,17 @@ private:
     INetworkStatusProvider *_networkStatusProvider;
     IModuleConfig *_moduleConfig;
     ISettings *_settings;
+    IPendingFirmwareUpdateStore *_pendingUpdateStore;
     ILogger *_logger;
     IDebugSystem *_debugSystem;
     IOtaUpdateLog *_otaUpdateLog;
 
-    // UPDATE_FIRMWARE_DEBUG is registered SerialOnly, so the decision to restart is invisible
-    // from the outside. The OTA log is the one channel that survives the restart and reaches
-    // MQTT afterwards, so the line that explains the reboot goes next to the session it broke.
+    // One restart per press of Update: once an update has been kept or resumed in this boot, the
+    // module does not arm another one, so a module with no link at all cannot reboot in a loop.
+    bool _updateHandledThisBoot = false;
+
+    // UPDATE_FIRMWARE_DEBUG is registered SerialOnly, so the OTA log is the only channel on which
+    // the reason for the reboot reaches MQTT after the restart.
     void writeOtaLog(const char *message)
     {
         if (_otaUpdateLog != nullptr)
@@ -61,12 +65,14 @@ public:
         INetworkStatusProvider *networkStatusProvider = nullptr,
         IModuleConfig *moduleConfig = nullptr,
         ISettings *settings = nullptr,
+        IPendingFirmwareUpdateStore *pendingUpdateStore = nullptr,
         ILogger *logger = nullptr,
         IDebugSystem *debugSystem = nullptr,
         IOtaUpdateLog *otaUpdateLog = nullptr)
         : _networkStatusProvider(networkStatusProvider),
           _moduleConfig(moduleConfig),
           _settings(settings),
+          _pendingUpdateStore(pendingUpdateStore),
           _logger(logger),
           _debugSystem(debugSystem),
           _otaUpdateLog(otaUpdateLog)
@@ -84,37 +90,33 @@ public:
                          const std::string &version,
                          const std::string &commandUid) override
     {
-        if (_settings == nullptr || _moduleConfig == nullptr)
+        if (_settings == nullptr || _moduleConfig == nullptr || _pendingUpdateStore == nullptr)
         {
-            log("UPDATE_RECOVERY: cannot keep the update, settings unavailable");
+            log("UPDATE_RECOVERY: cannot keep the update, store unavailable");
             return false;
         }
 
-        // The bound on restarts, and the whole of it: while an update is being carried the module
-        // does not arm another one, so one press of Update costs at most one extra boot. Without
-        // it a module with no link at all would answer every failed attempt with a reboot.
-        if (_settings->getNeedUpdate() == 1)
+        if (_updateHandledThisBoot)
         {
             log("UPDATE_RECOVERY: already carrying an update, no second restart");
             return false;
         }
 
-        // Truncated on the way back would mean downloading nothing, or reporting the result
-        // against a uid the server does not know.
-        if (url.empty() || url.length() >= UPDATE_LINK_BUFSIZE ||
-            version.length() >= UPDATE_VERSION_BUFSIZE ||
-            commandUid.length() >= BUFSIZE)
+        ModuleCommandDto command;
+        command.uid = commandUid;
+        command.command = getModuleCommandName(ModuleCommandEnum::UPDATE_FIRMWARE);
+        command.options = std::string("{\"url\":\"") + url + "\",\"version\":\"" + version + "\"}";
+        // Left empty on purpose: the age check is about how long a command waited on the server,
+        // and this one must not expire because of the restart it was asked to make.
+        command.createdAt = "";
+
+        if (!_pendingUpdateStore->save(command))
         {
-            log("UPDATE_RECOVERY: update does not fit the settings, url=%u version=%u uid=%u",
-                (unsigned)url.length(), (unsigned)version.length(), (unsigned)commandUid.length());
+            log("UPDATE_RECOVERY: could not store the update, reporting the failure instead");
             return false;
         }
 
-        _settings->setUpdateLink(url.c_str());
-        _settings->setUpdateVersion(version.c_str());
-        _settings->setModuleCommandUid(commandUid.c_str());
-        _settings->setUpdateStatus(FIRMWARE_UPDATE_STATE_IN_PROGRESS);
-        _settings->setNeedUpdate(1);
+        _updateHandledThisBoot = true;
 
         _settings->setNoScanSensors(1);
         _settings->setBootType(BOOT_TYPE_FIRMWARE_UPDATE);
@@ -131,63 +133,24 @@ public:
 
     bool takeKeptUpdate(ModuleCommandDto &command) override
     {
-        if (_settings == nullptr || _settings->getNeedUpdate() != 1)
+        if (_pendingUpdateStore == nullptr || !_pendingUpdateStore->load(command))
         {
             return false;
         }
 
-        // Anything other than in-progress means the previous boot already used its attempt, or
-        // died in the middle of one. Either way the update is not tried again.
-        if (_settings->getUpdateStatus() != FIRMWARE_UPDATE_STATE_IN_PROGRESS)
-        {
-            log("UPDATE_RECOVERY: kept update was already attempted (status=%d), dropping it",
-                (int)_settings->getUpdateStatus());
-            _settings->setNeedUpdate(0);
-            return false;
-        }
+        // Dropped before the attempt, not after: a boot that dies in the middle of the download
+        // (watchdog, power) comes back to an empty store and stops instead of looping.
+        _pendingUpdateStore->clear();
 
-        char url[UPDATE_LINK_BUFSIZE];
-        char version[UPDATE_VERSION_BUFSIZE];
-        char commandUid[BUFSIZE];
-        url[0] = '\0';
-        version[0] = '\0';
-        commandUid[0] = '\0';
-        _settings->getUpdateLink(url, UPDATE_LINK_BUFSIZE);
-        _settings->getUpdateVersion(version, UPDATE_VERSION_BUFSIZE);
-        _settings->getModuleCommandUid(commandUid, BUFSIZE);
-
-        if (url[0] == '\0' || version[0] == '\0' || commandUid[0] == '\0')
+        if (command.uid.empty() || command.options.empty())
         {
             log("UPDATE_RECOVERY: kept update is incomplete, dropping it");
-            _settings->setNeedUpdate(0);
             return false;
         }
 
-        // Spent before the attempt, not after: a module that reboots in the middle of the
-        // download (watchdog, power) comes back to a status that is no longer in-progress and
-        // stops instead of looping (the same guard S2 has in NormalModeConfigure).
-        _settings->setUpdateStatus(FIRMWARE_UPDATE_STATE_ERROR);
-
-        command.uid = commandUid;
-        command.command = getModuleCommandName(ModuleCommandEnum::UPDATE_FIRMWARE);
-        command.options = std::string("{\"url\":\"") + url + "\",\"version\":\"" + version + "\"}";
-        // Left empty on purpose: the age check is about how long a command waited on the server,
-        // and this one has been on the module all along - it must not expire because of the
-        // restart it was asked to make.
-        command.createdAt = "";
-
-        log("UPDATE_RECOVERY: resuming update uid=%s version=%s", commandUid, version);
+        _updateHandledThisBoot = true;
+        log("UPDATE_RECOVERY: resuming update uid=%s", command.uid.c_str());
         return true;
-    }
-
-    void finishKeptUpdate() override
-    {
-        if (_settings == nullptr)
-        {
-            return;
-        }
-
-        _settings->setNeedUpdate(0);
     }
 };
 
