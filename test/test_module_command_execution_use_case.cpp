@@ -18,6 +18,7 @@
 #include "Core/Domain/UseCases/ModuleStructure/SensorStructureUseCase.h"
 #include "Core/Domain/UseCases/Sensors/VirtualSensorChannelsUseCase.h"
 #include "Core/Domain/UseCases/Sensors/VpdChannelUseCase.h"
+#include "Core/Domain/UseCases/Sensors/ModbusAddressAllocator.h"
 #include "Application/DTOs/ModuleCommandDto.h"
 #include "Core/Domain/Enums/BootTypeEnum.h"
 #include "Core/Domain/Enums/ModuleCommandStatus.h"
@@ -441,6 +442,7 @@ struct SensorModelStructureFixture {
     VpdChannelUseCase vpdChannel;
     VirtualSensorChannelsUseCase virtualChannels;
     SensorStructureUseCase sensorStructure;
+    ModbusAddressAllocator modbusAddressAllocator;
     ModuleCommandExecutionUseCase useCase;
 
     /**
@@ -452,9 +454,12 @@ struct SensorModelStructureFixture {
     explicit SensorModelStructureFixture(bool wireSensorStructureUseCase = true)
         : virtualChannels(&vpdChannel),
           sensorStructure(&virtualChannels, &logger, &debugSystem),
+          modbusAddressAllocator(&sensorRepository),
           useCase(&logger, &debugSystem, nullptr, nullptr, nullptr,
                   &sensorRepository, &sensorTypeRepository, &sensorReader,
-                  &moduleConfig, nullptr, nullptr, nullptr, &moduleStructure) {
+                  &moduleConfig, nullptr, nullptr, nullptr, &moduleStructure,
+                  nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr,
+                  &modbusAddressAllocator) {
         debugSystem.registerFeature(DebugFeatures::MODULE_COMMAND_DEBUG);
         debugSystem.registerFeature(DebugFeatures::SETUP_DEBUG);
 
@@ -501,14 +506,61 @@ struct SensorModelStructureFixture {
      * @param uid Command uid.
      * @param modelUid Sensor type uid the command assigns; the payload carries pin 4, which is
      *        pin 0 of the module.
+     * @param jsonPin Pin as the backend numbers it: 4 is pin 0, 1 is pin 3.
      */
-    static ModuleCommandDto setSensorModelCommand(const char* uid, const char* modelUid) {
+    static ModuleCommandDto setSensorModelCommand(const char* uid, const char* modelUid, int jsonPin = 4) {
         ModuleCommandDto cmd;
         cmd.uid = uid;
         cmd.command = "SetSensorModel";
-        cmd.options = std::string("{\"pin\":4,\"uid\":\"") + modelUid + "\"}";
+        cmd.options = std::string("{\"pin\":") + std::to_string(jsonPin) + ",\"uid\":\"" + modelUid + "\"}";
         cmd.createdAt = "";
         return cmd;
+    }
+
+    /**
+     * Build a command that carries only a pin.
+     *
+     * @param uid Command uid.
+     * @param command Command name, ScanSensors or PingPin.
+     * @param jsonPin Pin as the backend numbers it: 4 is pin 0, 1 is pin 3.
+     */
+    static ModuleCommandDto pinCommand(const char* uid, const char* command, int jsonPin = 4) {
+        ModuleCommandDto cmd;
+        cmd.uid = uid;
+        cmd.command = command;
+        cmd.options = std::string("{\"pin\":") + std::to_string(jsonPin) + "}";
+        cmd.createdAt = "";
+        return cmd;
+    }
+
+    /**
+     * Put a ModBus entity of the same module into the repository, the way a sensor configured on
+     * another port of the shared UART already sits there.
+     *
+     * @param uid Uid of the entity.
+     * @param pin Port the entity sits on.
+     * @param address ModBus address the entity holds.
+     */
+    void addNeighbourSensor(const char* uid, int pin, int address) {
+        SensorEntity neighbour;
+        neighbour.uid = uid;
+        neighbour.pin = pin;
+        neighbour.protocol = "ModBus";
+        neighbour.modbusDeviceAddress = address;
+        neighbour.status = SENSOR_STATUS_ADDED;
+        sensorRepository.sensors.push_back(neighbour);
+    }
+
+    /**
+     * @param address ModBus address to look for among the probes the reader recorded.
+     */
+    bool wasProbed(int address) const {
+        for (int probed : sensorReader.probedAddresses) {
+            if (probed == address) {
+                return true;
+            }
+        }
+        return false;
     }
 };
 
@@ -612,6 +664,237 @@ void test_set_sensor_model_without_structure_use_case_changes_nothing(void) {
     TEST_ASSERT_TRUE(f.logger.hasMessageContaining("sensor structure use case is not wired"));
 }
 
+/**
+ * GDV1-3831: pins 2 and 3 share one UART, so an address held by the neighbour on pin 3 must never
+ * be probed - and never accepted - while a model is set on pin 2, even when that address is the one
+ * pin 2 would prefer.
+ */
+void test_set_sensor_model_never_probes_an_address_held_by_a_neighbour(void) {
+    SensorModelStructureFixture f;
+    f.addModbusType("model-air", "air_temp", "humidity");
+    f.addNeighbourSensor("test_module_uid.03", 3, MODBUS_ADDRESS_MIN + 2);
+    f.sensorReader.answeringAddresses = {MODBUS_ADDRESS_MIN + 1};
+
+    auto results = f.useCase.executeCommands({SensorModelStructureFixture::setSensorModelCommand(
+        "cmd-3831-1", "model-air", 2)});
+
+    TEST_ASSERT_EQUAL_STRING("Done", results[0].status.c_str());
+    TEST_ASSERT_FALSE(f.wasProbed(MODBUS_ADDRESS_MIN + 2));
+    TEST_ASSERT_EQUAL(MODBUS_ADDRESS_MIN + 1, f.sensorRepository.lastSavedSensor.modbusDeviceAddress);
+    TEST_ASSERT_TRUE(f.logger.hasJsonAction("address_skipped_occupied"));
+    TEST_ASSERT_TRUE(f.logger.jsonDetailsFor("address_skipped_occupied")
+                         .find("test_module_uid.03") != std::string::npos);
+}
+
+/**
+ * The address of the entity's own port is tried right after the default one, before the sweep.
+ */
+void test_set_sensor_model_prefers_the_own_address_of_the_pin(void) {
+    SensorModelStructureFixture f;
+    f.addModbusType("model-air", "air_temp", "humidity");
+    f.sensorReader.answeringAddresses = {MODBUS_ADDRESS_MIN + 3};
+
+    auto results = f.useCase.executeCommands({SensorModelStructureFixture::setSensorModelCommand(
+        "cmd-3831-2", "model-air", 1)});
+
+    TEST_ASSERT_EQUAL_STRING("Done", results[0].status.c_str());
+    TEST_ASSERT_EQUAL(2, static_cast<int>(f.sensorReader.probedAddresses.size()));
+    TEST_ASSERT_EQUAL(1, f.sensorReader.probedAddresses[0]);
+    TEST_ASSERT_EQUAL(MODBUS_ADDRESS_MIN + 3, f.sensorReader.probedAddresses[1]);
+    TEST_ASSERT_TRUE(f.logger.jsonDetailsFor("address_accepted").find("per_port") != std::string::npos);
+}
+
+/**
+ * The device answers only where the neighbour already sits: it is moved to a free address,
+ * re-verified and only then saved.
+ */
+void test_set_sensor_model_moves_a_device_off_an_occupied_address(void) {
+    SensorModelStructureFixture f;
+    f.addModbusType("model-air", "air_temp", "humidity");
+    f.addNeighbourSensor("test_module_uid.02", 2, MODBUS_ADDRESS_MIN + 2);
+    f.sensorReader.answeringAddresses = {MODBUS_ADDRESS_MIN + 2};
+
+    auto results = f.useCase.executeCommands({SensorModelStructureFixture::setSensorModelCommand(
+        "cmd-3831-3", "model-air", 1)});
+
+    TEST_ASSERT_EQUAL_STRING("Done", results[0].status.c_str());
+    TEST_ASSERT_EQUAL(1, f.sensorReader.writeSensorAddressCallCount);
+    TEST_ASSERT_EQUAL(MODBUS_ADDRESS_MIN + 2, f.sensorReader.lastWriteFromAddress);
+    TEST_ASSERT_EQUAL(MODBUS_ADDRESS_MIN + 3, f.sensorReader.lastWriteToAddress);
+    TEST_ASSERT_EQUAL(MODBUS_ADDRESS_MIN + 3, f.sensorRepository.lastSavedSensor.modbusDeviceAddress);
+    TEST_ASSERT_TRUE(f.logger.hasJsonAction("collision_detected"));
+    TEST_ASSERT_TRUE(f.logger.hasJsonAction("reassign_attempt"));
+    TEST_ASSERT_TRUE(f.logger.hasJsonAction("reassign_done"));
+}
+
+/**
+ * A device the firmware cannot move is reported as an error, not as Done.
+ */
+void test_set_sensor_model_reports_error_when_the_address_write_is_rejected(void) {
+    SensorModelStructureFixture f;
+    f.addModbusType("model-air", "air_temp", "humidity");
+    f.addNeighbourSensor("test_module_uid.02", 2, MODBUS_ADDRESS_MIN + 2);
+    f.sensorReader.answeringAddresses = {MODBUS_ADDRESS_MIN + 2};
+    f.sensorReader.writeSensorAddressReturnValue = false;
+
+    auto results = f.useCase.executeCommands({SensorModelStructureFixture::setSensorModelCommand(
+        "cmd-3831-4", "model-air", 1)});
+
+    TEST_ASSERT_EQUAL_STRING("Error", results[0].status.c_str());
+    TEST_ASSERT_EQUAL_STRING("Failed to move sensor to a free ModBus address", results[0].errorMessage.c_str());
+    TEST_ASSERT_EQUAL(0, f.sensorRepository.saveCallCount);
+    TEST_ASSERT_TRUE(f.logger.jsonDetailsFor("reassign_fail").find("write_rejected") != std::string::npos);
+}
+
+/**
+ * The write was acknowledged but the device does not answer at the new address: nothing is saved.
+ */
+void test_set_sensor_model_reports_error_when_the_device_is_silent_after_the_move(void) {
+    SensorModelStructureFixture f;
+    f.addModbusType("model-air", "air_temp", "humidity");
+    f.addNeighbourSensor("test_module_uid.02", 2, MODBUS_ADDRESS_MIN + 2);
+    f.sensorReader.answeringAddresses = {MODBUS_ADDRESS_MIN + 2};
+    f.sensorReader.answersAtNewAddressAfterWrite = false;
+
+    auto results = f.useCase.executeCommands({SensorModelStructureFixture::setSensorModelCommand(
+        "cmd-3831-5", "model-air", 1)});
+
+    TEST_ASSERT_EQUAL_STRING("Error", results[0].status.c_str());
+    TEST_ASSERT_EQUAL_STRING("Sensor does not answer at the new ModBus address", results[0].errorMessage.c_str());
+    TEST_ASSERT_EQUAL(0, f.sensorRepository.saveCallCount);
+    TEST_ASSERT_TRUE(f.logger.jsonDetailsFor("reassign_fail").find("verify_failed") != std::string::npos);
+}
+
+/**
+ * The whole range is held by other entities of the module, one of them a row left over from a pin
+ * the module no longer has: there is nowhere to move the device to.
+ */
+void test_set_sensor_model_reports_error_when_no_free_address_is_left(void) {
+    SensorModelStructureFixture f;
+    f.addModbusType("model-air", "air_temp", "humidity");
+    f.addNeighbourSensor("test_module_uid.00", 0, MODBUS_ADDRESS_MIN);
+    f.addNeighbourSensor("test_module_uid.01", 1, MODBUS_ADDRESS_MIN + 1);
+    f.addNeighbourSensor("test_module_uid.02", 2, MODBUS_ADDRESS_MIN + 2);
+    f.addNeighbourSensor("test_module_uid.10", 3, MODBUS_ADDRESS_MIN + 3);
+    f.sensorReader.answeringAddresses = {MODBUS_ADDRESS_MIN + 2};
+
+    auto results = f.useCase.executeCommands({SensorModelStructureFixture::setSensorModelCommand(
+        "cmd-3831-6", "model-air", 1)});
+
+    TEST_ASSERT_EQUAL_STRING("Error", results[0].status.c_str());
+    TEST_ASSERT_EQUAL_STRING("No free ModBus address on module", results[0].errorMessage.c_str());
+    TEST_ASSERT_EQUAL(0, f.sensorReader.writeSensorAddressCallCount);
+    TEST_ASSERT_EQUAL(0, f.sensorRepository.saveCallCount);
+    TEST_ASSERT_TRUE(f.logger.jsonDetailsFor("reassign_fail").find("no_free_address") != std::string::npos);
+}
+
+/**
+ * Reconfiguring the sensor that already sits on this pin must not let it block itself.
+ */
+void test_set_sensor_model_does_not_treat_its_own_address_as_occupied(void) {
+    SensorModelStructureFixture f;
+    f.addModbusType("model-air", "air_temp", "humidity");
+    f.addNeighbourSensor("test_module_uid.03", 3, MODBUS_ADDRESS_MIN + 3);
+    f.sensorReader.answeringAddresses = {MODBUS_ADDRESS_MIN + 3};
+
+    auto results = f.useCase.executeCommands({SensorModelStructureFixture::setSensorModelCommand(
+        "cmd-3831-7", "model-air", 1)});
+
+    TEST_ASSERT_EQUAL_STRING("Done", results[0].status.c_str());
+    TEST_ASSERT_EQUAL(0, f.sensorReader.writeSensorAddressCallCount);
+    TEST_ASSERT_EQUAL(MODBUS_ADDRESS_MIN + 3, f.sensorRepository.lastSavedSensor.modbusDeviceAddress);
+}
+
+/**
+ * A device answering at the free default address of its type is saved as before, with no write
+ * into the device at all.
+ */
+void test_set_sensor_model_keeps_a_free_default_address_untouched(void) {
+    SensorModelStructureFixture f;
+    f.addModbusType("model-air", "air_temp", "humidity");
+    f.sensorReader.answeringAddresses = {1};
+
+    auto results = f.useCase.executeCommands({SensorModelStructureFixture::setSensorModelCommand(
+        "cmd-3831-8", "model-air", 1)});
+
+    TEST_ASSERT_EQUAL_STRING("Done", results[0].status.c_str());
+    TEST_ASSERT_EQUAL(1, static_cast<int>(f.sensorReader.probedAddresses.size()));
+    TEST_ASSERT_EQUAL(1, f.sensorReader.probedAddresses[0]);
+    TEST_ASSERT_EQUAL(0, f.sensorReader.writeSensorAddressCallCount);
+    TEST_ASSERT_EQUAL(1, f.sensorRepository.lastSavedSensor.modbusDeviceAddress);
+}
+
+/**
+ * ScanSensors carries the same defect and gets the same guard.
+ */
+void test_scan_sensors_moves_a_device_off_an_occupied_address(void) {
+    SensorModelStructureFixture f;
+    f.addModbusType("model-air", "air_temp", "humidity");
+    f.addNeighbourSensor("test_module_uid.02", 2, MODBUS_ADDRESS_MIN + 2);
+    f.sensorReader.answeringAddresses = {MODBUS_ADDRESS_MIN + 2};
+
+    auto results = f.useCase.executeCommands({SensorModelStructureFixture::pinCommand(
+        "cmd-3831-9", "ScanSensors", 1)});
+
+    TEST_ASSERT_EQUAL_STRING("Done", results[0].status.c_str());
+    TEST_ASSERT_EQUAL(MODBUS_ADDRESS_MIN + 3, f.sensorReader.lastWriteToAddress);
+    TEST_ASSERT_EQUAL(MODBUS_ADDRESS_MIN + 3, f.sensorRepository.lastCreatedOrUpdatedSensor.modbusDeviceAddress);
+    TEST_ASSERT_EQUAL(1, static_cast<int>(results[0].result.sensors.size()));
+}
+
+/**
+ * ScanSensors reports the failed move as an error instead of saving a colliding address.
+ */
+void test_scan_sensors_reports_error_when_the_device_cannot_be_moved(void) {
+    SensorModelStructureFixture f;
+    f.addModbusType("model-air", "air_temp", "humidity");
+    f.addNeighbourSensor("test_module_uid.02", 2, MODBUS_ADDRESS_MIN + 2);
+    f.sensorReader.answeringAddresses = {MODBUS_ADDRESS_MIN + 2};
+    f.sensorReader.writeSensorAddressReturnValue = false;
+
+    auto results = f.useCase.executeCommands({SensorModelStructureFixture::pinCommand(
+        "cmd-3831-10", "ScanSensors", 1)});
+
+    TEST_ASSERT_EQUAL_STRING("Error", results[0].status.c_str());
+    TEST_ASSERT_EQUAL(0, f.sensorRepository.createOrUpdateSensorCallCount);
+}
+
+/**
+ * Nothing answers anywhere: ScanSensors still reports Done with an empty sensor list, as before.
+ */
+void test_scan_sensors_still_reports_done_with_an_empty_list(void) {
+    SensorModelStructureFixture f;
+    f.addModbusType("model-air", "air_temp", "humidity");
+    f.sensorReader.scanSensorReturnValue = false;
+
+    auto results = f.useCase.executeCommands({SensorModelStructureFixture::pinCommand(
+        "cmd-3831-11", "ScanSensors", 1)});
+
+    TEST_ASSERT_EQUAL_STRING("Done", results[0].status.c_str());
+    TEST_ASSERT_EQUAL(0, static_cast<int>(results[0].result.sensors.size()));
+    TEST_ASSERT_EQUAL(0, f.sensorRepository.createOrUpdateSensorCallCount);
+}
+
+/**
+ * PingPin only reports what answers and saves nothing, so it keeps sweeping every address of the
+ * range, occupied ones included.
+ */
+void test_ping_pin_still_sweeps_every_address_and_saves_nothing(void) {
+    SensorModelStructureFixture f;
+    f.addModbusType("model-air", "air_temp", "humidity");
+    f.addNeighbourSensor("test_module_uid.02", 2, MODBUS_ADDRESS_MIN + 2);
+    f.sensorReader.scanSensorReturnValue = false;
+
+    auto results = f.useCase.executeCommands({SensorModelStructureFixture::pinCommand(
+        "cmd-3831-12", "PingPin", 1)});
+
+    TEST_ASSERT_EQUAL_STRING("Error", results[0].status.c_str());
+    TEST_ASSERT_TRUE(f.wasProbed(MODBUS_ADDRESS_MIN + 2));
+    TEST_ASSERT_EQUAL(0, f.sensorRepository.saveCallCount);
+    TEST_ASSERT_EQUAL(0, f.sensorRepository.createOrUpdateSensorCallCount);
+    TEST_ASSERT_EQUAL(0, f.sensorReader.writeSensorAddressCallCount);
+}
+
 extern "C" int run_module_command_execution_use_case_tests(void) {
     RUN_TEST(test_add_wifi_success);
     RUN_TEST(test_add_wifi_failure);
@@ -634,5 +917,17 @@ extern "C" int run_module_command_execution_use_case_tests(void) {
     RUN_TEST(test_scan_sensors_adds_virtual_channel_to_structure);
     RUN_TEST(test_delete_sensors_removes_virtual_channel_too);
     RUN_TEST(test_set_sensor_model_without_structure_use_case_changes_nothing);
+    RUN_TEST(test_set_sensor_model_never_probes_an_address_held_by_a_neighbour);
+    RUN_TEST(test_set_sensor_model_prefers_the_own_address_of_the_pin);
+    RUN_TEST(test_set_sensor_model_moves_a_device_off_an_occupied_address);
+    RUN_TEST(test_set_sensor_model_reports_error_when_the_address_write_is_rejected);
+    RUN_TEST(test_set_sensor_model_reports_error_when_the_device_is_silent_after_the_move);
+    RUN_TEST(test_set_sensor_model_reports_error_when_no_free_address_is_left);
+    RUN_TEST(test_set_sensor_model_does_not_treat_its_own_address_as_occupied);
+    RUN_TEST(test_set_sensor_model_keeps_a_free_default_address_untouched);
+    RUN_TEST(test_scan_sensors_moves_a_device_off_an_occupied_address);
+    RUN_TEST(test_scan_sensors_reports_error_when_the_device_cannot_be_moved);
+    RUN_TEST(test_scan_sensors_still_reports_done_with_an_empty_list);
+    RUN_TEST(test_ping_pin_still_sweeps_every_address_and_saves_nothing);
     return 0;
 }

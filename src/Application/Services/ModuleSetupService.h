@@ -41,6 +41,7 @@
 #include "Core/Domain/Interfaces/UseCases/ICheckModuleDeletionUseCase.h"
 #include "Core/Domain/Interfaces/UseCases/ICheckFirmwareUpdateOnStartupUseCase.h"
 #include "Core/Domain/Interfaces/UseCases/ISensorStructureUseCase.h"
+#include "Core/Domain/Interfaces/UseCases/IModbusAddressAllocator.h"
 #include <memory>
 #include <cstdarg>
 #include <cstdio>
@@ -94,6 +95,7 @@ private:
     IRemoteModuleCommandReceiver *remoteModuleCommandReceiver;
 
     ISensorStructureUseCase *sensorStructureUseCase;
+    IModbusAddressAllocator *modbusAddressAllocator = nullptr;
 
     void log(const char *format, ...);
 
@@ -141,8 +143,6 @@ private:
     void addSensorToStructure(Node &node, const SensorEntity &sensorEntity);
     void removeDisconnectedNewSensorPlaceholders(Node &node, const SensorEntity &sensorEntity);
 
-    int findNextAvailableAddress(const std::map<int, std::vector<SensorEntity *>> &addressMap);
-
     void createPlaceholderSensors(Node &node);
     void processSensorsFromRepository(Node &node);
     void handleModbusAddressManagement(Node &node);
@@ -152,7 +152,7 @@ private:
     void findDuplicateAddresses(const std::map<int, std::vector<SensorEntity *>> &addressMap,
                                 std::vector<SensorEntity *> &sensorsNeedingNewAddress);
     void assignNewAddresses(std::vector<SensorEntity *> &sensorsNeedingNewAddress,
-                            std::map<int, std::vector<SensorEntity *>> &addressMap);
+                            const std::map<int, std::vector<SensorEntity *>> &addressMap);
 
     void addHydroSensors(Node &node);
     void addHydroPumps(Node &node);
@@ -204,6 +204,17 @@ public:
      * way. The same instance is given to RepublishModuleStructureUseCase.
      */
     void setSensorStructureUseCase(ISensorStructureUseCase *useCase) { sensorStructureUseCase = useCase; }
+
+    /**
+     * @brief Inject the owner of the ModBus addresses of the module (GDV1-3831)
+     *
+     * A setter for the same reason as setSensorStructureUseCase above: the constructor of this
+     * service is already 33 positional parameters long. The same instance is given to
+     * ModuleCommandExecutionUseCase, so the boot resolution and the commands see one occupancy.
+     *
+     * @param allocator Allocator reading the sensor repository of this module
+     */
+    void setModbusAddressAllocator(IModbusAddressAllocator *allocator) { modbusAddressAllocator = allocator; }
 
     void setupModule() override;
     std::unique_ptr<ILoopService> getLoopService() override;
@@ -1945,22 +1956,6 @@ inline void ModuleSetupService::removeDisconnectedNewSensorPlaceholders(Node &no
     }
 }
 
-inline int ModuleSetupService::findNextAvailableAddress(const std::map<int, std::vector<SensorEntity *>> &addressMap)
-{
-    // Search for next available address in range MODBUS_ADDRESS_MIN-MODBUS_ADDRESS_MAX
-    for (int address = MODBUS_ADDRESS_MIN; address <= MODBUS_ADDRESS_MAX; address++)
-    {
-        if (addressMap.find(address) == addressMap.end() || addressMap.at(address).empty())
-        {
-            log("SETUP: Found available address: 0x%02X", address);
-            return address;
-        }
-    }
-
-    log("SETUP: No available addresses found in range 0x%02X-0x%02X", MODBUS_ADDRESS_MIN, MODBUS_ADDRESS_MAX);
-    return -1; // No available address found
-}
-
 inline void ModuleSetupService::createPlaceholderSensors(Node &node)
 {
     log("SETUP: Sensor repository not available, creating placeholder sensors");
@@ -2108,6 +2103,12 @@ inline void ModuleSetupService::handleModbusAddressManagement(Node &node)
         return;
     }
 
+    if (!modbusAddressAllocator)
+    {
+        log("SETUP: Skipping Modbus address management - modbusAddressAllocator is NULL");
+        return;
+    }
+
     log("SETUP: Starting address validation and duplicate handling for Modbus sensors");
 
     // Get all sensors again to include newly detected ones
@@ -2239,14 +2240,58 @@ inline void ModuleSetupService::findDuplicateAddresses(const std::map<int, std::
                     i, address, sensors[i]->uid.c_str(), sensors[i]->status);
             }
 
-            // Keep the first sensor, mark others for address change
-            log("SETUP: Keeping first sensor %s, marking others for address change", sensors[0]->uid.c_str());
-            for (size_t i = 1; i < sensors.size(); i++)
+            size_t ownerIndex = 0;
+            size_t perPortMatches = 0;
+            for (size_t i = 0; i < sensors.size(); i++)
             {
+                if (sensors[i]->modbusDeviceAddress == MODBUS_ADDRESS_MIN + sensors[i]->pin)
+                {
+                    if (perPortMatches == 0)
+                    {
+                        ownerIndex = i;
+                    }
+                    perPortMatches++;
+                }
+            }
+
+            const char *rule = "per_port_match";
+            if (perPortMatches != 1)
+            {
+                ownerIndex = 0;
+                rule = "first_in_repository";
+            }
+
+            log("SETUP: Keeping sensor %s by rule %s, marking others for address change",
+                sensors[ownerIndex]->uid.c_str(), rule);
+
+            std::string movedUids;
+            for (size_t i = 0; i < sensors.size(); i++)
+            {
+                if (i == ownerIndex)
+                {
+                    continue;
+                }
+
                 sensorsNeedingNewAddress.push_back(sensors[i]);
                 sensorsMarkedForChange++;
+                if (!movedUids.empty())
+                {
+                    movedUids += ",";
+                }
+                movedUids += "\"" + sensors[i]->uid + "\"";
                 log("SETUP: Sensor %s marked for address change due to duplicate address 0x%02X",
                     sensors[i]->uid.c_str(), address);
+            }
+
+            if (logger)
+            {
+                char addressText[8];
+                snprintf(addressText, sizeof(addressText), "0x%02X", address);
+                std::string details = "{\"address\":\"" + std::string(addressText) +
+                                      "\",\"keptUid\":\"" + sensors[ownerIndex]->uid +
+                                      "\",\"rule\":\"" + rule +
+                                      "\",\"movedUids\":[" + movedUids + "]}";
+                logger->logJson("SENSOR_ADDRESS", "duplicate_owner_chosen", details.c_str());
             }
         }
         else
@@ -2261,7 +2306,7 @@ inline void ModuleSetupService::findDuplicateAddresses(const std::map<int, std::
 }
 
 inline void ModuleSetupService::assignNewAddresses(std::vector<SensorEntity *> &sensorsNeedingNewAddress,
-                                                   std::map<int, std::vector<SensorEntity *>> &addressMap)
+                                                   const std::map<int, std::vector<SensorEntity *>> &addressMap)
 {
     // Assign new addresses to sensors that need them
     if (sensorsNeedingNewAddress.empty())
@@ -2272,10 +2317,18 @@ inline void ModuleSetupService::assignNewAddresses(std::vector<SensorEntity *> &
 
     log("SETUP: Assigning new addresses to %zu sensors", sensorsNeedingNewAddress.size());
 
+    ModbusAddressOccupancy occupied;
+    for (const auto &pair : addressMap)
+    {
+        for (const SensorEntity *sensorEntity : pair.second)
+        {
+            occupied[pair.first].push_back(sensorEntity->uid);
+        }
+    }
+
     for (SensorEntity *sensorEntity : sensorsNeedingNewAddress)
     {
-        // Find next available address in range MODBUS_ADDRESS_MIN-MODBUS_ADDRESS_MAX
-        int newAddress = findNextAvailableAddress(addressMap);
+        int newAddress = modbusAddressAllocator->nextFreeAddress(occupied, MODBUS_ADDRESS_MIN + sensorEntity->pin);
 
         if (newAddress != -1)
         {
@@ -2295,8 +2348,7 @@ inline void ModuleSetupService::assignNewAddresses(std::vector<SensorEntity *> &
                     log("SETUP: Successfully changed sensor %s address from 0x%02X to 0x%02X",
                         sensorEntity->uid.c_str(), oldAddress, newAddress);
 
-                    // Update address map for next iterations
-                    addressMap[newAddress].push_back(sensorEntity);
+                    occupied[newAddress].push_back(sensorEntity->uid);
                 }
                 else
                 {

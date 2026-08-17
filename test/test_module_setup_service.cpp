@@ -23,6 +23,9 @@
 #include "Mock/Application/MockClearModuleDataService.h"
 #include "Mock/UseCases/ModuleMode/MockCheckModuleDeletionUseCase.h"
 #include "Mock/UseCases/ModuleMode/MockCheckFirmwareUpdateOnStartupUseCase.h"
+#include "Mock/Infrastructure/Repositories/MockSensorRepository.h"
+#include "Mock/Core/Domain/Adapters/Sensors/MockSensorReader.h"
+#include "Core/Domain/UseCases/Sensors/ModbusAddressAllocator.h"
 #include "Core/Domain/Enums/ModuleModeEnum.h"
 
 // Helper class for tests
@@ -55,6 +58,22 @@ public:
     static void callAddSensorToStructure(ModuleSetupService* service, Node& node, const SensorEntity& sensorEntity) {
         if (service) {
             service->addSensorToStructure(node, sensorEntity);
+        }
+    }
+
+    static void callFindDuplicateAddresses(ModuleSetupService* service,
+                                           const std::map<int, std::vector<SensorEntity*>>& addressMap,
+                                           std::vector<SensorEntity*>& sensorsNeedingNewAddress) {
+        if (service) {
+            service->findDuplicateAddresses(addressMap, sensorsNeedingNewAddress);
+        }
+    }
+
+    static void callAssignNewAddresses(ModuleSetupService* service,
+                                       std::vector<SensorEntity*>& sensorsNeedingNewAddress,
+                                       const std::map<int, std::vector<SensorEntity*>>& addressMap) {
+        if (service) {
+            service->assignNewAddresses(sensorsNeedingNewAddress, addressMap);
         }
     }
 };
@@ -1819,6 +1838,158 @@ static void test_structure_skips_vpd_channel_on_overflow(void) {
 }
 
 // Main test runner function
+/**
+ * @brief Build a ModBus entity of the module for the duplicate-address tests
+ * @param uid Uid of the entity
+ * @param pin Port the entity sits on
+ * @param address ModBus address the entity holds
+ */
+static SensorEntity makeDuplicateFixtureEntity(const char* uid, int pin, int address) {
+    SensorEntity entity;
+    entity.uid = uid;
+    entity.pin = pin;
+    entity.protocol = "ModBus";
+    entity.modbusDeviceAddress = address;
+    entity.status = SENSOR_STATUS_ADDED;
+    return entity;
+}
+
+/**
+ * @brief Build a setup service wired with the collaborators of the boot address resolution
+ * @param sensorRepository Repository of the module
+ * @param sensorReader Reader that writes the address into the device
+ * @param allocator Owner of the ModBus addresses of the module
+ */
+static ModuleSetupService* makeAddressManagementService(MockSensorRepository* sensorRepository,
+                                                        MockSensorReader* sensorReader,
+                                                        ModbusAddressAllocator* allocator) {
+    ModuleSetupService* service = new ModuleSetupService(
+        &g_mockLogger,
+        &g_mockDebugSystem,
+        &g_mockModuleConfig,
+        nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr,
+        nullptr, nullptr, nullptr,
+        sensorRepository,
+        nullptr,
+        sensorReader);
+    service->setModbusAddressAllocator(allocator);
+    return service;
+}
+
+/**
+ * GDV1-3831, the 2026-08-15 fixture: .02 on pin 2 and .03 on pin 3 both at 0x72. The entity kept is
+ * the one sitting on the address of its own port, whatever order the repository returned them in.
+ */
+static void test_find_duplicate_addresses_keeps_the_entity_on_its_own_port_address(void) {
+    g_mockLogger.reset();
+
+    SensorEntity onOwnAddress = makeDuplicateFixtureEntity("module.02", 2, MODBUS_ADDRESS_MIN + 2);
+    SensorEntity onForeignAddress = makeDuplicateFixtureEntity("module.03", 3, MODBUS_ADDRESS_MIN + 2);
+
+    MockSensorRepository sensorRepository;
+    MockSensorReader sensorReader;
+    ModbusAddressAllocator allocator(&sensorRepository);
+    ModuleSetupService* service = makeAddressManagementService(&sensorRepository, &sensorReader, &allocator);
+
+    std::map<int, std::vector<SensorEntity*>> addressMap;
+    addressMap[MODBUS_ADDRESS_MIN + 2] = {&onForeignAddress, &onOwnAddress};
+    std::vector<SensorEntity*> sensorsNeedingNewAddress;
+
+    ModuleSetupServiceTestHelper::callFindDuplicateAddresses(service, addressMap, sensorsNeedingNewAddress);
+
+    TEST_ASSERT_EQUAL(1, static_cast<int>(sensorsNeedingNewAddress.size()));
+    TEST_ASSERT_EQUAL_STRING("module.03", sensorsNeedingNewAddress[0]->uid.c_str());
+    TEST_ASSERT_TRUE(g_mockLogger.jsonDetailsFor("duplicate_owner_chosen").find("per_port_match") != std::string::npos);
+    TEST_ASSERT_TRUE(g_mockLogger.jsonDetailsFor("duplicate_owner_chosen").find("module.02") != std::string::npos);
+
+    std::map<int, std::vector<SensorEntity*>> reversedMap;
+    reversedMap[MODBUS_ADDRESS_MIN + 2] = {&onOwnAddress, &onForeignAddress};
+    std::vector<SensorEntity*> reversedResult;
+
+    ModuleSetupServiceTestHelper::callFindDuplicateAddresses(service, reversedMap, reversedResult);
+
+    TEST_ASSERT_EQUAL(1, static_cast<int>(reversedResult.size()));
+    TEST_ASSERT_EQUAL_STRING("module.03", reversedResult[0]->uid.c_str());
+
+    delete service;
+}
+
+/**
+ * Neither entity sits on the address of its own port: the survivor is the first one, as before.
+ */
+static void test_find_duplicate_addresses_falls_back_to_the_first_entity(void) {
+    g_mockLogger.reset();
+
+    SensorEntity first = makeDuplicateFixtureEntity("module.00", 0, MODBUS_ADDRESS_MIN + 2);
+    SensorEntity second = makeDuplicateFixtureEntity("module.01", 1, MODBUS_ADDRESS_MIN + 2);
+
+    MockSensorRepository sensorRepository;
+    MockSensorReader sensorReader;
+    ModbusAddressAllocator allocator(&sensorRepository);
+    ModuleSetupService* service = makeAddressManagementService(&sensorRepository, &sensorReader, &allocator);
+
+    std::map<int, std::vector<SensorEntity*>> addressMap;
+    addressMap[MODBUS_ADDRESS_MIN + 2] = {&first, &second};
+    std::vector<SensorEntity*> sensorsNeedingNewAddress;
+
+    ModuleSetupServiceTestHelper::callFindDuplicateAddresses(service, addressMap, sensorsNeedingNewAddress);
+
+    TEST_ASSERT_EQUAL(1, static_cast<int>(sensorsNeedingNewAddress.size()));
+    TEST_ASSERT_EQUAL_STRING("module.01", sensorsNeedingNewAddress[0]->uid.c_str());
+    TEST_ASSERT_TRUE(g_mockLogger.jsonDetailsFor("duplicate_owner_chosen").find("first_in_repository") != std::string::npos);
+
+    delete service;
+}
+
+/**
+ * The address the boot resolution moves a device to is the address of its own port when that one is
+ * free, not simply the lowest free one.
+ */
+static void test_assign_new_addresses_prefers_the_own_address_of_the_port(void) {
+    SensorEntity moved = makeDuplicateFixtureEntity("module.03", 3, MODBUS_ADDRESS_MIN + 2);
+    SensorEntity kept = makeDuplicateFixtureEntity("module.02", 2, MODBUS_ADDRESS_MIN + 2);
+
+    MockSensorRepository sensorRepository;
+    MockSensorReader sensorReader;
+    ModbusAddressAllocator allocator(&sensorRepository);
+    ModuleSetupService* service = makeAddressManagementService(&sensorRepository, &sensorReader, &allocator);
+
+    std::map<int, std::vector<SensorEntity*>> addressMap;
+    addressMap[MODBUS_ADDRESS_MIN + 2] = {&kept};
+    std::vector<SensorEntity*> sensorsNeedingNewAddress = {&moved};
+
+    ModuleSetupServiceTestHelper::callAssignNewAddresses(service, sensorsNeedingNewAddress, addressMap);
+
+    TEST_ASSERT_EQUAL(MODBUS_ADDRESS_MIN + 3, sensorReader.lastWriteToAddress);
+    TEST_ASSERT_EQUAL(MODBUS_ADDRESS_MIN + 3, moved.modbusDeviceAddress);
+    TEST_ASSERT_EQUAL(1, sensorRepository.createOrUpdateSensorCallCount);
+
+    delete service;
+}
+
+/**
+ * The repository row still follows the device: a refused write leaves both untouched.
+ */
+static void test_assign_new_addresses_keeps_the_repository_update_gated_on_the_write(void) {
+    SensorEntity moved = makeDuplicateFixtureEntity("module.03", 3, MODBUS_ADDRESS_MIN + 2);
+
+    MockSensorRepository sensorRepository;
+    MockSensorReader sensorReader;
+    sensorReader.writeSensorAddressReturnValue = false;
+    ModbusAddressAllocator allocator(&sensorRepository);
+    ModuleSetupService* service = makeAddressManagementService(&sensorRepository, &sensorReader, &allocator);
+
+    std::map<int, std::vector<SensorEntity*>> addressMap;
+    std::vector<SensorEntity*> sensorsNeedingNewAddress = {&moved};
+
+    ModuleSetupServiceTestHelper::callAssignNewAddresses(service, sensorsNeedingNewAddress, addressMap);
+
+    TEST_ASSERT_EQUAL(0, sensorRepository.createOrUpdateSensorCallCount);
+    TEST_ASSERT_EQUAL(MODBUS_ADDRESS_MIN + 2, moved.modbusDeviceAddress);
+
+    delete service;
+}
+
 extern "C" int run_module_setup_service_tests(void) {
     if (debug_file != nullptr) fprintf(debug_file, "\n----- Running ModuleSetupService Tests -----\n");
     
@@ -1886,6 +2057,11 @@ extern "C" int run_module_setup_service_tests(void) {
     RUN_TEST(test_structure_two_air_sensors_get_own_vpd);
     RUN_TEST(test_structure_vpd_channel_is_not_duplicated);
     RUN_TEST(test_structure_skips_vpd_channel_on_overflow);
+
+    RUN_TEST(test_find_duplicate_addresses_keeps_the_entity_on_its_own_port_address);
+    RUN_TEST(test_find_duplicate_addresses_falls_back_to_the_first_entity);
+    RUN_TEST(test_assign_new_addresses_prefers_the_own_address_of_the_port);
+    RUN_TEST(test_assign_new_addresses_keeps_the_repository_update_gated_on_the_write);
 
     if (debug_file != nullptr) fprintf(debug_file, "\n----- ModuleSetupService Tests Complete -----\n");
     

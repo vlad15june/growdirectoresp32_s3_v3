@@ -15,8 +15,43 @@ public:
     std::string moduleUid;
     std::vector<std::string> messages;
 
+    struct JsonLogRecord {
+        std::string feature;
+        std::string action;
+        std::string details;
+    };
+
+    std::vector<JsonLogRecord> jsonLogs;
+
     void capture(const char* message) {
         messages.push_back(message ? message : "");
+    }
+
+    /**
+     * @brief Whether a structured record with this action was written
+     * @param action Action name, as passed to logJson
+     */
+    bool hasJsonAction(const std::string& action) const {
+        for (const auto& record : jsonLogs) {
+            if (record.action == action) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * @brief Details of the first structured record with this action
+     * @param action Action name, as passed to logJson
+     * @return Details body of the record, or an empty string when no such record was written
+     */
+    std::string jsonDetailsFor(const std::string& action) const {
+        for (const auto& record : jsonLogs) {
+            if (record.action == action) {
+                return record.details;
+            }
+        }
+        return "";
     }
 
     bool hasMessageContaining(const std::string& needle) const {
@@ -49,6 +84,7 @@ public:
     void reset() {
         printCalled = false;
         lastMessage.clear();
+        jsonLogs.clear();
     }
     
     // Implementation of setModuleUid
@@ -228,6 +264,7 @@ public:
     
     void logJson(const char* feature, const char* action, const char* details) override {
         printCalled = true;
+        jsonLogs.push_back({feature ? feature : "", action ? action : "", details ? details : ""});
         if (logFile.is_open()) {
             logFile << "JSON: { \"feature\": \"" << (feature ? feature : "NULL") 
                    << "\", \"action\": \"" << (action ? action : "NULL") 
@@ -238,6 +275,7 @@ public:
     
     void logJson(const char* topic, const char* feature, const char* action, const char* details) override {
         printCalled = true;
+        jsonLogs.push_back({feature ? feature : "", action ? action : "", details ? details : ""});
         if (logFile.is_open()) {
             logFile << "[" << (topic ? topic : "NULL") << "] JSON: { \"feature\": \"" 
                    << (feature ? feature : "NULL") << "\", \"action\": \"" 
