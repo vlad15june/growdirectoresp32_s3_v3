@@ -407,7 +407,8 @@ SyncSensorTypesUseCase syncSensorTypesUseCase(
     &jsonConverter,
     &mqttLogger,
     &debugSystem,
-    &sensorRepository);
+    &sensorRepository,
+    &moduleConfig);
 
 OnChangeLocalIpUseCase onChangeLocalIpUseCase(
     wifiAdapter,
