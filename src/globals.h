@@ -559,8 +559,6 @@ void initDependencies()
     syncRulesUseCase.setSettings(&settings);
     commandService.setRemoteSensorReceiver(&remoteSensorReceiver);
     moduleSetupService.setSensorStructureUseCase(&sensorStructureUseCase);
-    // The same builder on the command path (GDV1-3782): a sensor added by SetSensorModel or
-    // ScanSensors must reach the structure with its computed channels, not only its registers.
     moduleCommandExecutionUseCase.setSensorStructureUseCase(&sensorStructureUseCase);
     syncSensorTypesUseCase.setVirtualSensorChannelsUseCase(&virtualSensorChannelsUseCase);
     syncSensorTypesUseCase.setRepublishModuleStructureUseCase(&republishModuleStructureUseCase);
