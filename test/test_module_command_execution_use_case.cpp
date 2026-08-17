@@ -430,13 +430,6 @@ void test_reboot_without_settings_still_restarts(void) {
     TEST_ASSERT_TRUE(arduinoAdapter.restartCalled);
 }
 
-// GDV1-3782. Picking the sensor model in the app publishes the structure right after the command,
-// and that structure used to carry only the register channels: the module built the records with
-// ModuleStructure::addSensor, which knows nothing about computed channels. VPD was calculated and
-// sent in hardware/update from the first read, but the backend had never been told the channel
-// exists, so the app showed no VPD until the module restarted and rebuilt the whole structure
-// (module 9C:13:9E:9A:51:9C, firmware 2.18.6, 2026-08-15). The command path has to build the
-// records the same way the setup flow does.
 struct SensorModelStructureFixture {
     MockLogger logger;
     MockDebugSystem debugSystem;
@@ -450,8 +443,12 @@ struct SensorModelStructureFixture {
     SensorStructureUseCase sensorStructure;
     ModuleCommandExecutionUseCase useCase;
 
-    // wireSensorStructureUseCase = false leaves the dependency unset, the way the use case comes
-    // out of its constructor before the composition root calls the setter (src/globals.h)
+    /**
+     * Build a sensor module with one node and a command use case ready to run commands on pin 0.
+     *
+     * @param wireSensorStructureUseCase Pass false to leave the structure builder unset, the way
+     *        the use case comes out of its constructor before the composition root calls the setter.
+     */
     explicit SensorModelStructureFixture(bool wireSensorStructureUseCase = true)
         : virtualChannels(&vpdChannel),
           sensorStructure(&virtualChannels, &logger, &debugSystem),
@@ -461,10 +458,7 @@ struct SensorModelStructureFixture {
         debugSystem.registerFeature(DebugFeatures::MODULE_COMMAND_DEBUG);
         debugSystem.registerFeature(DebugFeatures::SETUP_DEBUG);
 
-        // Pins exist only on a sensor module
         moduleConfig.setModuleType(MODULE_TYPE_SENSOR);
-
-        // The module always has exactly one node
         moduleStructure.nodes.push_back(Node());
 
         if (wireSensorStructureUseCase) {
@@ -472,7 +466,6 @@ struct SensorModelStructureFixture {
         }
     }
 
-    // Sensor type of two ModBus register channels, e.g. the air temperature + humidity of RY-WS301
     void addModbusType(const char* uid, const char* firstType, const char* secondType) {
         SensorType sensorType;
         sensorType.uid = uid;
@@ -502,7 +495,13 @@ struct SensorModelStructureFixture {
         return nullptr;
     }
 
-    // Pin 4 in the command payload is pin 0 of the module
+    /**
+     * Build a SetSensorModel command for pin 0 of the module.
+     *
+     * @param uid Command uid.
+     * @param modelUid Sensor type uid the command assigns; the payload carries pin 4, which is
+     *        pin 0 of the module.
+     */
     static ModuleCommandDto setSensorModelCommand(const char* uid, const char* modelUid) {
         ModuleCommandDto cmd;
         cmd.uid = uid;
@@ -513,7 +512,6 @@ struct SensorModelStructureFixture {
     }
 };
 
-// The pair air_temp + humidity -> the structure carries the computed VPD channel immediately
 void test_set_sensor_model_adds_virtual_channel_to_structure(void) {
     SensorModelStructureFixture f;
     f.addModbusType("model-air", "air_temp", "humidity");
@@ -524,7 +522,6 @@ void test_set_sensor_model_adds_virtual_channel_to_structure(void) {
     TEST_ASSERT_EQUAL(1, static_cast<int>(results.size()));
     TEST_ASSERT_EQUAL_STRING("Done", results[0].status.c_str());
 
-    // Two register channels plus the computed one, and nothing else
     TEST_ASSERT_EQUAL(3, static_cast<int>(f.moduleStructure.nodes[0].sensors.size()));
 
     const Sensor* vpd = f.findSensor("test_module_uid.00.03");
@@ -536,7 +533,6 @@ void test_set_sensor_model_adds_virtual_channel_to_structure(void) {
     TEST_ASSERT_NOT_NULL(f.findSensor("test_module_uid.00.02"));
 }
 
-// No air pair -> no computed channel is invented
 void test_set_sensor_model_without_air_pair_adds_no_virtual_channel(void) {
     SensorModelStructureFixture f;
     f.addModbusType("model-soil", "soil_temp", "ec");
@@ -553,7 +549,6 @@ void test_set_sensor_model_without_air_pair_adds_no_virtual_channel(void) {
     TEST_ASSERT_NOT_NULL(f.findSensor("test_module_uid.00.02"));
 }
 
-// ScanSensors adds the sensor it detected through the same builder, so it has the same channels
 void test_scan_sensors_adds_virtual_channel_to_structure(void) {
     SensorModelStructureFixture f;
     f.addModbusType("model-air", "air_temp", "humidity");
@@ -574,8 +569,6 @@ void test_scan_sensors_adds_virtual_channel_to_structure(void) {
     TEST_ASSERT_EQUAL_STRING("vpd", vpd->type.c_str());
 }
 
-// DeleteSensors clears the pin, and a computed channel carries the pin of its sensor - so it goes
-// with the register channels and needs no separate handling.
 void test_delete_sensors_removes_virtual_channel_too(void) {
     SensorModelStructureFixture f;
     f.addModbusType("model-air", "air_temp", "humidity");
@@ -584,7 +577,6 @@ void test_delete_sensors_removes_virtual_channel_too(void) {
         "cmd-set-model-3", "model-air")});
     TEST_ASSERT_EQUAL(3, static_cast<int>(f.moduleStructure.nodes[0].sensors.size()));
 
-    // The repository has to report the sensor for DeleteSensors to find anything on the pin
     SensorEntity stored;
     stored.uid = "test_module_uid.00";
     stored.pin = 0;
@@ -603,10 +595,6 @@ void test_delete_sensors_removes_virtual_channel_too(void) {
     TEST_ASSERT_EQUAL(0, static_cast<int>(f.moduleStructure.nodes[0].sensors.size()));
 }
 
-// The builder is handed over by a setter, so a use case whose setter was never called holds a null
-// pointer on the same path a command walks. The helper has to leave the structure alone and let the
-// command finish instead of following that pointer, and it has to say so in the log - otherwise the
-// unchanged structure looks exactly like a sensor that had nothing to add.
 void test_set_sensor_model_without_structure_use_case_changes_nothing(void) {
     SensorModelStructureFixture f(false);
     f.addModbusType("model-air", "air_temp", "humidity");
@@ -614,11 +602,9 @@ void test_set_sensor_model_without_structure_use_case_changes_nothing(void) {
     auto results = f.useCase.executeCommands({SensorModelStructureFixture::setSensorModelCommand(
         "cmd-set-model-4", "model-air")});
 
-    // The sensor is still saved: the missing dependency does not fail the command
     TEST_ASSERT_EQUAL(1, static_cast<int>(results.size()));
     TEST_ASSERT_EQUAL_STRING("Done", results[0].status.c_str());
 
-    // Nothing is published: neither the register channels nor the computed one reach the structure
     TEST_ASSERT_EQUAL(0, static_cast<int>(f.moduleStructure.nodes[0].sensors.size()));
     TEST_ASSERT_NULL(f.findSensor("test_module_uid.00.01"));
     TEST_ASSERT_NULL(f.findSensor("test_module_uid.00.03"));
