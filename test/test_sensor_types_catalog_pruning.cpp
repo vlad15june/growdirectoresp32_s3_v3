@@ -1,7 +1,3 @@
-// GDV1-3829: the sensor type catalog must converge on the server list, not only ever grow. Both
-// halves are pinned here: the sync drops what the server no longer publishes, and no bad response
-// can talk it into an empty catalog - an HTTP failure comes back as an empty list.
-
 #include <unity.h>
 #include <algorithm>
 #include <string>
@@ -47,7 +43,6 @@ static SensorType makePruningSensorType(const std::string& uid,
     return sensorType;
 }
 
-// Wired the way globals.h wires it; the use case is declared last, after the mocks it points at.
 struct PruningFixture {
     MockHybridAPIService apiService;
     MockSensorTypeRepository repository;
@@ -224,7 +219,6 @@ static void test_published_but_invalid_type_is_not_pruned(void) {
     TEST_ASSERT_EQUAL(2, static_cast<int>(f.catalogSize()));
 }
 
-// No clear(), no per-uid remove(): there is never an instant with no catalog (GDV1-3827).
 static void test_pruning_does_not_wipe_the_catalog_first(void) {
     PruningFixture f;
 

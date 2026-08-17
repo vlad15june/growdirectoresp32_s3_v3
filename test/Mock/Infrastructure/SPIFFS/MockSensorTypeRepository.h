@@ -124,7 +124,6 @@ public:
             lastSaveBytes = 0;
             return 0;
         }
-        // The real saveAll rewrites /data/sensorTypes.json in full and does not merge.
         sensorTypes.clear();
         int count = 0;
         for (const auto& entity : entities) {

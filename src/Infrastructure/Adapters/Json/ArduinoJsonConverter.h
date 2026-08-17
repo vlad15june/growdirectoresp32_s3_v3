@@ -2117,10 +2117,6 @@ public:
         // array into a single ArduinoJson document.  This removes the ~64 KB heap
         // constraint (which caused "[]" writes on low memory) and allows files of
         // any size to be read correctly.
-        //
-        // Reading is all-or-nothing, the same rule sensorTypesToJson below applies to writing:
-        // a parsed prefix is indistinguishable from a complete catalog at the call site, and the
-        // sync deletes by absence (GDV1-3829).
         const size_t len = jsonStr.size();
         size_t pos = 0;
         while (pos < len) {

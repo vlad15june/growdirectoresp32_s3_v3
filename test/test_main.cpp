@@ -257,10 +257,8 @@ int main(void) {
     // Run tests for always storing the sensor type catalog (GDV1-3827)
     run_sensor_types_bulk_save_tests();
 
-    // Run tests for pruning the sensor type catalog down to what the server publishes (GDV1-3829)
     run_sensor_types_catalog_pruning_tests();
 
-    // Run tests for reading the catalog all-or-nothing, which is what makes the prune safe (GDV1-3829)
     run_sensor_types_catalog_parse_tests();
 
     return UNITY_END();

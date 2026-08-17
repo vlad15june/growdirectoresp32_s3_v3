@@ -251,8 +251,6 @@ private:
      */
     int synchronizeSensorTypes(const std::vector<SensorType>& serverSensorTypes,
                                const std::vector<SensorType>& publishedSensorTypes) {
-        // An HTTP failure comes back as an empty list, so the guard is restated where the pruning
-        // lives and not only in the callers.
         if (serverSensorTypes.empty() || publishedSensorTypes.empty()) {
             log("SYNC_SENSOR_TYPES: Empty server sensor type list, catalog left untouched");
             return 0;
@@ -327,7 +325,6 @@ private:
             updateSensorsForChangedSensorTypes(changedSensorTypes);
         }
 
-        // Removals count as applied changes: the caller reads a zero as "nothing synchronized".
         return syncedCount + removedCount;
     }
 

@@ -64,8 +64,12 @@ static std::string extractArray(const std::string &src, const std::string &key)
     return src.substr(start, end - start);
 }
 
-// endedInsideObject reports that the text stopped before the last object closed, i.e. what arrived
-// is a prefix and not a whole array. Callers that may act on a partial list do not ask.
+/**
+ * Split a JSON array body into the source text of its top-level objects.
+ *
+ * @param endedInsideObject Set when the text stopped before the last object closed, i.e. what
+ *        arrived is a prefix and not a whole array. Optional.
+ */
 static std::vector<std::string> splitObjects(const std::string &arrayStr, bool *endedInsideObject = nullptr)
 {
     std::vector<std::string> result;
@@ -2139,8 +2143,6 @@ private:
     {
         sensorTypes.clear();
 
-        // All-or-nothing, as in ArduinoJsonConverter: both implementations of IJsonConverter have
-        // to answer the same way, and the sync deletes by absence (GDV1-3829).
         bool endedInsideObject = false;
         auto typeObjs = splitObjects(jsonStr, &endedInsideObject);
         if (endedInsideObject)

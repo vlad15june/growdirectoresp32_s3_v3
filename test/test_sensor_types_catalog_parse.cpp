@@ -1,7 +1,3 @@
-// GDV1-3829: reading the sensor type catalog is all-or-nothing. The prune deletes by absence, so a
-// parsed prefix would retire the types that did not fit. It is a rule of IJsonConverter, hence both
-// implementations are driven here through the interface.
-
 #include <Arduino.h>
 
 #include <unity.h>
@@ -100,8 +96,6 @@ static void test_arduino_converter_still_refuses_empty_and_unusable_bodies(void)
     assertEmptyAndUnusableBodiesAreRefused(converter);
 }
 
-// Reachable without mocking the heap: the serializer builds in a 16 KB document, the parser reads
-// into an 8 KB one.
 static void test_arduino_converter_refuses_a_type_too_large_for_its_document(void) {
     ArduinoJsonConverter arduinoConverter;
     IJsonConverter& converter = arduinoConverter;
@@ -147,7 +141,7 @@ static void test_json_converter_refuses_a_type_it_cannot_read(void) {
     IJsonConverter& converter = jsonConverter;
 
     std::vector<SensorType> types = threeTypes();
-    types[1].name = ""; // a type with no name is what this implementation reports as unreadable
+    types[1].name = "";
 
     std::string json = converter.sensorTypesToJson(types);
     TEST_ASSERT_FALSE(json.empty());
