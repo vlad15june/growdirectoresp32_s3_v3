@@ -124,10 +124,7 @@ public:
             lastSaveBytes = 0;
             return 0;
         }
-        // GDV1-3829: the real SensorTypeRepository::saveAll hands the whole vector to the DAO,
-        // which rewrites /data/sensorTypes.json in full — it does not merge with what was there.
-        // The mock has to do the same, otherwise a type dropped by the sync would still be
-        // visible through getAll() and a pruning test could never fail.
+        // The real saveAll rewrites /data/sensorTypes.json in full and does not merge.
         sensorTypes.clear();
         int count = 0;
         for (const auto& entity : entities) {

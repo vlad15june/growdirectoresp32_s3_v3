@@ -243,20 +243,16 @@ private:
     }
     
     /**
-     * Merge the server catalog into the local one and write the result in a single bulk write.
+     * Merge the server catalog into the local one, prune what the server no longer publishes and
+     * write the result in a single bulk write.
      *
-     * GDV1-3829: the merge also prunes — a local type whose uid the server no longer publishes is
-     * dropped, so the catalog converges on the server list instead of only ever growing.
-     * `publishedSensorTypes` is the **raw** server response, not the validated subset: a type the
-     * server still publishes but that failed validateSensorType() is not a retired type, and
-     * pruning it would throw away a good local copy over a bad payload field.
+     * @param publishedSensorTypes The raw server response, not the validated subset: a type that
+     *        failed validateSensorType() is not a retired type and must not be pruned.
      */
     int synchronizeSensorTypes(const std::vector<SensorType>& serverSensorTypes,
                                const std::vector<SensorType>& publishedSensorTypes) {
-        // GDV1-3829: never prune on an empty response. processServerSensorTypes already refuses to
-        // call us when the validated list is empty, and syncSensorTypesFromServer never gets here
-        // at all when the fetch came back empty — restating the condition where the pruning lives
-        // keeps an HTTP failure or an empty payload from emptying the catalog whoever calls next.
+        // An HTTP failure comes back as an empty list, so the guard is restated where the pruning
+        // lives and not only in the callers.
         if (serverSensorTypes.empty() || publishedSensorTypes.empty()) {
             log("SYNC_SENSOR_TYPES: Empty server sensor type list, catalog left untouched");
             return 0;
@@ -299,9 +295,6 @@ private:
             }
         }
 
-        // GDV1-3829: prune what the server no longer publishes. The uid -> index map built above is
-        // reused, so this costs one bool per catalog entry and no second copy of the catalog — the
-        // size of this write is exactly what GDV1-3827 is about.
         int removedCount = countAndCompactRetiredSensorTypes(toSave, toSaveIndex, publishedSensorTypes);
         if (removedCount > 0) {
             changed = true;
@@ -334,16 +327,13 @@ private:
             updateSensorsForChangedSensorTypes(changedSensorTypes);
         }
 
-        // A sync that only retired types still did its job: the caller reads a zero as "nothing
-        // synchronized" and reports the whole sync as failed (processServerSensorTypes), so the
-        // removals have to count as applied changes just like the additions and the updates do.
+        // Removals count as applied changes: the caller reads a zero as "nothing synchronized".
         return syncedCount + removedCount;
     }
 
     /**
      * Drop from `toSave` every type whose uid is absent from `publishedSensorTypes`, in place.
-     * `toSaveIndex` maps uid -> index in `toSave` and is left cleared when anything was dropped,
-     * because the compaction invalidates it.
+     * `toSaveIndex` is left cleared when anything was dropped: the compaction invalidates it.
      *
      * @return how many types were dropped
      */

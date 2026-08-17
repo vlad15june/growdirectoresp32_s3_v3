@@ -64,9 +64,8 @@ static std::string extractArray(const std::string &src, const std::string &key)
     return src.substr(start, end - start);
 }
 
-// endedInsideObject, when asked for, reports that the text stopped before the last object closed,
-// i.e. what arrived is a prefix and not a whole array. Callers that must not act on a partial list
-// (sensorTypesFromJson) ask; the rest keep taking whatever closed.
+// endedInsideObject reports that the text stopped before the last object closed, i.e. what arrived
+// is a prefix and not a whole array. Callers that may act on a partial list do not ask.
 static std::vector<std::string> splitObjects(const std::string &arrayStr, bool *endedInsideObject = nullptr)
 {
     std::vector<std::string> result;
@@ -2140,11 +2139,8 @@ private:
     {
         sensorTypes.clear();
 
-        // All-or-nothing, the same rule the serializer already applies (ArduinoJsonConverter's
-        // sensorTypesToJson: "a type that cannot be serialized fails the whole array"). Both
-        // implementations of IJsonConverter have to answer the same way here: a short catalog is
-        // indistinguishable from a complete one at the call site, and since GDV1-3829 the sync
-        // prunes by absence, so a parsed prefix would delete the missing types from the module.
+        // All-or-nothing, as in ArduinoJsonConverter: both implementations of IJsonConverter have
+        // to answer the same way, and the sync deletes by absence (GDV1-3829).
         bool endedInsideObject = false;
         auto typeObjs = splitObjects(jsonStr, &endedInsideObject);
         if (endedInsideObject)

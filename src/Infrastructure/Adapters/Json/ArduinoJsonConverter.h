@@ -2118,13 +2118,9 @@ public:
         // constraint (which caused "[]" writes on low memory) and allows files of
         // any size to be read correctly.
         //
-        // Reading is all-or-nothing, the same rule sensorTypesToJson below already applies to
-        // writing ("a type that cannot be serialized fails the whole array"). A body that ends
-        // inside an object, or a type this parser cannot take (the fixed 8 KB document in
-        // sensorTypeFromJson is the documented casualty of heap pressure, GDV1-3827), used to
-        // leave the parsed prefix behind and still report success — and a short catalog is
-        // indistinguishable from a complete one at the call site. Since GDV1-3829 the sync prunes
-        // by absence, so that prefix would delete the missing types from the module.
+        // Reading is all-or-nothing, the same rule sensorTypesToJson below applies to writing:
+        // a parsed prefix is indistinguishable from a complete catalog at the call site, and the
+        // sync deletes by absence (GDV1-3829).
         const size_t len = jsonStr.size();
         size_t pos = 0;
         while (pos < len) {
@@ -2165,7 +2161,6 @@ public:
                 return false;
             }
             sensorTypes.push_back(sensorType);
-            //Serial.printf("ArduinoJsonConverter: Successfully parsed sensor type '%s'\n", sensorType.name.c_str());
             pos = end + 1;
         }
 

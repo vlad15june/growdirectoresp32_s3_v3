@@ -1,20 +1,6 @@
-// GDV1-3829: reading the sensor type catalog is all-or-nothing.
-//
-// The prune added by this ticket decides what to delete by absence: a uid the response does not
-// carry is a type the server retired. That is only safe while "the response" means the whole list.
-// The parser did not guarantee it — a body that stopped mid-object kept the parsed prefix, a type it
-// could not take was skipped without a word, and success was reported as long as one type survived.
-// HTTP 200 plus a short list is indistinguishable from HTTP 200 plus a complete one at the call
-// site (RestApiService::getSensorTypesList only clears the list when the converter says false), so
-// the prune would have deleted the missing types from /data/sensorTypes.json.
-//
-// Both failures are documented behaviour of this subsystem, not hypotheticals: every type is parsed
-// into a fixed 8 KB document while the serializer builds it in a 16 KB one, and the comment above
-// this very parser records that heap pressure is what broke it before (GDV1-3827).
-//
-// The rule is the one the serializer already applies on the way out — sensorTypesToJson: "a type
-// that cannot be serialized fails the whole array". It is a rule of IJsonConverter, so both
-// implementations are driven here through the interface the DAO and the REST service are given.
+// GDV1-3829: reading the sensor type catalog is all-or-nothing. The prune deletes by absence, so a
+// parsed prefix would retire the types that did not fit. It is a rule of IJsonConverter, hence both
+// implementations are driven here through the interface.
 
 #include <Arduino.h>
 
@@ -27,8 +13,6 @@
 #include "Infrastructure/Adapters/Json/ArduinoJsonConverter.h"
 #include "Infrastructure/Adapters/Json/JsonConverter.h"
 
-// Real entities, serialized by the real converter: the test never writes the wire format by hand,
-// so it cannot drift away from the contract the firmware actually reads.
 static SensorType makeCatalogType(const std::string& uid, const std::string& name) {
     SensorType sensorType;
     sensorType.uid = uid;
@@ -61,8 +45,6 @@ static std::vector<SensorType> threeTypes() {
     return types;
 }
 
-// A body cut off while the last type was still being written: the prefix of the array a dropped
-// connection or a truncated read delivers.
 static std::string cutInsideTheLastType(const std::string& json) {
     size_t lastObject = json.rfind('{');
     TEST_ASSERT_TRUE(lastObject != std::string::npos);
@@ -81,8 +63,6 @@ static void assertWholeCatalogIsParsed(IJsonConverter& converter) {
     TEST_ASSERT_EQUAL_STRING("uid-c", parsed[2].uid.c_str());
 }
 
-// The defect this ticket's reviewer found: two types out of three came back as a successful parse,
-// and the prune would have read the third one as retired by the server.
 static void assertBodyEndingInsideATypeIsRefused(IJsonConverter& converter) {
     std::string json = converter.sensorTypesToJson(threeTypes());
     TEST_ASSERT_FALSE(json.empty());
@@ -92,8 +72,6 @@ static void assertBodyEndingInsideATypeIsRefused(IJsonConverter& converter) {
     TEST_ASSERT_EQUAL(0, static_cast<int>(parsed.size()));
 }
 
-// The answers that already meant "do not touch the catalog" have to keep meaning it: the guard the
-// prune sits behind reads an empty list, and nothing here may turn one of these into a list at all.
 static void assertEmptyAndUnusableBodiesAreRefused(IJsonConverter& converter) {
     std::vector<SensorType> parsed;
 
@@ -122,10 +100,8 @@ static void test_arduino_converter_still_refuses_empty_and_unusable_bodies(void)
     assertEmptyAndUnusableBodiesAreRefused(converter);
 }
 
-// A single type that does not fit the parser's fixed document is the other half of the same defect:
-// it used to disappear from the middle of an otherwise successful list. The serializer builds in a
-// 16 KB document and the parser reads into an 8 KB one, so this is reachable without any mocking of
-// the heap.
+// Reachable without mocking the heap: the serializer builds in a 16 KB document, the parser reads
+// into an 8 KB one.
 static void test_arduino_converter_refuses_a_type_too_large_for_its_document(void) {
     ArduinoJsonConverter arduinoConverter;
     IJsonConverter& converter = arduinoConverter;
