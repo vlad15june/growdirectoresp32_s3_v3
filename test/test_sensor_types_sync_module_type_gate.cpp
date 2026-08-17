@@ -1,6 +1,3 @@
-// GDV1-3828: a module whose type has no local sensor pins has no consumer for the sensor type
-// catalog, so it must not fetch, store or re-sync it. Every module of the current S3 fleet is
-// such a module, and each of them paid for the catalog on every IP reconnect.
 #include <unity.h>
 #include "Core/Domain/UseCases/SensorTypes/SyncSensorTypesUseCase.h"
 #include "Mock/Infrastructure/Api/MockHybridAPIService.h"
@@ -35,7 +32,12 @@ static SensorType syncGateCreateSensorType(const std::string& uid, const std::st
     return sensorType;
 }
 
-// moduleType < 0 means "no module config injected at all" (pre-GDV1-3828 wiring)
+/**
+ * Build the use case under test for a given module type.
+ *
+ * @param moduleType Module type to report through the injected module config; a value below 1
+ *        leaves the module config unset, the way the use case was wired before GDV1-3828.
+ */
 static void sync_gate_setup(int moduleType) {
     g_syncGateApiService.reset();
     g_syncGateRepository.reset();
@@ -74,13 +76,12 @@ static void sync_gate_teardown(void) {
     g_syncGateModuleConfig = nullptr;
 }
 
-// A drycontact module (MODULE_TYPE_DEVICE) neither fetches nor writes the catalog on forceSync().
 void test_sync_gate_device_module_does_not_fetch_on_force_sync(void) {
     sync_gate_setup(MODULE_TYPE_DEVICE);
 
     bool result = g_syncGateUseCase->forceSync();
 
-    TEST_ASSERT_TRUE(result); // skipping is not a failure
+    TEST_ASSERT_TRUE(result);
     TEST_ASSERT_FALSE(g_syncGateApiService.getSensorTypesListCalled);
     TEST_ASSERT_FALSE(g_syncGateRepository.saveAllCalled);
     TEST_ASSERT_FALSE(g_syncGateRepository.getAllCalled);
@@ -88,11 +89,9 @@ void test_sync_gate_device_module_does_not_fetch_on_force_sync(void) {
     sync_gate_teardown();
 }
 
-// Same module, the periodic entry point: loop() must not fetch either.
 void test_sync_gate_device_module_does_not_fetch_on_loop(void) {
     sync_gate_setup(MODULE_TYPE_DEVICE);
 
-    // The constructor backdates _lastSyncTime by a full interval, so an ungated loop() syncs at once
     g_syncGateArduinoAdapter.setMillis(1000);
     g_syncGateUseCase->loop();
 
@@ -102,7 +101,6 @@ void test_sync_gate_device_module_does_not_fetch_on_loop(void) {
     sync_gate_teardown();
 }
 
-// A dimmer module (MODULE_TYPE_ANALOG_INPUT_DEVICE) has no sensor pins either.
 void test_sync_gate_analog_input_device_does_not_fetch(void) {
     sync_gate_setup(MODULE_TYPE_ANALOG_INPUT_DEVICE);
 
@@ -114,7 +112,6 @@ void test_sync_gate_analog_input_device_does_not_fetch(void) {
     sync_gate_teardown();
 }
 
-// A sensor module does have local sensor pins: nothing changes for it.
 void test_sync_gate_sensor_module_still_syncs(void) {
     sync_gate_setup(MODULE_TYPE_SENSOR);
 
@@ -127,7 +124,6 @@ void test_sync_gate_sensor_module_still_syncs(void) {
     sync_gate_teardown();
 }
 
-// Hydro is the type that actually carries local sensors today: it must keep syncing.
 void test_sync_gate_hydro_module_still_syncs(void) {
     sync_gate_setup(MODULE_TYPE_HYDRO);
 
@@ -139,7 +135,6 @@ void test_sync_gate_hydro_module_still_syncs(void) {
     sync_gate_teardown();
 }
 
-// Without a module config the type is unknown, so the use case behaves exactly as before the gate.
 void test_sync_gate_without_module_config_still_syncs(void) {
     sync_gate_setup(-1);
 

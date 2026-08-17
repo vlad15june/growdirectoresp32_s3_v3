@@ -64,7 +64,6 @@ private:
         }
     }
 
-    // No module config injected: the type is unknown, so keep syncing as before the gate
     bool moduleTypeHasLocalSensors() const {
         return !_moduleConfig || _moduleConfig->getSensorPinCount() > 0;
     }

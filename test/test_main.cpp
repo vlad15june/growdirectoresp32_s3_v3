@@ -256,7 +256,6 @@ int main(void) {
     // Run tests for always storing the sensor type catalog (GDV1-3827)
     run_sensor_types_bulk_save_tests();
 
-    // Run tests for gating the catalog sync by module type (GDV1-3828)
     run_sensor_types_sync_module_type_gate_tests();
 
     return UNITY_END();
