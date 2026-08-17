@@ -6,13 +6,6 @@
 #include "Infrastructure/Adapters/SPIFFS/ISpiffsAdapter.h"
 #include <string>
 
-/**
- * @brief The kept UpdateFirmware command as one JSON file, the way the module stores its
- *        WiFi networks and its catalogs.
- *
- * The file is written while the module runs and read on the next boot, in setupModule() after
- * initSPIFFS() and before the startup update check, so the file system is already mounted.
- */
 class PendingFirmwareUpdateStore : public IPendingFirmwareUpdateStore
 {
 private:

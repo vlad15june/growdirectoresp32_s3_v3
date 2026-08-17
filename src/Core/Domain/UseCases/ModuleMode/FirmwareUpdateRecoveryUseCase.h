@@ -27,12 +27,8 @@ private:
     IDebugSystem *_debugSystem;
     IOtaUpdateLog *_otaUpdateLog;
 
-    // One restart per press of Update: once an update has been kept or resumed in this boot, the
-    // module does not arm another one, so a module with no link at all cannot reboot in a loop.
     bool _updateHandledThisBoot = false;
 
-    // UPDATE_FIRMWARE_DEBUG is registered SerialOnly, so the OTA log is the only channel on which
-    // the reason for the reboot reaches MQTT after the restart.
     void writeOtaLog(const char *message)
     {
         if (_otaUpdateLog != nullptr)
@@ -106,8 +102,6 @@ public:
         command.uid = commandUid;
         command.command = getModuleCommandName(ModuleCommandEnum::UPDATE_FIRMWARE);
         command.options = std::string("{\"url\":\"") + url + "\",\"version\":\"" + version + "\"}";
-        // Left empty on purpose: the age check is about how long a command waited on the server,
-        // and this one must not expire because of the restart it was asked to make.
         command.createdAt = "";
 
         if (!_pendingUpdateStore->save(command))
@@ -138,8 +132,6 @@ public:
             return false;
         }
 
-        // Dropped before the attempt, not after: a boot that dies in the middle of the download
-        // (watchdog, power) comes back to an empty store and stops instead of looping.
         _pendingUpdateStore->clear();
 
         if (command.uid.empty() || command.options.empty())

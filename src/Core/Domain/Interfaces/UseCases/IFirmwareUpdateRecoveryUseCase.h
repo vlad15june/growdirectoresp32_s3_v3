@@ -4,13 +4,6 @@
 #include <string>
 #include "Application/DTOs/ModuleCommandDto.h"
 
-/**
- * @brief Carries a firmware update over a restart when the link is not usable (GDV1-3834)
- *
- * An update can fail because the module cannot open a connection at all, and it keeps failing
- * that way until it is rebooted. This use case turns that into one restart plus one retry the
- * user does not have to ask for.
- */
 class IFirmwareUpdateRecoveryUseCase
 {
 public:

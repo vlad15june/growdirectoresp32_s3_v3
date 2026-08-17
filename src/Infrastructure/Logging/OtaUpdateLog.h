@@ -74,8 +74,6 @@ public:
         char header[320];
         snprintf(header, sizeof(header), "===== OTA SESSION mac=%s url=%s =====",
                  _wifi ? _wifi->getMACAddress() : "", url ? url : "");
-        // Appended, not rewritten: a failed attempt now restarts the module within a second,
-        // long before the 5 s MQTT flush, so rewriting here threw away the session worth reading.
         appendLine(header);
 
         _throttle.reset();

@@ -1,6 +1,5 @@
 #pragma once
 
-// HTTPC_ERROR_CONNECTION_REFUSED of the Arduino HTTPClient: the connection was never opened.
 constexpr int FIRMWARE_UPDATE_HTTP_NOT_CONNECTED = -1;
 
 class IFirmwareRemoteUpdate {

@@ -1,7 +1,3 @@
-// GDV1-3834. A firmware update can fail because the module cannot open a connection at all
-// (`GET code=-1`) and keeps failing that way until it is rebooted, so the module restarts itself
-// and finishes the update afterwards - without the user pressing Update a second time.
-
 #include <unity.h>
 #include <string>
 #include <vector>
@@ -30,7 +26,6 @@ static const char *COMMAND_UID = "48cba456-5a01-4e6c-a9bb-970544fd9f71";
 
 namespace
 {
-// What a restart does not take away, and what it does.
 struct ModuleState
 {
     MockLogger logger;
@@ -83,7 +78,7 @@ ModuleCommandDto updateFirmwareCommand(const char *uid = COMMAND_UID)
     command.createdAt = "";
     return command;
 }
-} // namespace
+}
 
 void test_update_with_http_down_restarts_before_downloading(void)
 {

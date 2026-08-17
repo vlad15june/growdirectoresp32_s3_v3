@@ -3,12 +3,6 @@
 
 #include "Application/DTOs/ModuleCommandDto.h"
 
-/**
- * @brief The UpdateFirmware command a module carries over a restart of its own (GDV1-3834)
- *
- * Kept as a file and not in the settings: the EEPROM has a finite write endurance and no room
- * for a 90-character URL, while the module already stores structured state as JSON files.
- */
 class IPendingFirmwareUpdateStore
 {
 public:

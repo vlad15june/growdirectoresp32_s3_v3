@@ -217,7 +217,6 @@ int main(void) {
 
     run_check_firmware_update_on_startup_tests();
 
-    // Run tests for the update that survives a restart when the link is down (GDV1-3834)
     run_firmware_update_recovery_tests();
 
     // Run tests for ModBus sensor power-cycle recovery (GDV1-3715)
