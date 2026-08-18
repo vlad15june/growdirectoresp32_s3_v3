@@ -198,7 +198,8 @@ public:
             return _modbusReader->writeSensorAddress(sensor.modbusDeviceAddress, newAddress, portIndex,
                                                      sensor.registerToStoreModbusDeviceAddress,
                                                      sensor.writeRegistersCommand,
-                                                     sensor.modbusPingAddress);
+                                                     sensor.modbusPingAddress,
+                                                     sensor.applyAddressAfterPowerCycle);
         }
         else
         {

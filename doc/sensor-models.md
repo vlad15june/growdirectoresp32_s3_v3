@@ -17,6 +17,7 @@ This page contains the current list of supported sensor models in the GrowDirect
 | XF600A Compact Weather Station | xf600a | Modbus | 9600 | 255 (0xFF) | ✓ | ✓ | Air Temperature, Humidity, Pressure, Wind Speed/Direction, Rainfall |
 | RY-WS12S Component Temperature Sensor | ry-ws12s | Modbus | 9600 | 1 | ✓ | ✓ | Surface/Component Temperature (°C) |
 | CC-FL-120W Water Flow Meter | cc-fl-120w | Modbus | 9600 | 1 | ✓ | ✓ | Water Flow (m³), Valve Control |
+| RK520-02 Soil Moisture, Temperature & EC Sensor | rk520-02 | Modbus | 9600 | 1 (0x01) | ✓ | ✓ | Soil Temperature (°C), Soil Moisture (%), Soil EC (mS/cm) |
 
 ---
 
@@ -540,6 +541,69 @@ Response: 01 01 00 01 00 FF/00 XX XX (FF=open, 00=closed)
 - Position faucet higher than water meter
 - Avoid direct sunlight, freezing, and flooding
 - Install valves before and after for maintenance
+
+---
+
+### RK520-02 Soil Moisture, Temperature & EC Sensor (Rika Sensors)
+
+**Description**: Insertion probe measuring soil moisture, soil temperature, and soil electrical conductivity (EC) over RS485. IP68, 316L stainless steel probe.
+
+* **UID**: *To be assigned* (issued by the server when the model is created)
+* **Protocol**: Modbus RTU (Function Codes 03 read / 06 write)
+* **Baud Rate**: 9600
+* **Data Bits**: 8
+* **Stop Bits**: 1
+* **Parity**: None (8-N-1)
+* **Default Modbus Address**: 1 (0x01), range 0x00-0xFF
+* **Broadcast Address**: 0xFE (vendor-specific — **not** 0x00)
+* **Power Supply**: DC 12-24V
+* **Housing**: ABS, 45 × 15 × 145 mm, IP68
+
+**Sensor Types**:
+
+| Parameter | Range | Unit |
+| --- | --- | --- |
+| Soil Temperature | -30 to +70 | °C |
+| Soil Moisture | 0-100 | % (m³/m³) |
+| Soil EC | 0-10 | mS/cm |
+
+**Modbus Registers** (Function Code 03; all channels are single 16-bit registers):
+
+| Address | Contents | Data Type | Formula |
+| --- | --- | --- | --- |
+| 0x0000 | Soil Temperature | s16 (two's complement) | value / 10 = °C |
+| 0x0001 | Soil Moisture | u16 | value / 10 = % |
+| 0x0002 | Soil EC | u16 | value / 1000 = mS/cm |
+| 0x0200 | Device Address | Read/Write (03/06) | Range 0x00-0xFF, default 0x01 |
+
+**Negative temperatures**: the temperature register is signed (two's complement). Example: 0xFF05 = -251 → -25.1 °C. The sensor model must declare the temperature channel as `dataType: "s16"` — decoding it as u16 yields ~6553 °C instead.
+
+**Address change**: FC06 to register 0x0200. Critical detail from the manual: *"After the restart sensor changes to take effect"* — the new address applies **only after a power cycle**. The firmware handles this via the model flag `applyAddressAfterPowerCycle` (see `docs/contracts/backend-firmware/hardware-api.md` in the specs repo): after writing the address, the port is power-cycled and the new address is pinged again.
+
+**Communication Examples**:
+
+Read all 3 values (address 01):
+```
+Request:  01 03 00 00 00 03 05 CB
+Response: 01 03 06 01 16 03 E8 01 1E 68 8F
+Calculation: 0x0116 = 278 → 27.8 °C; 0x03E8 = 1000 → 100.0 %; 0x011E = 286 → 0.286 mS/cm
+```
+
+Change address 01 → 02:
+```
+Request:  01 06 02 00 00 02 09 B3
+Response: 01 06 02 00 00 02 09 B3 (echo)
+Note: address takes effect only after a sensor restart (power cycle)
+```
+
+**Wiring Definition (RS485)** — connector version per GrowDirector wiring (the vendor manual shows the wire-color version: red V+, black V-, yellow RS485-A, green RS485-B):
+
+| Pin | Function |
+| --- | --- |
+| Pin 3 | V+ |
+| Pin 4 | V- (GND) |
+| Pin 2 | RS485-A |
+| Pin 6 | RS485-B |
 
 ---
 

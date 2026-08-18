@@ -430,6 +430,76 @@ void test_reboot_without_settings_still_restarts(void) {
     TEST_ASSERT_TRUE(arduinoAdapter.restartCalled);
 }
 
+namespace {
+
+class RecordingSensorReader : public MockSensorReader {
+public:
+    bool scanned = false;
+    uint16_t modbusPingAddress = 0;
+    uint16_t registerToStoreModbusDeviceAddress = 0;
+    uint8_t writeRegistersCommand = 0;
+    bool applyAddressAfterPowerCycle = false;
+
+    bool scanSensor(const SensorEntity &sensor) override {
+        scanned = true;
+        modbusPingAddress = sensor.modbusPingAddress;
+        registerToStoreModbusDeviceAddress = sensor.registerToStoreModbusDeviceAddress;
+        writeRegistersCommand = sensor.writeRegistersCommand;
+        applyAddressAfterPowerCycle = sensor.applyAddressAfterPowerCycle;
+        return true;
+    }
+};
+
+} // namespace
+
+// PingPin builds the probe sensor from the model: the three Modbus addressing
+// fields and the power-cycle flag must be copied, otherwise the manual ping
+// runs with zeroed addressing (GDV1-3788 review).
+void test_ping_pin_copies_modbus_addressing_fields(void) {
+    MockLogger logger;
+    MockDebugSystem debugSystem;
+    MockSensorTypeRepository sensorTypeRepository;
+    RecordingSensorReader sensorReader;
+    MockModuleConfig moduleConfig;
+
+    debugSystem.registerFeature(DebugFeatures::MODULE_COMMAND_DEBUG);
+    moduleConfig.setModuleType(MODULE_TYPE_SENSOR);
+    moduleConfig.setSensorPinCount(4);
+
+    SensorType sensorType;
+    sensorType.uid = "st-1";
+    sensorType.name = "rk520-02";
+    sensorType.protocol = SensorProtocol::MODBUS_PROTOCOL;
+    sensorType.canScan = true;
+    sensorType.modbusDeviceAddress = 1;
+    sensorType.modbusPingAddress = 0x0000;
+    sensorType.registerToStoreModbusDeviceAddress = 0x0200;
+    sensorType.writeRegistersCommand = 6;
+    sensorType.applyAddressAfterPowerCycle = true;
+    sensorTypeRepository.addSensorType(sensorType);
+
+    ModuleCommandExecutionUseCase uc(
+        &logger, &debugSystem, nullptr, nullptr, nullptr,
+        nullptr, &sensorTypeRepository, &sensorReader, &moduleConfig, nullptr,
+        nullptr, nullptr, nullptr, nullptr, nullptr, nullptr);
+
+    ModuleCommandDto cmd;
+    cmd.uid = "cmd-ping-1";
+    cmd.command = "PingPin";
+    cmd.options = "{\"pin\":4}";
+    cmd.createdAt = "";
+
+    auto results = uc.executeCommands({cmd});
+
+    TEST_ASSERT_EQUAL(1, static_cast<int>(results.size()));
+    TEST_ASSERT_EQUAL_STRING("Done", results[0].status.c_str());
+    TEST_ASSERT_TRUE(sensorReader.scanned);
+    TEST_ASSERT_EQUAL_UINT16(0x0000, sensorReader.modbusPingAddress);
+    TEST_ASSERT_EQUAL_UINT16(0x0200, sensorReader.registerToStoreModbusDeviceAddress);
+    TEST_ASSERT_EQUAL_UINT8(6, sensorReader.writeRegistersCommand);
+    TEST_ASSERT_TRUE(sensorReader.applyAddressAfterPowerCycle);
+}
+
 struct SensorModelStructureFixture {
     MockLogger logger;
     MockDebugSystem debugSystem;
@@ -629,6 +699,7 @@ extern "C" int run_module_command_execution_use_case_tests(void) {
     RUN_TEST(test_reboot_command_sets_user_boot_type);
     RUN_TEST(test_reboot_via_execute_sets_user_boot_type);
     RUN_TEST(test_reboot_without_settings_still_restarts);
+    RUN_TEST(test_ping_pin_copies_modbus_addressing_fields);
     RUN_TEST(test_set_sensor_model_adds_virtual_channel_to_structure);
     RUN_TEST(test_set_sensor_model_without_air_pair_adds_no_virtual_channel);
     RUN_TEST(test_scan_sensors_adds_virtual_channel_to_structure);

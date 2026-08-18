@@ -65,6 +65,7 @@ public:
     uint16_t modbusPingAddress;
     uint16_t registerToStoreModbusDeviceAddress;
     uint8_t writeRegistersCommand;
+    bool applyAddressAfterPowerCycle;
     std::string modbusRegisterConfig;
     std::string analogPinConfig;
 
@@ -81,6 +82,7 @@ public:
         modbusPingAddress(0),
         registerToStoreModbusDeviceAddress(0),
         writeRegistersCommand(0),
+        applyAddressAfterPowerCycle(false),
         priorityForScan(0),
         id(0) {}
 };

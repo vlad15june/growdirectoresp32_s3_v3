@@ -6,28 +6,28 @@ Guidance for coding agents working in the GrowDirector ESP32-S3 firmware reposit
 
 GrowDirector firmware for ESP32-S3, written in C++17 using the Arduino framework via PlatformIO. The codebase mixes embedded runtime concerns (Wi-Fi, MQTT, RS-485, SPIFFS, EEPROM, WebServer, OTA) with a layered application/domain structure.
 
-- Current firmware version: `2.18.2` (read from the `VERSION` file at build/test time).
+- Current firmware version: `2.18.3` (read from the `VERSION` file at build/test time; the file stores the value with surrounding quotes, e.g. `"2.18.3"`, and CI strips the quotes when naming artifacts).
 - Primary target board: `env:esp32-s3-devkitm-1`.
 - Unit-test target: `env:native` (desktop, no hardware required).
-- Additional environments: `env:esp32-s3-devkitm-1-win`, `env:esp32s2dev`.
+- Additional environments: `env:esp32-s3-devkitm-1-win` (same S3 board, `upload_port = COM4`), `env:esp32s2dev` (ESP32-S2 Saola, 4MB flash, PSRAM disabled).
 
 Repository scale (as of the latest snapshot):
 
-- ~257 source files under `src/`:
-  - `src/Core/` — ~125 files (domain logic, entities, use cases, interfaces, enums, utilities).
-  - `src/Application/` — ~48 files (services, commands, DTOs, loop orchestration).
-  - `src/Infrastructure/` — ~81 files (hardware, network, storage, framework adapters).
-- ~102 test files under `test/` (Unity framework, native environment).
+- 257 source files under `src/`:
+  - `src/Core/` — 125 files (domain logic, entities, use cases, interfaces, enums, utilities).
+  - `src/Application/` — 48 files (services, commands, DTOs, loop orchestration).
+  - `src/Infrastructure/` — 81 files (hardware, network, storage, framework adapters).
+- 107 files under `test/` — 55 Unity test `.cpp` files at the top level plus mocks under `test/Mock/` (Application, Core, Infrastructure, UseCases subdirectories and `ArduinoMock.h`).
 
 ## Specs Guardrail
 
-Canonical engineering documentation for GrowDirector does **not** live in this repository. A `specs/` Git submodule is configured (see `.gitmodules`), but it is currently **not initialized** and the directory is empty. The committed resolver `.specs-repo` points to `specs`.
+Canonical engineering documentation for GrowDirector does **not** live in this repository. A `specs/` Git submodule is configured (see `.gitmodules`, pointing to `git@bitbucket.org:dimacher/growdirector-specs.git`, branch `main`), but it is currently **not initialized** and the directory is empty. The committed resolver `.specs-repo` contains `specs`.
 
 Before changing architecture, contracts, or cross-component behavior:
 
 1. Read the configured specs repository path from `.specs-repo.local` when present, otherwise from `.specs-repo`.
-2. If the path is not configured yet, stop and ask for it, or save it manually into `.specs-repo.local`.
-3. Resolve that path on disk and verify it points to a valid specs repo.
+2. If the path is not configured yet, stop and ask for it, or save it manually into `.specs-repo.local` (this file is gitignored — it is a per-developer override).
+3. Resolve that path on disk and verify it points to a valid specs repo (it should contain `docs/components/`, `docs/contracts/`, etc.).
 4. If the path does not resolve, stop work exactly as you would when the path is not configured.
 5. Read the primary firmware docs from that repo:
    - `docs/components/firmware/index.md`
@@ -66,6 +66,7 @@ just build      # Build firmware for esp32-s3-devkitm-1
 just test       # Run native unit tests
 just clean      # Clean build artifacts
 just monitor    # Start serial monitor at 115200 baud
+just all        # Alias for build
 ```
 
 Direct PlatformIO equivalents (firmware version is injected from `VERSION`):
@@ -79,10 +80,10 @@ pio device monitor -e esp32-s3-devkitm-1
 
 Notes:
 
-- The `native` environment uses `throwtheswitch/Unity@^2.5.2` and builds with `-std=gnu++17 -g -O0`.
-- The `esp32-s3-devkitm-1` environment enables PSRAM (`BOARD_HAS_PSRAM`, `CONFIG_SPIRAM_USE_MALLOC`, etc.) and depends on `AsyncMqttClient`, `ArduinoJson`, `ESP32Time`, and the Telaire T6700 CO2 sensor library.
+- The `native` environment uses `throwtheswitch/Unity@^2.5.2`, builds with `-std=gnu++17 -g -O0`, ignores `test_embedded`, and supports gdb debugging (`debug_init_break = tbreak setup`).
+- The `esp32-s3-devkitm-1` environment enables PSRAM (`BOARD_HAS_PSRAM`, `CONFIG_SPIRAM_USE_MALLOC`, etc.) and depends on `AsyncMqttClient@^0.9.0`, `ArduinoJson@^6.21.4`, `ESP32Time@^2.0.0`, and the Telaire T6700 CO2 sensor library (`@^1.0.1`). `lib_ignore = ArduinoSTL` is set in all environments.
 - `scripts/verbose_test.py` is registered as a pre-test script for the `native` environment.
-- `lib_extra_dirs = ~/Documents/Arduino/libraries` is set for the ESP32-S3 environments; avoid relying on libraries that are only present there.
+- `lib_extra_dirs = ~/Documents/Arduino/libraries` is set for the `esp32-s3-devkitm-1` and `esp32s2dev` environments; avoid relying on libraries that are only present there.
 
 ## Continuous Integration and Deployment
 
@@ -94,7 +95,7 @@ The project uses Bitbucket Pipelines (see `bitbucket-pipelines.yml`):
   1. Rebuild the CI image if `Dockerfile.ci`, `platformio.ini`, or `scripts/**` changed.
   2. Run `pio test -e native -vvv` and `pio run -e esp32-s3-devkitm-1`.
   3. Produce artifacts: `firmware-<version>-<branch>.bin`, `release-notes-<version>-<branch>.md`, and `build-info.json`.
-  4. Upload the firmware to the environment-specific backend when the `VERSION` file changes:
+  4. Upload the firmware via `POST /api/v1/Firmware/upload` (with `X-CI-Token` header) to the environment-specific backend, only when the `VERSION` file changes:
      - `main` → `https://gen3.api.growdirector.com`
      - `develop` → `https://api-test.growdirector.com`
      - `release/*` → `https://api.stage.k8s.growdirector.com`
@@ -152,14 +153,14 @@ Key areas:
 The embedded composition root is split across:
 
 - `src/globals.h` — global singleton wiring and object-graph construction.
-- `src/main.cpp` — Arduino `setup()` / `loop()`, FreeRTOS task creation (`buttonUpdateTask`), and runtime startup.
+- `src/main.cpp` — Arduino `setup()` / `loop()`, FreeRTOS task creation (`buttonUpdateTask`, pinned via `xTaskCreatePinnedToCore`, polling button states every 50 ms), and runtime startup.
 
 Practical implications:
 
 - Changes that affect object lifetime, dependency wiring, or boot order often require edits in `src/globals.h`.
 - Changes that affect task scheduling, MQTT loop cadence, button polling, or startup initialization often require edits in `src/main.cpp`.
 - Be careful with global initialization order; this repo relies heavily on static/global object construction.
-- Default MQTT broker, user, and password are currently hardcoded in `src/globals.h`.
+- Default MQTT broker (`116.203.235.144:1883`), user, and password are currently hardcoded in `src/globals.h`.
 - Board-specific RS-485 port and sensor-power wiring is also defined in `src/globals.h`.
 
 Module modes (defined in `src/Core/Domain/Enums/ModuleModeEnum.h`):
@@ -177,7 +178,7 @@ Subsystem hotspots:
 - Hybrid backend communication: `src/Infrastructure/Controllers/Api/HybridAPIService.*`, `src/Infrastructure/Controllers/HTTP/RestApiService.*`, `src/Infrastructure/Controllers/MQTT/MqttApiService.*`.
 - Rules persistence/evaluation: repositories under `src/Infrastructure/Repositories/` plus `src/Core/Domain/UseCases/Rules/`.
 - Sensor persistence and sensor-type sync: SPIFFS DAOs plus `SensorRepository`, `SensorTypeRepository`, and sensor-related use cases.
-- `src/main.cpp` contains a disabled `createTestSensorTypes()` bootstrap helper; treat it as development/bootstrap code, not the default production flow.
+- `src/main.cpp` contains a `createTestSensorTypes()` bootstrap helper whose call in `setup()` is commented out; treat it as development/bootstrap code, not the default production flow.
 
 ## Storage and State
 
@@ -219,9 +220,9 @@ Tests live under `test/` and run in the `native` PlatformIO environment using Un
 
 Important details:
 
-- `test/test_main.cpp` is the single entry point for the native test binary.
-- Each test file exposes a `run_*_tests()` function that is called from `test/test_main.cpp`.
-- Mocks live under `test/Mock/` and mirror the major interfaces (`ISettings`, `IModuleConfig`, `IApiService`, `ISpiffsAdapter`, etc.).
+- `test/test_main.cpp` is the single entry point for the native test binary; it declares ~108 `extern "C" run_*_tests()` functions and calls each of them.
+- Each test file exposes a `run_*_tests()` function that is called from `test/test_main.cpp`. When adding a new test file, register its runner there.
+- Mocks live under `test/Mock/` and mirror the major interfaces (`ISettings`, `IModuleConfig`, `IApiService`, `ISpiffsAdapter`, etc.), organized into `Application`, `Core`, `Infrastructure`, and `UseCases` subdirectories, plus a shared `ArduinoMock.h`.
 - There is no dedicated per-file runner today. To isolate one test group, temporarily comment unrelated `run_*_tests()` calls in `test/test_main.cpp`, run `just test`, then revert the harness change.
 - Some tests write debug logs to files in the repository root (e.g., `button_use_cases_test_debug.log`, `led_use_cases_test_debug.log`, `module_setup_test_debug.log`, `mock_logger.log`). These are ignored by `.gitignore`.
 
@@ -246,6 +247,7 @@ Important details:
 - `src/Infrastructure/Repositories/` — persistence-backed repositories.
 - `test/test_main.cpp` — native test harness.
 - `ReleaseNotes.md` — changelog and recent feature/fix context.
+- `tickets/` — per-ticket notes (`GDV1-*.md`); historical context, prefer the specs repo for canonical decisions.
 
 ## Agent Tooling
 
@@ -253,6 +255,7 @@ Important details:
 - `.claude/skills/` contains project-specific Claude skills (e.g., `log-analysis`, `task-doc`, `task-arch`, `feature-arch`, `imp-doc`). These are intended for Claude Code workflows and are not part of the firmware build.
 - `.github/prompts/` contains prompt templates for ticket drafting and feature solution design.
 - `old/` contains historical reference code (`aptestmode.h`, `server_communication.h`). It is not compiled and should not be imported into the main build.
+- `test_scripts/` contains Python helper scripts for bench/log analysis (e.g., ELK log download, jig HTTP test, `rk90011_probe.py`); they are not part of the firmware build.
 
 ---
 

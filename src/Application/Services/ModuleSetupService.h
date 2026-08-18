@@ -1718,6 +1718,7 @@ inline void ModuleSetupService::scanPinForSensorTypes(int pin, Node &node)
             tempSensor.modbusPingAddress = sensorType.modbusPingAddress;
             tempSensor.registerToStoreModbusDeviceAddress = sensorType.registerToStoreModbusDeviceAddress;
             tempSensor.writeRegistersCommand = sensorType.writeRegistersCommand;
+            tempSensor.applyAddressAfterPowerCycle = sensorType.applyAddressAfterPowerCycle;
 
             int scanTargetAddress = MODBUS_ADDRESS_MIN + pin;
 
