@@ -116,6 +116,16 @@ Mock implementations live in `test/Mock/` — there are mocks for all major inte
 - JSON serialization lives in `Infrastructure/Adapters/Converters/`
 - Firmware version is read from the `VERSION` file at build time
 
+## Commit Messages
+
+Format: `GDV1-XXXX #tag: subject`
+
+- `GDV1-XXXX` is the Jira key of the task the change belongs to.
+- Tag is one of `#fix`, `#feat`, `#add`, `#clean`, `#refactor`, `#test`, `#docs`.
+- Subject is lowercase, imperative, no trailing period; it names the real change, not the file touched.
+- Version bumps are the only keyless form: `#ver 2.18.7` (made by the `prepare_new_version` skill).
+- No `Co-Authored-By` trailers and no generated-with footers.
+
 ## Debugging
 
 - Live device output: `pio device monitor -b 115200` (or `just monitor`).
