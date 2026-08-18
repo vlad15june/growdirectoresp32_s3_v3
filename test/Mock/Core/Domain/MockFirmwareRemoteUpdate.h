@@ -10,13 +10,16 @@ private:
     bool _updateInProgress = false;
     bool _updateFromURLCalled = false;
     bool _updateFromURLResult = true;
-    const char* _lastUrl = nullptr;
+    std::string _lastUrl;
     std::string _lastErrorMessage;
+    int _lastHttpCode = 0;
+    int _updateFromURLCallCount = 0;
 
 public:
     bool updateFirmwareFromURL(const char* url) override {
         _updateFromURLCalled = true;
-        _lastUrl = url;
+        _updateFromURLCallCount++;
+        _lastUrl = (url != nullptr) ? url : "";
         return _updateFromURLResult;
     }
 
@@ -26,6 +29,10 @@ public:
 
     const char* getLastErrorMessage() const override {
         return _lastErrorMessage.c_str();
+    }
+
+    int getLastHttpCode() const override {
+        return _lastHttpCode;
     }
 
     void setUpdateInProgress(bool inProgress) {
@@ -41,20 +48,30 @@ public:
         _lastErrorMessage = message;
     }
 
+    void setLastHttpCode(int code) {
+        _lastHttpCode = code;
+    }
+
     bool wasUpdateFromURLCalled() const {
         return _updateFromURLCalled;
     }
 
+    int getUpdateFromURLCallCount() const {
+        return _updateFromURLCallCount;
+    }
+
     const char* getLastUrl() const {
-        return _lastUrl;
+        return _lastUrl.c_str();
     }
 
     void reset() {
         _updateInProgress = false;
         _updateFromURLCalled = false;
         _updateFromURLResult = true;
-        _lastUrl = nullptr;
+        _lastUrl.clear();
         _lastErrorMessage.clear();
+        _lastHttpCode = 0;
+        _updateFromURLCallCount = 0;
     }
 };
 

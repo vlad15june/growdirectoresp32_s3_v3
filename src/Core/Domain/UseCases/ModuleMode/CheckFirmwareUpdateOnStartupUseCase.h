@@ -7,6 +7,7 @@
 #include <string>
 #include "Core/Domain/Interfaces/UseCases/ICheckFirmwareUpdateOnStartupUseCase.h"
 #include "Core/Domain/Interfaces/UseCases/IModuleCommandExecutionUseCase.h"
+#include "Core/Domain/Interfaces/UseCases/IFirmwareUpdateRecoveryUseCase.h"
 #include "Core/Domain/Interfaces/API/IHybridAPIService.h"
 #include "Core/Domain/Interfaces/ILogger.h"
 #include "Core/Domain/Interfaces/IDebugSystem.h"
@@ -22,6 +23,7 @@ private:
     IModuleCommandExecutionUseCase *_moduleCommandUseCase;
     ILogger *_logger;
     IDebugSystem *_debugSystem;
+    IFirmwareUpdateRecoveryUseCase *_firmwareUpdateRecoveryUseCase;
 
     void log(const char *format, ...)
     {
@@ -46,58 +48,8 @@ private:
         }
     }
 
-public:
-    CheckFirmwareUpdateOnStartupUseCase(
-        IHybridAPIService *hybridApiService = nullptr,
-        IModuleCommandExecutionUseCase *moduleCommandUseCase = nullptr,
-        ILogger *logger = nullptr,
-        IDebugSystem *debugSystem = nullptr)
-        : _hybridApiService(hybridApiService),
-          _moduleCommandUseCase(moduleCommandUseCase),
-          _logger(logger),
-          _debugSystem(debugSystem)
+    bool applyUpdateCommands(const std::vector<ModuleCommandDto> &updateCommands)
     {
-    }
-
-    virtual ~CheckFirmwareUpdateOnStartupUseCase() = default;
-
-    bool run() override
-    {
-        log("BOOT_UPDATE: pull commands on startup");
-
-        if (_hybridApiService == nullptr || _moduleCommandUseCase == nullptr)
-        {
-            log("BOOT_UPDATE: dependencies unavailable, continue to deletion check");
-            return false;
-        }
-
-        _hybridApiService->init();
-
-        std::vector<ModuleCommandDto> commands = _hybridApiService->getModuleCommand();
-
-        if (commands.empty())
-        {
-            log("BOOT_UPDATE: no commands, continue to deletion check");
-            return false;
-        }
-
-        std::vector<ModuleCommandDto> updateCommands;
-        for (const auto &command : commands)
-        {
-            if (getModuleCommandEnum(command.command) == ModuleCommandEnum::UPDATE_FIRMWARE)
-            {
-                log("BOOT_UPDATE: UpdateFirmware found uid=%s createdAt=%s",
-                    command.uid.c_str(), command.createdAt.c_str());
-                updateCommands.push_back(command);
-            }
-        }
-
-        if (updateCommands.empty())
-        {
-            log("BOOT_UPDATE: no UpdateFirmware, continue to deletion check");
-            return false;
-        }
-
         std::vector<ModuleCommandExecutionResult> results =
             _moduleCommandUseCase->executeCommands(updateCommands);
 
@@ -125,6 +77,71 @@ public:
 
         log("BOOT_UPDATE: applied=%d", updateApplied ? 1 : 0);
         return updateApplied;
+    }
+
+public:
+    CheckFirmwareUpdateOnStartupUseCase(
+        IHybridAPIService *hybridApiService = nullptr,
+        IModuleCommandExecutionUseCase *moduleCommandUseCase = nullptr,
+        ILogger *logger = nullptr,
+        IDebugSystem *debugSystem = nullptr,
+        IFirmwareUpdateRecoveryUseCase *firmwareUpdateRecoveryUseCase = nullptr)
+        : _hybridApiService(hybridApiService),
+          _moduleCommandUseCase(moduleCommandUseCase),
+          _logger(logger),
+          _debugSystem(debugSystem),
+          _firmwareUpdateRecoveryUseCase(firmwareUpdateRecoveryUseCase)
+    {
+    }
+
+    virtual ~CheckFirmwareUpdateOnStartupUseCase() = default;
+
+    bool run() override
+    {
+        log("BOOT_UPDATE: pull commands on startup");
+
+        if (_hybridApiService == nullptr || _moduleCommandUseCase == nullptr)
+        {
+            log("BOOT_UPDATE: dependencies unavailable, continue to deletion check");
+            return false;
+        }
+
+        _hybridApiService->init();
+
+        ModuleCommandDto keptUpdate;
+        if (_firmwareUpdateRecoveryUseCase != nullptr &&
+            _firmwareUpdateRecoveryUseCase->takeKeptUpdate(keptUpdate))
+        {
+            log("BOOT_UPDATE: resuming kept UpdateFirmware uid=%s", keptUpdate.uid.c_str());
+            return applyUpdateCommands({keptUpdate});
+        }
+
+        std::vector<ModuleCommandDto> commands = _hybridApiService->getModuleCommand();
+
+        if (commands.empty())
+        {
+            log("BOOT_UPDATE: no commands, continue to deletion check");
+            return false;
+        }
+
+        std::vector<ModuleCommandDto> updateCommands;
+        for (const auto &command : commands)
+        {
+            if (getModuleCommandEnum(command.command) == ModuleCommandEnum::UPDATE_FIRMWARE)
+            {
+                log("BOOT_UPDATE: UpdateFirmware found uid=%s createdAt=%s",
+                    command.uid.c_str(), command.createdAt.c_str());
+                updateCommands.push_back(command);
+            }
+        }
+
+        if (updateCommands.empty())
+        {
+            log("BOOT_UPDATE: no UpdateFirmware, continue to deletion check");
+            return false;
+        }
+
+        return applyUpdateCommands(updateCommands);
     }
 };
 

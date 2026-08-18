@@ -33,6 +33,7 @@
 #include "Core/Domain/UseCases/ModuleMode/OnConnectivityRestoredUseCase.h"
 #include "Core/Domain/UseCases/ModuleMode/CheckModuleDeletionUseCase.h"
 #include "Core/Domain/UseCases/ModuleMode/CheckFirmwareUpdateOnStartupUseCase.h"
+#include "Core/Domain/UseCases/ModuleMode/FirmwareUpdateRecoveryUseCase.h"
 #include "Core/Domain/UseCases/DeviceControl/ProcessDeviceStateUseCaseFactory.h"
 #include "Core/Domain/UseCases/DeviceControl/DeviceCommandExecutionUseCase.h"
 #include "Core/Domain/UseCases/ModuleCommand/ModuleCommandExecutionUseCase.h"
@@ -58,6 +59,7 @@
 #include "Infrastructure/Logging/OtaUpdateLog.h"
 #include "Infrastructure/Logging/BootEventLog.h"
 #include "Infrastructure/Configuration/ModuleConfig.h"
+#include "Infrastructure/Configuration/PendingFirmwareUpdateStore.h"
 #include "Infrastructure/Configuration/Settings.h"
 #include "Infrastructure/Configuration/StepCycleStore.h"
 #include "Infrastructure/Logging/DebugSystem.h"
@@ -203,6 +205,8 @@ BootEventLog bootEventLog(&spiffsAdapter, &mqttLogger, &ntpTimeAdapter, &arduino
 BootEventLog restartEventLog(&spiffsAdapter, &mqttLogger, &ntpTimeAdapter, &arduinoAdapter, &wifiAdapter, "restart");
 
 FirmwareRemoteUpdate firmwareRemoteUpdate(&mqttLogger, &debugSystem, &settings, &otaUpdateLog);
+
+PendingFirmwareUpdateStore pendingFirmwareUpdateStore(&spiffsAdapter, &jsonConverter);
 
 WiFiManager wifiManager(&wifiAdapter, &settings, &mqttLogger, &debugSystem, &spiffsAdapter, &jsonConverter);
 
@@ -351,13 +355,16 @@ RemoteModuleCommandSender remoteModuleCommandSender(&udpManager, &jsonConverter,
 
 RemoteModuleCommandReceiver remoteModuleCommandReceiver(&udpInboundDispatcher, &moduleConfig, &settings, &jsonConverter, &mqttLogger, &debugSystem);
 
-ModuleCommandExecutionUseCase moduleCommandExecutionUseCase(&mqttLogger, &debugSystem, &ntpTimeAdapter, &firmwareRemoteUpdate, &arduinoAdapter, &sensorRepository, &sensorTypeRepository, &sensorReader, &moduleConfig, &settings, &hybridApiService, &clearModuleDataService, &moduleStructure, &sensorValueModel, &wifiManager, &ledUseCases, &rawBusAccessAdapter, &checkModuleDeletionUseCase, &remoteModuleCommandSender);
+FirmwareUpdateRecoveryUseCase firmwareUpdateRecoveryUseCase(&diagnosticService, &moduleConfig, &settings, &pendingFirmwareUpdateStore, &mqttLogger, &debugSystem, &otaUpdateLog);
+
+ModuleCommandExecutionUseCase moduleCommandExecutionUseCase(&mqttLogger, &debugSystem, &ntpTimeAdapter, &firmwareRemoteUpdate, &arduinoAdapter, &sensorRepository, &sensorTypeRepository, &sensorReader, &moduleConfig, &settings, &hybridApiService, &clearModuleDataService, &moduleStructure, &sensorValueModel, &wifiManager, &ledUseCases, &rawBusAccessAdapter, &checkModuleDeletionUseCase, &remoteModuleCommandSender, &firmwareUpdateRecoveryUseCase);
 
 CheckFirmwareUpdateOnStartupUseCase checkFirmwareUpdateOnStartupUseCase(
     &hybridApiService,
     &moduleCommandExecutionUseCase,
     &mqttLogger,
-    &debugSystem);
+    &debugSystem,
+    &firmwareUpdateRecoveryUseCase);
 
 CommandService commandService(
     &deviceCommandExecutionUseCase,
@@ -407,7 +414,8 @@ SyncSensorTypesUseCase syncSensorTypesUseCase(
     &jsonConverter,
     &mqttLogger,
     &debugSystem,
-    &sensorRepository);
+    &sensorRepository,
+    &moduleConfig);
 
 OnChangeLocalIpUseCase onChangeLocalIpUseCase(
     wifiAdapter,
@@ -559,6 +567,7 @@ void initDependencies()
     syncRulesUseCase.setSettings(&settings);
     commandService.setRemoteSensorReceiver(&remoteSensorReceiver);
     moduleSetupService.setSensorStructureUseCase(&sensorStructureUseCase);
+    moduleCommandExecutionUseCase.setSensorStructureUseCase(&sensorStructureUseCase);
     syncSensorTypesUseCase.setVirtualSensorChannelsUseCase(&virtualSensorChannelsUseCase);
     syncSensorTypesUseCase.setRepublishModuleStructureUseCase(&republishModuleStructureUseCase);
     loopServiceFactory.setOtaUpdateLog(&otaUpdateLog);

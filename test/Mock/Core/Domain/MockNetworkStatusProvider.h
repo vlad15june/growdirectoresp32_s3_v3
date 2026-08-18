@@ -6,9 +6,14 @@
 class MockNetworkStatusProvider : public INetworkStatusProvider {
 public:
     bool offline = false;
+    bool httpDown = false;
 
     bool isNetworkOffline() override {
         return offline;
+    }
+
+    bool isHttpConnectionDown() override {
+        return httpDown;
     }
 };
 

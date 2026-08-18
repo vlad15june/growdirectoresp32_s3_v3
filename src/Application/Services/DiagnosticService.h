@@ -70,6 +70,11 @@ private:
     unsigned long _wifiLastReconnectAttempt = 0;
     static const unsigned long WIFI_RECONNECT_RETRY_INTERVAL_MS = 10 * 60 * 1000;
 
+    int countOffline() const
+    {
+        return _restApiService ? _restApiService->getCountOffline() : 0;
+    }
+
     unsigned long calculateFailsInHour()
     {
         unsigned long totalFails = 0;
@@ -228,9 +233,8 @@ private:
         }
 
         unsigned long currentTime = _arduinoAdapter->millis();
-        bool httpDown = _restApiService->getCountOffline() > _maxCountOffline;
 
-        if (httpDown)
+        if (isHttpConnectionDown())
         {
             if (_httpDownSince == 0)
             {
@@ -272,8 +276,7 @@ private:
         bool mqttConnected = (_mqttManager != nullptr) ? _mqttManager->isConnected() : false;
         
         // Check API status
-        const int countOffline = _restApiService ? _restApiService->getCountOffline() : 0;
-        bool apiDisconnected = (countOffline > _maxCountOffline);
+        bool apiDisconnected = isHttpConnectionDown();
 
         // Module is fully offline if:
         // - WiFi is down OR
@@ -461,6 +464,11 @@ public:
         return _lastNetworkState == DIAGNOSTICS_NETWORK_STATE_ERROR;
     }
 
+    bool isHttpConnectionDown() override
+    {
+        return countOffline() > _maxCountOffline;
+    }
+
     void recordFailure()
     {
         if (_arduinoAdapter)
@@ -506,7 +514,7 @@ public:
         }
         bool routerDown = (_wifiDownSince != 0) && (now - _wifiDownSince >= WIFI_OFFLINE_DEBOUNCE_MS);
 
-        bool httpDown = (_restApiService ? _restApiService->getCountOffline() : 0) > _maxCountOffline;
+        bool httpDown = isHttpConnectionDown();
         bool offline = routerDown || (!_mqttConnected && httpDown);
 
         if (offline)
@@ -546,7 +554,7 @@ public:
                    wifiConnected ? 1 : 0,
                    _wifiDownSince,
                    httpDown ? 1 : 0,
-                   (_restApiService ? _restApiService->getCountOffline() : 0),
+                   countOffline(),
                    _mqttConnected ? 1 : 0);
 
         if (_wifiAdapter != nullptr)
@@ -607,8 +615,7 @@ public:
         diagnosticData.apiSendFails = _restApiService ? _restApiService->getApiSendFails() : 0;
 
         // Use REST API for API status determination
-        const int countOffline = _restApiService ? _restApiService->getCountOffline() : 0;
-        diagnosticData.apiStatus = (countOffline > _maxCountOffline) ? "disconnected" : "connected";
+        diagnosticData.apiStatus = isHttpConnectionDown() ? "disconnected" : "connected";
 
         // Use the actual MQTT connection status directly from the manager
         diagnosticData.mqttStatus = (_mqttManager && _mqttManager->isConnected()) ? "connected" : "disconnected";

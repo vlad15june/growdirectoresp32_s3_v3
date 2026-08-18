@@ -1,5 +1,7 @@
 #pragma once
 
+constexpr int FIRMWARE_UPDATE_HTTP_NOT_CONNECTED = -1;
+
 class IFirmwareRemoteUpdate {
 public:
     virtual ~IFirmwareRemoteUpdate() = default;
@@ -28,4 +30,10 @@ public:
      * @return Reason of the last failure, empty string if the last attempt did not fail
      */
     virtual const char* getLastErrorMessage() const = 0;
+
+    /**
+     * @brief HTTP code the last download attempt got back
+     * @return Code of the last request, negative for HTTPClient errors, 0 if no request was made
+     */
+    virtual int getLastHttpCode() const = 0;
 };

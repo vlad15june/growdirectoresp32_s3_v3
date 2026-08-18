@@ -11,8 +11,13 @@
 #include "Mock/Infrastructure/Configuration/MockModuleConfig.h"
 #include "Mock/Infrastructure/Configuration/MockSettings.h"
 #include "Mock/Infrastructure/MockArduinoAdapter.h"
+#include "Mock/Infrastructure/Repositories/MockSensorRepository.h"
 #include "Mock/Infrastructure/SPIFFS/MockSensorTypeRepository.h"
 #include "Mock/Core/Domain/Adapters/Sensors/MockSensorReader.h"
+#include "Core/Domain/Data/Models/ModuleStructure.h"
+#include "Core/Domain/UseCases/ModuleStructure/SensorStructureUseCase.h"
+#include "Core/Domain/UseCases/Sensors/VirtualSensorChannelsUseCase.h"
+#include "Core/Domain/UseCases/Sensors/VpdChannelUseCase.h"
 #include "Application/DTOs/ModuleCommandDto.h"
 #include "Core/Domain/Enums/BootTypeEnum.h"
 #include "Core/Domain/Enums/ModuleCommandStatus.h"
@@ -495,6 +500,188 @@ void test_ping_pin_copies_modbus_addressing_fields(void) {
     TEST_ASSERT_TRUE(sensorReader.applyAddressAfterPowerCycle);
 }
 
+struct SensorModelStructureFixture {
+    MockLogger logger;
+    MockDebugSystem debugSystem;
+    MockModuleConfig moduleConfig;
+    MockSensorRepository sensorRepository;
+    MockSensorTypeRepository sensorTypeRepository;
+    MockSensorReader sensorReader;
+    ModuleStructure moduleStructure;
+    VpdChannelUseCase vpdChannel;
+    VirtualSensorChannelsUseCase virtualChannels;
+    SensorStructureUseCase sensorStructure;
+    ModuleCommandExecutionUseCase useCase;
+
+    /**
+     * Build a sensor module with one node and a command use case ready to run commands on pin 0.
+     *
+     * @param wireSensorStructureUseCase Pass false to leave the structure builder unset, the way
+     *        the use case comes out of its constructor before the composition root calls the setter.
+     */
+    explicit SensorModelStructureFixture(bool wireSensorStructureUseCase = true)
+        : virtualChannels(&vpdChannel),
+          sensorStructure(&virtualChannels, &logger, &debugSystem),
+          useCase(&logger, &debugSystem, nullptr, nullptr, nullptr,
+                  &sensorRepository, &sensorTypeRepository, &sensorReader,
+                  &moduleConfig, nullptr, nullptr, nullptr, &moduleStructure) {
+        debugSystem.registerFeature(DebugFeatures::MODULE_COMMAND_DEBUG);
+        debugSystem.registerFeature(DebugFeatures::SETUP_DEBUG);
+
+        moduleConfig.setModuleType(MODULE_TYPE_SENSOR);
+        moduleStructure.nodes.push_back(Node());
+
+        if (wireSensorStructureUseCase) {
+            useCase.setSensorStructureUseCase(&sensorStructure);
+        }
+    }
+
+    void addModbusType(const char* uid, const char* firstType, const char* secondType) {
+        SensorType sensorType;
+        sensorType.uid = uid;
+        sensorType.name = "test_modbus_sensor";
+        sensorType.protocol = SensorProtocol::MODBUS_PROTOCOL;
+        sensorType.modbusDeviceAddress = 1;
+
+        ModbusRegisterConfig first;
+        first.channel = 1;
+        first.sensorType = firstType;
+        ModbusRegisterConfig second;
+        second.channel = 2;
+        second.sensorType = secondType;
+
+        sensorType.modbusRegisterConfig.push_back(first);
+        sensorType.modbusRegisterConfig.push_back(second);
+
+        sensorTypeRepository.addSensorType(sensorType);
+    }
+
+    const Sensor* findSensor(const std::string& uid) const {
+        for (const auto& sensor : moduleStructure.nodes[0].sensors) {
+            if (sensor.uid == uid) {
+                return &sensor;
+            }
+        }
+        return nullptr;
+    }
+
+    /**
+     * Build a SetSensorModel command for pin 0 of the module.
+     *
+     * @param uid Command uid.
+     * @param modelUid Sensor type uid the command assigns; the payload carries pin 4, which is
+     *        pin 0 of the module.
+     */
+    static ModuleCommandDto setSensorModelCommand(const char* uid, const char* modelUid) {
+        ModuleCommandDto cmd;
+        cmd.uid = uid;
+        cmd.command = "SetSensorModel";
+        cmd.options = std::string("{\"pin\":4,\"uid\":\"") + modelUid + "\"}";
+        cmd.createdAt = "";
+        return cmd;
+    }
+};
+
+void test_set_sensor_model_adds_virtual_channel_to_structure(void) {
+    SensorModelStructureFixture f;
+    f.addModbusType("model-air", "air_temp", "humidity");
+
+    auto results = f.useCase.executeCommands({SensorModelStructureFixture::setSensorModelCommand(
+        "cmd-set-model-1", "model-air")});
+
+    TEST_ASSERT_EQUAL(1, static_cast<int>(results.size()));
+    TEST_ASSERT_EQUAL_STRING("Done", results[0].status.c_str());
+
+    TEST_ASSERT_EQUAL(3, static_cast<int>(f.moduleStructure.nodes[0].sensors.size()));
+
+    const Sensor* vpd = f.findSensor("test_module_uid.00.03");
+    TEST_ASSERT_NOT_NULL(vpd);
+    TEST_ASSERT_EQUAL_STRING("vpd", vpd->type.c_str());
+    TEST_ASSERT_EQUAL(0, vpd->pin);
+
+    TEST_ASSERT_NOT_NULL(f.findSensor("test_module_uid.00.01"));
+    TEST_ASSERT_NOT_NULL(f.findSensor("test_module_uid.00.02"));
+}
+
+void test_set_sensor_model_without_air_pair_adds_no_virtual_channel(void) {
+    SensorModelStructureFixture f;
+    f.addModbusType("model-soil", "soil_temp", "ec");
+
+    auto results = f.useCase.executeCommands({SensorModelStructureFixture::setSensorModelCommand(
+        "cmd-set-model-2", "model-soil")});
+
+    TEST_ASSERT_EQUAL(1, static_cast<int>(results.size()));
+    TEST_ASSERT_EQUAL_STRING("Done", results[0].status.c_str());
+
+    TEST_ASSERT_EQUAL(2, static_cast<int>(f.moduleStructure.nodes[0].sensors.size()));
+    TEST_ASSERT_NULL(f.findSensor("test_module_uid.00.03"));
+    TEST_ASSERT_NOT_NULL(f.findSensor("test_module_uid.00.01"));
+    TEST_ASSERT_NOT_NULL(f.findSensor("test_module_uid.00.02"));
+}
+
+void test_scan_sensors_adds_virtual_channel_to_structure(void) {
+    SensorModelStructureFixture f;
+    f.addModbusType("model-air", "air_temp", "humidity");
+
+    ModuleCommandDto cmd;
+    cmd.uid = "cmd-scan-1";
+    cmd.command = "ScanSensors";
+    cmd.options = "{\"pin\":4}";
+    cmd.createdAt = "";
+
+    auto results = f.useCase.executeCommands({cmd});
+
+    TEST_ASSERT_EQUAL(1, static_cast<int>(results.size()));
+    TEST_ASSERT_EQUAL_STRING("Done", results[0].status.c_str());
+
+    const Sensor* vpd = f.findSensor("test_module_uid.00.03");
+    TEST_ASSERT_NOT_NULL(vpd);
+    TEST_ASSERT_EQUAL_STRING("vpd", vpd->type.c_str());
+}
+
+void test_delete_sensors_removes_virtual_channel_too(void) {
+    SensorModelStructureFixture f;
+    f.addModbusType("model-air", "air_temp", "humidity");
+
+    f.useCase.executeCommands({SensorModelStructureFixture::setSensorModelCommand(
+        "cmd-set-model-3", "model-air")});
+    TEST_ASSERT_EQUAL(3, static_cast<int>(f.moduleStructure.nodes[0].sensors.size()));
+
+    SensorEntity stored;
+    stored.uid = "test_module_uid.00";
+    stored.pin = 0;
+    f.sensorRepository.sensors.push_back(stored);
+
+    ModuleCommandDto cmd;
+    cmd.uid = "cmd-delete-1";
+    cmd.command = "DeleteSensors";
+    cmd.options = "{\"pin\":4}";
+    cmd.createdAt = "";
+
+    auto results = f.useCase.executeCommands({cmd});
+
+    TEST_ASSERT_EQUAL(1, static_cast<int>(results.size()));
+    TEST_ASSERT_EQUAL_STRING("Done", results[0].status.c_str());
+    TEST_ASSERT_EQUAL(0, static_cast<int>(f.moduleStructure.nodes[0].sensors.size()));
+}
+
+void test_set_sensor_model_without_structure_use_case_changes_nothing(void) {
+    SensorModelStructureFixture f(false);
+    f.addModbusType("model-air", "air_temp", "humidity");
+
+    auto results = f.useCase.executeCommands({SensorModelStructureFixture::setSensorModelCommand(
+        "cmd-set-model-4", "model-air")});
+
+    TEST_ASSERT_EQUAL(1, static_cast<int>(results.size()));
+    TEST_ASSERT_EQUAL_STRING("Done", results[0].status.c_str());
+
+    TEST_ASSERT_EQUAL(0, static_cast<int>(f.moduleStructure.nodes[0].sensors.size()));
+    TEST_ASSERT_NULL(f.findSensor("test_module_uid.00.01"));
+    TEST_ASSERT_NULL(f.findSensor("test_module_uid.00.03"));
+
+    TEST_ASSERT_TRUE(f.logger.hasMessageContaining("sensor structure use case is not wired"));
+}
+
 extern "C" int run_module_command_execution_use_case_tests(void) {
     RUN_TEST(test_add_wifi_success);
     RUN_TEST(test_add_wifi_failure);
@@ -513,5 +700,10 @@ extern "C" int run_module_command_execution_use_case_tests(void) {
     RUN_TEST(test_reboot_via_execute_sets_user_boot_type);
     RUN_TEST(test_reboot_without_settings_still_restarts);
     RUN_TEST(test_ping_pin_copies_modbus_addressing_fields);
+    RUN_TEST(test_set_sensor_model_adds_virtual_channel_to_structure);
+    RUN_TEST(test_set_sensor_model_without_air_pair_adds_no_virtual_channel);
+    RUN_TEST(test_scan_sensors_adds_virtual_channel_to_structure);
+    RUN_TEST(test_delete_sensors_removes_virtual_channel_too);
+    RUN_TEST(test_set_sensor_model_without_structure_use_case_changes_nothing);
     return 0;
 }
