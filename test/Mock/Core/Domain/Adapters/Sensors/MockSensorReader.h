@@ -2,6 +2,7 @@
 #define MOCK_SENSOR_READER_H
 
 #include "Core/Domain/Interfaces/Adapters/Sensors/ISensorReader.h"
+#include <algorithm>
 #include <map>
 #include <string>
 #include <vector>
@@ -19,6 +20,10 @@ public:
     std::string lastSensorUid;
     int lastPortIndex = -1;
     bool lastPortPowerOn = false;
+    std::vector<int> probedAddresses;
+    int writeSensorAddressCallCount = 0;
+    int lastWriteFromAddress = -1;
+    int lastWriteToAddress = -1;
 
     // Configurable results
     bool readSensorReturnValue = true;
@@ -29,6 +34,8 @@ public:
     std::map<std::string, float> multiChannelValues;
     bool writeSensorAddressReturnValue = true;
     bool setModbusPortPowerReturnValue = true;
+    std::vector<int> answeringAddresses;
+    bool answersAtNewAddressAfterWrite = true;
 
     void reset()
     {
@@ -41,6 +48,10 @@ public:
         lastSensorUid.clear();
         lastPortIndex = -1;
         lastPortPowerOn = false;
+        probedAddresses.clear();
+        writeSensorAddressCallCount = 0;
+        lastWriteFromAddress = -1;
+        lastWriteToAddress = -1;
 
         readSensorReturnValue = true;
         readSensorValue = 0.0f;
@@ -49,6 +60,8 @@ public:
         multiChannelValues.clear();
         writeSensorAddressReturnValue = true;
         setModbusPortPowerReturnValue = true;
+        answeringAddresses.clear();
+        answersAtNewAddressAfterWrite = true;
     }
 
     void init(unsigned long modbusBaud = 9600) override
@@ -68,11 +81,23 @@ public:
         return readSensorReturnValue;
     }
 
+    /**
+     * @brief Probe of one address; answeringAddresses, when filled, says which addresses answer
+     * @param sensor Entity carrying the address under probe
+     */
     bool scanSensor(const SensorEntity &sensor) override
     {
         scanSensorCallCount++;
         lastSensorUid = sensor.uid;
-        return scanSensorReturnValue;
+        probedAddresses.push_back(sensor.modbusDeviceAddress);
+
+        if (answeringAddresses.empty())
+        {
+            return scanSensorReturnValue;
+        }
+
+        return std::find(answeringAddresses.begin(), answeringAddresses.end(),
+                         sensor.modbusDeviceAddress) != answeringAddresses.end();
     }
 
     SensorReadResult readSensorDetailed(const SensorEntity &sensor) override
@@ -96,9 +121,29 @@ public:
         return true;
     }
 
-    bool writeSensorAddress(const SensorEntity &sensor, int) override
+    /**
+     * @brief Address write; on success the device answers at the new address unless the test says
+     *        it does not (answersAtNewAddressAfterWrite)
+     * @param sensor Entity carrying the address the device answers at today
+     * @param newAddress Address the device is moved to
+     */
+    bool writeSensorAddress(const SensorEntity &sensor, int newAddress) override
     {
+        writeSensorAddressCallCount++;
         lastSensorUid = sensor.uid;
+        lastWriteFromAddress = sensor.modbusDeviceAddress;
+        lastWriteToAddress = newAddress;
+
+        if (writeSensorAddressReturnValue && answersAtNewAddressAfterWrite)
+        {
+            auto answered = std::find(answeringAddresses.begin(), answeringAddresses.end(),
+                                      sensor.modbusDeviceAddress);
+            if (answered != answeringAddresses.end())
+            {
+                *answered = newAddress;
+            }
+        }
+
         return writeSensorAddressReturnValue;
     }
 

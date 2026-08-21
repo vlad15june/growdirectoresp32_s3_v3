@@ -17,6 +17,7 @@
 #include "Core/Domain/Interfaces/UseCases/ICheckModuleDeletionUseCase.h"
 #include "Core/Domain/Interfaces/UseCases/IFirmwareUpdateRecoveryUseCase.h"
 #include "Core/Domain/Interfaces/UseCases/ISensorStructureUseCase.h"
+#include "Core/Domain/Interfaces/UseCases/IModbusAddressAllocator.h"
 #include "Core/Domain/Interfaces/Adapters/Sensors/IRawBusAccess.h"
 #include "Core/Domain/Interfaces/Udp/IRemoteModuleCommandSender.h"
 #include "Core/Utils/HexCodec.h"
@@ -60,12 +61,13 @@ private:
     IRemoteModuleCommandSender *remoteModuleCommandSender = nullptr;
     IFirmwareUpdateRecoveryUseCase *firmwareUpdateRecoveryUseCase = nullptr;
     ISensorStructureUseCase *sensorStructureUseCase = nullptr;
+    IModbusAddressAllocator *modbusAddressAllocator = nullptr;
     static const unsigned long commandMaxAgeSeconds = 300;
     static const unsigned long rawReadTimeoutMs = 1000;
 
 public:
-    ModuleCommandExecutionUseCase(ILogger *logger = nullptr, IDebugSystem *debugSystem = nullptr, INTPTimeAdapter *timeAdapter = nullptr, IFirmwareRemoteUpdate *firmwareUpdater = nullptr, IArduinoAdapter *arduinoAdapter = nullptr, ISensorRepository *sensorRepository = nullptr, ISensorTypeRepository *sensorTypeRepository = nullptr, ISensorReader *sensorReader = nullptr, IModuleConfig *moduleConfig = nullptr, ISettings *settings = nullptr, IHybridAPIService *hybridApiService = nullptr, IClearModuleDataService *clearModuleDataService = nullptr, ModuleStructure *moduleStructure = nullptr, ISensorValueModel *sensorValueModel = nullptr, IWifiManager *wifiManager = nullptr, ILedUseCases *ledUseCases = nullptr, IRawBusAccess *rawBus = nullptr, ICheckModuleDeletionUseCase *checkModuleDeletionUseCase = nullptr, IRemoteModuleCommandSender *remoteModuleCommandSender = nullptr, IFirmwareUpdateRecoveryUseCase *firmwareUpdateRecoveryUseCase = nullptr)
-        : logger(logger), debugSystem(debugSystem), timeAdapter(timeAdapter), firmwareUpdater(firmwareUpdater), arduinoAdapter(arduinoAdapter), sensorRepository(sensorRepository), sensorTypeRepository(sensorTypeRepository), sensorReader(sensorReader), moduleConfig(moduleConfig), settings(settings), hybridApiService(hybridApiService), clearModuleDataService(clearModuleDataService), moduleStructure(moduleStructure), sensorValueModel(sensorValueModel), wifiManager(wifiManager), ledUseCases(ledUseCases), rawBus(rawBus), checkModuleDeletionUseCase(checkModuleDeletionUseCase), remoteModuleCommandSender(remoteModuleCommandSender), firmwareUpdateRecoveryUseCase(firmwareUpdateRecoveryUseCase) {}
+    ModuleCommandExecutionUseCase(ILogger *logger = nullptr, IDebugSystem *debugSystem = nullptr, INTPTimeAdapter *timeAdapter = nullptr, IFirmwareRemoteUpdate *firmwareUpdater = nullptr, IArduinoAdapter *arduinoAdapter = nullptr, ISensorRepository *sensorRepository = nullptr, ISensorTypeRepository *sensorTypeRepository = nullptr, ISensorReader *sensorReader = nullptr, IModuleConfig *moduleConfig = nullptr, ISettings *settings = nullptr, IHybridAPIService *hybridApiService = nullptr, IClearModuleDataService *clearModuleDataService = nullptr, ModuleStructure *moduleStructure = nullptr, ISensorValueModel *sensorValueModel = nullptr, IWifiManager *wifiManager = nullptr, ILedUseCases *ledUseCases = nullptr, IRawBusAccess *rawBus = nullptr, ICheckModuleDeletionUseCase *checkModuleDeletionUseCase = nullptr, IRemoteModuleCommandSender *remoteModuleCommandSender = nullptr, IFirmwareUpdateRecoveryUseCase *firmwareUpdateRecoveryUseCase = nullptr, IModbusAddressAllocator *modbusAddressAllocator = nullptr)
+        : logger(logger), debugSystem(debugSystem), timeAdapter(timeAdapter), firmwareUpdater(firmwareUpdater), arduinoAdapter(arduinoAdapter), sensorRepository(sensorRepository), sensorTypeRepository(sensorTypeRepository), sensorReader(sensorReader), moduleConfig(moduleConfig), settings(settings), hybridApiService(hybridApiService), clearModuleDataService(clearModuleDataService), moduleStructure(moduleStructure), sensorValueModel(sensorValueModel), wifiManager(wifiManager), ledUseCases(ledUseCases), rawBus(rawBus), checkModuleDeletionUseCase(checkModuleDeletionUseCase), remoteModuleCommandSender(remoteModuleCommandSender), firmwareUpdateRecoveryUseCase(firmwareUpdateRecoveryUseCase), modbusAddressAllocator(modbusAddressAllocator) {}
     
     virtual ~ModuleCommandExecutionUseCase() = default;
 
@@ -575,6 +577,216 @@ private:
     }
 
     /**
+     * @brief Write one structured record of the address resolution to the log stream of the module
+     * @param action Action of the record; the severity lives in the name of the action (*_fail)
+     * @param details Body of the record, valid JSON
+     */
+    void logAddressEvent(const char *action, const std::string &details)
+    {
+        if (logger)
+        {
+            logger->logJson("SENSOR_ADDRESS", action, details.c_str());
+        }
+    }
+
+    /**
+     * @brief ModBus address as the "0x72" text of the SETUP log, for a field of a JSON record
+     * @param address ModBus address
+     */
+    std::string addressToText(int address)
+    {
+        char buffer[8];
+        snprintf(buffer, sizeof(buffer), "0x%02X", address);
+        return std::string(buffer);
+    }
+
+    /**
+     * @brief Occupancy as a JSON array of "0x72:uid" pairs, for the details of a JSON record
+     * @param occupied Occupancy built by the allocator
+     */
+    std::string occupancyToText(const ModbusAddressOccupancy &occupied)
+    {
+        std::string pairs = "[";
+        for (const auto &entry : occupied)
+        {
+            for (const auto &uid : entry.second)
+            {
+                if (pairs.size() > 1)
+                {
+                    pairs += ",";
+                }
+                pairs += "\"" + addressToText(entry.first) + ":" + uid + "\"";
+            }
+        }
+        return pairs + "]";
+    }
+
+    /**
+     * @brief Probe one address and take it when it answers and no other entity of the module holds it
+     * @param entity Entity being configured; on success its modbusDeviceAddress stays on this address
+     * @param address Address to probe
+     * @param occupied Occupancy of the module built by the allocator
+     * @param probeStep Step of the resolution this address comes from, for the log record
+     * @return true when the address answered and was taken
+     */
+    bool probeFreeAddress(SensorEntity &entity, int address, const ModbusAddressOccupancy &occupied, const char *probeStep)
+    {
+        if (modbusAddressAllocator->isAddressTaken(occupied, address))
+        {
+            logAddressEvent("address_skipped_occupied",
+                            "{\"sensorUid\":\"" + entity.uid + "\",\"address\":\"" + addressToText(address) +
+                                "\",\"heldBy\":\"" + modbusAddressAllocator->addressHolder(occupied, address) + "\"}");
+            return false;
+        }
+
+        entity.modbusDeviceAddress = address;
+        log(DebugFeatures::MODULE_COMMAND_DEBUG,
+            "ModuleCommandUseCase: Scanning ModBus address 0x%02X for sensor %s",
+            address, entity.sensorType.c_str());
+
+        if (!sensorReader->scanSensor(entity))
+        {
+            return false;
+        }
+
+        log(DebugFeatures::MODULE_COMMAND_DEBUG,
+            "ModuleCommandUseCase: Found %s sensor on pin %d at address 0x%02X",
+            entity.sensorType.c_str(), entity.pin, address);
+        logAddressEvent("address_accepted",
+                        "{\"sensorUid\":\"" + entity.uid + "\",\"address\":\"" + addressToText(address) +
+                            "\",\"probeStep\":\"" + probeStep + "\"}");
+        return true;
+    }
+
+    /**
+     * @brief Move a device that answers only where another entity of the module already sits
+     * @param entity Entity being configured; on success its modbusDeviceAddress is the new address
+     * @param occupied Occupancy of the module built by the allocator
+     * @param preferredAddress Address of the entity's own port, preferred target of the move
+     * @return true and an empty message when the device now answers at a free address, false and an
+     *         empty message when it answers nowhere, false and a message when the move failed
+     */
+    std::pair<bool, std::string> moveDeviceOffOccupiedAddress(SensorEntity &entity, const ModbusAddressOccupancy &occupied, int preferredAddress)
+    {
+        int collisionAddress = -1;
+        for (int address = MODBUS_ADDRESS_MIN; address <= MODBUS_ADDRESS_MAX; address++)
+        {
+            if (!modbusAddressAllocator->isAddressTaken(occupied, address))
+            {
+                continue;
+            }
+
+            entity.modbusDeviceAddress = address;
+            if (sensorReader->scanSensor(entity))
+            {
+                collisionAddress = address;
+                break;
+            }
+        }
+
+        if (collisionAddress == -1)
+        {
+            return {false, ""};
+        }
+
+        std::string heldBy = modbusAddressAllocator->addressHolder(occupied, collisionAddress);
+        std::string collisionText = addressToText(collisionAddress);
+        logAddressEvent("collision_detected",
+                        "{\"sensorUid\":\"" + entity.uid + "\",\"address\":\"" + collisionText +
+                            "\",\"heldBy\":\"" + heldBy + "\",\"pin\":" + std::to_string(entity.pin) + "}");
+
+        int targetAddress = modbusAddressAllocator->nextFreeAddress(occupied, preferredAddress);
+        if (targetAddress == -1)
+        {
+            logAddressEvent("reassign_fail",
+                            "{\"sensorUid\":\"" + entity.uid + "\",\"fromAddress\":\"" + collisionText +
+                                "\",\"toAddress\":\"\",\"reason\":\"no_free_address\"}");
+            return {false, "No free ModBus address on module"};
+        }
+
+        std::string targetText = addressToText(targetAddress);
+        logAddressEvent("reassign_attempt",
+                        "{\"sensorUid\":\"" + entity.uid + "\",\"fromAddress\":\"" + collisionText +
+                            "\",\"toAddress\":\"" + targetText + "\",\"preferred\":\"" + addressToText(preferredAddress) + "\"}");
+
+        if (!sensorReader->writeSensorAddress(entity, targetAddress))
+        {
+            logAddressEvent("reassign_fail",
+                            "{\"sensorUid\":\"" + entity.uid + "\",\"fromAddress\":\"" + collisionText +
+                                "\",\"toAddress\":\"" + targetText + "\",\"reason\":\"write_rejected\"}");
+            return {false, "Failed to move sensor to a free ModBus address"};
+        }
+
+        entity.modbusDeviceAddress = targetAddress;
+        if (!sensorReader->scanSensor(entity))
+        {
+            logAddressEvent("reassign_fail",
+                            "{\"sensorUid\":\"" + entity.uid + "\",\"fromAddress\":\"" + collisionText +
+                                "\",\"toAddress\":\"" + targetText + "\",\"reason\":\"verify_failed\"}");
+            return {false, "Sensor does not answer at the new ModBus address"};
+        }
+
+        logAddressEvent("reassign_done",
+                        "{\"sensorUid\":\"" + entity.uid + "\",\"fromAddress\":\"" + collisionText +
+                            "\",\"toAddress\":\"" + targetText + "\"}");
+        return {true, ""};
+    }
+
+    /**
+     * @brief Bring a ModBus entity to an address of the module nobody else holds (GDV1-3831)
+     * @param entity Entity being configured; it enters with the default address of its type and
+     *        leaves with the address it may keep
+     * @return true and an empty message when the entity may be saved, false and an empty message
+     *         when nothing answered at all, false and a message when the device could not be moved
+     */
+    std::pair<bool, std::string> resolveModbusAddress(SensorEntity &entity)
+    {
+        int defaultAddress = entity.modbusDeviceAddress;
+        int preferredAddress = MODBUS_ADDRESS_MIN + entity.pin;
+        ModbusAddressOccupancy occupied = modbusAddressAllocator->occupiedAddresses(entity.uid);
+
+        logAddressEvent("resolve_start",
+                        "{\"sensorUid\":\"" + entity.uid + "\",\"pin\":" + std::to_string(entity.pin) +
+                            ",\"typeUid\":\"" + entity.sensorTypeUid + "\",\"defaultAddress\":\"" + addressToText(defaultAddress) +
+                            "\",\"preferredAddress\":\"" + addressToText(preferredAddress) +
+                            "\",\"occupied\":" + occupancyToText(occupied) + "}");
+
+        if (probeFreeAddress(entity, defaultAddress, occupied, "default"))
+        {
+            return {true, ""};
+        }
+
+        if (!entity.isModbusSensor())
+        {
+            return {false, ""};
+        }
+
+        log(DebugFeatures::MODULE_COMMAND_DEBUG,
+            "ModuleCommandUseCase: Sensor not found at default address, scanning range 0x%02X-0x%02X",
+            MODBUS_ADDRESS_MIN, MODBUS_ADDRESS_MAX);
+
+        if (probeFreeAddress(entity, preferredAddress, occupied, "per_port"))
+        {
+            return {true, ""};
+        }
+
+        for (int address = MODBUS_ADDRESS_MIN; address <= MODBUS_ADDRESS_MAX; address++)
+        {
+            if (address == preferredAddress || address == defaultAddress)
+            {
+                continue;
+            }
+
+            if (probeFreeAddress(entity, address, occupied, "sweep"))
+            {
+                return {true, ""};
+            }
+        }
+
+        return moveDeviceOffOccupiedAddress(entity, occupied, preferredAddress);
+    }
+
+    /**
      * @brief Handle SetSensorModel command - verify specific sensor and save to repository
      * @param moduleCommand Module command DTO with options
      * @return Pair of status and error message
@@ -597,7 +809,7 @@ private:
             return {ModuleCommandStatus::ERROR, "Missing pin or uid in options"};
         }
 
-        if (!sensorTypeRepository || !sensorReader || !sensorRepository || !moduleConfig)
+        if (!sensorTypeRepository || !sensorReader || !sensorRepository || !moduleConfig || !modbusAddressAllocator)
         {
             log(DebugFeatures::MODULE_COMMAND_DEBUG,
                 "ModuleCommandUseCase: Sensor services not available for SetSensorModel");
@@ -655,36 +867,18 @@ private:
         newSensorEntity.isError = false;
         newSensorEntity.status = SensorStatusEnum::SENSOR_STATUS_ADDED;
 
-        // Verify sensor is actually connected on this pin at default address
-        bool sensorDetected = sensorReader->scanSensor(newSensorEntity);
-        
-        if (!sensorDetected)
-        {
-            // If not detected at default address, scan all ModBus addresses in the defined range
-            log(DebugFeatures::MODULE_COMMAND_DEBUG,
-                "ModuleCommandUseCase: Sensor not found at default address, scanning range 0x%02X-0x%02X", 
-                MODBUS_ADDRESS_MIN, MODBUS_ADDRESS_MAX);
-            
-            for (int address = MODBUS_ADDRESS_MIN; address <= MODBUS_ADDRESS_MAX; address++)
-            {
-                newSensorEntity.modbusDeviceAddress = address;
-                log(DebugFeatures::MODULE_COMMAND_DEBUG,
-                    "ModuleCommandUseCase: Scanning ModBus address 0x%02X for sensor %s", 
-                    address, targetSensorType->name.c_str());
+        auto resolution = resolveModbusAddress(newSensorEntity);
 
-                if (sensorReader->scanSensor(newSensorEntity))
-                {
-                    log(DebugFeatures::MODULE_COMMAND_DEBUG,
-                        "ModuleCommandUseCase: Found %s sensor on pin %d at address 0x%02X", 
-                        targetSensorType->name.c_str(), pin, address);
-                    sensorDetected = true;
-                    break;
-                }
-            }
-        }
-        
-        if (!sensorDetected)
+        if (!resolution.first)
         {
+            if (!resolution.second.empty())
+            {
+                log(DebugFeatures::MODULE_COMMAND_DEBUG,
+                    "ModuleCommandUseCase: Sensor %s on pin %d not saved - %s",
+                    targetSensorType->name.c_str(), pin, resolution.second.c_str());
+                return {ModuleCommandStatus::ERROR, resolution.second};
+            }
+
             log(DebugFeatures::MODULE_COMMAND_DEBUG,
                 "ModuleCommandUseCase: Sensor %s not detected on pin %d",
                 targetSensorType->name.c_str(), pin);
@@ -914,7 +1108,7 @@ private:
             return {ModuleCommandStatus::ERROR, "Missing or invalid pin in options"};
         }
 
-        if (!sensorTypeRepository || !sensorReader || !moduleConfig)
+        if (!sensorTypeRepository || !sensorReader || !moduleConfig || !modbusAddressAllocator)
         {
             log(DebugFeatures::MODULE_COMMAND_DEBUG,
                 "ModuleCommandUseCase: Sensor services not available for ScanSensors");
@@ -988,126 +1182,61 @@ private:
             log(DebugFeatures::MODULE_COMMAND_DEBUG,
                 "ModuleCommandUseCase: Trying sensor type %s on pin %d", sensorType.name.c_str(), pin);
 
-            // Try to scan this sensor at default address
-            if (sensorReader->scanSensor(tempSensor))
-            {
-                log(DebugFeatures::MODULE_COMMAND_DEBUG,
-                    "ModuleCommandUseCase: Found %s sensor on pin %d", sensorType.name.c_str(), pin);
-                
-                // Set sensor status to NEW for auto-detected sensor
-                tempSensor.status = SensorStatusEnum::SENSOR_STATUS_NEW;
-                tempSensor.isActive = true;
-                tempSensor.isError = false;
-                
-                // Save sensor to repository
-                if (sensorRepository)
-                {
-                    if (sensorRepository->createOrUpdateSensor(tempSensor))
-                    {
-                        log(DebugFeatures::MODULE_COMMAND_DEBUG,
-                            "ModuleCommandUseCase: Successfully saved detected sensor %s to repository with NEW status", 
-                            tempSensor.uid.c_str());
-                        
-                        // Update module structure - add detected sensor
-                        if (moduleStructure)
-                        {
-                            addSensorToStructure(tempSensor);
-                            log(DebugFeatures::MODULE_COMMAND_DEBUG,
-                                "ModuleCommandUseCase: Added detected sensor to moduleStructure on pin %d", pin);
-                        }
-                    }
-                    else
-                    {
-                        log(DebugFeatures::MODULE_COMMAND_DEBUG,
-                            "ModuleCommandUseCase: Failed to save detected sensor %s to repository", 
-                            tempSensor.uid.c_str());
-                    }
-                }
-                
-                // Add detected sensor to result
-                SensorResultDto sensorResult(
-                    tempSensor.uid,
-                    tempSensor.sensorType,
-                    tempSensor.pin,
-                    1, // group
-                    tempSensor.sensorTypeUid
-                );
-                result.sensors.push_back(sensorResult);
-                
-                // Return immediately after finding first sensor
-                log(DebugFeatures::MODULE_COMMAND_DEBUG,
-                    "ModuleCommandUseCase: ScanSensors completed - found sensor %s", 
-                    tempSensor.sensorType.c_str());
-                return {ModuleCommandStatus::DONE, "", result};
-            }
+            auto resolution = resolveModbusAddress(tempSensor);
 
-            // For ModBus sensors, scan all addresses in the defined range if not found at default
-            if (sensorType.isModbusSensor())
+            if (!resolution.first)
             {
-                log(DebugFeatures::MODULE_COMMAND_DEBUG,
-                    "ModuleCommandUseCase: Sensor not found at default address, scanning range 0x%02X-0x%02X", 
-                    MODBUS_ADDRESS_MIN, MODBUS_ADDRESS_MAX);
-                
-                for (int address = MODBUS_ADDRESS_MIN; address <= MODBUS_ADDRESS_MAX; address++)
+                if (!resolution.second.empty())
                 {
-                    tempSensor.modbusDeviceAddress = address;
                     log(DebugFeatures::MODULE_COMMAND_DEBUG,
-                        "ModuleCommandUseCase: Scanning ModBus address 0x%02X for sensor type %s", 
-                        address, sensorType.name.c_str());
+                        "ModuleCommandUseCase: Sensor type %s on pin %d not saved - %s",
+                        sensorType.name.c_str(), pin, resolution.second.c_str());
+                    return {ModuleCommandStatus::ERROR, resolution.second};
+                }
 
-                    if (sensorReader->scanSensor(tempSensor))
+                continue;
+            }
+
+            tempSensor.status = SensorStatusEnum::SENSOR_STATUS_NEW;
+            tempSensor.isActive = true;
+            tempSensor.isError = false;
+
+            if (sensorRepository)
+            {
+                if (sensorRepository->createOrUpdateSensor(tempSensor))
+                {
+                    log(DebugFeatures::MODULE_COMMAND_DEBUG,
+                        "ModuleCommandUseCase: Successfully saved detected sensor %s to repository with NEW status",
+                        tempSensor.uid.c_str());
+
+                    if (moduleStructure)
                     {
+                        addSensorToStructure(tempSensor);
                         log(DebugFeatures::MODULE_COMMAND_DEBUG,
-                            "ModuleCommandUseCase: Found %s sensor on pin %d at address 0x%02X", 
-                            sensorType.name.c_str(), pin, address);
-                        
-                        // Set sensor status to NEW for auto-detected sensor
-                        tempSensor.status = SensorStatusEnum::SENSOR_STATUS_NEW;
-                        tempSensor.isActive = true;
-                        tempSensor.isError = false;
-                        
-                        // Save sensor to repository
-                        if (sensorRepository)
-                        {
-                            if (sensorRepository->createOrUpdateSensor(tempSensor))
-                            {
-                                log(DebugFeatures::MODULE_COMMAND_DEBUG,
-                                    "ModuleCommandUseCase: Successfully saved detected sensor %s to repository with NEW status", 
-                                    tempSensor.uid.c_str());
-                                
-                                // Update module structure - add detected sensor
-                                if (moduleStructure)
-                                {
-                                    addSensorToStructure(tempSensor);
-                                    log(DebugFeatures::MODULE_COMMAND_DEBUG,
-                                        "ModuleCommandUseCase: Added detected sensor to moduleStructure on pin %d", pin);
-                                }
-                            }
-                            else
-                            {
-                                log(DebugFeatures::MODULE_COMMAND_DEBUG,
-                                    "ModuleCommandUseCase: Failed to save detected sensor %s to repository", 
-                                    tempSensor.uid.c_str());
-                            }
-                        }
-                        
-                        // Add detected sensor to result
-                        SensorResultDto sensorResult(
-                            tempSensor.uid,
-                            tempSensor.sensorType,
-                            tempSensor.pin,
-                            1, // group
-                            tempSensor.sensorTypeUid
-                        );
-                        result.sensors.push_back(sensorResult);
-                        
-                        log(DebugFeatures::MODULE_COMMAND_DEBUG,
-                            "ModuleCommandUseCase: ScanSensors completed - found sensor %s at address 0x%02X", 
-                            tempSensor.sensorType.c_str(), address);
-                        return {ModuleCommandStatus::DONE, "", result};
+                            "ModuleCommandUseCase: Added detected sensor to moduleStructure on pin %d", pin);
                     }
                 }
+                else
+                {
+                    log(DebugFeatures::MODULE_COMMAND_DEBUG,
+                        "ModuleCommandUseCase: Failed to save detected sensor %s to repository",
+                        tempSensor.uid.c_str());
+                }
             }
+
+            SensorResultDto sensorResult(
+                tempSensor.uid,
+                tempSensor.sensorType,
+                tempSensor.pin,
+                1,
+                tempSensor.sensorTypeUid
+            );
+            result.sensors.push_back(sensorResult);
+
+            log(DebugFeatures::MODULE_COMMAND_DEBUG,
+                "ModuleCommandUseCase: ScanSensors completed - found sensor %s at address 0x%02X",
+                tempSensor.sensorType.c_str(), tempSensor.modbusDeviceAddress);
+            return {ModuleCommandStatus::DONE, "", result};
         }
 
         // No sensor detected on this pin
