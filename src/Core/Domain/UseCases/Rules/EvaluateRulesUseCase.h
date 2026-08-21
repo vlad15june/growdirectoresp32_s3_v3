@@ -1366,6 +1366,21 @@ private:
         return held;
     }
 
+    /**
+     * Evaluate a sensor rule and tell whether the device has to be on.
+     *
+     * Every condition is judged on the arithmetic mean of its sensors, so several sensors inside
+     * one condition behave as one averaged probe. BETWEEN is the exception: an arc (wind
+     * direction) has no meaningful mean, so it keeps reading the first sensor of the condition.
+     *
+     * @param rule The rule to evaluate; with no conditions the rule-level sensor is used instead.
+     * @param committedOn Whether the device is currently held on by this rule, i.e. the previous
+     *        state hysteresis has to continue from.
+     * @param firedIndex Out: index of the condition that holds the rule on, -1 when none does.
+     * @return The verdict for the whole rule.
+     *
+     * Side effect: refreshes the per-condition hold flags kept in _conditionHoldStates.
+     */
     SensorVerdict evaluateSensorRule(const Rule& rule, bool committedOn, int* firedIndex = nullptr) {
         if (firedIndex) {
             *firedIndex = -1;
@@ -1382,7 +1397,9 @@ private:
                     logSerial("EVALUATE_RULES: SENSOR_COND uid=%s reason=no_sensor_uid on=0", rule.uid.c_str());
                     condOn = false;
                 } else {
-                    double condValue = getSensorValue(cond.sensorUids[0]);
+                    double condValue = (cond.direction == RuleDirection::BETWEEN)
+                        ? getSensorValue(cond.sensorUids[0])
+                        : computeMean(rule.uid, cond.sensorUids);
                     SensorVerdict condVerdict = evaluateSensorHysteresis(cond.direction, condValue, cond.valueLow, cond.valueHigh, condPreviouslyOn);
                     switch (condVerdict) {
                         case SensorVerdict::TURN_ON:
@@ -1591,6 +1608,18 @@ private:
         return firedIndex;
     }
 
+    /**
+     * Fill the result descriptor the module reports to the server with the condition that holds
+     * the rule on: its sensor, the value it was judged on and the thresholds it was judged against.
+     *
+     * The reported value is the same number the evaluation compared, i.e. the mean of the
+     * condition's sensors for sensor and step rules and the first sensor's raw reading for
+     * BETWEEN, so the app shows the user the value the rule actually acted on.
+     *
+     * @param rule The rule being evaluated.
+     * @param firedIndex Index of the condition that fired; out of range leaves the result untouched.
+     * @param result Out: sensorUid, sensorValue, sensorValueTime and the threshold pair.
+     */
     void applyFiredConditionDescriptor(const Rule& rule, int firedIndex, RuleEvaluationResult& result) {
         if (firedIndex < 0 || firedIndex >= static_cast<int>(rule.conditions.size())) {
             return;
@@ -1601,9 +1630,11 @@ private:
         }
 
         bool stepTarget = (rule.ruleType == RuleType::STEP && cond.direction != RuleDirection::BETWEEN);
+        bool averaged = stepTarget ||
+                        (rule.ruleType == RuleType::SENSOR && cond.direction != RuleDirection::BETWEEN);
 
         result.sensorUid = cond.sensorUids[0];
-        result.sensorValue = static_cast<float>(stepTarget
+        result.sensorValue = static_cast<float>(averaged
             ? computeMean(rule.uid, cond.sensorUids)
             : getSensorValue(cond.sensorUids[0]));
         if (_arduinoAdapter) {
