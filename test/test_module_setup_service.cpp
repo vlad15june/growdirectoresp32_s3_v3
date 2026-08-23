@@ -19,6 +19,8 @@
 #include "Mock/Infrastructure/Mqtt/MockMqttManager.h"
 #include "Mock/Infrastructure/Mqtt/MockMessageProcessor.h"
 #include "Mock/Application/Services/Devices/MockDeviceService.h"
+#include "Mock/Infrastructure/Repositories/MockSensorRepository.h"
+#include "Mock/Core/Domain/Adapters/Sensors/MockSensorReader.h"
 #include "Mock/Infrastructure/MockArduinoAdapter.h"
 #include "Mock/Application/MockClearModuleDataService.h"
 #include "Mock/UseCases/ModuleMode/MockCheckModuleDeletionUseCase.h"
@@ -55,6 +57,12 @@ public:
     static void callAddSensorToStructure(ModuleSetupService* service, Node& node, const SensorEntity& sensorEntity) {
         if (service) {
             service->addSensorToStructure(node, sensorEntity);
+        }
+    }
+
+    static void callFillModuleStructure(ModuleSetupService* service) {
+        if (service) {
+            service->fillModuleStructure();
         }
     }
 };
@@ -1818,6 +1826,90 @@ static void test_structure_skips_vpd_channel_on_overflow(void) {
     module_setup_service_teardown();
 }
 
+// --- GDV1-3847: prepareSensorsForReading must run on every setup pass ---
+// The XF700A rainfall-window write lives in prepareSensorsForReading; before the fix it
+// only ran on the noScanSensors fast path, so a normally scanned module never wrote the
+// sensor's accumulation window and rainfall never returned to zero after rain stopped.
+
+static MockSensorRepository g_mockSensorRepository;
+static MockSensorReader g_mockSensorReader;
+static ModuleStructure g_prepareModuleStructure;
+
+static SensorEntity makePrepareTestWeatherSensor(void) {
+    SensorEntity sensor;
+    sensor.uid = "AA:BB:CC:DD:EE:FF.02";
+    sensor.model = "XF700A";
+    sensor.protocol = "ModBus";
+    sensor.pin = 2;
+    sensor.modbusDeviceAddress = 0x72;
+    sensor.status = SENSOR_STATUS_ADDED;
+    return sensor;
+}
+
+static void build_service_with_sensor_pipeline(void) {
+    delete g_moduleSetupService;
+    g_moduleSetupService = new ModuleSetupService(
+        &g_mockLogger,
+        &g_mockDebugSystem,
+        &g_mockModuleConfig,
+        &g_mockLedAdapter,
+        nullptr, // buttonAdapter
+        &g_mockLedUseCases,
+        &g_mockButtonUseCases,
+        &g_mockWifiAdapter,
+        &g_mockWiFiManager,
+        &g_mockWebServerLauncher,
+        &g_mockLoopServiceFactory,
+        &g_mockMqttManager,
+        &g_prepareModuleStructure, // moduleStructure
+        &g_mockDeviceService,
+        nullptr, // ruleService
+        &g_mockSensorRepository,
+        nullptr, // sensorTypeRepository
+        &g_mockSensorReader);
+    g_moduleSetupService->setSensorStructureUseCase(&g_sensorStructureUseCase);
+}
+
+static void prepare_test_setup(void) {
+    module_setup_service_setup();
+    g_mockSensorRepository = MockSensorRepository();
+    g_mockSensorReader.reset();
+    g_prepareModuleStructure.nodes.clear();
+    g_mockModuleConfig.setModuleType(MODULE_TYPE_SENSOR);
+    g_mockModuleConfig.setModuleSubType(MODULE_SUBTYPE_NONE);
+    g_mockSensorRepository.sensors.push_back(makePrepareTestWeatherSensor());
+    build_service_with_sensor_pipeline();
+}
+
+// Normal scan path: repository sensors are verified via scanSensor and preparation runs
+static void test_prepare_sensors_runs_on_normal_scan_path(void) {
+    prepare_test_setup();
+
+    g_mockSettings.setNoScanSensors(0);
+
+    ModuleSetupServiceTestHelper::callFillModuleStructure(g_moduleSetupService);
+
+    TEST_ASSERT_EQUAL(1, g_mockSensorReader.scanSensorCallCount);
+    TEST_ASSERT_EQUAL(1, g_mockSensorReader.prepareSensorsForReadingCallCount);
+
+    module_setup_service_teardown();
+}
+
+// Fast path: no verification scan, but preparation still runs exactly once (not twice)
+static void test_prepare_sensors_runs_once_on_no_scan_fast_path(void) {
+    prepare_test_setup();
+
+    g_mockSettings.setNoScanSensors(1);
+
+    ModuleSetupServiceTestHelper::callFillModuleStructure(g_moduleSetupService);
+
+    TEST_ASSERT_EQUAL(0, g_mockSensorReader.scanSensorCallCount);
+    TEST_ASSERT_EQUAL(1, g_mockSensorReader.prepareSensorsForReadingCallCount);
+    TEST_ASSERT_EQUAL_UINT8(0, g_mockSettings.getNoScanSensors());
+
+    module_setup_service_teardown();
+}
+
 // Main test runner function
 extern "C" int run_module_setup_service_tests(void) {
     if (debug_file != nullptr) fprintf(debug_file, "\n----- Running ModuleSetupService Tests -----\n");
@@ -1886,6 +1978,10 @@ extern "C" int run_module_setup_service_tests(void) {
     RUN_TEST(test_structure_two_air_sensors_get_own_vpd);
     RUN_TEST(test_structure_vpd_channel_is_not_duplicated);
     RUN_TEST(test_structure_skips_vpd_channel_on_overflow);
+
+    // Sensor preparation on every setup pass (GDV1-3847)
+    RUN_TEST(test_prepare_sensors_runs_on_normal_scan_path);
+    RUN_TEST(test_prepare_sensors_runs_once_on_no_scan_fast_path);
 
     if (debug_file != nullptr) fprintf(debug_file, "\n----- ModuleSetupService Tests Complete -----\n");
     
