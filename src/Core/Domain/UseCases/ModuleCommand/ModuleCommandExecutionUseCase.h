@@ -859,6 +859,10 @@ private:
         newSensorEntity.sensorTypeUid = targetSensorType->uid;
         newSensorEntity.modbusDeviceAddress = targetSensorType->modbusDeviceAddress;
         newSensorEntity.baudRate = targetSensorType->baudRate;
+        newSensorEntity.modbusPingAddress = targetSensorType->modbusPingAddress;
+        newSensorEntity.registerToStoreModbusDeviceAddress = targetSensorType->registerToStoreModbusDeviceAddress;
+        newSensorEntity.writeRegistersCommand = targetSensorType->writeRegistersCommand;
+        newSensorEntity.applyAddressAfterPowerCycle = targetSensorType->applyAddressAfterPowerCycle;
         newSensorEntity.i2cAddress = targetSensorType->i2cAddress;
         newSensorEntity.chipType = targetSensorType->chipType;
         newSensorEntity.modbusRegisterConfigs = targetSensorType->modbusRegisterConfig;

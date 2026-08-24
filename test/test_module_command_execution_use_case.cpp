@@ -473,7 +473,7 @@ void test_ping_pin_copies_modbus_addressing_fields(void) {
     sensorType.protocol = SensorProtocol::MODBUS_PROTOCOL;
     sensorType.canScan = true;
     sensorType.modbusDeviceAddress = 1;
-    sensorType.modbusPingAddress = 0x0000;
+    sensorType.modbusPingAddress = 0x0009;
     sensorType.registerToStoreModbusDeviceAddress = 0x0200;
     sensorType.writeRegistersCommand = 6;
     sensorType.applyAddressAfterPowerCycle = true;
@@ -495,7 +495,7 @@ void test_ping_pin_copies_modbus_addressing_fields(void) {
     TEST_ASSERT_EQUAL(1, static_cast<int>(results.size()));
     TEST_ASSERT_EQUAL_STRING("Done", results[0].status.c_str());
     TEST_ASSERT_TRUE(sensorReader.scanned);
-    TEST_ASSERT_EQUAL_UINT16(0x0000, sensorReader.modbusPingAddress);
+    TEST_ASSERT_EQUAL_UINT16(0x0009, sensorReader.modbusPingAddress);
     TEST_ASSERT_EQUAL_UINT16(0x0200, sensorReader.registerToStoreModbusDeviceAddress);
     TEST_ASSERT_EQUAL_UINT8(6, sensorReader.writeRegistersCommand);
     TEST_ASSERT_TRUE(sensorReader.applyAddressAfterPowerCycle);
@@ -541,12 +541,27 @@ struct SensorModelStructureFixture {
         }
     }
 
+    /**
+     * Register a two-channel ModBus model in the catalog the use case reads.
+     *
+     * The four ModBus addressing fields carry non-default values on purpose: every path that
+     * builds a sensor from a model has to copy them, and a default value would make that
+     * assertion pass on its own.
+     *
+     * @param uid Uid the SetSensorModel command refers to.
+     * @param firstType Channel 1 sensor type.
+     * @param secondType Channel 2 sensor type.
+     */
     void addModbusType(const char* uid, const char* firstType, const char* secondType) {
         SensorType sensorType;
         sensorType.uid = uid;
         sensorType.name = "test_modbus_sensor";
         sensorType.protocol = SensorProtocol::MODBUS_PROTOCOL;
         sensorType.modbusDeviceAddress = 1;
+        sensorType.modbusPingAddress = 0x0009;
+        sensorType.registerToStoreModbusDeviceAddress = 0x0200;
+        sensorType.writeRegistersCommand = 16;
+        sensorType.applyAddressAfterPowerCycle = true;
 
         ModbusRegisterConfig first;
         first.channel = 1;
@@ -965,6 +980,46 @@ void test_ping_pin_still_sweeps_every_address_and_saves_nothing(void) {
     TEST_ASSERT_EQUAL(0, f.sensorReader.writeSensorAddressCallCount);
 }
 
+/**
+ * SetSensorModel builds the stored entity from the model, so the four ModBus addressing fields
+ * have to reach storage; zeros there send the address write into the broadcast fallbacks and the
+ * pre-scan ping to register 0x0000 (GDV1-3848).
+ */
+void test_set_sensor_model_copies_modbus_addressing_fields(void) {
+    SensorModelStructureFixture f;
+    f.addModbusType("model-air", "air_temp", "humidity");
+    f.sensorReader.answeringAddresses = {1};
+
+    auto results = f.useCase.executeCommands({SensorModelStructureFixture::setSensorModelCommand(
+        "cmd-3848-1", "model-air", 1)});
+
+    TEST_ASSERT_EQUAL_STRING("Done", results[0].status.c_str());
+    TEST_ASSERT_EQUAL(1, f.sensorRepository.saveCallCount);
+    TEST_ASSERT_EQUAL_UINT16(0x0009, f.sensorRepository.lastSavedSensor.modbusPingAddress);
+    TEST_ASSERT_EQUAL_UINT16(0x0200, f.sensorRepository.lastSavedSensor.registerToStoreModbusDeviceAddress);
+    TEST_ASSERT_EQUAL_UINT8(16, f.sensorRepository.lastSavedSensor.writeRegistersCommand);
+    TEST_ASSERT_TRUE(f.sensorRepository.lastSavedSensor.applyAddressAfterPowerCycle);
+}
+
+/**
+ * ScanSensors stores the entity it discovered, and it must carry the same four fields.
+ */
+void test_scan_sensors_copies_modbus_addressing_fields(void) {
+    SensorModelStructureFixture f;
+    f.addModbusType("model-air", "air_temp", "humidity");
+    f.sensorReader.answeringAddresses = {1};
+
+    auto results = f.useCase.executeCommands({SensorModelStructureFixture::pinCommand(
+        "cmd-3848-2", "ScanSensors", 1)});
+
+    TEST_ASSERT_EQUAL_STRING("Done", results[0].status.c_str());
+    TEST_ASSERT_EQUAL(1, f.sensorRepository.createOrUpdateSensorCallCount);
+    TEST_ASSERT_EQUAL_UINT16(0x0009, f.sensorRepository.lastCreatedOrUpdatedSensor.modbusPingAddress);
+    TEST_ASSERT_EQUAL_UINT16(0x0200, f.sensorRepository.lastCreatedOrUpdatedSensor.registerToStoreModbusDeviceAddress);
+    TEST_ASSERT_EQUAL_UINT8(16, f.sensorRepository.lastCreatedOrUpdatedSensor.writeRegistersCommand);
+    TEST_ASSERT_TRUE(f.sensorRepository.lastCreatedOrUpdatedSensor.applyAddressAfterPowerCycle);
+}
+
 extern "C" int run_module_command_execution_use_case_tests(void) {
     RUN_TEST(test_add_wifi_success);
     RUN_TEST(test_add_wifi_failure);
@@ -1000,5 +1055,7 @@ extern "C" int run_module_command_execution_use_case_tests(void) {
     RUN_TEST(test_scan_sensors_reports_error_when_the_device_cannot_be_moved);
     RUN_TEST(test_scan_sensors_still_reports_done_with_an_empty_list);
     RUN_TEST(test_ping_pin_still_sweeps_every_address_and_saves_nothing);
+    RUN_TEST(test_set_sensor_model_copies_modbus_addressing_fields);
+    RUN_TEST(test_scan_sensors_copies_modbus_addressing_fields);
     return 0;
 }
