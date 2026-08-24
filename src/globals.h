@@ -37,6 +37,7 @@
 #include "Core/Domain/UseCases/DeviceControl/ProcessDeviceStateUseCaseFactory.h"
 #include "Core/Domain/UseCases/DeviceControl/DeviceCommandExecutionUseCase.h"
 #include "Core/Domain/UseCases/ModuleCommand/ModuleCommandExecutionUseCase.h"
+#include "Core/Domain/UseCases/Sensors/ModbusAddressAllocator.h"
 #include "Core/Domain/UseCases/Sensors/SensorCommandUseCase.h"
 #include "Core/Domain/UseCases/Sensors/SensorPlausibilityUseCase.h"
 #include "Core/Domain/UseCases/Rules/EvaluateRulesUseCase.h"
@@ -215,6 +216,7 @@ RuleRepository ruleRepository(&ruleDao, &ntpTimeAdapter, &debugSystem, &mqttLogg
 
 SpiffsSensorDao sensorDao(&spiffsAdapter, &jsonConverter, &debugSystem, &mqttLogger);
 SensorRepository sensorRepository(&sensorDao, &debugSystem, &mqttLogger);
+ModbusAddressAllocator modbusAddressAllocator(&sensorRepository);
 
 SpiffsSensorTypeDao sensorTypeDao(&spiffsAdapter, &jsonConverter, &debugSystem, &mqttLogger);
 SensorTypeRepository sensorTypeRepository(&sensorTypeDao, &debugSystem, &mqttLogger);
@@ -357,7 +359,7 @@ RemoteModuleCommandReceiver remoteModuleCommandReceiver(&udpInboundDispatcher, &
 
 FirmwareUpdateRecoveryUseCase firmwareUpdateRecoveryUseCase(&diagnosticService, &moduleConfig, &settings, &pendingFirmwareUpdateStore, &mqttLogger, &debugSystem, &otaUpdateLog);
 
-ModuleCommandExecutionUseCase moduleCommandExecutionUseCase(&mqttLogger, &debugSystem, &ntpTimeAdapter, &firmwareRemoteUpdate, &arduinoAdapter, &sensorRepository, &sensorTypeRepository, &sensorReader, &moduleConfig, &settings, &hybridApiService, &clearModuleDataService, &moduleStructure, &sensorValueModel, &wifiManager, &ledUseCases, &rawBusAccessAdapter, &checkModuleDeletionUseCase, &remoteModuleCommandSender, &firmwareUpdateRecoveryUseCase);
+ModuleCommandExecutionUseCase moduleCommandExecutionUseCase(&mqttLogger, &debugSystem, &ntpTimeAdapter, &firmwareRemoteUpdate, &arduinoAdapter, &sensorRepository, &sensorTypeRepository, &sensorReader, &moduleConfig, &settings, &hybridApiService, &clearModuleDataService, &moduleStructure, &sensorValueModel, &wifiManager, &ledUseCases, &rawBusAccessAdapter, &checkModuleDeletionUseCase, &remoteModuleCommandSender, &firmwareUpdateRecoveryUseCase, &modbusAddressAllocator);
 
 CheckFirmwareUpdateOnStartupUseCase checkFirmwareUpdateOnStartupUseCase(
     &hybridApiService,
@@ -567,6 +569,7 @@ void initDependencies()
     syncRulesUseCase.setSettings(&settings);
     commandService.setRemoteSensorReceiver(&remoteSensorReceiver);
     moduleSetupService.setSensorStructureUseCase(&sensorStructureUseCase);
+    moduleSetupService.setModbusAddressAllocator(&modbusAddressAllocator);
     moduleCommandExecutionUseCase.setSensorStructureUseCase(&sensorStructureUseCase);
     syncSensorTypesUseCase.setVirtualSensorChannelsUseCase(&virtualSensorChannelsUseCase);
     syncSensorTypesUseCase.setRepublishModuleStructureUseCase(&republishModuleStructureUseCase);

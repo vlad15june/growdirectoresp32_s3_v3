@@ -15,6 +15,11 @@ public:
     bool lastStatusIsActive = false;
     bool lastStatusIsError = false;
 
+    int saveCallCount = 0;
+    SensorEntity lastSavedSensor;
+    int createOrUpdateSensorCallCount = 0;
+    SensorEntity lastCreatedOrUpdatedSensor;
+
     Utils::Optional<SensorEntity> get(const char* uid) override {
         for (const auto& sensor : sensors) {
             if (sensor.uid == uid) {
@@ -25,7 +30,11 @@ public:
     }
 
     std::vector<SensorEntity> getAll() override { return sensors; }
-    bool save(const SensorEntity&) override { return true; }
+    bool save(const SensorEntity& sensor) override {
+        saveCallCount++;
+        lastSavedSensor = sensor;
+        return true;
+    }
     int saveAll(const std::vector<SensorEntity>&) override { return 0; }
     bool remove(const char*) override { return true; }
     int removeAll() override { return 0; }
@@ -56,7 +65,11 @@ public:
         lastStatusIsError = isError;
         return true;
     }
-    bool createOrUpdateSensor(const SensorEntity&) override { return true; }
+    bool createOrUpdateSensor(const SensorEntity& sensor) override {
+        createOrUpdateSensorCallCount++;
+        lastCreatedOrUpdatedSensor = sensor;
+        return true;
+    }
     bool updateSensorStatusEnum(const char*, SensorStatusEnum) override { return true; }
     std::vector<SensorEntity> getSensorsByStatus(SensorStatusEnum) override { return {}; }
 };

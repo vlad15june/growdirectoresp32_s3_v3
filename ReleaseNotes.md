@@ -1,5 +1,19 @@
 # Release Notes
 
+## Version 2.18.8 (2026-08-21)
+
+### Added
+- **Soil Moisture, Temperature And EC Probe RK520-02 Supported**: GDV1-3788 The RK520-02 soil probe can now be picked as a sensor model and is found by a sensor scan, reporting soil temperature, soil moisture and soil electrical conductivity as three measurement channels of one sensor. A sensor model may now also declare a channel whose reading can legitimately fall below zero, so a sub-zero soil temperature is reported as the negative value it is instead of an implausibly large positive one that the plausibility check would have thrown away.
+
+### Changed
+- **A Sensor That Needs A Restart To Accept Its Address Is Given One**: GDV1-3788 A sensor model can now state that its device takes on a newly assigned address only after its power has been cut and restored. For such a sensor, when the module has written the address and the device does not answer on it, the module switches the sensor port off and on, waits for the sensor to come back and checks the address again, so setting the sensor up succeeds instead of being reported as a failed address change. Sensors that accept a new address straight away are never power-cycled, so setting them up takes no longer than before.
+
+### Fixed
+- **The Same Sensor Address Is Never Given To Two Sensors Of One Module**: GDV1-3831 The four sensor sockets of a module share two communication lines, so a sensor address belongs to the whole module rather than to one socket. Choosing a sensor model, or scanning for sensors, took the first address that answered and stored it without asking whether another sensor of the same module already held it, and reported success. Two sensors then held one address, and the next start of the module broke the tie by reprogramming one of the two devices, leaving the other sensor pointing at an address nothing answers on — with nothing in the log to show that it had happened. The module now knows which addresses it already holds: a sensor is only ever given a free address, preferably the one that belongs to its own socket; a device found only on an address that is already taken is moved to a free one and checked again before anything is saved, and a move that does not succeed is reported as an error instead of success. When two sensors are nevertheless found on the same address, the one whose address matches its own socket keeps it. Every address assignment, including the case of an address already in use, is now written to the sensor log.
+- **A Rule Condition Built On Several Sensors Uses All Of Them**: GDV1-3839 A condition of a sensor rule may list more than one sensor, but only the first of them was read: the others had no effect on when the rule switched its equipment, and the application showed a reading the rule had not actually acted upon. Every condition is now judged on the average of all the sensors it lists, so a group of sensors inside one condition behaves as a single averaged probe, and that same averaged reading is what the module reports as the value the rule acted on. A condition that checks whether a reading falls inside a range — wind direction, where an average has no meaning — keeps reading its first sensor as before.
+
+---
+
 ## Version 2.18.7 (2026-08-17)
 
 ### Fixed

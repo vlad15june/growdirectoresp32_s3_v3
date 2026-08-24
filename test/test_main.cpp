@@ -36,6 +36,7 @@ extern "C" int run_sync_sensor_types_use_case_tests(void);
 extern "C" int run_wifi_manager_tests(void);
 extern "C" int run_module_command_execution_use_case_tests(void);
 extern "C" int run_modbus_address_registers_tests(void);
+extern "C" int run_modbus_address_allocator_tests(void);
 extern "C" int run_ff_wildcard_broadcast_fallback_tests(void);
 extern "C" void run_remote_sensor_tests(void);
 extern "C" void run_device_command_tests(void);
@@ -55,6 +56,7 @@ extern "C" void run_module_to_module_reboot_tests(void);
 extern "C" void run_rule_dnf_combine_tests(void);
 extern "C" void run_rule_condition_hold_tests(void);
 extern "C" void run_rule_fired_condition_tests(void);
+extern "C" void run_rule_sensor_condition_average_tests(void);
 extern "C" int run_preventive_restart_use_case_tests(void);
 extern "C" void run_rule_operation_time_tests(void);
 extern "C" void run_rule_sensor_value_refresh_tests(void);
@@ -188,6 +190,8 @@ int main(void) {
     // Run tests for configurable Modbus address-management registers
     run_modbus_address_registers_tests();
 
+    run_modbus_address_allocator_tests();
+
     // Run tests for FF-wildcard broadcast fallback (WS12S, CWYW)
     run_ff_wildcard_broadcast_fallback_tests();
 
@@ -239,6 +243,8 @@ int main(void) {
 
     // Run tests for reporting the condition that actually fired (GDV1-3755)
     run_rule_fired_condition_tests();
+
+    run_rule_sensor_condition_average_tests();
 
     // Run tests for nightly preventive restart
     run_preventive_restart_use_case_tests();
