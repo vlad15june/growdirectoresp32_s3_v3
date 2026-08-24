@@ -340,6 +340,13 @@ public:
 
     /**
      * @brief Get all active rules that are in ON mode
+     *
+     * Rules being deleted and rules held by a protective shutdown are left out. The two calendar
+     * arrays are combined with OR, the same way EvaluateRulesUseCase::isRuleActiveNow combines
+     * them: the rule is kept when today matches daysOfWeek or daysOfMonth, and is dropped only
+     * when neither matches. An empty array carries no calendar restriction of its own. daysOfWeek
+     * holds tm_wday values, where 0 is Sunday; daysOfMonth holds tm_mday values.
+     *
      * @return Vector of active rules
      */
     std::vector<Rule> getActiveRules() override {
@@ -372,20 +379,19 @@ public:
                 continue;
             }
             
-            if (rule.mode == RuleMode::ON) {                
-                // Check day of week
-                if (!rule.daysOfWeek.empty()) {
-                    int today = timeinfo.tm_wday; // 0 is Sunday
-                    if (std::find(rule.daysOfWeek.begin(), rule.daysOfWeek.end(), today) == rule.daysOfWeek.end()) {
-                        continue; // Not a valid day of week
-                    }
-                }
-                
-                // Check day of month
-                if (!rule.daysOfMonth.empty()) {
+            if (rule.mode == RuleMode::ON) {
+                if (!rule.daysOfWeek.empty() || !rule.daysOfMonth.empty()) {
+                    int today = timeinfo.tm_wday;
                     int dayOfMonth = timeinfo.tm_mday;
-                    if (std::find(rule.daysOfMonth.begin(), rule.daysOfMonth.end(), dayOfMonth) == rule.daysOfMonth.end()) {
-                        continue; // Not a valid day of month
+
+                    bool dayMatches =
+                        std::find(rule.daysOfWeek.begin(), rule.daysOfWeek.end(), today) != rule.daysOfWeek.end();
+                    if (!dayMatches) {
+                        dayMatches =
+                            std::find(rule.daysOfMonth.begin(), rule.daysOfMonth.end(), dayOfMonth) != rule.daysOfMonth.end();
+                    }
+                    if (!dayMatches) {
+                        continue;
                     }
                 }
 
