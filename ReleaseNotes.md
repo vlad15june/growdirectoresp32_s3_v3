@@ -1,5 +1,15 @@
 # Release Notes
 
+## Version 2.18.9 (2026-08-26)
+
+### Fixed
+- **A Rule Set For Both Days Of The Week And Days Of The Month Runs On Either**: GDV1-3841 A schedule that named both the days of the week and the days of the month it should run on was only considered on a day that matched both lists at once, so a rule meant for Mondays and for the first of the month stayed idle unless the first fell on a Monday. Such a rule is now considered on any day that matches either list, which is what the specification and the previous generation of modules have always done.
+- **A Schedule Rule That Stops Applying Switches Its Equipment Off**: GDV1-3841 A rule that had switched its equipment on and then stopped applying — its dates passed, or it was switched off by hand — left that equipment running for good, while the application went on showing the rule as running. Any rule that leaves the set of applicable rules with its equipment powered now switches it off and reports why it stopped, telling a rule switched off by the user apart from one whose dates have passed. Cycling rules keep their own handling of the cycle they were in.
+- **A Sensor Chosen By Hand Is Addressed The Same Way As A Scanned One**: GDV1-3848 A sensor added by picking its model in the application was stored without the addressing information that its model carries, so the module announced its address to every device on the line at once instead of speaking to that one device, and looked for the sensor at the wrong place when checking whether it was still there. Picking a model by hand now stores the same addressing information that a sensor scan stores, so a sensor set up by hand is addressed and checked exactly like one that was found by a scan.
+- **Rainfall Returns To Zero After The Rain Stops**: GDV1-3847 The compact weather station has to be told how long to accumulate rainfall before starting the count again, and it was told only on a start that skipped the sensor scan. After an ordinary start it was never told, so the rainfall reading kept growing and never came back to zero once the rain had stopped. Sensors are now prepared on every start, once, after scanning and address assignment. As part of the same preparation the power of every sensor line is brought into a settled state straight away, where previously an ordinary start left all but the last checked line unpowered until the module noticed and recovered on its own. A module with such sensors takes about ten seconds longer to start up.
+
+---
+
 ## Version 2.18.8 (2026-08-21)
 
 ### Added
