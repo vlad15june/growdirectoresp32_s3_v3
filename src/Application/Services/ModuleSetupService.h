@@ -1203,6 +1203,15 @@ inline void ModuleSetupService::fillSensorModuleStructure(Node &node)
         log("SETUP: noScanSensors flag was set - skipping handleModbusAddressManagement");
     }
 
+    // Prepare sensors (including per-model register writes like the XF700A rainfall window)
+    // after scanning and address assignment, so the writes reach the final Modbus addresses
+    // and run on every setup pass, not only on the noScanSensors fast path.
+    if (sensorReader && sensorRepository)
+    {
+        auto sensorsToPrepare = sensorRepository->getAll();
+        sensorReader->prepareSensorsForReading(sensorsToPrepare);
+    }
+
     log("SETUP: Sensor module structure filled with %zu sensors", node.sensors.size());
 }
 
@@ -2029,11 +2038,8 @@ inline void ModuleSetupService::processSensorsFromRepository(Node &node)
             mqttManager->loop();
         }
 
-        if (sensorReader)
-        {
-            sensorReader->prepareSensorsForReading(sensorEntities);
-        }
-
+        // prepareSensorsForReading is invoked by fillSensorModuleStructure after this
+        // pass, on both the fast path and the normal scan path.
         settings->setNoScanSensors(false);
         return;
     }
