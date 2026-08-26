@@ -513,6 +513,24 @@ private:
         }
     }
 
+    /**
+     * @brief Release the device of every rule that has left the active set
+     *
+     * A rule that is no longer returned by getActiveRules is never evaluated again, so nothing
+     * else would switch its device off: the relay would stay closed for good. Any such rule whose
+     * device this use case had powered is driven OFF here, with isRuleTurnOnDevice cleared and a
+     * stop reason published - rule_manualy_off when the user switched the rule off, otherwise
+     * rule_off_by_date, which is what the calendar of the rule stopped matching.
+     *
+     * A rule switched off by the user also loses its stored STEP cycle counter: the counter dies
+     * with the run, whether the rule was running in this uptime or was already off when the module
+     * booted (GDV1-3811).
+     *
+     * LOOP and STEP rules that leave the active set for any other reason are left to
+     * deactivateInactiveCyclingRules, which owns their cycle bookkeeping.
+     *
+     * @param activeUids uids returned by getActiveRules in this evaluation cycle
+     */
     void deactivateDroppedRules(const std::set<std::string>& activeUids) {
         if (!_ruleRepository) {
             return;
@@ -520,16 +538,19 @@ private:
 
         std::vector<Rule> allRules = _ruleRepository->getAll();
         for (const auto& rule : allRules) {
-            if (rule.mode != RuleMode::OFF) {
-                continue;
-            }
             if (activeUids.count(rule.uid)) {
                 continue;
             }
 
-            // Switched off by the user - the stored counter dies with the run, whether the rule
-            // was running in this uptime or was already off when the module booted (GDV1-3811).
-            dropStepCycleOnce(rule);
+            bool switchedOffByUser = rule.mode == RuleMode::OFF;
+            bool cyclingRule = rule.ruleType == RuleType::LOOP || rule.ruleType == RuleType::STEP;
+            if (!switchedOffByUser && cyclingRule) {
+                continue;
+            }
+
+            if (switchedOffByUser) {
+                dropStepCycleOnce(rule);
+            }
 
             auto it = _ruleActiveStates.find(rule.uid);
             bool wasOn = it != _ruleActiveStates.end() && it->second.isDeviceOn();
@@ -537,15 +558,17 @@ private:
                 continue;
             }
 
-            log("EVALUATE_RULES: RULE_DEACTIVATED uid=%s deviceUid=%s reason=rule_manualy_off",
-                rule.uid.c_str(), rule.deviceUid.c_str());
+            const char* stopReason = switchedOffByUser ? "rule_manualy_off" : "rule_off_by_date";
+
+            log("EVALUATE_RULES: RULE_DEACTIVATED uid=%s deviceUid=%s reason=%s",
+                rule.uid.c_str(), rule.deviceUid.c_str(), stopReason);
 
             RuleEvaluationResult off(rule.uid, rule.ruleType, rule.version);
             off.workflowUid = rule.workflowUid;
             off.workflowVersion = rule.workflowVersion;
             off.state = DEVICE_STATE_OFF;
             off.isRuleTurnOnDevice = false;
-            off.ruleStopReason = "rule_manualy_off";
+            off.ruleStopReason = stopReason;
             off.sensorUid = rule.sensorUid;
             off.sensorValue = static_cast<float>(getSensorValue(rule.sensorUid));
             off.sensorValueLow = rule.valueLow;

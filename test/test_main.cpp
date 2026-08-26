@@ -62,6 +62,7 @@ extern "C" void run_rule_operation_time_tests(void);
 extern "C" void run_rule_sensor_value_refresh_tests(void);
 extern "C" void run_mqtt_inbound_size_guard_tests(void);
 extern "C" void run_rule_step_cycle_persistence_tests(void);
+extern "C" void run_rule_calendar_or_tests(void);
 extern "C" void run_vpd_channel_tests(void);
 extern "C" void run_sensor_service_tests(void);
 extern "C" int run_sensor_types_bulk_save_tests(void);
@@ -258,6 +259,8 @@ int main(void) {
 
     // Run tests for the STEP cycle counter surviving a reboot (GDV1-3811)
     run_rule_step_cycle_persistence_tests();
+
+    run_rule_calendar_or_tests();
 
     // Run tests for the computed VPD sensor channel (GDV1-3782)
     run_vpd_channel_tests();
