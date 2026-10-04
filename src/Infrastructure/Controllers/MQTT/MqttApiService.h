@@ -33,7 +33,9 @@ private:
     static constexpr const char* RULE_STATE_BY_UID_TOPIC = "hardware/rules/state/%s/%s";
     static constexpr const char* RULE_SENSOR_OFFLINE_TOPIC = "hardware/event/rule_sensor_offline/%s";
     
-    char _topicBuffer[128];
+    // Longest topic is "hardware/rules/state/<uid>/<rule-uid>"; 128 bytes has always been the
+    // size here and stays it.
+    static const size_t TOPIC_BUFFER_SIZE = 128;
     
     void log(const char* format, ...) {
         if (_logger != nullptr && _debugSystem != nullptr &&
@@ -49,21 +51,29 @@ private:
         }
     }
     
-    // Format a topic with the module UID
-    const char* formatTopic(const char* topicFormat) {
+    // Format a topic with the module UID into a buffer owned by the caller.
+    //
+    // The buffer is the caller's, not a member of this class: a member buffer with a returned
+    // pointer into it would be safe only while a single task publishes. Between formatTopic()
+    // and publish() the caller serialises a JSON document, and a second task formatting its own
+    // topic in that window would silently redirect the first one's payload to the wrong topic.
+    // Two tasks do publish through this object, on two cores - the control loop and the outbox
+    // network task - so the topic lives on the caller's stack for the whole
+    // format-serialise-publish sequence and cannot be shared with anyone.
+    bool formatTopic(char* out, size_t outSize, const char* topicFormat) {
         if (_moduleConfig == nullptr) {
             log("MQTT: formatTopic - ModuleConfig not available");
-            return nullptr;
+            return false;
         }
         
         const char* moduleUid = _moduleConfig->getModuleUid();
         if (moduleUid == nullptr || strlen(moduleUid) == 0) {
             log("MQTT: formatTopic - Module UID not available");
-            return nullptr;
+            return false;
         }
         
-        snprintf(_topicBuffer, sizeof(_topicBuffer), topicFormat, moduleUid);
-        return _topicBuffer;
+        snprintf(out, outSize, topicFormat, moduleUid);
+        return true;
     }
 
 public:
@@ -93,8 +103,8 @@ public:
             return false;
         }
         
-        const char* topic = formatTopic(MODULE_STRUCTURE_TOPIC);
-        if (topic == nullptr) {
+        char topic[TOPIC_BUFFER_SIZE];
+        if (!formatTopic(topic, sizeof(topic), MODULE_STRUCTURE_TOPIC)) {
             return false;
         }
         
@@ -119,8 +129,8 @@ public:
             return false;
         }
         
-        const char* topic = formatTopic(DIAGNOSTIC_TOPIC);
-        if (topic == nullptr) {
+        char topic[TOPIC_BUFFER_SIZE];
+        if (!formatTopic(topic, sizeof(topic), DIAGNOSTIC_TOPIC)) {
             return false;
         }
         
@@ -146,8 +156,8 @@ public:
             return false;
         }
         
-        const char* topic = formatTopic(UPDATE_TOPIC);
-        if (topic == nullptr) {
+        char topic[TOPIC_BUFFER_SIZE];
+        if (!formatTopic(topic, sizeof(topic), UPDATE_TOPIC)) {
             return false;
         }
         
@@ -173,8 +183,8 @@ public:
             return false;
         }
         
-        const char* topic = formatTopic(DEVICE_COMMAND_TOPIC);
-        if (topic == nullptr) {
+        char topic[TOPIC_BUFFER_SIZE];
+        if (!formatTopic(topic, sizeof(topic), DEVICE_COMMAND_TOPIC)) {
             return false;
         }
         
@@ -200,8 +210,8 @@ public:
             return false;
         }
         
-        const char* topic = formatTopic(COMMAND_RESULT_TOPIC);
-        if (topic == nullptr) {
+        char topic[TOPIC_BUFFER_SIZE];
+        if (!formatTopic(topic, sizeof(topic), COMMAND_RESULT_TOPIC)) {
             return false;
         }
         
@@ -227,8 +237,8 @@ public:
             return false;
         }
 
-        const char* topic = formatTopic(RAW_IO_RESULT_TOPIC);
-        if (topic == nullptr) {
+        char topic[TOPIC_BUFFER_SIZE];
+        if (!formatTopic(topic, sizeof(topic), RAW_IO_RESULT_TOPIC)) {
             return false;
         }
 
@@ -249,8 +259,8 @@ public:
             return false;
         }
         
-        const char* topic = formatTopic(RULE_STATE_TOPIC);
-        if (topic == nullptr) {
+        char topic[TOPIC_BUFFER_SIZE];
+        if (!formatTopic(topic, sizeof(topic), RULE_STATE_TOPIC)) {
             return false;
         }
         
@@ -281,11 +291,12 @@ public:
             return false;
         }
 
-        snprintf(_topicBuffer, sizeof(_topicBuffer), RULE_STATE_BY_UID_TOPIC, moduleUid, uid);
+        char topic[TOPIC_BUFFER_SIZE];
+        snprintf(topic, sizeof(topic), RULE_STATE_BY_UID_TOPIC, moduleUid, uid);
 
-        log("MQTT: Publishing rule state command to topic: %s", _topicBuffer);
+        log("MQTT: Publishing rule state command to topic: %s", topic);
 
-        if (!_mqttManager->publish(_topicBuffer, msg)) {
+        if (!_mqttManager->publish(topic, msg)) {
             log("MQTT: Failed to publish by-uid rule state command");
             return false;
         }
@@ -299,8 +310,8 @@ public:
             return false;
         }
 
-        const char* topic = formatTopic(RULE_SENSOR_OFFLINE_TOPIC);
-        if (topic == nullptr) {
+        char topic[TOPIC_BUFFER_SIZE];
+        if (!formatTopic(topic, sizeof(topic), RULE_SENSOR_OFFLINE_TOPIC)) {
             return false;
         }
 

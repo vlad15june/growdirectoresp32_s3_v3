@@ -28,6 +28,10 @@ public:
         return _devices;
     }
 
+    const std::vector<Device*>& allDevices() override {
+        return _devices;
+    }
+
     int getDeviceCount() const override {
         return static_cast<int>(_devices.size());
     }

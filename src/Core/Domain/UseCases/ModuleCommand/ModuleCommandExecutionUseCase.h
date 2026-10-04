@@ -18,6 +18,7 @@
 #include "Core/Domain/Interfaces/UseCases/IFirmwareUpdateRecoveryUseCase.h"
 #include "Core/Domain/Interfaces/UseCases/ISensorStructureUseCase.h"
 #include "Core/Domain/Interfaces/UseCases/IModbusAddressAllocator.h"
+#include "Core/Domain/Interfaces/UseCases/SensorTypes/ISyncSensorTypesUseCase.h"
 #include "Core/Domain/Interfaces/Adapters/Sensors/IRawBusAccess.h"
 #include "Core/Domain/Interfaces/Udp/IRemoteModuleCommandSender.h"
 #include "Core/Utils/HexCodec.h"
@@ -62,6 +63,10 @@ private:
     IFirmwareUpdateRecoveryUseCase *firmwareUpdateRecoveryUseCase = nullptr;
     ISensorStructureUseCase *sensorStructureUseCase = nullptr;
     IModbusAddressAllocator *modbusAddressAllocator = nullptr;
+    // Stores the catalog a ScanSensors command fetched; without it the command stores it itself.
+    ISyncSensorTypesUseCase *catalogSync = nullptr;
+    // Raised while runComplexInline() composes a command on its caller's stack.
+    bool composingInline = false;
     static const unsigned long commandMaxAgeSeconds = 300;
     static const unsigned long rawReadTimeoutMs = 1000;
 
@@ -74,6 +79,14 @@ public:
     void setRemoteModuleCommandSender(IRemoteModuleCommandSender* sender) { remoteModuleCommandSender = sender; }
 
     void setSensorStructureUseCase(ISensorStructureUseCase* useCase) { sensorStructureUseCase = useCase; }
+
+    /**
+     * @brief The use case a ScanSensors command hands the catalog it fetched to.
+     *
+     * The synchronization merges it and writes it through the storage task, as it writes the
+     * catalogs it fetches itself; the command goes on to its scan once the catalog has landed.
+     */
+    void setSyncSensorTypesUseCase(ISyncSensorTypesUseCase* useCase) { catalogSync = useCase; }
 
     /**
      * @brief Execute module commands from JSON options
@@ -156,16 +169,30 @@ public:
                 switch (commandEnum) {
                     case ModuleCommandEnum::ADD_WIFI:
                     {
+                        // Inline, like BlinkingStart: AddWifi waits for nothing - no bus, no
+                        // network. It writes EEPROM, SPIFFS and the WiFiMulti list, all of which
+                        // the control loop also writes, so executing it anywhere else would
+                        // create a second writer for no wait saved.
                         auto result = handleAddWifi(moduleCommand);
                         status = result.first;
                         errorMessage = result.second;
                         break;
                     }
                     case ModuleCommandEnum::UPDATE_FIRMWARE:
+                    case ModuleCommandEnum::PING_PIN:
+                    case ModuleCommandEnum::SET_SENSOR_MODEL:
+                    case ModuleCommandEnum::SCAN_SENSORS:
+                    case ModuleCommandEnum::DELETE_MODULE:
                     {
-                        auto result = handleUpdateFirmware(moduleCommand);
-                        status = result.first;
-                        errorMessage = result.second;
+                        // The complex commands run through the same prepare/execute/finish steps
+                        // the asynchronous path uses, composed inline: one copy of the logic.
+                        // CommandService routes these commands to the acquisition and network
+                        // tasks and does not reach this case on the device; the inline shape
+                        // serves a caller that needs the answer on its own call stack.
+                        ModuleCommandExecutionResult r = runComplexInline(moduleCommand);
+                        status = getModuleCommandStatus(r.status);
+                        errorMessage = r.errorMessage;
+                        cmdResult = r.result;
                         break;
                     }
                     case ModuleCommandEnum::BLINKING_START:
@@ -189,44 +216,12 @@ public:
                         errorMessage = success ? "" : "Reboot command failed";
                         break;
                     }
-                    case ModuleCommandEnum::PING_PIN:
-                    {
-                        auto result = handlePingPin(moduleCommand);
-                        status = result.first;
-                        errorMessage = result.second;
-                        break;
-                    }
-                    case ModuleCommandEnum::SET_SENSOR_MODEL:
-                    {
-                        auto result = handleSetSensorModel(moduleCommand);
-                        status = result.first;
-                        errorMessage = result.second;
-                        log(DebugFeatures::MODULE_COMMAND_DEBUG,
-                            "ModuleCommandUseCase: SET_SENSOR_MODEL executed - status: %s, error: %s",
-                            getModuleCommandStatusName(status), errorMessage.c_str());
-                        break;
-                    }
                     case ModuleCommandEnum::DELETE_SENSORS:
                     {
                         auto result = handleDeleteSensors(moduleCommand);
                         status = result.status;
                         errorMessage = result.errorMessage;
                         cmdResult = result.result;
-                        break;
-                    }
-                    case ModuleCommandEnum::SCAN_SENSORS:
-                    {
-                        auto result = handleScanSensors(moduleCommand);
-                        status = result.status;
-                        errorMessage = result.errorMessage;
-                        cmdResult = result.result;
-                        break;
-                    }
-                    case ModuleCommandEnum::DELETE_MODULE:
-                    {
-                        auto result = handleDeleteModule(moduleCommand);
-                        status = result.first;
-                        errorMessage = result.second;
                         break;
                     }
                     case ModuleCommandEnum::UNKNOWN:
@@ -266,7 +261,761 @@ public:
         }
     }
 
+    // --- The complex commands, split by the task that runs each part ---------------------------
+    //
+    // The statuses and error messages these produce are exactly the ones an inline
+    // handler produces: the backend sees the same reports whichever task earns them.
+
+    bool prepareComplexCommand(const ModuleCommandDto &moduleCommand,
+                               ComplexCommandWork &work,
+                               ModuleCommandExecutionResult &immediate) override
+    {
+        work = ComplexCommandWork();
+        work.command = moduleCommand;
+
+        // The same age gate executeCommands() applies, kept here because the asynchronous path
+        // enters through this method: a command must not become executable by taking the other
+        // road in.
+        if (!moduleCommand.createdAt.empty() && !checkCommandTime(moduleCommand.createdAt))
+        {
+            log(DebugFeatures::MODULE_COMMAND_DEBUG,
+                "MODULE_COMMAND: command expired uid=%s createdAt=%s",
+                moduleCommand.uid.c_str(), moduleCommand.createdAt.c_str());
+            immediate = makeResult(moduleCommand.uid, ModuleCommandStatus::ERROR, "Command is expired");
+            return false;
+        }
+
+        switch (getModuleCommandEnum(moduleCommand.command)) {
+            case ModuleCommandEnum::UPDATE_FIRMWARE:
+            {
+                if (moduleCommand.options.empty())
+                {
+                    immediate = makeResult(moduleCommand.uid, ModuleCommandStatus::ERROR, "Missing options");
+                    return false;
+                }
+                std::string url = extractJsonValue(moduleCommand.options, "url");
+                std::string version = extractJsonValue(moduleCommand.options, "version");
+                if (url.empty() || version.empty())
+                {
+                    immediate = makeResult(moduleCommand.uid, ModuleCommandStatus::ERROR,
+                                           "Missing url or version in options");
+                    return false;
+                }
+                log(DebugFeatures::MODULE_COMMAND_DEBUG,
+                    "ModuleCommandUseCase: Firmware update - URL: %s, Version: %s, UID: %s",
+                    url.c_str(), version.c_str(), moduleCommand.uid.c_str());
+
+                // The same question the boot check asks, on the door a signalled command comes
+                // through: while the running image is on probation the download would write the
+                // slot the bootloader falls back to, and this boot has not yet earned the right
+                // to spend it. The update waits here exactly as it waits at boot - in the file,
+                // started by the control loop once the image is confirmed - and the server is
+                // told what it is told on every other path that takes an update on: in progress.
+                if (firmwareUpdateRecoveryUseCase &&
+                    firmwareUpdateRecoveryUseCase->isRunningImageOnProbation())
+                {
+                    if (firmwareUpdateRecoveryUseCase->holdUntilImageConfirmed(moduleCommand))
+                    {
+                        immediate = makeResult(moduleCommand.uid, ModuleCommandStatus::IN_PROGRESS);
+                        return false;
+                    }
+
+                    // One update is held per boot and this is not it. Refused rather than
+                    // downloaded: the slot is the same slot. Unlike the boot check, this path
+                    // owes the server an outcome for every command of the list it answers, so
+                    // the refusal is named instead of left silent.
+                    immediate = makeResult(moduleCommand.uid, ModuleCommandStatus::ERROR,
+                                           "Another firmware update is waiting for the running "
+                                           "image to be confirmed");
+                    return false;
+                }
+
+                // A link the module already reports as down does not get a download attempt: the
+                // update is kept for the next boot and the module restarts into it. Decided here,
+                // in the step that runs on the control loop, because keeping it writes the
+                // settings, the pending-update file and the requested module mode - the state
+                // this step owns. The download task is never handed work that cannot start.
+                if (firmwareUpdateRecoveryUseCase &&
+                    firmwareUpdateRecoveryUseCase->isHttpConnectionDown() &&
+                    firmwareUpdateRecoveryUseCase->keepForNextBoot(moduleCommand))
+                {
+                    immediate = makeResult(moduleCommand.uid, ModuleCommandStatus::IN_PROGRESS);
+                    return false;
+                }
+
+                work.onBus = false;
+                return true;
+            }
+            case ModuleCommandEnum::DELETE_MODULE:
+            {
+                log(DebugFeatures::MODULE_COMMAND_DEBUG,
+                    "ModuleCommandUseCase: Processing DeleteModule command - uid: %s",
+                    moduleCommand.uid.c_str());
+                if (!checkModuleDeletionUseCase)
+                {
+                    logError("ModuleCommandUseCase: CheckModuleDeletionUseCase not available for module deletion verification");
+                    immediate = makeResult(moduleCommand.uid, ModuleCommandStatus::ERROR,
+                                           "Deletion check use case not available");
+                    return false;
+                }
+                work.onBus = false;
+                return true;
+            }
+            case ModuleCommandEnum::PING_PIN:
+            {
+                if (moduleCommand.options.empty())
+                {
+                    immediate = makeResult(moduleCommand.uid, ModuleCommandStatus::ERROR, "Missing options");
+                    return false;
+                }
+                log(DebugFeatures::MODULE_COMMAND_DEBUG,
+                    "ModuleCommandUseCase: PingPin options: %s", moduleCommand.options.c_str());
+
+                int pin = convertPinFromJson(extractJsonIntValue(moduleCommand.options, "pin"));
+                if (pin < 0 || pin >= moduleConfig->getSensorPinCount())
+                {
+                    immediate = makeResult(moduleCommand.uid, ModuleCommandStatus::ERROR,
+                                           "Missing or invalid pin in options");
+                    return false;
+                }
+                if (!sensorTypeRepository || !sensorReader)
+                {
+                    log(DebugFeatures::MODULE_COMMAND_DEBUG,
+                        "ModuleCommandUseCase: Sensor repository or reader not available for PingPin");
+                    immediate = makeResult(moduleCommand.uid, ModuleCommandStatus::ERROR,
+                                           "Sensor service not available");
+                    return false;
+                }
+
+                // Snapshotted here, on the control loop: the repository must not be read from the
+                // acquisition task. The whole catalog travels, and the scan tries the types it
+                // marks as scannable - counted here, because a pin ping with nothing to try is
+                // answered now rather than by an empty pass on the line.
+                SensorTypeCatalog catalog = sensorTypeRepository->catalogSnapshot();
+                int scannableCount = 0;
+                for (const auto &sensorType : *catalog)
+                {
+                    if (sensorType.canScan)
+                    {
+                        scannableCount++;
+                    }
+                }
+                if (scannableCount == 0)
+                {
+                    log(DebugFeatures::MODULE_COMMAND_DEBUG,
+                        "ModuleCommandUseCase: No scannable sensor types available for scanning");
+                    immediate = makeResult(moduleCommand.uid, ModuleCommandStatus::ERROR,
+                                           "No sensor types available");
+                    return false;
+                }
+
+                log(DebugFeatures::MODULE_COMMAND_DEBUG,
+                    "ModuleCommandUseCase: PingPin - got %d scannable sensor type(s)",
+                    scannableCount);
+
+                work.onBus = true;
+                work.pin = pin;
+                work.sensorTypes = catalog;
+                return true;
+            }
+            case ModuleCommandEnum::SET_SENSOR_MODEL:
+            {
+                if (moduleCommand.options.empty())
+                {
+                    immediate = makeResult(moduleCommand.uid, ModuleCommandStatus::ERROR, "Missing options");
+                    return false;
+                }
+                log(DebugFeatures::MODULE_COMMAND_DEBUG,
+                    "ModuleCommandUseCase: SetSensorModel options: %s", moduleCommand.options.c_str());
+
+                int pin = convertPinFromJson(extractJsonIntValue(moduleCommand.options, "pin"));
+                std::string modelUid = extractJsonValue(moduleCommand.options, "uid");
+
+                if ((pin < 0 || pin >= moduleConfig->getSensorPinCount()) || modelUid.empty())
+                {
+                    immediate = makeResult(moduleCommand.uid, ModuleCommandStatus::ERROR,
+                                           "Missing pin or uid in options");
+                    return false;
+                }
+                if (!sensorTypeRepository || !sensorReader || !sensorRepository || !moduleConfig ||
+                    !modbusAddressAllocator)
+                {
+                    log(DebugFeatures::MODULE_COMMAND_DEBUG,
+                        "ModuleCommandUseCase: Sensor services not available for SetSensorModel");
+                    immediate = makeResult(moduleCommand.uid, ModuleCommandStatus::ERROR,
+                                           "Sensor service not available");
+                    return false;
+                }
+
+                log(DebugFeatures::MODULE_COMMAND_DEBUG,
+                    "ModuleCommandUseCase: SetSensorModel command - Pin: %d, ModelUID: %s",
+                    pin, modelUid.c_str());
+
+                // One type, looked up by the uid the command names: the whole catalog is walked
+                // to find it, and only the one found is held.
+                SensorTypeCatalog catalog = sensorTypeRepository->catalogSnapshot();
+                const SensorType* targetSensorType = nullptr;
+                for (const auto &sensorType : *catalog)
+                {
+                    if (sensorType.uid == modelUid)
+                    {
+                        targetSensorType = &sensorType;
+                        break;
+                    }
+                }
+                if (!targetSensorType)
+                {
+                    log(DebugFeatures::MODULE_COMMAND_DEBUG,
+                        "ModuleCommandUseCase: Sensor type with UID %s not found", modelUid.c_str());
+                    immediate = makeResult(moduleCommand.uid, ModuleCommandStatus::ERROR,
+                                           "Sensor type not found");
+                    return false;
+                }
+
+                std::string moduleUid = moduleConfig->getModuleUid();
+                char pinStr[3];
+                sprintf(pinStr, "%02d", pin);
+                std::string generatedSensorUid = moduleUid + "." + pinStr;
+
+                log(DebugFeatures::MODULE_COMMAND_DEBUG,
+                    "ModuleCommandUseCase: Generated sensor UID: %s", generatedSensorUid.c_str());
+
+                SensorEntity newSensorEntity;
+                newSensorEntity.uid = generatedSensorUid;
+                newSensorEntity.pin = pin;
+                newSensorEntity.sensorType = targetSensorType->name;
+                newSensorEntity.model = targetSensorType->name;
+                newSensorEntity.protocol = targetSensorType->getProtocolString();
+                newSensorEntity.sensorTypeUid = targetSensorType->uid;
+                newSensorEntity.modbusDeviceAddress = targetSensorType->modbusDeviceAddress;
+                newSensorEntity.baudRate = targetSensorType->baudRate;
+                newSensorEntity.modbusPingAddress = targetSensorType->modbusPingAddress;
+                newSensorEntity.registerToStoreModbusDeviceAddress = targetSensorType->registerToStoreModbusDeviceAddress;
+                newSensorEntity.writeRegistersCommand = targetSensorType->writeRegistersCommand;
+                newSensorEntity.applyAddressAfterPowerCycle = targetSensorType->applyAddressAfterPowerCycle;
+                newSensorEntity.i2cAddress = targetSensorType->i2cAddress;
+                newSensorEntity.chipType = targetSensorType->chipType;
+                newSensorEntity.modbusRegisterConfigs = targetSensorType->modbusRegisterConfig;
+                newSensorEntity.i2cRegisterConfigs = targetSensorType->i2cRegisterConfig;
+                newSensorEntity.isActive = true;
+                newSensorEntity.isError = false;
+                newSensorEntity.status = SensorStatusEnum::SENSOR_STATUS_ADDED;
+
+                work.onBus = true;
+                work.pin = pin;
+                work.sensorToVerify = newSensorEntity;
+                // Read here, on the loop that owns the repository; the resolution on the bus task
+                // works from this snapshot. The entity being configured is left out of it, so a
+                // sensor that is being given a new model does not count as its own competitor.
+                work.occupiedModbusAddresses =
+                    modbusAddressAllocator->occupiedAddresses(generatedSensorUid);
+                return true;
+            }
+            case ModuleCommandEnum::SCAN_SENSORS:
+            {
+                if (moduleCommand.options.empty())
+                {
+                    immediate = makeResult(moduleCommand.uid, ModuleCommandStatus::ERROR, "Missing options");
+                    return false;
+                }
+                log(DebugFeatures::MODULE_COMMAND_DEBUG,
+                    "ModuleCommandUseCase: ScanSensors options: %s", moduleCommand.options.c_str());
+
+                int pin = convertPinFromJson(extractJsonIntValue(moduleCommand.options, "pin"));
+                if (pin < 0 || pin >= moduleConfig->getSensorPinCount())
+                {
+                    immediate = makeResult(moduleCommand.uid, ModuleCommandStatus::ERROR,
+                                           "Missing or invalid pin in options");
+                    return false;
+                }
+                if (!sensorTypeRepository || !sensorReader || !moduleConfig || !modbusAddressAllocator)
+                {
+                    log(DebugFeatures::MODULE_COMMAND_DEBUG,
+                        "ModuleCommandUseCase: Sensor services not available for ScanSensors");
+                    immediate = makeResult(moduleCommand.uid, ModuleCommandStatus::ERROR,
+                                           "Sensor service not available");
+                    return false;
+                }
+
+                SensorTypeCatalog catalog = sensorTypeRepository->catalogSnapshot();
+                if (catalog->empty())
+                {
+                    log(DebugFeatures::MODULE_COMMAND_DEBUG,
+                        "ModuleCommandUseCase: No sensor types in repository, fetching from server");
+                    if (hybridApiService)
+                    {
+                        // The catalog fetch is network work; the scan that follows is bus work.
+                        // The chain is expressed by finishComplexCommand() handing back nextWork.
+                        work.onBus = false;
+                        work.fetchCatalog = true;
+                        work.pin = pin;
+                        return true;
+                    }
+                    log(DebugFeatures::MODULE_COMMAND_DEBUG,
+                        "ModuleCommandUseCase: No sensor types available for scanning after sync");
+                    immediate = makeResult(moduleCommand.uid, ModuleCommandStatus::ERROR,
+                                           "No sensor types available");
+                    return false;
+                }
+
+                work.onBus = true;
+                work.pin = pin;
+                work.sensorTypes = catalog;
+                work.moduleUid = moduleConfig->getModuleUid();
+                work.occupiedModbusAddresses = occupancyForScan(work.moduleUid, pin);
+                return true;
+            }
+            default:
+                immediate = makeResult(moduleCommand.uid, ModuleCommandStatus::ERROR, "Unknown command");
+                return false;
+        }
+    }
+
+    ComplexCommandOutcome executeBusWork(const ComplexCommandWork &work) override
+    {
+        ComplexCommandOutcome outcome;
+
+        switch (getModuleCommandEnum(work.command.command)) {
+            case ModuleCommandEnum::PING_PIN:
+            {
+                log(DebugFeatures::MODULE_COMMAND_DEBUG,
+                    "ModuleCommandUseCase: PingPin command - scanning pin %d", work.pin);
+
+                for (const auto &sensorType : work.candidates())
+                {
+                    // A pin ping tries what the catalog says can be scanned for; the rest of it
+                    // has no scan to answer.
+                    if (!sensorType.canScan)
+                    {
+                        continue;
+                    }
+
+                    SensorEntity tempSensor;
+                    tempSensor.pin = work.pin;
+                    tempSensor.sensorType = sensorType.name;
+                    tempSensor.model = sensorType.name;
+                    tempSensor.protocol = sensorType.getProtocolString();
+                    tempSensor.modbusDeviceAddress = sensorType.modbusDeviceAddress;
+                    tempSensor.baudRate = sensorType.baudRate;
+                    tempSensor.modbusPingAddress = sensorType.modbusPingAddress;
+                    tempSensor.registerToStoreModbusDeviceAddress = sensorType.registerToStoreModbusDeviceAddress;
+                    tempSensor.writeRegistersCommand = sensorType.writeRegistersCommand;
+                    tempSensor.applyAddressAfterPowerCycle = sensorType.applyAddressAfterPowerCycle;
+                    tempSensor.i2cAddress = sensorType.i2cAddress;
+                    tempSensor.chipType = sensorType.chipType;
+                    tempSensor.modbusRegisterConfigs = sensorType.modbusRegisterConfig;
+                    tempSensor.i2cRegisterConfigs = sensorType.i2cRegisterConfig;
+
+                    if (sensorReader->scanSensor(tempSensor))
+                    {
+                        log(DebugFeatures::MODULE_COMMAND_DEBUG,
+                            "ModuleCommandUseCase: Found %s sensor on pin %d",
+                            sensorType.name.c_str(), work.pin);
+                        outcome.status = ModuleCommandStatus::DONE;
+                        outcome.detected = true;
+                        return outcome;
+                    }
+
+                    log(DebugFeatures::MODULE_COMMAND_DEBUG,
+                        "ModuleCommandUseCase: Sensor not found at default address, scanning range 0x%02X-0x%02X",
+                        MODBUS_ADDRESS_MIN, MODBUS_ADDRESS_MAX);
+
+                    for (int address = MODBUS_ADDRESS_MIN; address <= MODBUS_ADDRESS_MAX; address++)
+                    {
+                        tempSensor.modbusDeviceAddress = address;
+                        if (sensorReader->scanSensor(tempSensor))
+                        {
+                            log(DebugFeatures::MODULE_COMMAND_DEBUG,
+                                "ModuleCommandUseCase: Found %s sensor on pin %d at address 0x%02X",
+                                sensorType.name.c_str(), work.pin, address);
+                            outcome.status = ModuleCommandStatus::DONE;
+                            outcome.detected = true;
+                            return outcome;
+                        }
+                    }
+                }
+
+                log(DebugFeatures::MODULE_COMMAND_DEBUG,
+                    "ModuleCommandUseCase: No sensor detected on pin %d", work.pin);
+                outcome.status = ModuleCommandStatus::ERROR;
+                outcome.errorMessage = "No sensor detected on pin";
+                return outcome;
+            }
+            case ModuleCommandEnum::SET_SENSOR_MODEL:
+            {
+                SensorEntity sensor = work.sensorToVerify;
+
+                auto resolution = resolveModbusAddress(sensor, work.occupiedModbusAddresses);
+                bool sensorDetected = resolution.first;
+
+                outcome.detected = sensorDetected;
+                outcome.sensor = sensor;
+                outcome.status = sensorDetected ? ModuleCommandStatus::DONE : ModuleCommandStatus::ERROR;
+                if (!sensorDetected)
+                {
+                    // A named message means the device answered but could not be given an address
+                    // of its own; an empty one means nothing answered anywhere, which is the case
+                    // this command reported before the allocator existed.
+                    outcome.errorMessage = resolution.second.empty()
+                        ? std::string("Sensor not detected on specified pin")
+                        : resolution.second;
+                    log(DebugFeatures::MODULE_COMMAND_DEBUG,
+                        "ModuleCommandUseCase: Sensor %s not saved on pin %d - %s",
+                        sensor.sensorType.c_str(), work.pin, outcome.errorMessage.c_str());
+                }
+                return outcome;
+            }
+            case ModuleCommandEnum::SCAN_SENSORS:
+            {
+                log(DebugFeatures::MODULE_COMMAND_DEBUG,
+                    "ModuleCommandUseCase: ScanSensors command - scanning pin %d", work.pin);
+
+                for (const auto &sensorType : work.candidates())
+                {
+                    SensorEntity tempSensor;
+                    tempSensor.pin = work.pin;
+                    tempSensor.sensorType = sensorType.name;
+                    tempSensor.model = sensorType.name;
+                    tempSensor.protocol = sensorType.getProtocolString();
+                    tempSensor.sensorTypeUid = sensorType.uid;
+                    tempSensor.modbusDeviceAddress = sensorType.modbusDeviceAddress;
+                    tempSensor.baudRate = sensorType.baudRate;
+                    tempSensor.modbusPingAddress = sensorType.modbusPingAddress;
+                    tempSensor.registerToStoreModbusDeviceAddress = sensorType.registerToStoreModbusDeviceAddress;
+                    tempSensor.writeRegistersCommand = sensorType.writeRegistersCommand;
+                    tempSensor.applyAddressAfterPowerCycle = sensorType.applyAddressAfterPowerCycle;
+                    tempSensor.i2cAddress = sensorType.i2cAddress;
+                    tempSensor.chipType = sensorType.chipType;
+                    tempSensor.modbusRegisterConfigs = sensorType.modbusRegisterConfig;
+                    tempSensor.i2cRegisterConfigs = sensorType.i2cRegisterConfig;
+
+                    char pinStr[3];
+                    sprintf(pinStr, "%02d", work.pin);
+                    tempSensor.uid = work.moduleUid + "." + pinStr;
+
+                    log(DebugFeatures::MODULE_COMMAND_DEBUG,
+                        "ModuleCommandUseCase: Trying sensor type %s on pin %d",
+                        sensorType.name.c_str(), work.pin);
+
+                    auto resolution = resolveModbusAddress(tempSensor, work.occupiedModbusAddresses);
+
+                    if (!resolution.first)
+                    {
+                        if (!resolution.second.empty())
+                        {
+                            // The device is there and cannot be given an address of its own:
+                            // saying so beats trying the next model on a line with a collision.
+                            log(DebugFeatures::MODULE_COMMAND_DEBUG,
+                                "ModuleCommandUseCase: Sensor type %s on pin %d not saved - %s",
+                                sensorType.name.c_str(), work.pin, resolution.second.c_str());
+                            outcome.status = ModuleCommandStatus::ERROR;
+                            outcome.errorMessage = resolution.second;
+                            return outcome;
+                        }
+
+                        continue;
+                    }
+
+                    log(DebugFeatures::MODULE_COMMAND_DEBUG,
+                        "ModuleCommandUseCase: Found %s sensor on pin %d at address 0x%02X",
+                        sensorType.name.c_str(), work.pin, tempSensor.modbusDeviceAddress);
+                    outcome.status = ModuleCommandStatus::DONE;
+                    outcome.detected = true;
+                    outcome.sensor = tempSensor;
+                    return outcome;
+                }
+
+                log(DebugFeatures::MODULE_COMMAND_DEBUG,
+                    "ModuleCommandUseCase: No sensor detected on pin %d", work.pin);
+                outcome.status = ModuleCommandStatus::DONE;
+                outcome.detected = false;
+                return outcome;
+            }
+            default:
+                outcome.status = ModuleCommandStatus::ERROR;
+                outcome.errorMessage = "Not a bus command";
+                return outcome;
+        }
+    }
+
+    ComplexCommandOutcome executeNetworkWork(const ComplexCommandWork &work) override
+    {
+        ComplexCommandOutcome outcome;
+
+        if (work.fetchCatalog)
+        {
+            outcome.fetchedTypes = fetchSensorTypesForScan();
+            outcome.status = ModuleCommandStatus::DONE;
+            if (outcome.fetchedTypes.empty())
+            {
+                log(DebugFeatures::MODULE_COMMAND_DEBUG,
+                    "ModuleCommandUseCase: Server returned no sensor types");
+            }
+            return outcome;
+        }
+
+        switch (getModuleCommandEnum(work.command.command)) {
+            case ModuleCommandEnum::UPDATE_FIRMWARE:
+            {
+                if (!firmwareUpdater)
+                {
+                    log(DebugFeatures::MODULE_COMMAND_DEBUG,
+                        "ModuleCommandUseCase: Firmware updater not available");
+                    outcome.status = ModuleCommandStatus::ERROR;
+                    outcome.errorMessage = "Firmware updater not available";
+                    return outcome;
+                }
+
+                std::string url = extractJsonValue(work.command.options, "url");
+                // Optional field: an empty value means the command carried no checksum, and the
+                // image is installed the way it was before the field existed.
+                std::string md5 = extractJsonValue(work.command.options, "md5");
+                outcome.networkOk = firmwareUpdater->updateFirmwareFromURL(url.c_str(), md5.c_str());
+                outcome.firmwareUpdateStatus = firmwareUpdater->getLastUpdateStatus();
+                outcome.firmwareHttpCode = firmwareUpdater->getLastHttpCode();
+
+                if (outcome.networkOk)
+                {
+                    log(DebugFeatures::MODULE_COMMAND_DEBUG,
+                        "ModuleCommandUseCase: Firmware update completed successfully");
+                    outcome.status = ModuleCommandStatus::DONE;
+                    return outcome;
+                }
+
+                // The updater knows why it stopped (HTTP code, short write, no space); without it
+                // every cause of a failed OTA reaches the backend as the same opaque sentence.
+                const char* reason = firmwareUpdater->getLastErrorMessage();
+                std::string errorMessage = "Failed to start firmware update";
+                if (reason != nullptr && reason[0] != '\0')
+                {
+                    errorMessage += ": ";
+                    errorMessage += reason;
+                }
+                log(DebugFeatures::MODULE_COMMAND_DEBUG,
+                    "ModuleCommandUseCase: Firmware update failed to start (%s)",
+                    (reason != nullptr && reason[0] != '\0') ? reason : "no reason reported");
+
+                outcome.status = ModuleCommandStatus::ERROR;
+                outcome.errorMessage = errorMessage;
+                return outcome;
+            }
+            case ModuleCommandEnum::DELETE_MODULE:
+            {
+                log(DebugFeatures::MODULE_COMMAND_DEBUG,
+                    "DELETE_MODULE: Verifying module deletion status with server");
+                outcome.deletionStatus = checkModuleDeletionUseCase->evaluate();
+                outcome.status = ModuleCommandStatus::DONE;
+                return outcome;
+            }
+            default:
+                outcome.status = ModuleCommandStatus::ERROR;
+                outcome.errorMessage = "Not a network command";
+                return outcome;
+        }
+    }
+
+    bool finishComplexCommand(const ComplexCommandWork &work,
+                              const ComplexCommandOutcome &outcome,
+                              ModuleCommandExecutionResult &result,
+                              ComplexCommandWork &nextWork) override
+    {
+        if (work.fetchCatalog && (catalogSync == nullptr || composingInline))
+        {
+            // Stored on this task: there is no synchronization to hand the catalog to, or nothing
+            // would collect a write handed to the storage task while runComplexInline() holds the
+            // caller's stack.
+            if (!outcome.fetchedTypes.empty())
+            {
+                sensorTypeRepository->saveAll(outcome.fetchedTypes);
+                log(DebugFeatures::MODULE_COMMAND_DEBUG,
+                    "ModuleCommandUseCase: Fetched and saved %d sensor types from server",
+                    static_cast<int>(outcome.fetchedTypes.size()));
+            }
+
+            SensorTypeCatalog catalog = sensorTypeRepository->catalogSnapshot();
+            if (catalog->empty())
+            {
+                log(DebugFeatures::MODULE_COMMAND_DEBUG,
+                    "ModuleCommandUseCase: No sensor types available for scanning after sync");
+                result = makeResult(work.command.uid, ModuleCommandStatus::ERROR,
+                                    "No sensor types available");
+                return true;
+            }
+
+            scanFromCatalog(work, catalog, nextWork);
+            return false;
+        }
+
+        if (work.fetchCatalog || work.awaitCatalogStore)
+        {
+            return finishCatalogStage(work, outcome, result, nextWork);
+        }
+
+        switch (getModuleCommandEnum(work.command.command)) {
+            case ModuleCommandEnum::PING_PIN:
+            {
+                result = makeResult(work.command.uid, outcome.status, outcome.errorMessage);
+                return true;
+            }
+            case ModuleCommandEnum::UPDATE_FIRMWARE:
+            {
+                // The persisted update status is an EEPROM write, so it happens here, on the
+                // control loop, like every other settings write - the download task only records
+                // the value, and this step is the single writer.
+                if (outcome.firmwareUpdateStatus != 0 && settings)
+                {
+                    settings->setUpdateStatus(outcome.firmwareUpdateStatus);
+                }
+
+                if (outcome.networkOk)
+                {
+                    settings->setNoScanSensors(1);
+                    settings->setBootType(BOOT_TYPE_FIRMWARE_UPDATE);
+                    moduleConfig->setRequestedModuleMode(CONFIGURED_NEED_RESTART);
+                    result = makeResult(work.command.uid, ModuleCommandStatus::DONE);
+                    return true;
+                }
+
+                // A download that never opened a connection is worth one restart: the network
+                // stack comes back with the module, and the update is carried out on the next
+                // boot. A refusal that came from the server is not - it would refuse again.
+                if (firmwareUpdateRecoveryUseCase &&
+                    outcome.firmwareHttpCode == FIRMWARE_UPDATE_HTTP_NOT_CONNECTED &&
+                    firmwareUpdateRecoveryUseCase->keepForNextBoot(work.command))
+                {
+                    result = makeResult(work.command.uid, ModuleCommandStatus::IN_PROGRESS);
+                    return true;
+                }
+
+                result = makeResult(work.command.uid, ModuleCommandStatus::ERROR, outcome.errorMessage);
+                return true;
+            }
+            case ModuleCommandEnum::DELETE_MODULE:
+            {
+                if (outcome.status != ModuleCommandStatus::DONE)
+                {
+                    result = makeResult(work.command.uid, outcome.status, outcome.errorMessage);
+                    return true;
+                }
+                result = applyDeletionVerdict(work.command, outcome.deletionStatus);
+                return true;
+            }
+            case ModuleCommandEnum::SET_SENSOR_MODEL:
+            {
+                result = applySetSensorModel(work, outcome);
+                log(DebugFeatures::MODULE_COMMAND_DEBUG,
+                    "ModuleCommandUseCase: SET_SENSOR_MODEL executed - status: %s, error: %s",
+                    result.status.c_str(), result.errorMessage.c_str());
+                return true;
+            }
+            case ModuleCommandEnum::SCAN_SENSORS:
+            {
+                result = applyScanSensors(work, outcome);
+                return true;
+            }
+            default:
+                result = makeResult(work.command.uid, ModuleCommandStatus::ERROR, "Unknown command");
+                return true;
+        }
+    }
+
+    bool catalogStorePending() override
+    {
+        return catalogSync != nullptr && catalogSync->isWritePending();
+    }
+
 private:
+    /**
+     * @brief The ScanSensors stage between its catalog fetch and its scan, through the
+     *        synchronization. Control loop.
+     *
+     * The fetched catalog is handed to the catalog synchronization, which writes it on the storage
+     * task like every catalog it fetches itself, and the scan runs from the catalog the module
+     * holds once the write has landed - nothing here waits for flash.
+     *
+     * A catalog already on its way to flash - the one handed over here, or one the synchronization
+     * handed over before this command got here - is waited for, not written alongside: the file has
+     * one writer. The repository is not read meanwhile either, because a module without a catalog
+     * has no cache and every read of it goes to the file being replaced. A write that was already
+     * in flight carries the server's catalog, as the one fetched here does, so once it has landed
+     * the command scans from it and stores nothing of its own.
+     */
+    bool finishCatalogStage(const ComplexCommandWork &work,
+                            const ComplexCommandOutcome &outcome,
+                            ModuleCommandExecutionResult &result,
+                            ComplexCommandWork &nextWork)
+    {
+        if (catalogSync->isWritePending())
+        {
+            return waitForCatalogStore(work, nextWork);
+        }
+
+        SensorTypeCatalog catalog = sensorTypeRepository->catalogSnapshot();
+        if (catalog->empty() && work.fetchCatalog && !outcome.fetchedTypes.empty())
+        {
+            const ISyncSensorTypesUseCase::StoreResult stored =
+                catalogSync->storeFetchedCatalog(outcome.fetchedTypes);
+            log(DebugFeatures::MODULE_COMMAND_DEBUG,
+                "ModuleCommandUseCase: %d fetched sensor types handed to the catalog sync - %s",
+                static_cast<int>(outcome.fetchedTypes.size()),
+                stored == ISyncSensorTypesUseCase::StoreResult::Pending ? "on their way to flash"
+                : stored == ISyncSensorTypesUseCase::StoreResult::Stored ? "stored"
+                : "not stored");
+
+            if (stored == ISyncSensorTypesUseCase::StoreResult::Pending)
+            {
+                return waitForCatalogStore(work, nextWork);
+            }
+            if (stored == ISyncSensorTypesUseCase::StoreResult::Stored)
+            {
+                catalog = sensorTypeRepository->catalogSnapshot();
+            }
+        }
+
+        if (catalog->empty())
+        {
+            // A server that had no catalog to give is told apart from a catalog that did not make
+            // it to flash - refused before the write, or by the file system during it.
+            const bool storeFailed = work.awaitCatalogStore || !outcome.fetchedTypes.empty();
+            log(DebugFeatures::MODULE_COMMAND_DEBUG,
+                "ModuleCommandUseCase: No sensor types available for scanning after sync (%s)",
+                storeFailed ? "the catalog was not stored" : "the server sent none");
+            result = makeResult(work.command.uid, ModuleCommandStatus::ERROR,
+                                storeFailed ? "Sensor types could not be stored"
+                                            : "No sensor types available");
+            return true;
+        }
+
+        scanFromCatalog(work, catalog, nextWork);
+        return false;
+    }
+
+    /** @brief Hold the scan until the catalog on its way to flash has landed. */
+    bool waitForCatalogStore(const ComplexCommandWork &work, ComplexCommandWork &nextWork)
+    {
+        log(DebugFeatures::MODULE_COMMAND_DEBUG,
+            "ModuleCommandUseCase: a sensor type catalog is on its way to flash, the scan on pin %d waits for it",
+            work.pin);
+        nextWork = work;
+        nextWork.fetchCatalog = false;
+        nextWork.awaitCatalogStore = true;
+        nextWork.onBus = false;
+        return false;
+    }
+
+    /** @brief The scan stage of a ScanSensors, over the catalog the module now holds. */
+    void scanFromCatalog(const ComplexCommandWork &work, const SensorTypeCatalog &catalog,
+                         ComplexCommandWork &nextWork)
+    {
+        nextWork = work;
+        nextWork.fetchCatalog = false;
+        nextWork.awaitCatalogStore = false;
+        nextWork.onBus = true;
+        nextWork.sensorTypes = catalog;
+        nextWork.moduleUid = moduleConfig->getModuleUid();
+        nextWork.occupiedModbusAddresses = occupancyForScan(nextWork.moduleUid, work.pin);
+    }
+
     /**
      * @brief Helper structure for commands that return results with sensor data
      */
@@ -281,6 +1030,52 @@ private:
         CommandExecutionResult(ModuleCommandStatus status, const std::string& errorMessage, const ModuleCommandResult& result)
             : status(status), errorMessage(errorMessage), result(result) {}
     };
+
+    /**
+     * @brief Attempts ScanSensors makes when it has to fetch the sensor type catalog itself.
+     *
+     * Three, and the retries live at this call site rather than in the transport: the outbox
+     * has a retry budget of its own, and retries inside the transport would multiply with it -
+     * one outbox attempt would grow to 90 s while holding the API lock. ScanSensors is the one
+     * catalog consumer the outbox does not drive, so it brings its own attempts.
+     */
+    static const uint8_t SCAN_SENSOR_TYPES_MAX_ATTEMPTS = 3;
+
+    /**
+     * @brief GET the sensor type catalog for a scan, up to SCAN_SENSOR_TYPES_MAX_ATTEMPTS times.
+     *
+     * Retried on `httpFailed` and on nothing else: an empty catalog from a server that answered is
+     * a real answer, and asking three times for it would cost two extra requests every time a
+     * module with no local catalog is scanned against an account that has no sensor models.
+     */
+    std::vector<SensorType> fetchSensorTypesForScan()
+    {
+        std::vector<SensorType> serverTypes;
+
+        for (uint8_t attempt = 1; attempt <= SCAN_SENSOR_TYPES_MAX_ATTEMPTS; ++attempt)
+        {
+            // The calling task vouches for itself between its attempts: one attempt is a
+            // bounded legal pause (the API lock plus one call), three back to back are not.
+            if (attempt > 1 && arduinoAdapter)
+            {
+                arduinoAdapter->feedTaskWatchdog();
+            }
+
+            bool httpFailed = false;
+            serverTypes = hybridApiService->getSensorTypesList(&httpFailed);
+
+            if (!httpFailed)
+            {
+                return serverTypes;
+            }
+
+            log(DebugFeatures::MODULE_COMMAND_DEBUG,
+                "ModuleCommandUseCase: sensor type fetch failed, attempt %d of %d",
+                (int)attempt, (int)SCAN_SENSOR_TYPES_MAX_ATTEMPTS);
+        }
+
+        return serverTypes;
+    }
 
     /**
      * @brief Add a sensor to the module structure through the builder the setup flow uses
@@ -308,6 +1103,11 @@ private:
      * @brief Handle AddWifi command
      * @param moduleCommand Module command DTO with options
      * @return Pair of status and error message
+     *
+     * Deliberately not one of the split complex commands: there is no network wait in here to
+     * move anywhere. What it does is write - EEPROM through the settings, the networks file in
+     * SPIFFS, the WiFiMulti access-point list - and every one of those is state the control loop
+     * also writes, so this runs on the control loop like the other state writes.
      */
     std::pair<ModuleCommandStatus, std::string> handleAddWifi(const ModuleCommandDto& moduleCommand)
     {
@@ -350,84 +1150,261 @@ private:
         }
     }
 
-    /**
-     * @brief Handle UpdateFirmware command
-     * @param moduleCommand Module command DTO with options
-     * @return Pair of status and error message
-     */
-    std::pair<ModuleCommandStatus, std::string> handleUpdateFirmware(const ModuleCommandDto& moduleCommand)
+    static ModuleCommandExecutionResult makeResult(const std::string& uid,
+                                                   ModuleCommandStatus status,
+                                                   const std::string& errorMessage = "",
+                                                   const ModuleCommandResult& commandResult = ModuleCommandResult())
     {
-        if (moduleCommand.options.empty())
+        return ModuleCommandExecutionResult(uid, getModuleCommandStatusName(status), errorMessage, commandResult);
+    }
+
+    /**
+     * @brief The synchronous composition of prepare -> execute -> finish, for a caller that
+     *        needs the answer on this call stack: executeCommands() reaches it for the complex
+     *        commands. On the device CommandService routes those commands to their tasks instead.
+     */
+    ModuleCommandExecutionResult runComplexInline(const ModuleCommandDto& moduleCommand)
+    {
+        // A stage that waits for the storage task would wait here for ever: its outcome is
+        // collected by a loop iteration, and this call holds the caller's stack until it returns.
+        struct InlineScope
         {
-            return {ModuleCommandStatus::ERROR, "Missing options"};
+            bool &flag;
+            const bool previous;
+            explicit InlineScope(bool &f) : flag(f), previous(f) { flag = true; }
+            ~InlineScope() { flag = previous; }
+        } inlineScope(composingInline);
+
+        ComplexCommandWork work;
+        ModuleCommandExecutionResult immediate("", "");
+        if (!prepareComplexCommand(moduleCommand, work, immediate))
+        {
+            return immediate;
         }
 
-        std::string url = extractJsonValue(moduleCommand.options, "url");
-        std::string version = extractJsonValue(moduleCommand.options, "version");
-
-        if (url.empty() || version.empty())
+        while (true)
         {
-            return {ModuleCommandStatus::ERROR, "Missing url or version in options"};
+            ComplexCommandOutcome outcome = work.onBus ? executeBusWork(work) : executeNetworkWork(work);
+            ModuleCommandExecutionResult result("", "");
+            ComplexCommandWork nextWork;
+            if (finishComplexCommand(work, outcome, result, nextWork))
+            {
+                return result;
+            }
+            work = nextWork;
+        }
+    }
+
+    /** @brief The loop-owned half of SetSensorModel: repository and structure writes. */
+    ModuleCommandExecutionResult applySetSensorModel(const ComplexCommandWork& work,
+                                                     const ComplexCommandOutcome& outcome)
+    {
+        if (!outcome.detected)
+        {
+            // The bus step names why when the device answered but could not be given a free
+            // address; the plain "not detected" stays the answer when nothing answered at all.
+            return makeResult(work.command.uid, ModuleCommandStatus::ERROR,
+                              outcome.errorMessage.empty()
+                                  ? std::string("Sensor not detected on specified pin")
+                                  : outcome.errorMessage);
+        }
+
+        const SensorEntity& newSensorEntity = outcome.sensor;
+        const int pin = work.pin;
+
+        // The new row is stored before anything of the port's current sensor is let go of, so a
+        // write the flash refuses costs nothing: the port keeps the sensor it has - its row, its
+        // records in the structure and its readings. The row carries the port's uid, so storing it
+        // is what replaces the row the port had.
+        if (!sensorRepository->save(newSensorEntity))
+        {
+            log(DebugFeatures::MODULE_COMMAND_DEBUG,
+                "ModuleCommandUseCase: Failed to save sensor to repository");
+            return makeResult(work.command.uid, ModuleCommandStatus::ERROR, "Failed to save sensor");
         }
 
         log(DebugFeatures::MODULE_COMMAND_DEBUG,
-            "ModuleCommandUseCase: Firmware update - URL: %s, Version: %s, UID: %s",
-            url.c_str(), version.c_str(), moduleCommand.uid.c_str());
+            "ModuleCommandUseCase: Sensor saved, now checking for other sensors on pin %d", pin);
 
-        if (!firmwareUpdater)
+        auto allSensors = sensorRepository->getAll();
+        std::vector<SensorEntity> sensorsToDelete;
+        for (const auto &existingSensor : allSensors)
         {
-            log(DebugFeatures::MODULE_COMMAND_DEBUG,
-                "ModuleCommandUseCase: Firmware updater not available");
-            return {ModuleCommandStatus::ERROR, "Firmware updater not available"};
-        }
-
-        if (firmwareUpdateRecoveryUseCase &&
-            firmwareUpdateRecoveryUseCase->isHttpConnectionDown() &&
-            firmwareUpdateRecoveryUseCase->keepForNextBoot(url, version, moduleCommand.uid))
-        {
-            return {ModuleCommandStatus::IN_PROGRESS, ""};
-        }
-
-        // Execute firmware update
-        bool updateResult = firmwareUpdater->updateFirmwareFromURL(url.c_str());
-        
-        if (updateResult)
-        {
-            log(DebugFeatures::MODULE_COMMAND_DEBUG,
-                "ModuleCommandUseCase: Firmware update completed successfully");
-
-            settings->setNoScanSensors(1);
-            settings->setBootType(BOOT_TYPE_FIRMWARE_UPDATE);
-            moduleConfig->setRequestedModuleMode(CONFIGURED_NEED_RESTART);
-
-            return {ModuleCommandStatus::DONE, ""};
-        }
-        else
-        {
-            if (firmwareUpdateRecoveryUseCase &&
-                firmwareUpdater->getLastHttpCode() == FIRMWARE_UPDATE_HTTP_NOT_CONNECTED &&
-                firmwareUpdateRecoveryUseCase->keepForNextBoot(url, version, moduleCommand.uid))
+            if (existingSensor.pin == pin && existingSensor.uid != newSensorEntity.uid)
             {
-                return {ModuleCommandStatus::IN_PROGRESS, ""};
+                log(DebugFeatures::MODULE_COMMAND_DEBUG,
+                    "ModuleCommandUseCase: Found existing sensor on pin %d with UID: %s, marking for deletion",
+                    pin, existingSensor.uid.c_str());
+                sensorsToDelete.push_back(existingSensor);
+            }
+        }
+
+        for (const auto &sensorToDelete : sensorsToDelete)
+        {
+            log(DebugFeatures::MODULE_COMMAND_DEBUG,
+                "ModuleCommandUseCase: Deleting old sensor with UID: %s from pin %d",
+                sensorToDelete.uid.c_str(), pin);
+
+            if (!sensorRepository->remove(sensorToDelete.uid.c_str()))
+            {
+                log(DebugFeatures::MODULE_COMMAND_DEBUG,
+                    "ModuleCommandUseCase: Warning - Failed to delete old sensor UID: %s",
+                    sensorToDelete.uid.c_str());
             }
 
-            // The updater knows why it stopped (HTTP code, short write, no space); without it
-            // every cause of a failed OTA reaches the backend as the same opaque sentence.
-            const char* reason = firmwareUpdater->getLastErrorMessage();
-            std::string errorMessage = "Failed to start firmware update";
-
-            if (reason != nullptr && reason[0] != '\0')
+            // Clear stale cached channel values so they don't appear in future update packets
+            if (sensorValueModel)
             {
-                errorMessage += ": ";
-                errorMessage += reason;
+                sensorValueModel->removeSensor(sensorToDelete.uid);
             }
-
-            log(DebugFeatures::MODULE_COMMAND_DEBUG,
-                "ModuleCommandUseCase: Firmware update failed to start (%s)",
-                (reason != nullptr && reason[0] != '\0') ? reason : "no reason reported");
-
-            return {ModuleCommandStatus::ERROR, errorMessage};
         }
+
+        // Also clear any stale channel values for the new sensor's base UID (same key in sensorValueModel)
+        if (sensorValueModel)
+        {
+            sensorValueModel->removeSensor(newSensorEntity.uid);
+        }
+
+        if (moduleStructure)
+        {
+            moduleStructure->removeSensorsByPin(pin);
+            log(DebugFeatures::MODULE_COMMAND_DEBUG,
+                "ModuleCommandUseCase: Cleared moduleStructure on pin %d", pin);
+            addSensorToStructure(newSensorEntity);
+            log(DebugFeatures::MODULE_COMMAND_DEBUG,
+                "ModuleCommandUseCase: Added new sensor to moduleStructure on pin %d", pin);
+        }
+
+        log(DebugFeatures::MODULE_COMMAND_DEBUG,
+            "ModuleCommandUseCase: Successfully saved %s sensor on pin %d with UID: %s",
+            newSensorEntity.sensorType.c_str(), pin, newSensorEntity.uid.c_str());
+
+        return makeResult(work.command.uid, ModuleCommandStatus::DONE);
+    }
+
+    /** @brief The loop-owned half of ScanSensors: repository and structure writes. */
+    ModuleCommandExecutionResult applyScanSensors(const ComplexCommandWork& work,
+                                                  const ComplexCommandOutcome& outcome)
+    {
+        ModuleCommandResult result;
+
+        if (!outcome.detected)
+        {
+            // A pin with nothing on it is still a successful scan with an empty list; a device
+            // that could not be moved off an address another entity holds is not, and nothing of
+            // it is saved.
+            if (outcome.status == ModuleCommandStatus::ERROR)
+            {
+                return makeResult(work.command.uid, ModuleCommandStatus::ERROR, outcome.errorMessage);
+            }
+            return makeResult(work.command.uid, ModuleCommandStatus::DONE, "", result);
+        }
+
+        SensorEntity detectedSensor = outcome.sensor;
+        detectedSensor.status = SensorStatusEnum::SENSOR_STATUS_NEW;
+        detectedSensor.isActive = true;
+        detectedSensor.isError = false;
+
+        if (sensorRepository)
+        {
+            if (sensorRepository->createOrUpdateSensor(detectedSensor))
+            {
+                log(DebugFeatures::MODULE_COMMAND_DEBUG,
+                    "ModuleCommandUseCase: Successfully saved detected sensor %s to repository with NEW status",
+                    detectedSensor.uid.c_str());
+
+                // The uid is the port's: on an occupied port the row just replaced another
+                // sensor's, and what the value model holds under the uid was read from that one.
+                if (sensorValueModel)
+                {
+                    sensorValueModel->removeSensor(detectedSensor.uid);
+                }
+
+                if (moduleStructure)
+                {
+                    // The port's records go with the row they describe: a channel of the replaced
+                    // sensor that the new model does not have, or the record of an empty port,
+                    // would otherwise stay in the structure beside the new sensor's records.
+                    moduleStructure->removeSensorsByPin(work.pin);
+                    addSensorToStructure(detectedSensor);
+                    log(DebugFeatures::MODULE_COMMAND_DEBUG,
+                        "ModuleCommandUseCase: Added detected sensor to moduleStructure on pin %d", work.pin);
+                }
+            }
+            else
+            {
+                // The port keeps the row it had, and the structure and the readings go on
+                // describing that one; reporting the sensor found would tell the server the port
+                // holds a sensor the module does not have. Answered as SetSensorModel answers the
+                // same refusal - and on an error no structure follows the result.
+                log(DebugFeatures::MODULE_COMMAND_DEBUG,
+                    "ModuleCommandUseCase: Failed to save detected sensor %s to repository",
+                    detectedSensor.uid.c_str());
+                return makeResult(work.command.uid, ModuleCommandStatus::ERROR, "Failed to save sensor");
+            }
+        }
+
+        SensorResultDto sensorResult(
+            detectedSensor.uid,
+            detectedSensor.sensorType,
+            detectedSensor.pin,
+            1, // group
+            detectedSensor.sensorTypeUid
+        );
+        result.sensors.push_back(sensorResult);
+
+        log(DebugFeatures::MODULE_COMMAND_DEBUG,
+            "ModuleCommandUseCase: ScanSensors completed - found sensor %s",
+            detectedSensor.sensorType.c_str());
+
+        return makeResult(work.command.uid, ModuleCommandStatus::DONE, "", result);
+    }
+
+    /** @brief The loop-owned half of DeleteModule: the factory reset the verdict allows. */
+    ModuleCommandExecutionResult applyDeletionVerdict(const ModuleCommandDto& moduleCommand,
+                                                      ModuleDeletionStatusEnum deletionStatus)
+    {
+        if (deletionStatus == ModuleDeletionStatusEnum::UNKNOWN)
+        {
+            log(DebugFeatures::MODULE_COMMAND_DEBUG,
+                "DELETE_MODULE: verdict UNKNOWN - returning InProgress (retry)");
+            return makeResult(moduleCommand.uid, ModuleCommandStatus::IN_PROGRESS,
+                              "Deletion not confirmed yet, will retry");
+        }
+
+        if (deletionStatus == ModuleDeletionStatusEnum::NOT_DELETED)
+        {
+            logError("ModuleCommandUseCase: DELETE_MODULE verdict NOT_DELETED - module is not marked as deleted");
+            return makeResult(moduleCommand.uid, ModuleCommandStatus::ERROR,
+                              "Module not marked as deleted");
+        }
+
+        log(DebugFeatures::MODULE_COMMAND_DEBUG,
+            "DELETE_MODULE: verdict DELETED - proceeding with factory reset");
+
+        if (!clearModuleDataService)
+        {
+            logError("ModuleCommandUseCase: ClearModuleDataService not available");
+            return makeResult(moduleCommand.uid, ModuleCommandStatus::ERROR,
+                              "Clear data service not available");
+        }
+
+        bool clearResult = clearModuleDataService->clearAllData();
+        if (clearResult)
+        {
+            log(DebugFeatures::MODULE_COMMAND_DEBUG,
+                "ModuleCommandUseCase: Factory reset completed successfully - all module data cleared");
+            if (moduleConfig)
+            {
+                moduleConfig->setRequestedModuleMode(ModuleModeEnum::CONFIGURED_NEED_RESTART);
+                log(DebugFeatures::MODULE_COMMAND_DEBUG,
+                    "ModuleCommandUseCase: Requested mode change to CONFIGURED_NEED_RESTART - device will restart");
+            }
+            return makeResult(moduleCommand.uid, ModuleCommandStatus::DONE);
+        }
+
+        logError("ModuleCommandUseCase: Factory reset failed - could not clear all data");
+        return makeResult(moduleCommand.uid, ModuleCommandStatus::ERROR, "Failed to clear module data");
     }
 
     /**
@@ -473,107 +1450,19 @@ private:
     }
 
     /**
-     * @brief Handle PingPin command - scan pin for any connected sensor
-     * @param moduleCommand Module command DTO with options
-     * @return Pair of status and error message
+     * @brief Occupancy of the ModBus range for a scan of one pin, read on the control loop
+     *
+     * The sensor a scan of this pin would save carries the uid of the pin, so its own row is left
+     * out: rescanning a pin must not let the sensor already on it block itself.
+     *
+     * @param moduleUid Uid of this module, the prefix of every sensor uid it owns
+     * @param pin Pin being scanned
      */
-    std::pair<ModuleCommandStatus, std::string> handlePingPin(const ModuleCommandDto& moduleCommand)
+    ModbusAddressOccupancy occupancyForScan(const std::string &moduleUid, int pin)
     {
-        if (moduleCommand.options.empty())
-        {
-            return {ModuleCommandStatus::ERROR, "Missing options"};
-        }
-        log(DebugFeatures::MODULE_COMMAND_DEBUG,
-            "ModuleCommandUseCase: PingPin options: %s", moduleCommand.options.c_str());
-
-        int pin = convertPinFromJson(extractJsonIntValue(moduleCommand.options, "pin"));
-        if (pin < 0 || pin >= moduleConfig->getSensorPinCount())
-        {
-            return {ModuleCommandStatus::ERROR, "Missing or invalid pin in options"};
-        }
-
-        if (!sensorTypeRepository || !sensorReader)
-        {
-            log(DebugFeatures::MODULE_COMMAND_DEBUG,
-                "ModuleCommandUseCase: Sensor repository or reader not available for PingPin");
-            return {ModuleCommandStatus::ERROR, "Sensor service not available"};
-        }
-
-        log(DebugFeatures::MODULE_COMMAND_DEBUG,
-            "ModuleCommandUseCase: PingPin command - scanning pin %d", pin);
-
-        // Get only scannable sensor types
-        auto allSensorTypes = sensorTypeRepository->getCanScan();
-        if (allSensorTypes.empty())
-        {
-            log(DebugFeatures::MODULE_COMMAND_DEBUG,
-                "ModuleCommandUseCase: No scannable sensor types available for scanning");
-            return {ModuleCommandStatus::ERROR, "No sensor types available"};
-        }
-
-        log(DebugFeatures::MODULE_COMMAND_DEBUG,
-            "ModuleCommandUseCase: PingPin - got %d scannable sensor type(s):",
-            static_cast<int>(allSensorTypes.size()));
-        for (const auto &st : allSensorTypes)
-        {
-            log(DebugFeatures::MODULE_COMMAND_DEBUG,
-                "ModuleCommandUseCase: PingPin -   [%s] uid=%s protocol=%s",
-                st.name.c_str(), st.uid.c_str(), st.getProtocolString().c_str());
-        }
-
-        // Try to detect any sensor on the pin
-        for (const auto &sensorType : allSensorTypes)
-        {
-            // Create temporary sensor entity for testing
-            SensorEntity tempSensor;
-            tempSensor.pin = pin;
-            tempSensor.sensorType = sensorType.name;
-            tempSensor.model = sensorType.name;
-            tempSensor.protocol = sensorType.getProtocolString();
-            tempSensor.modbusDeviceAddress = sensorType.modbusDeviceAddress;
-            tempSensor.baudRate = sensorType.baudRate;
-            tempSensor.modbusPingAddress = sensorType.modbusPingAddress;
-            tempSensor.registerToStoreModbusDeviceAddress = sensorType.registerToStoreModbusDeviceAddress;
-            tempSensor.writeRegistersCommand = sensorType.writeRegistersCommand;
-            tempSensor.applyAddressAfterPowerCycle = sensorType.applyAddressAfterPowerCycle;
-            tempSensor.i2cAddress = sensorType.i2cAddress;
-            tempSensor.chipType = sensorType.chipType;
-            tempSensor.modbusRegisterConfigs = sensorType.modbusRegisterConfig;
-            tempSensor.i2cRegisterConfigs = sensorType.i2cRegisterConfig;
-
-            // Try to scan this sensor at default address
-            if (sensorReader->scanSensor(tempSensor))
-            {
-                log(DebugFeatures::MODULE_COMMAND_DEBUG,
-                    "ModuleCommandUseCase: Found %s sensor on pin %d", sensorType.name.c_str(), pin);
-                return {ModuleCommandStatus::DONE, ""};
-            }
-
-            // If not detected at default address, scan all ModBus addresses in the defined range
-            log(DebugFeatures::MODULE_COMMAND_DEBUG,
-                "ModuleCommandUseCase: Sensor not found at default address, scanning range 0x%02X-0x%02X", 
-                MODBUS_ADDRESS_MIN, MODBUS_ADDRESS_MAX);
-            
-            for (int address = MODBUS_ADDRESS_MIN; address <= MODBUS_ADDRESS_MAX; address++)
-            {
-                tempSensor.modbusDeviceAddress = address;
-                log(DebugFeatures::MODULE_COMMAND_DEBUG,
-                    "ModuleCommandUseCase: Scanning ModBus address 0x%02X for sensor type %s", 
-                    address, sensorType.name.c_str());
-
-                if (sensorReader->scanSensor(tempSensor))
-                {
-                    log(DebugFeatures::MODULE_COMMAND_DEBUG,
-                        "ModuleCommandUseCase: Found %s sensor on pin %d at address 0x%02X", 
-                        sensorType.name.c_str(), pin, address);
-                    return {ModuleCommandStatus::DONE, ""};
-                }
-            }
-        }
-
-        log(DebugFeatures::MODULE_COMMAND_DEBUG,
-            "ModuleCommandUseCase: No sensor detected on pin %d", pin);
-        return {ModuleCommandStatus::ERROR, "No sensor detected on pin"};
+        char pinStr[3];
+        sprintf(pinStr, "%02d", pin);
+        return modbusAddressAllocator->occupiedAddresses(moduleUid + "." + pinStr);
     }
 
     /**
@@ -733,17 +1622,23 @@ private:
     }
 
     /**
-     * @brief Bring a ModBus entity to an address of the module nobody else holds (GDV1-3831)
+     * @brief Bring a ModBus entity to an address of the module nobody else holds
+     *
+     * Runs on the bus task, so the occupancy arrives as an argument: it was read from the sensor
+     * repository by the prepare step, on the control loop that owns the repositories. Everything
+     * this resolution asks of the allocator afterwards is arithmetic over that snapshot.
+     *
      * @param entity Entity being configured; it enters with the default address of its type and
      *        leaves with the address it may keep
+     * @param occupied Addresses other entities of the module hold, snapshotted on the control loop
      * @return true and an empty message when the entity may be saved, false and an empty message
      *         when nothing answered at all, false and a message when the device could not be moved
      */
-    std::pair<bool, std::string> resolveModbusAddress(SensorEntity &entity)
+    std::pair<bool, std::string> resolveModbusAddress(SensorEntity &entity,
+                                                      const ModbusAddressOccupancy &occupied)
     {
         int defaultAddress = entity.modbusDeviceAddress;
         int preferredAddress = MODBUS_ADDRESS_MIN + entity.pin;
-        ModbusAddressOccupancy occupied = modbusAddressAllocator->occupiedAddresses(entity.uid);
 
         logAddressEvent("resolve_start",
                         "{\"sensorUid\":\"" + entity.uid + "\",\"pin\":" + std::to_string(entity.pin) +
@@ -753,6 +1648,7 @@ private:
 
         if (probeFreeAddress(entity, defaultAddress, occupied, "default"))
         {
+            takeTheDeviceOffTheFactoryAddress(entity, occupied, preferredAddress);
             return {true, ""};
         }
 
@@ -787,182 +1683,74 @@ private:
     }
 
     /**
-     * @brief Handle SetSensorModel command - verify specific sensor and save to repository
-     * @param moduleCommand Module command DTO with options
-     * @return Pair of status and error message
+     * @brief Move a device that answered at its model's own address onto an address of the module
+     *
+     * The address a device leaves the factory with belongs to its model and not to this row: every
+     * device of that model answers at it, so a second one plugged into the port sharing this one's
+     * UART answers every question addressed to it, and nothing on the line can tell the two apart.
+     * The module's own range gives one address per port, and a row holding one of those is a row
+     * nobody else answers for. So the factory address is a state a row passes through, not one it
+     * keeps: the module writes its own address into the device while the person is still watching
+     * the app, instead of leaving it to the address phase of the next restart.
+     *
+     * The same writeSensorAddress() sequence that phase uses, and the same allocator: one isolation
+     * of the port, one write, and the reader's own verification that the device answers where it
+     * was sent. An attempt, not a condition - a device whose address no write of the module's takes
+     * stays where it is and is saved on the factory address, exactly as it was before.
+     *
+     * @param entity Entity answering at the factory address; on success it carries the new one
+     * @param occupied Addresses other entities of the module hold
+     * @param preferredAddress Address of the entity's own port, preferred target of the move
      */
-    std::pair<ModuleCommandStatus, std::string> handleSetSensorModel(const ModuleCommandDto& moduleCommand)
+    void takeTheDeviceOffTheFactoryAddress(SensorEntity &entity,
+                                           const ModbusAddressOccupancy &occupied,
+                                           int preferredAddress)
     {
-        if (moduleCommand.options.empty())
+        if (!entity.isModbusSensor())
         {
-            return {ModuleCommandStatus::ERROR, "Missing options"};
+            return;
         }
 
-        log(DebugFeatures::MODULE_COMMAND_DEBUG,
-            "ModuleCommandUseCase: SetSensorModel options: %s", moduleCommand.options.c_str());
-
-        int pin = convertPinFromJson(extractJsonIntValue(moduleCommand.options, "pin"));
-        std::string modelUid = extractJsonValue(moduleCommand.options, "uid");
-
-        if ((pin < 0 || pin >= moduleConfig->getSensorPinCount()) || modelUid.empty())
+        const int factoryAddress = entity.modbusDeviceAddress;
+        if (factoryAddress == preferredAddress)
         {
-            return {ModuleCommandStatus::ERROR, "Missing pin or uid in options"};
+            // The model's own address is this port's address: there is nothing to move it to that
+            // would be more its own than where it already is.
+            return;
         }
 
-        if (!sensorTypeRepository || !sensorReader || !sensorRepository || !moduleConfig || !modbusAddressAllocator)
+        const int targetAddress = modbusAddressAllocator->nextFreeAddress(occupied, preferredAddress);
+        if (targetAddress == -1 || targetAddress == factoryAddress)
         {
-            log(DebugFeatures::MODULE_COMMAND_DEBUG,
-                "ModuleCommandUseCase: Sensor services not available for SetSensorModel");
-            return {ModuleCommandStatus::ERROR, "Sensor service not available"};
+            logAddressEvent("reassign_fail",
+                            "{\"sensorUid\":\"" + entity.uid + "\",\"fromAddress\":\"" +
+                                addressToText(factoryAddress) +
+                                "\",\"toAddress\":\"\",\"reason\":\"no_free_address\"}");
+            return;
         }
 
-        log(DebugFeatures::MODULE_COMMAND_DEBUG,
-            "ModuleCommandUseCase: SetSensorModel command - Pin: %d, ModelUID: %s",
-            pin, modelUid.c_str());
+        const std::string factoryText = addressToText(factoryAddress);
+        const std::string targetText = addressToText(targetAddress);
+        logAddressEvent("reassign_attempt",
+                        "{\"sensorUid\":\"" + entity.uid + "\",\"fromAddress\":\"" + factoryText +
+                            "\",\"toAddress\":\"" + targetText + "\",\"preferred\":\"" +
+                            addressToText(preferredAddress) + "\"}");
 
-        // Find sensor type by UID (modelUid)
-        auto allSensorTypes = sensorTypeRepository->getAll();
-        SensorType* targetSensorType = nullptr;
-        
-        for (auto &sensorType : allSensorTypes)
+        if (!sensorReader->writeSensorAddress(entity, targetAddress))
         {
-            if (sensorType.uid == modelUid)
-            {
-                targetSensorType = &sensorType;
-                break;
-            }
+            // The device stays on the address it answered at, and so does the row: a model the
+            // module cannot address is still a sensor, and the person's sensor is saved either way.
+            logAddressEvent("reassign_fail",
+                            "{\"sensorUid\":\"" + entity.uid + "\",\"fromAddress\":\"" + factoryText +
+                                "\",\"toAddress\":\"" + targetText + "\",\"reason\":\"write_rejected\"}");
+            entity.modbusDeviceAddress = factoryAddress;
+            return;
         }
 
-        if (!targetSensorType)
-        {
-            log(DebugFeatures::MODULE_COMMAND_DEBUG,
-                "ModuleCommandUseCase: Sensor type with UID %s not found", modelUid.c_str());
-            return {ModuleCommandStatus::ERROR, "Sensor type not found"};
-        }
-
-        // Generate sensor UID based on module UID and pin (e.g., "48:27:E2:E2:01:78.02")
-        std::string moduleUid = moduleConfig->getModuleUid();
-        char pinStr[3];
-        sprintf(pinStr, "%02d", pin);
-        std::string generatedSensorUid = moduleUid + "." + pinStr;
-
-        log(DebugFeatures::MODULE_COMMAND_DEBUG,
-            "ModuleCommandUseCase: Generated sensor UID: %s", generatedSensorUid.c_str());
-
-        // Create sensor entity from sensor type
-        SensorEntity newSensorEntity;
-        newSensorEntity.uid = generatedSensorUid;
-        newSensorEntity.pin = pin;
-        newSensorEntity.sensorType = targetSensorType->name;
-        newSensorEntity.model = targetSensorType->name;
-        newSensorEntity.protocol = targetSensorType->getProtocolString();
-        newSensorEntity.sensorTypeUid = targetSensorType->uid;
-        newSensorEntity.modbusDeviceAddress = targetSensorType->modbusDeviceAddress;
-        newSensorEntity.baudRate = targetSensorType->baudRate;
-        newSensorEntity.modbusPingAddress = targetSensorType->modbusPingAddress;
-        newSensorEntity.registerToStoreModbusDeviceAddress = targetSensorType->registerToStoreModbusDeviceAddress;
-        newSensorEntity.writeRegistersCommand = targetSensorType->writeRegistersCommand;
-        newSensorEntity.applyAddressAfterPowerCycle = targetSensorType->applyAddressAfterPowerCycle;
-        newSensorEntity.i2cAddress = targetSensorType->i2cAddress;
-        newSensorEntity.chipType = targetSensorType->chipType;
-        newSensorEntity.modbusRegisterConfigs = targetSensorType->modbusRegisterConfig;
-        newSensorEntity.i2cRegisterConfigs = targetSensorType->i2cRegisterConfig;
-        newSensorEntity.isActive = true;
-        newSensorEntity.isError = false;
-        newSensorEntity.status = SensorStatusEnum::SENSOR_STATUS_ADDED;
-
-        auto resolution = resolveModbusAddress(newSensorEntity);
-
-        if (!resolution.first)
-        {
-            if (!resolution.second.empty())
-            {
-                log(DebugFeatures::MODULE_COMMAND_DEBUG,
-                    "ModuleCommandUseCase: Sensor %s on pin %d not saved - %s",
-                    targetSensorType->name.c_str(), pin, resolution.second.c_str());
-                return {ModuleCommandStatus::ERROR, resolution.second};
-            }
-
-            log(DebugFeatures::MODULE_COMMAND_DEBUG,
-                "ModuleCommandUseCase: Sensor %s not detected on pin %d",
-                targetSensorType->name.c_str(), pin);
-            return {ModuleCommandStatus::ERROR, "Sensor not detected on specified pin"};
-        }
-
-        log(DebugFeatures::MODULE_COMMAND_DEBUG,
-            "ModuleCommandUseCase: Sensor detected successfully, now checking for existing sensors on pin %d", pin);
-
-        // Get all existing sensors to check if there's already one on this pin
-        auto allSensors = sensorRepository->getAll();
-        std::vector<SensorEntity> sensorsToDelete;
-        
-        for (const auto &existingSensor : allSensors)
-        {
-            if (existingSensor.pin == pin)
-            {
-                log(DebugFeatures::MODULE_COMMAND_DEBUG,
-                    "ModuleCommandUseCase: Found existing sensor on pin %d with UID: %s, marking for deletion",
-                    pin, existingSensor.uid.c_str());
-                sensorsToDelete.push_back(existingSensor);
-            }
-        }
-
-        // Now delete old sensors on the same pin (after new one is saved)
-        for (const auto &sensorToDelete : sensorsToDelete)
-        {
-            log(DebugFeatures::MODULE_COMMAND_DEBUG,
-                "ModuleCommandUseCase: Deleting old sensor with UID: %s from pin %d",
-                sensorToDelete.uid.c_str(), pin);
-            
-            if (!sensorRepository->remove(sensorToDelete.uid.c_str()))
-            {
-                log(DebugFeatures::MODULE_COMMAND_DEBUG,
-                    "ModuleCommandUseCase: Warning - Failed to delete old sensor UID: %s",
-                    sensorToDelete.uid.c_str());
-            }
-
-            // Clear stale cached channel values so they don't appear in future update packets
-            if (sensorValueModel)
-            {
-                sensorValueModel->removeSensor(sensorToDelete.uid);
-            }
-        }
-
-        // Also clear any stale channel values for the new sensor's base UID (same key in sensorValueModel)
-        if (sensorValueModel)
-        {
-            sensorValueModel->removeSensor(newSensorEntity.uid);
-        }
-
-        // Update module structure - remove all sensors from this pin
-        if (moduleStructure)
-        {
-            moduleStructure->removeSensorsByPin(pin);
-            log(DebugFeatures::MODULE_COMMAND_DEBUG,
-                "ModuleCommandUseCase: Cleared moduleStructure on pin %d", pin);
-        }
-
-        // Save the new sensor first
-        if (!sensorRepository->save(newSensorEntity))
-        {
-            log(DebugFeatures::MODULE_COMMAND_DEBUG,
-                "ModuleCommandUseCase: Failed to save sensor to repository");
-            return {ModuleCommandStatus::ERROR, "Failed to save sensor"};
-        }
-
-        // Update module structure - add new sensor
-        if (moduleStructure)
-        {
-            addSensorToStructure(newSensorEntity);
-            log(DebugFeatures::MODULE_COMMAND_DEBUG,
-                "ModuleCommandUseCase: Added new sensor to moduleStructure on pin %d", pin);
-        }
-
-        log(DebugFeatures::MODULE_COMMAND_DEBUG,
-            "ModuleCommandUseCase: Successfully saved %s sensor on pin %d with UID: %s",
-            targetSensorType->name.c_str(), pin, generatedSensorUid.c_str());
-        
-        return {ModuleCommandStatus::DONE, ""};
+        entity.modbusDeviceAddress = targetAddress;
+        logAddressEvent("reassign_done",
+                        "{\"sensorUid\":\"" + entity.uid + "\",\"fromAddress\":\"" + factoryText +
+                            "\",\"toAddress\":\"" + targetText + "\"}");
     }
 
     /**
@@ -1068,6 +1856,14 @@ private:
             {
                 logError("ModuleCommandUseCase: Failed to delete sensor %s", sensor.uid.c_str());
                 allDeleted = false;
+                continue;
+            }
+
+            // The readings go with the row: the uid is the port's, and a sensor added on this
+            // port later would otherwise start out with them.
+            if (sensorValueModel)
+            {
+                sensorValueModel->removeSensor(sensor.uid);
             }
         }
 
@@ -1088,164 +1884,6 @@ private:
             "ModuleCommandUseCase: Successfully deleted %d sensor(s) from pin %d", 
             sensorsToDelete.size(), pin);
 
-        return {ModuleCommandStatus::DONE, "", result};
-    }
-
-    /**
-     * @brief Handle ScanSensors command - scan pin for connected sensors and return detected sensor info
-     * @param moduleCommand Module command DTO with options
-     * @return CommandExecutionResult with detected sensors info
-     */
-    CommandExecutionResult handleScanSensors(const ModuleCommandDto& moduleCommand)
-    {
-        if (moduleCommand.options.empty())
-        {
-            return {ModuleCommandStatus::ERROR, "Missing options"};
-        }
-
-        log(DebugFeatures::MODULE_COMMAND_DEBUG,
-            "ModuleCommandUseCase: ScanSensors options: %s", moduleCommand.options.c_str());
-
-        int pin = convertPinFromJson(extractJsonIntValue(moduleCommand.options, "pin"));
-        if (pin < 0 || pin >= moduleConfig->getSensorPinCount())
-        {
-            return {ModuleCommandStatus::ERROR, "Missing or invalid pin in options"};
-        }
-
-        if (!sensorTypeRepository || !sensorReader || !moduleConfig || !modbusAddressAllocator)
-        {
-            log(DebugFeatures::MODULE_COMMAND_DEBUG,
-                "ModuleCommandUseCase: Sensor services not available for ScanSensors");
-            return {ModuleCommandStatus::ERROR, "Sensor service not available"};
-        }
-
-        log(DebugFeatures::MODULE_COMMAND_DEBUG,
-            "ModuleCommandUseCase: ScanSensors command - scanning pin %d", pin);
-
-        // Get all sensor types for scanning
-        auto allSensorTypes = sensorTypeRepository->getAll();
-        if (allSensorTypes.empty())
-        {
-            log(DebugFeatures::MODULE_COMMAND_DEBUG,
-                "ModuleCommandUseCase: No sensor types in repository, fetching from server");
-
-            if (hybridApiService)
-            {
-                auto serverTypes = hybridApiService->getSensorTypesList();
-                if (!serverTypes.empty())
-                {
-                    sensorTypeRepository->saveAll(serverTypes);
-                    allSensorTypes = sensorTypeRepository->getAll();
-                    log(DebugFeatures::MODULE_COMMAND_DEBUG,
-                        "ModuleCommandUseCase: Fetched and saved %d sensor types from server",
-                        static_cast<int>(allSensorTypes.size()));
-                }
-                else
-                {
-                    log(DebugFeatures::MODULE_COMMAND_DEBUG,
-                        "ModuleCommandUseCase: Server returned no sensor types");
-                }
-            }
-
-            if (allSensorTypes.empty())
-            {
-                log(DebugFeatures::MODULE_COMMAND_DEBUG,
-                    "ModuleCommandUseCase: No sensor types available for scanning after sync");
-                return {ModuleCommandStatus::ERROR, "No sensor types available"};
-            }
-        }
-
-        ModuleCommandResult result;
-        std::string moduleUid = moduleConfig->getModuleUid();
-
-        // Try to detect sensors on the pin
-        for (const auto &sensorType : allSensorTypes)
-        {
-            // Create temporary sensor entity for testing
-            SensorEntity tempSensor;
-            tempSensor.pin = pin;
-            tempSensor.sensorType = sensorType.name;
-            tempSensor.model = sensorType.name;
-            tempSensor.protocol = sensorType.getProtocolString();
-            tempSensor.sensorTypeUid = sensorType.uid;
-            tempSensor.modbusDeviceAddress = sensorType.modbusDeviceAddress;
-            tempSensor.baudRate = sensorType.baudRate;
-            tempSensor.modbusPingAddress = sensorType.modbusPingAddress;
-            tempSensor.registerToStoreModbusDeviceAddress = sensorType.registerToStoreModbusDeviceAddress;
-            tempSensor.writeRegistersCommand = sensorType.writeRegistersCommand;
-            tempSensor.applyAddressAfterPowerCycle = sensorType.applyAddressAfterPowerCycle;
-            tempSensor.i2cAddress = sensorType.i2cAddress;
-            tempSensor.chipType = sensorType.chipType;
-            tempSensor.modbusRegisterConfigs = sensorType.modbusRegisterConfig;
-            tempSensor.i2cRegisterConfigs = sensorType.i2cRegisterConfig;
-
-            char pinStr[3];
-            sprintf(pinStr, "%02d", pin);
-            tempSensor.uid = moduleUid + "." + pinStr;
-
-            log(DebugFeatures::MODULE_COMMAND_DEBUG,
-                "ModuleCommandUseCase: Trying sensor type %s on pin %d", sensorType.name.c_str(), pin);
-
-            auto resolution = resolveModbusAddress(tempSensor);
-
-            if (!resolution.first)
-            {
-                if (!resolution.second.empty())
-                {
-                    log(DebugFeatures::MODULE_COMMAND_DEBUG,
-                        "ModuleCommandUseCase: Sensor type %s on pin %d not saved - %s",
-                        sensorType.name.c_str(), pin, resolution.second.c_str());
-                    return {ModuleCommandStatus::ERROR, resolution.second};
-                }
-
-                continue;
-            }
-
-            tempSensor.status = SensorStatusEnum::SENSOR_STATUS_NEW;
-            tempSensor.isActive = true;
-            tempSensor.isError = false;
-
-            if (sensorRepository)
-            {
-                if (sensorRepository->createOrUpdateSensor(tempSensor))
-                {
-                    log(DebugFeatures::MODULE_COMMAND_DEBUG,
-                        "ModuleCommandUseCase: Successfully saved detected sensor %s to repository with NEW status",
-                        tempSensor.uid.c_str());
-
-                    if (moduleStructure)
-                    {
-                        addSensorToStructure(tempSensor);
-                        log(DebugFeatures::MODULE_COMMAND_DEBUG,
-                            "ModuleCommandUseCase: Added detected sensor to moduleStructure on pin %d", pin);
-                    }
-                }
-                else
-                {
-                    log(DebugFeatures::MODULE_COMMAND_DEBUG,
-                        "ModuleCommandUseCase: Failed to save detected sensor %s to repository",
-                        tempSensor.uid.c_str());
-                }
-            }
-
-            SensorResultDto sensorResult(
-                tempSensor.uid,
-                tempSensor.sensorType,
-                tempSensor.pin,
-                1,
-                tempSensor.sensorTypeUid
-            );
-            result.sensors.push_back(sensorResult);
-
-            log(DebugFeatures::MODULE_COMMAND_DEBUG,
-                "ModuleCommandUseCase: ScanSensors completed - found sensor %s at address 0x%02X",
-                tempSensor.sensorType.c_str(), tempSensor.modbusDeviceAddress);
-            return {ModuleCommandStatus::DONE, "", result};
-        }
-
-        // No sensor detected on this pin
-        log(DebugFeatures::MODULE_COMMAND_DEBUG,
-            "ModuleCommandUseCase: No sensor detected on pin %d", pin);
         return {ModuleCommandStatus::DONE, "", result};
     }
 
@@ -1309,6 +1947,13 @@ private:
                 "ModuleCommandUseCase: Reboot - Set boot type to BOOT_TYPE_USER");
         }
 
+        // The board has no battery-backed RTC: the next boot starts its clock from the time in
+        // EEPROM until a server answers, and this restart is one the module can see coming.
+        if (timeAdapter)
+        {
+            timeAdapter->saveTimeToStorage();
+        }
+
         log(DebugFeatures::MODULE_COMMAND_DEBUG,
             "ModuleCommandUseCase: Executing reboot command");
 
@@ -1351,72 +1996,6 @@ private:
         }
 
         return timeAdapter->isCommandTimeValid(createdDate.c_str(), commandMaxAgeSeconds);
-    }
-
-    /**
-     * @brief Handle DeleteModule command - wipes and resets the module to unconfigured state
-     * @param moduleCommand Module command DTO with options
-     * @return Pair of status and error message
-     */
-    std::pair<ModuleCommandStatus, std::string> handleDeleteModule(const ModuleCommandDto& moduleCommand)
-    {
-        log(DebugFeatures::MODULE_COMMAND_DEBUG,
-            "ModuleCommandUseCase: Processing DeleteModule command - uid: %s", moduleCommand.uid.c_str());
-
-        if (!checkModuleDeletionUseCase)
-        {
-            logError("ModuleCommandUseCase: CheckModuleDeletionUseCase not available for module deletion verification");
-            return {ModuleCommandStatus::ERROR, "Deletion check use case not available"};
-        }
-
-        log(DebugFeatures::MODULE_COMMAND_DEBUG,
-            "DELETE_MODULE: Verifying module deletion status with server");
-
-        ModuleDeletionStatusEnum deletionStatus = checkModuleDeletionUseCase->evaluate();
-
-        if (deletionStatus == ModuleDeletionStatusEnum::UNKNOWN)
-        {
-            log(DebugFeatures::MODULE_COMMAND_DEBUG,
-                "DELETE_MODULE: verdict UNKNOWN - returning InProgress (retry)");
-            return {ModuleCommandStatus::IN_PROGRESS, "Deletion not confirmed yet, will retry"};
-        }
-
-        if (deletionStatus == ModuleDeletionStatusEnum::NOT_DELETED)
-        {
-            logError("ModuleCommandUseCase: DELETE_MODULE verdict NOT_DELETED - module is not marked as deleted");
-            return {ModuleCommandStatus::ERROR, "Module not marked as deleted"};
-        }
-
-        log(DebugFeatures::MODULE_COMMAND_DEBUG,
-            "DELETE_MODULE: verdict DELETED - proceeding with factory reset");
-
-        // Check if clearModuleDataService is available
-        if (!clearModuleDataService)
-        {
-            logError("ModuleCommandUseCase: ClearModuleDataService not available");
-            return {ModuleCommandStatus::ERROR, "Clear data service not available"};
-        }
-
-        // Execute factory reset
-        bool clearResult = clearModuleDataService->clearAllData();
-        
-        if (clearResult)
-        {
-            log(DebugFeatures::MODULE_COMMAND_DEBUG,
-                "ModuleCommandUseCase: Factory reset completed successfully - all module data cleared");
-            if (moduleConfig)
-            {
-                moduleConfig->setRequestedModuleMode(ModuleModeEnum::CONFIGURED_NEED_RESTART);
-                log(DebugFeatures::MODULE_COMMAND_DEBUG,
-                    "ModuleCommandUseCase: Requested mode change to CONFIGURED_NEED_RESTART - device will restart");
-            }
-            return {ModuleCommandStatus::DONE, ""};
-        }
-        else
-        {
-            logError("ModuleCommandUseCase: Factory reset failed - could not clear all data");
-            return {ModuleCommandStatus::ERROR, "Failed to clear module data"};
-        }
     }
 
     /**

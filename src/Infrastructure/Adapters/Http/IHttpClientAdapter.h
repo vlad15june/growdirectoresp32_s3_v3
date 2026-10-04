@@ -2,6 +2,15 @@
 
 #include <Arduino.h>
 
+#include "Infrastructure/Adapters/Http/IHttpBodySink.h"
+
+// getStreamPtr() below hands back a WiFiClient, and a pointer needs no definition. Declaring the
+// name here makes this header self-contained: on the device the definition arrives with
+// <WiFiClientSecure.h> through HttpClientAdapter.h, and a caller that only ever talks to this
+// interface - the firmware update path is the sole user of getStreamPtr() - needs no network
+// stack at all.
+class WiFiClient;
+
 /**
  * @brief Interface for HTTP client operations
  * 
@@ -69,8 +78,21 @@ public:
     virtual const char* getString() = 0;
     
     /**
+     * @brief Hand the response body to a sink in the pieces it arrives in
+     *
+     * The counterpart of getString() for an answer whose length is a property of the account
+     * rather than of the firmware: a list of sensor types is ~1.4 KB per type, and getString()
+     * needs all of it in one heap block before the caller sees the first byte. Here the caller
+     * sees the body as the transport reads it and keeps only what it makes out of it.
+     *
+     * @param sink Where the pieces go; may end the transfer by answering false
+     * @return true when the whole body reached the sink
+     */
+    virtual bool readBodyInto(IHttpBodySink& sink) = 0;
+
+    /**
      * @brief Get the content length of the response
-     * 
+     *
      * @return Content length in bytes, -1 if unknown
      */
     virtual int getSize() = 0;

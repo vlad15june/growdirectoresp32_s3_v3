@@ -23,6 +23,10 @@ public:
     bool sendModuleUpdateDataCalled = false;
     bool getDeviceCommandCalled = false;
     bool getRuleListCalled = false;
+    bool getRuleListHttpFailed = false;
+    bool getSensorTypesListCalled = false;
+    bool getSensorTypesListHttpFailed = false;
+    std::vector<SensorType> sensorTypesListReturnValue;
     bool getModuleCommandCalled = false;
     
     // Return values
@@ -75,6 +79,10 @@ public:
         sendModuleCommandExecutionResultReturnValue = true;
         getDeviceCommandCalled = false;
         getRuleListCalled = false;
+        getRuleListHttpFailed = false;
+        getSensorTypesListCalled = false;
+        getSensorTypesListHttpFailed = false;
+        sensorTypesListReturnValue.clear();
         getModuleCommandCalled = false;
         deviceCommandsReturnValue.clear();
         ruleListReturnValue.clear();
@@ -166,18 +174,34 @@ public:
         return deviceCommandsReturnValue;
     }
     
-    std::vector<Rule> getRuleList() override {
+    std::vector<Rule> getRuleList(bool* httpFailed = nullptr, bool* readWhole = nullptr) override {
         getRuleListCalled = true;
+        if (httpFailed != nullptr)
+            *httpFailed = getRuleListHttpFailed;
+        // Answers as a transport that read every rule of the answer, which is what a stand-in
+        // that hands back a ready vector did: a test that wants the other case says so.
+        if (readWhole != nullptr)
+            *readWhole = getRuleListReadWhole;
         return ruleListReturnValue;
     }
+
+    /** Whether the answer is reported as one the module read whole. */
+    bool getRuleListReadWhole = true;
     
-    std::vector<ModuleCommandDto> getModuleCommand() override {
+    bool getModuleCommandHttpFailed = false;
+
+    std::vector<ModuleCommandDto> getModuleCommand(bool* httpFailed = nullptr) override {
         getModuleCommandCalled = true;
+        if (httpFailed != nullptr)
+            *httpFailed = getModuleCommandHttpFailed;
         return moduleCommandsReturnValue;
     }
     
-    std::vector<SensorType> getSensorTypesList() override {
-        return std::vector<SensorType>();
+    std::vector<SensorType> getSensorTypesList(bool* httpFailed = nullptr) override {
+        getSensorTypesListCalled = true;
+        if (httpFailed != nullptr)
+            *httpFailed = getSensorTypesListHttpFailed;
+        return getSensorTypesListHttpFailed ? std::vector<SensorType>() : sensorTypesListReturnValue;
     }
     
     int getApiSendFails() const override { return apiSendFails; }

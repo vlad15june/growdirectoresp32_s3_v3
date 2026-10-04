@@ -2,6 +2,7 @@
 #define MOCK_NTP_TIME_ADAPTER_H
 
 #include "Infrastructure/Adapters/Time/INTPTimeAdapter.h"
+#include <ctime>
 #include <map>
 #include <string>
 
@@ -77,6 +78,18 @@ public:
         // Default to synchronized for testing
         return true;
     }
+
+    /**
+     * What this boot's clock is made of. By default SNTP set it at the boot's start: a scenario
+     * about anything but the clock has the clock; one about the clock says when SNTP answers.
+     */
+    bool sntpSetThisBoot = true;
+    unsigned long sntpSetAt = 0;
+    bool seededFromStorage = false;
+
+    bool wasSetBySntpThisBoot() override { return sntpSetThisBoot; }
+    unsigned long sntpSetAtMs() override { return sntpSetAt; }
+    bool wasSeededFromStorage() override { return seededFromStorage; }
 
     // Additional methods for testing
     void setEpochTime(unsigned long time) {

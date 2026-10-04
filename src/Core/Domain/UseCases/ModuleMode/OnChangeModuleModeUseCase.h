@@ -10,6 +10,7 @@
 #include "Core/Domain/Interfaces/IDebugSystem.h"
 #include "Core/Domain/Enums/ModuleModeEnum.h"
 #include "Core/Domain/Enums/BootTypeEnum.h"
+#include "Infrastructure/Adapters/Time/INTPTimeAdapter.h" //TODO: move to Core/Domain/Interfaces/Adapters/Time/INTPTimeAdapter.h
 #include "constants.h"
 
 class OnChangeModuleModeUseCase : public IOnChangeModuleModeUseCase
@@ -19,17 +20,20 @@ private:
     IModuleConfig &_moduleConfig;
     ILogger &_logger;
     IDebugSystem &_debugSystem;
+    INTPTimeAdapter *_timeAdapter;
 
 public:
     OnChangeModuleModeUseCase(
         IArduinoAdapter &arduinoAdapter,
         IModuleConfig &moduleConfig,
         ILogger &loggerInstance,
-        IDebugSystem &debugSystemInstance)
+        IDebugSystem &debugSystemInstance,
+        INTPTimeAdapter *timeAdapter = nullptr)
         : _arduinoAdapter(arduinoAdapter),
           _moduleConfig(moduleConfig),
           _logger(loggerInstance),
-          _debugSystem(debugSystemInstance)
+          _debugSystem(debugSystemInstance),
+          _timeAdapter(timeAdapter)
     {
     }
 
@@ -90,6 +94,14 @@ public:
 private:
     void restart()
     {
+        // Every restart the module decides on itself arrives here. The board has no
+        // battery-backed RTC, so the next boot starts its clock from the time in EEPROM until a
+        // server answers - and this is the last moment that value can be made current.
+        if (_timeAdapter != nullptr)
+        {
+            _timeAdapter->saveTimeToStorage();
+        }
+
         uint8_t bootType = _moduleConfig.getSettings()->getBootType();
         _arduinoAdapter.delay(1000);
         if (bootType == BOOT_TYPE_TECHNICAL)

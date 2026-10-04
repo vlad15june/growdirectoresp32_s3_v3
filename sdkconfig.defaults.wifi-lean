@@ -1,0 +1,32 @@
+# WiFi receive budget, lean profile.
+#
+# Overlay applied on top of sdkconfig.defaults and the conservative TLS overlay; neither is edited
+# here. It lowers how much of the internal heap the WiFi driver can pin at once with received
+# frames. The boards have no PSRAM, so every driver buffer lives in the same heap the TLS
+# handshake and the request bodies need at the same moment.
+#
+# RX_BA_WIN 16 -> 6. The block-ack window is the number of aggregated (AMPDU) frames the driver
+# may hold in its reorder buffer while it waits for a gap in the sequence to be filled; each
+# frame held there is a received-data buffer of up to ~1.6 KB that stays allocated until the
+# window moves on. 16 is the Kconfig default for boards whose WiFi buffers can spill into PSRAM;
+# for a board without it Kconfig picks 6, and only the explicit 16 that sdkconfig.defaults
+# inherits from the factory profile keeps it at 16 (esp_wifi/Kconfig, range 2..32). A window of
+# 6 keeps AMPDU reception, and with it what is negotiated with the access point, as it is, and
+# lowers the ceiling of what one lost frame can pin. The two compile-time checks in
+# esp_wifi/src/wifi_init.c stay satisfied: 6 <= DYNAMIC_RX_BUFFER_NUM (32) and
+# 6 <= 2 * STATIC_RX_BUFFER_NUM (8).
+#
+# CSI_ENABLED y -> n. Channel state information is captured per received frame into buffers of
+# about one KB per static RX buffer (Kconfig help), allocated for the lifetime of the driver.
+# Nothing in this firmware or in its libraries calls esp_wifi_set_csi(); the memory is spent on
+# a feature that is never read.
+#
+# STATIC_RX_BUFFER_NUM and DYNAMIC_RX_BUFFER_NUM are deliberately not changed here. The Arduino
+# core (WiFiGeneric.cpp, wifiLowLevelInit) overwrites both in the wifi_init_config_t it hands to
+# esp_wifi_init() - static 4, dynamic 32, and the TX side as dynamic with a cache of 4 - unless
+# the sketch calls WiFi.useStaticBuffers(true), which this firmware does not. The precompiled
+# driver (libpp.a) reads its buffer counts from that structure and from nowhere else, so a value
+# set here would land in sdkconfig.h and never reach the radio. The Kconfig entries keep their
+# factory values so that the checks above are evaluated against what is committed.
+CONFIG_ESP32_WIFI_RX_BA_WIN=6
+CONFIG_ESP32_WIFI_CSI_ENABLED=n

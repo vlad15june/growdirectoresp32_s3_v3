@@ -7,6 +7,7 @@
 #include "Core/Domain/Interfaces/ILogger.h"
 #include "Core/Domain/Interfaces/IDebugSystem.h"
 #include "Core/Domain/Data/Models/IDeviceModel.h"
+#include "Core/Domain/Interfaces/UseCases/Boot/IBootGates.h"
 #include <vector>
 #include <cstdarg>
 #include <cstdio>
@@ -21,6 +22,9 @@ private:
     IDeviceModel* _deviceModel;
     ILogger* _logger;
     IDebugSystem* _debugSystem;
+    // The boot sequence's gate in front of the rule list fetch; without one the sync asks on its
+    // own interval.
+    IBootGates* _bootGates = nullptr;
     
     void log(const char* format, ...) {
         if (_logger && _debugSystem && _debugSystem->isFeatureEnabled(DebugFeatures::RULE_DEBUG)) {
@@ -47,6 +51,13 @@ public:
         _debugSystem(debugSystem) {}
     
     ~RuleService() override = default;
+
+    /**
+     * Put the rule list fetch behind the boot sequence: the sync is driven only once the gate lets
+     * it, so the fetch it owes - its first, and any a forced sync raised meanwhile - goes as one
+     * request when the gate opens. The rules already held are evaluated regardless.
+     */
+    void setBootGates(IBootGates* gates) { _bootGates = gates; }
     
     bool init() override {
         log("RULE_SERVICE: Initializing rule service");
@@ -75,11 +86,17 @@ public:
             _evaluateRulesUseCase->loop();
         }
 
-        if (_syncRulesUseCase) {
+        if (_syncRulesUseCase && (_bootGates == nullptr || _bootGates->allows(BootGate::RULE_LIST))) {
             _syncRulesUseCase->loop();
         }
     }
     
+    void onOutboxCompletion(const OutboxCompletion& completion) override {
+        if (_syncRulesUseCase) {
+            _syncRulesUseCase->onOutboxCompletion(completion);
+        }
+    }
+
     bool forceSyncRules() override {
         log("RULE_SERVICE: Forcing rule synchronization");
         

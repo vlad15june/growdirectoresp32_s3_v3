@@ -13,17 +13,20 @@ public:
     uint32_t lastReadTime;
     std::vector<std::pair<std::string, float>> channelValues;
     bool isMultiChannel;
+    // True once currentValue has been written. Zero is a legitimate reading, so the value itself
+    // cannot tell a sensor that read 0 from one that has not been read.
+    bool hasCurrentValue;
     
     /**
      * @brief Constructor
      */
-    SensorValue() : currentValue(0.0f), lastReadTime(0), isMultiChannel(false) {}
+    SensorValue() : currentValue(0.0f), lastReadTime(0), isMultiChannel(false), hasCurrentValue(false) {}
     
     /**
      * @brief Constructor with sensor UID
      * @param uid Sensor UID
      */
-    SensorValue(const std::string& uid) : sensorUid(uid), currentValue(0.0f), lastReadTime(0), isMultiChannel(false) {}
+    SensorValue(const std::string& uid) : sensorUid(uid), currentValue(0.0f), lastReadTime(0), isMultiChannel(false), hasCurrentValue(false) {}
     
     /**
      * @brief Get channel value by name
@@ -51,6 +54,7 @@ public:
     void setChannelValue(const std::string& channelName, float value) {
         if (!isMultiChannel) {
             currentValue = value;
+            hasCurrentValue = true;
             return;
         }
         

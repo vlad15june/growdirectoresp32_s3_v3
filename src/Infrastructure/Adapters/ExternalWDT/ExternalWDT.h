@@ -1,6 +1,8 @@
 #ifndef EXTERNAL_WDT_H
 #define EXTERNAL_WDT_H
 
+#include "LoopLivenessGate.h"
+
 #include <driver/gpio.h>
 #include <esp_err.h>
 #include <esp_timer.h>
@@ -75,6 +77,21 @@ public:
      */
     bool isTaskRunning() const;
 
+    /**
+     * @brief Make the kicks conditional on the control loop's liveness.
+     *
+     * The kick task keeps its own cadence (the chip's period is a hardware property), but once
+     * the gate is configured it kicks only while the loop has beaten within stallLimitMs -
+     * see LoopLivenessGate. Never configured means unconditional kicks.
+     */
+    void configureLoopGate(uint32_t stallLimitMs);
+
+    /** @brief The control loop reports one completed iteration. Called from loop() and nowhere else. */
+    void noteLoopAlive();
+
+    /** @brief Kicks withheld because the loop had been silent past the stall limit. */
+    uint64_t getStarvedKickCount() const;
+
     ExternalWDT(const ExternalWDT&) = delete;
     ExternalWDT& operator=(const ExternalWDT&) = delete;
 
@@ -87,7 +104,9 @@ private:
     bool enabled_;
     bool taskRunning_;
     bool level_;
+    LoopLivenessGate loopGate_;
     std::atomic<uint64_t> kickCount_;
+    std::atomic<uint64_t> starvedKickCount_;
     TaskHandle_t taskHandle_;
     esp_timer_handle_t timer_;
     SemaphoreHandle_t mutex_;

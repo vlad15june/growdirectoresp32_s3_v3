@@ -103,6 +103,13 @@ public:
     std::vector<Device*> getAllDevices() override {
         return devices;
     }
+
+    /**
+     * @brief All devices by reference, without the copy getAllDevices() makes
+     */
+    const std::vector<Device*>& allDevices() override {
+        return devices;
+    }
     
     /**
      * @brief Get the number of devices

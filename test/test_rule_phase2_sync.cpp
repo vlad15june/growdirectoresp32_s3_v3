@@ -5,11 +5,11 @@
 #include "Core/Domain/Enums/RuleEnums.h"
 #include "Application/DTOs/RuleStateUpdateDto.h"
 #include "Application/DTOs/CommandDto.h"
-#include "Infrastructure/Adapters/Json/JsonConverter.h"
+#include "Infrastructure/Adapters/Json/ArduinoJsonConverter.h"
 #include "Application/Services/CommandService.h"
 #include "Infrastructure/Repositories/RuleRepository.h"
 
-#include "Mock/Infrastructure/Api/MockHybridAPIService.h"
+#include "Mock/Application/MockOutbox.h"
 #include "Mock/Infrastructure/Repositories/MockRuleRepository.h"
 #include "Mock/Infrastructure/SPIFFS/MockSpiffsRuleDao.h"
 #include "Mock/Core/Domain/MockRemoteSensorReceiver.h"
@@ -39,7 +39,7 @@ static void test_rulestatedto_version_default_and_ctor(void)
 
 static void test_bulk_ack_carries_version_and_synchronizing(void)
 {
-    JsonConverter c;
+    ArduinoJsonConverter c;
     RuleStateUpdateDto u;
     u.addRuleState("r1", "Synchronizing", "On", "", "", 5);
 
@@ -51,7 +51,7 @@ static void test_bulk_ack_carries_version_and_synchronizing(void)
 
 static void test_per_uid_ack_shape_flat(void)
 {
-    JsonConverter c;
+    ArduinoJsonConverter c;
     RuleStateDto item("r1", "Synchronized", "Off", "", "", 7);
 
     std::string json = c.ruleStateUpdateSingleToJson(item, "2026-06-05T10:00:00Z");
@@ -67,7 +67,7 @@ static void test_per_uid_ack_shape_flat(void)
 
 static void test_per_uid_ack_error_carries_errortype(void)
 {
-    JsonConverter c;
+    ArduinoJsonConverter c;
     RuleStateDto item("r2", "Error", "Off", "bad field", "wrong_format", 3);
 
     std::string json = c.ruleStateUpdateSingleToJson(item, "t");
@@ -79,7 +79,7 @@ static void test_per_uid_ack_error_carries_errortype(void)
 
 static void test_per_uid_ack_carries_accountuid(void)
 {
-    JsonConverter c;
+    ArduinoJsonConverter c;
     RuleStateDto item("r1", "Synchronized", "On", "", "", 0);
     item.accountUid = "acc-123";
 
@@ -93,7 +93,7 @@ static void test_per_uid_ack_carries_accountuid(void)
 
 static void test_bulk_ack_carries_accountuid(void)
 {
-    JsonConverter c;
+    ArduinoJsonConverter c;
     RuleStateUpdateDto u;
     u.accountUid = "acc-123";
     u.addRuleState("r1", "Synchronized", "On", "", "", 0);
@@ -104,7 +104,7 @@ static void test_bulk_ack_carries_accountuid(void)
 
 static void test_state_literal_synchronizing_roundtrip(void)
 {
-    JsonConverter c;
+    ArduinoJsonConverter c;
 
     Rule r;
     r.uid = "r1";
@@ -126,14 +126,15 @@ static void test_state_literal_synchronizing_roundtrip(void)
 
 static void test_push_drop_malformed_payload(void)
 {
-    JsonConverter converter;
-    MockHybridAPIService api;
+    ArduinoJsonConverter converter;
+    MockOutbox api;
     MockRuleRepository repo;
     MockRemoteSensorReceiver receiver;
     MockNTPTimeAdapter time;
 
-    CommandService svc(nullptr, nullptr, nullptr, &api, nullptr,
+    CommandService svc(nullptr, nullptr, nullptr, nullptr,
                        nullptr, nullptr, &time, &converter, &repo);
+    svc.setOutbox(&api);
     svc.setRemoteSensorReceiver(&receiver);
 
     CommandDto cmd;
@@ -145,20 +146,21 @@ static void test_push_drop_malformed_payload(void)
 
     TEST_ASSERT_TRUE(result);
     TEST_ASSERT_EQUAL_INT(0, repo.synchronizeCallCount);
-    TEST_ASSERT_FALSE(api.sendByUidRuleStateCommandCalled);
+    TEST_ASSERT_EQUAL_INT(0, (int)api.ruleStateUids.size());
     TEST_ASSERT_EQUAL_INT(0, receiver.onRuleSetChangedCallCount);
 }
 
 static void test_push_drop_empty_array(void)
 {
-    JsonConverter converter;
-    MockHybridAPIService api;
+    ArduinoJsonConverter converter;
+    MockOutbox api;
     MockRuleRepository repo;
     MockRemoteSensorReceiver receiver;
     MockNTPTimeAdapter time;
 
-    CommandService svc(nullptr, nullptr, nullptr, &api, nullptr,
+    CommandService svc(nullptr, nullptr, nullptr, nullptr,
                        nullptr, nullptr, &time, &converter, &repo);
+    svc.setOutbox(&api);
     svc.setRemoteSensorReceiver(&receiver);
 
     CommandDto cmd;
@@ -169,21 +171,22 @@ static void test_push_drop_empty_array(void)
 
     TEST_ASSERT_TRUE(result);
     TEST_ASSERT_EQUAL_INT(0, repo.synchronizeCallCount);
-    TEST_ASSERT_FALSE(api.sendByUidRuleStateCommandCalled);
+    TEST_ASSERT_EQUAL_INT(0, (int)api.ruleStateUids.size());
     TEST_ASSERT_EQUAL_INT(0, receiver.onRuleSetChangedCallCount);
 }
 
 static void test_push_apply_valid_rule(void)
 {
-    JsonConverter converter;
-    MockHybridAPIService api;
+    ArduinoJsonConverter converter;
+    MockOutbox api;
     MockRuleRepository repo;
     repo.synchronizeReturnValue = 1;
     MockRemoteSensorReceiver receiver;
     MockNTPTimeAdapter time;
 
-    CommandService svc(nullptr, nullptr, nullptr, &api, nullptr,
+    CommandService svc(nullptr, nullptr, nullptr, nullptr,
                        nullptr, nullptr, &time, &converter, &repo);
+    svc.setOutbox(&api);
     svc.setRemoteSensorReceiver(&receiver);
 
     CommandDto cmd;
@@ -198,30 +201,31 @@ static void test_push_apply_valid_rule(void)
     TEST_ASSERT_EQUAL_INT(1, (int)repo.lastSynchronizeRules.size());
     TEST_ASSERT_EQUAL_STRING("rule-1", repo.lastSynchronizeRules[0].uid.c_str());
 
-    TEST_ASSERT_TRUE(api.sendByUidRuleStateCommandCalled);
-    TEST_ASSERT_EQUAL_STRING("rule-1", api.lastByUidRuleStateUid.c_str());
+    TEST_ASSERT_EQUAL_INT(1, (int)api.ruleStateUids.size());
+    TEST_ASSERT_EQUAL_STRING("rule-1", api.ruleStateUids[0].c_str());
 
-    TEST_ASSERT_TRUE(contains(api.lastByUidRuleStateCommandStr, "\"uid\":\"rule-1\""));
-    TEST_ASSERT_TRUE(contains(api.lastByUidRuleStateCommandStr, "\"state\":\"Synchronized\""));
-    TEST_ASSERT_TRUE(contains(api.lastByUidRuleStateCommandStr, "\"timestamp\":"));
-    TEST_ASSERT_FALSE(contains(api.lastByUidRuleStateCommandStr, "\"rules\":["));
-    TEST_ASSERT_FALSE(contains(api.lastByUidRuleStateCommandStr, "ruleUid"));
-    TEST_ASSERT_FALSE(contains(api.lastByUidRuleStateCommandStr, "version"));
+    TEST_ASSERT_TRUE(contains(api.ruleStateBodies[0], "\"uid\":\"rule-1\""));
+    TEST_ASSERT_TRUE(contains(api.ruleStateBodies[0], "\"state\":\"Synchronized\""));
+    TEST_ASSERT_TRUE(contains(api.ruleStateBodies[0], "\"timestamp\":"));
+    TEST_ASSERT_FALSE(contains(api.ruleStateBodies[0], "\"rules\":["));
+    TEST_ASSERT_FALSE(contains(api.ruleStateBodies[0], "ruleUid"));
+    TEST_ASSERT_FALSE(contains(api.ruleStateBodies[0], "version"));
 
     TEST_ASSERT_EQUAL_INT(1, receiver.onRuleSetChangedCallCount);
 }
 
 static void test_push_invalid_rule_acks_error(void)
 {
-    JsonConverter converter;
-    MockHybridAPIService api;
+    ArduinoJsonConverter converter;
+    MockOutbox api;
     MockRuleRepository repo;
     repo.synchronizeReturnValue = 1;
     MockRemoteSensorReceiver receiver;
     MockNTPTimeAdapter time;
 
-    CommandService svc(nullptr, nullptr, nullptr, &api, nullptr,
+    CommandService svc(nullptr, nullptr, nullptr, nullptr,
                        nullptr, nullptr, &time, &converter, &repo);
+    svc.setOutbox(&api);
     svc.setRemoteSensorReceiver(&receiver);
 
     CommandDto cmd;
@@ -233,21 +237,22 @@ static void test_push_invalid_rule_acks_error(void)
     TEST_ASSERT_TRUE(result);
 
     TEST_ASSERT_EQUAL_INT(0, repo.synchronizeCallCount);
-    TEST_ASSERT_TRUE(api.sendByUidRuleStateCommandCalled);
+    TEST_ASSERT_EQUAL_INT(1, (int)api.ruleStateUids.size());
     TEST_ASSERT_EQUAL_INT(1, receiver.onRuleSetChangedCallCount);
 }
 
 static void test_push_storage_failure_skips_ack(void)
 {
-    JsonConverter converter;
-    MockHybridAPIService api;
+    ArduinoJsonConverter converter;
+    MockOutbox api;
     MockRuleRepository repo;
     repo.synchronizeReturnValue = 0;
     MockRemoteSensorReceiver receiver;
     MockNTPTimeAdapter time;
 
-    CommandService svc(nullptr, nullptr, nullptr, &api, nullptr,
+    CommandService svc(nullptr, nullptr, nullptr, nullptr,
                        nullptr, nullptr, &time, &converter, &repo);
+    svc.setOutbox(&api);
     svc.setRemoteSensorReceiver(&receiver);
 
     CommandDto cmd;
@@ -259,7 +264,7 @@ static void test_push_storage_failure_skips_ack(void)
     TEST_ASSERT_TRUE(result);
     TEST_ASSERT_EQUAL_INT(1, repo.synchronizeCallCount);
 
-    TEST_ASSERT_FALSE(api.sendByUidRuleStateCommandCalled);
+    TEST_ASSERT_EQUAL_INT(0, (int)api.ruleStateUids.size());
 
     TEST_ASSERT_EQUAL_INT(1, receiver.onRuleSetChangedCallCount);
 }

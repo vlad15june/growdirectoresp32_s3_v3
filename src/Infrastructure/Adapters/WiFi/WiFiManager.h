@@ -88,7 +88,7 @@ public:
     WiFiManager(IWifiAdapter* wifiAdapter, ISettings* settings, ILogger* logger = nullptr, IDebugSystem* debugSystem = nullptr, ISpiffsAdapter* spiffsAdapter = nullptr, IJsonConverter* jsonConverter = nullptr);
     virtual ~WiFiManager() = default;
 
-    bool setupWifiConnection() override;
+    int registerNetworks() override;
     bool addWifiNetwork(const char* ssid, const char* password) override;
 };
 
@@ -96,17 +96,17 @@ WiFiManager::WiFiManager(IWifiAdapter* wifiAdapter, ISettings* settings, ILogger
     : _wifiAdapter(wifiAdapter), _settings(settings), logger(logger), debugSystem(debugSystem), _spiffsAdapter(spiffsAdapter), _jsonConverter(jsonConverter) {
 }
 
-bool WiFiManager::setupWifiConnection() {
+int WiFiManager::registerNetworks() {
     if (!_wifiAdapter)
     {
         log("SETUP: Error - WiFi adapter is missing");
-        return false;
+        return 0;
     }
 
     if (!_settings)
     {
         log("SETUP: Error - Settings not available for WiFi connection");
-        return false;
+        return 0;
     }
 
     int loaded = loadNetworksFromFile();
@@ -118,23 +118,11 @@ bool WiFiManager::setupWifiConnection() {
         _settings->getPassword(password);
         _wifiAdapter->addNetwork(ssid, password);
         log("SETUP: No networks file found, using EEPROM credentials");
-    }
-    else
-    {
-        log("SETUP: Loaded %d network(s) from file", loaded);
+        return 1;
     }
 
-    if (_wifiAdapter->connectToNetworks())
-    {
-        const char* activeSsid = _wifiAdapter->getSSID(0);
-        log("SETUP: Connected to WiFi network: %s", activeSsid);
-        return true;
-    }
-    else
-    {
-        log("SETUP: Failed to connect to WiFi network");
-        return false;
-    }
+    log("SETUP: Loaded %d network(s) from file", loaded);
+    return loaded;
 }
 
 bool WiFiManager::addWifiNetwork(const char* ssid, const char* password) {

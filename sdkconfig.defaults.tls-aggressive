@@ -1,0 +1,18 @@
+# TLS record buffer sizes, aggressive profile (GD_TLS_BUFFER_PROFILE=2).
+#
+# Overlay applied on top of sdkconfig.defaults, which is a byte-for-byte copy of the factory
+# configuration and is not edited here. Both directions are cut: outgoing records to 2048 bytes,
+# incoming records to 8192.
+#
+# The incoming limit is the risk. A TLS peer may send records of up to 16384 bytes without asking,
+# and mbedtls only advertises a smaller limit when the max_fragment_length extension is compiled
+# in and the server honours it - neither is the case here. A server that sends a longer record,
+# for a certificate chain or a large response body, gets MBEDTLS_ERR_SSL_INVALID_RECORD and the
+# connection fails. Nothing on the host can tell whether the production backend does; this profile
+# is for measurement on hardware against the real server, not for the fleet.
+#
+# The matching slot geometry is in src/Infrastructure/Adapters/Http/TlsBufferProfile.h. The two
+# are checked against each other at compile time, so this file cannot silently fail to arrive.
+CONFIG_MBEDTLS_ASYMMETRIC_CONTENT_LEN=y
+CONFIG_MBEDTLS_SSL_IN_CONTENT_LEN=8192
+CONFIG_MBEDTLS_SSL_OUT_CONTENT_LEN=2048

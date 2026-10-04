@@ -1,7 +1,10 @@
 #include <unity.h>
 #include "Core/Domain/Data/Models/ModuleStructure.h"
 #include "Application/DTOs/UpdateDto.h"
-#include "Infrastructure/Adapters/Json/JsonConverter.h"
+#include "Core/Domain/UseCases/ModuleStructure/RepublishModuleStructureUseCase.h"
+#include "Infrastructure/Adapters/Json/ArduinoJsonConverter.h"
+#include "Mock/Infrastructure/Api/MockHybridAPIService.h"
+#include "Mock/Infrastructure/Repositories/MockSensorRepository.h"
 
 static const char* test_json = R"({
     "GrowdirectorUid":"84:F7:03:FE:88:30",
@@ -36,7 +39,7 @@ static const char* test_json = R"({
 })";
 
 void test_module_structure_parse_and_serialize(void) {
-    JsonConverter jsonConverter;
+    ArduinoJsonConverter jsonConverter;
     ModuleStructure ms;
     TEST_ASSERT_TRUE(jsonConverter.moduleStructureFromJson(test_json, ms));
     TEST_ASSERT_EQUAL_STRING("84:F7:03:FE:88:30", ms.growdirectorUid.c_str());
@@ -83,7 +86,7 @@ void test_module_structure_parse_and_serialize(void) {
 }
 
 void test_module_structure_lookup(void) {
-    JsonConverter jsonConverter;
+    ArduinoJsonConverter jsonConverter;
     ModuleStructure ms;
     jsonConverter.moduleStructureFromJson(test_json, ms);
 
@@ -114,14 +117,89 @@ void test_module_structure_lookup(void) {
 }
 
 void test_module_structure_device_type(void) {
-    JsonConverter jsonConverter;
+    ArduinoJsonConverter jsonConverter;
     ModuleStructure ms;
     jsonConverter.moduleStructureFromJson(test_json, ms);
     TEST_ASSERT_EQUAL_STRING("sensor", ms.getDeviceType().c_str());
+}
+
+// --- the republish and its retry budget --------------------------------------------------------
+//
+// RepublishModuleStructureUseCase is the one caller of sendToServerModuleStructure() that the
+// outbox does not drive.
+// RestAPIService::sendToServerModuleStructure() makes a single attempt, because the outbox retries on its own and three
+// attempts inside one outbox attempt would make that attempt 90 s long while it holds the API
+// lock. This use case is not driven by the outbox, so it would go from three attempts to
+// one without noticing.
+//
+// Both tests assert on how many requests went out, not on an internal counter.
+
+namespace {
+
+// Records nothing: what is under test is how many times the structure was offered, not what it
+// contained. The real ISensorStructureUseCase is exercised by the setup tests.
+class CountingSensorStructureUseCase : public ISensorStructureUseCase {
+public:
+    int addSensorCalls = 0;
+    void addSensor(Node&, const SensorEntity&) override { addSensorCalls++; }
+    void addMultiChannelModbusSensor(Node&, const SensorEntity&) override {}
+    void addMultiChannelI2CSensor(Node&, const SensorEntity&) override {}
+    void addSingleChannelSensor(Node&, const SensorEntity&) override {}
+    void addVirtualChannelSensors(Node&, const SensorEntity&) override {}
+};
+
+struct RepublishUnderTest {
+    ModuleStructure structure;
+    MockSensorRepository sensorRepository;
+    MockHybridAPIService api;
+    CountingSensorStructureUseCase sensorStructure;
+    RepublishModuleStructureUseCase useCase;
+
+    RepublishUnderTest()
+        : useCase(&structure, &sensorRepository, &api, &sensorStructure, nullptr, nullptr)
+    {
+        Node node;
+        node.uid = "republish-node";
+        structure.nodes.push_back(node);
+    }
+};
+
+} // namespace
+
+void test_republish_retries_the_structure_three_times_when_the_server_refuses(void) {
+    RepublishUnderTest module;
+    module.api.sendModuleStructureReturnValue = false;
+
+    const bool sent = module.useCase.execute("virtual_channel_shift");
+
+    char message[176];
+    snprintf(message, sizeof(message),
+             "a refused republish went out %d times; it had three attempts before the retry loop "
+             "was taken out of the transport and it must still have three",
+             module.api.sendToServerModuleStructureCallCount);
+    TEST_ASSERT_FALSE(sent);
+    TEST_ASSERT_EQUAL_INT_MESSAGE(RepublishModuleStructureUseCase::MAX_ATTEMPTS,
+                                  module.api.sendToServerModuleStructureCallCount, message);
+}
+
+void test_republish_stops_at_the_first_accepted_structure(void) {
+    RepublishUnderTest module;
+    module.api.sendModuleStructureReturnValue = true;
+
+    const bool sent = module.useCase.execute("virtual_channel_shift");
+
+    TEST_ASSERT_TRUE(sent);
+    TEST_ASSERT_EQUAL_INT_MESSAGE(1, module.api.sendToServerModuleStructureCallCount,
+                                  "an accepted structure was sent more than once - the retry loop "
+                                  "does not stop on success");
+    TEST_ASSERT_EQUAL_MESSAGE(ApiPriority::BOTH, module.api.lastModuleStructurePriority,
+                              "the republish stopped going out through both transports");
 }
 
 extern "C" void run_module_structure_tests(void) {
     RUN_TEST(test_module_structure_parse_and_serialize);
     RUN_TEST(test_module_structure_lookup);
     RUN_TEST(test_module_structure_device_type);
+    RUN_TEST(test_republish_retries_the_structure_three_times_when_the_server_refuses);
+    RUN_TEST(test_republish_stops_at_the_first_accepted_structure);
 }

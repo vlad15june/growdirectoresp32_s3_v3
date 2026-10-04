@@ -31,7 +31,7 @@ void ProcessDeviceStateUseCase::loop()
 
 void ProcessDeviceStateUseCase::controlDeviceState()
 {
-    auto devices = deviceModel->getAllDevices();
+    const auto& devices = deviceModel->allDevices();
     for (int i = 0; i < devices.size(); i++)
     {
         processDeviceState(devices[i], i);
@@ -382,7 +382,7 @@ bool ProcessDeviceStateUseCase::isChannelInRange(int index)
 int ProcessDeviceStateUseCase::countDevicesInOffState()
 {
     int count = 0;
-    auto devices = deviceModel->getAllDevices();
+    const auto& devices = deviceModel->allDevices();
 
     for (size_t i = 0; i < devices.size(); i++)
     {

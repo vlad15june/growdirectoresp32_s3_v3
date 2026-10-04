@@ -33,6 +33,10 @@ public:
         lastSetValue = value;
     }
 
+    bool hasSensorValue(const std::string& sensorUid) const override {
+        return values.find(sensorUid) != values.end();
+    }
+
     void setLastReadTime(const std::string& sensorUid, uint32_t time) override {
         lastReadTimes[sensorUid] = time;
         setLastReadTimeCallCount++;

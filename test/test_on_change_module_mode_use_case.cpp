@@ -262,9 +262,7 @@ void test_loop_when_mode_changes_to_configured_done(void) {
 }
 
 // Main test runner function
-extern "C" int run_on_change_module_mode_use_case_tests(void) {
-    UNITY_BEGIN();
-    
+extern "C" void run_on_change_module_mode_use_case_tests(void) {
     RUN_TEST(test_loop_when_no_mode_change);
     RUN_TEST(test_loop_when_mode_changes_to_need_restart);
     RUN_TEST(test_loop_technical_need_restart_calls_hard_reset);
@@ -274,6 +272,4 @@ extern "C" int run_on_change_module_mode_use_case_tests(void) {
     RUN_TEST(test_loop_when_mode_changes_to_user_can_reconfigure);
     RUN_TEST(test_loop_when_mode_changes_to_ap_test_mode);
     RUN_TEST(test_loop_when_mode_changes_to_configured_done);
-    
-    return UNITY_END();
 }

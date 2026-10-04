@@ -6,12 +6,15 @@
 #include "time.h"
 #include "esp_sntp.h"
 #include <ESP32Time.h>
+#include <atomic>
 #include <cstdarg>
 #include <cstdio>
 
 #include "Core/Domain/Interfaces/ILogger.h"
 #include "Core/Domain/Interfaces/IDebugSystem.h"
 #include "Core/Domain/Interfaces/ISettings.h" // Add ISettings include
+#include "Core/Domain/Interfaces/Adapters/IArduinoAdapter.h"
+#include "StoredTimeSeedPolicy.h"
 
 // Forward declaration for the MqttLogger class
 class MqttLogger;
@@ -32,6 +35,26 @@ private:
     ILogger *_logger;
     IDebugSystem *_debugSystem;
     ISettings *_settings; // Add ISettings member
+    IArduinoAdapter *_arduinoAdapter;
+
+    // Decides which sync notifications are worth an EEPROM commit.
+    StoredTimeSeedPolicy _seedPolicy;
+
+    // How often SNTP asks a server. The normal interval is what a module with a working clock
+    // runs on; the forced one is a catch-up, asked for when the network comes back, and it lasts
+    // until a server has answered.
+    static const uint32_t NORMAL_SYNC_INTERVAL_MS = 5 * 60 * 1000UL;
+    static const uint32_t FORCED_SYNC_INTERVAL_MS = 30 * 1000UL;
+
+    // True between forceSyncTime() and the first sync it produces: SNTP is on the forced interval
+    // and something still has to put the normal one back.
+    bool _forcedSyncPending;
+
+    // What this boot's clock is made of: SNTP's first notification, and when it came - written on
+    // the SNTP task, read on the loop - and whether setup seeded the clock from storage.
+    std::atomic<bool> _sntpSetThisBoot;
+    std::atomic<unsigned long> _sntpSetAtMs;
+    std::atomic<bool> _seededFromStorage;
 
     // Utility buffer for logging
     char _logBuffer[256];
@@ -52,6 +75,9 @@ private:
     // Calculate total seconds from hours, minutes, seconds
     unsigned long calculateTotalSeconds(int hours, int minutes, int seconds);
 
+    // Milliseconds since boot, truncated to the 32 bits the device counter has
+    uint32_t uptimeMs();
+
     // Update real time seconds counter
     void updateRealTimeSeconds();
 
@@ -70,10 +96,12 @@ private:
     }
 
 public:
-    // Constructor
+    // Constructor. Without an Arduino adapter there is no uptime to compare the clock against,
+    // so a clock that steps is only stored when the seed next ages out.
     NTPTimeAdapter(ILogger *logger,
                    IDebugSystem *debugSystemInstance = nullptr,
                    ISettings *settings = nullptr, // Add settings parameter
+                   IArduinoAdapter *arduinoAdapter = nullptr,
                    const char *ntpServer = "pool.ntp.org",
                    long utcOffsetSeconds = 0,
                    int daylightOffsetSeconds = 0);
@@ -91,6 +119,9 @@ public:
     void restoreTimeFromStorage() override;
     void forceSyncTime() override;
     bool isTimeSynchronized() override;
+    bool wasSetBySntpThisBoot() override { return _sntpSetThisBoot.load(); }
+    unsigned long sntpSetAtMs() override { return _sntpSetAtMs.load(); }
+    bool wasSeededFromStorage() override { return _seededFromStorage.load(); }
     bool getLocalTime(struct tm* out) override;
 
     // Callback handler that will be called by the static callback
@@ -103,16 +134,22 @@ NTPTimeAdapter *NTPTimeAdapter::_instance = nullptr;
 NTPTimeAdapter::NTPTimeAdapter(ILogger *logger,
                                IDebugSystem *debugSystemInstance,
                                ISettings *settings, // Add settings parameter
+                               IArduinoAdapter *arduinoAdapter,
                                const char *ntpServer,
                                long utcOffsetSeconds,
                                int daylightOffsetSeconds)
     : _logger(logger),
       _debugSystem(debugSystemInstance),
       _settings(settings), // Initialize settings
+      _arduinoAdapter(arduinoAdapter),
       _ntpServer(ntpServer),
       _utcOffsetSeconds(utcOffsetSeconds),
       _daylightOffsetSeconds(daylightOffsetSeconds),
-      _realTimeSeconds(0)
+      _realTimeSeconds(0),
+      _forcedSyncPending(false),
+      _sntpSetThisBoot(false),
+      _sntpSetAtMs(0),
+      _seededFromStorage(false)
 {
     // Store instance pointer for callback
     _instance = this;
@@ -133,8 +170,9 @@ void NTPTimeAdapter::setup()
     log("TIME: Attempting to restore time from storage during setup\n");
     restoreTimeFromStorage();
     
-    // Set more aggressive time synchronization interval for faster sync (5 minutes initially)
-    sntp_set_sync_interval(5 * 60 * 1000UL);
+    // The interval a module with a working clock polls on; nothing is being caught up yet.
+    _forcedSyncPending = false;
+    sntp_set_sync_interval(NORMAL_SYNC_INTERVAL_MS);
 
     // Register callback for time synchronization
     sntp_set_time_sync_notification_cb(timeSyncCallback);
@@ -300,6 +338,7 @@ void NTPTimeAdapter::saveTimeToStorage()
     }
 
     putTimeToEEPROM(timeinfo);
+    _seedPolicy.recordWrite(StoredTimeSeedPolicy::civilSeconds(timeinfo), uptimeMs());
 
     char buffer[150];
     strftime(buffer, sizeof(buffer), "%Y-%m-%dT%H:%M:%SZ", &timeinfo);
@@ -325,6 +364,7 @@ void NTPTimeAdapter::restoreTimeFromStorage()
     if (timeinfo.tm_year + 1900 > 2020)
     {
         _rtc.setTimeStruct(timeinfo);
+        _seededFromStorage.store(true);
         log("TIME_SYNC: System clock seeded from EEPROM: %s\n", buffer);
     }
     else
@@ -346,6 +386,48 @@ void NTPTimeAdapter::timeSyncCallback(struct timeval *tv)
 // Non-static callback handler
 void NTPTimeAdapter::onTimeSynchronized()
 {
+    // A server has answered on this boot - noted before the clock is read, whether it reads or
+    // not, and once: the moment is the first answer's.
+    if (!_sntpSetThisBoot.load())
+    {
+        _sntpSetAtMs.store(uptimeMs());
+        _sntpSetThisBoot.store(true);
+    }
+
+    struct tm timeinfo;
+
+    if (!getLocalTime(&timeinfo))
+    {
+        log("TIME_SYNC: Sync notified but the clock is unreadable, stored time left alone\n");
+        return;
+    }
+
+    // A server has answered and the clock reads, so whatever the forced interval was asked for is
+    // done: the next request goes out on the normal one. SNTP reads the interval when it schedules
+    // that request, which happens after this notification returns.
+    if (_forcedSyncPending)
+    {
+        _forcedSyncPending = false;
+        sntp_set_sync_interval(NORMAL_SYNC_INTERVAL_MS);
+        log("TIME_SYNC: Caught up, SNTP back to the normal polling interval\n");
+    }
+
+    // The stored time is a seed for the next boot, and a sync happens every few minutes: writing
+    // it every time would spend the endurance of the settings sector on a value nothing reads
+    // while the module is running. It is refreshed when it has aged out, and off schedule only
+    // when the clock has been set to something the stored value no longer describes.
+    const long long wallSeconds = StoredTimeSeedPolicy::civilSeconds(timeinfo);
+    const bool aged = _seedPolicy.isPlannedWriteDue(wallSeconds);
+    const bool stepped = _arduinoAdapter != nullptr &&
+                         _seedPolicy.isClockStepDetected(wallSeconds, uptimeMs());
+
+    if (!aged && !stepped)
+    {
+        log("TIME_SYNC: Stored time still describes this clock, skipping EEPROM write\n");
+        return;
+    }
+
+    log("TIME_SYNC: Refreshing stored time (aged=%d stepped=%d)\n", aged ? 1 : 0, stepped ? 1 : 0);
     saveTimeToStorage();
 }
 
@@ -365,6 +447,16 @@ void NTPTimeAdapter::updateRealTimeSeconds()
 unsigned long NTPTimeAdapter::calculateTotalSeconds(int hours, int minutes, int seconds)
 {
     return hours * 3600 + minutes * 60 + seconds;
+}
+
+uint32_t NTPTimeAdapter::uptimeMs()
+{
+    if (_arduinoAdapter == nullptr)
+    {
+        return 0;
+    }
+
+    return static_cast<uint32_t>(_arduinoAdapter->millis());
 }
 
 // EEPROM operations - Modified to use ISettings
@@ -401,8 +493,9 @@ void NTPTimeAdapter::forceSyncTime()
     // Stop SNTP service
     sntp_stop();
     
-    // Restart SNTP service with aggressive settings
-    sntp_set_sync_interval(30 * 1000UL); // 30 seconds for immediate sync
+    // Restart SNTP service with aggressive settings until a server answers
+    _forcedSyncPending = true;
+    sntp_set_sync_interval(FORCED_SYNC_INTERVAL_MS);
     sntp_set_time_sync_notification_cb(timeSyncCallback);
     
     // Reconfigure time servers

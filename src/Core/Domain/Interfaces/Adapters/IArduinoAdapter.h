@@ -3,6 +3,10 @@
 
 #include <cstddef> // For size_t
 
+#ifdef GD_HEAP_FORENSICS
+#include "Core/Domain/Diagnostics/HeapTaskLedger.h"
+#endif
+
 class IArduinoAdapter {
 public:
     virtual ~IArduinoAdapter() = default;
@@ -56,6 +60,29 @@ public:
     virtual uint32_t getMaxAllocHeap() = 0;
     virtual uint32_t getPsramSize() = 0;
     virtual uint32_t getFreePsram() = 0;
+    // Largest block a single allocation can still get out of PSRAM: free bytes say how much is
+    // left, this says whether any of it is usable in one piece.
+    virtual uint32_t getMaxAllocPsram() = 0;
+
+#ifdef GD_HEAP_FORENSICS
+    // Heap-forensics builds only. Who holds the heap, task by task: one walk over every allocated block
+    // with the heap locked, so it is for the rare moment worth that and never for a steady path.
+    // Fills the owners of the caller's ledger and asks for no memory. A platform that keeps no
+    // such account answers false - which is what every implementation does unless it says
+    // otherwise.
+    virtual bool readHeapOwners(HeapTaskLedger& ledger) {
+        (void)ledger;
+        return false;
+    }
+
+    // The other half of the ledger: the tasks alive now, by handle and name - what turns an
+    // owner into a word. A call of its own because it locks something else, the kernel, and its
+    // price is worth knowing apart from the walk's. A platform that cannot list them says so.
+    virtual void readLiveTasks(HeapTaskLedger& ledger) {
+        ledger.taskCount = 0;
+        ledger.tasksListed = false;
+    }
+#endif
 };
 
 #endif // I_ARDUINO_ADAPTER_H

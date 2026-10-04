@@ -692,9 +692,55 @@ void test_send_rule_state_command_with_different_priorities() {
     hybrid_api_service_teardown();
 }
 
-extern "C" int run_hybrid_api_service_tests(void) {
-    UNITY_BEGIN();
-    
+// The catalog fetch is REST-only, like the rule list, and the flag that tells a failed request
+// from an account with no sensor models has to survive the trip through this service. Losing it
+// here would make every outage look to SyncSensorTypesUseCase like a server saying "no models".
+void test_sensor_types_list_carries_the_http_failure_flag_through() {
+    hybrid_api_service_setup();
+
+    g_mockRestApi.reset();
+    g_mockMqttApi.reset();
+    SensorType type;
+    type.uid = "type-1";
+    type.name = "type_1";
+    g_mockRestApi.sensorTypesListReturnValue.push_back(type);
+
+    bool httpFailed = true; // start from the wrong value so a service that never writes it fails
+    std::vector<SensorType> types = g_hybridApiService->getSensorTypesList(&httpFailed);
+
+    TEST_ASSERT_TRUE(g_mockRestApi.getSensorTypesListCalled);
+    TEST_ASSERT_FALSE_MESSAGE(g_mockMqttApi.sendToServerModuleStructureCalled,
+                              "the catalog fetch is REST-only and must not touch MQTT");
+    TEST_ASSERT_EQUAL_UINT32(1, (uint32_t)types.size());
+    TEST_ASSERT_FALSE_MESSAGE(httpFailed,
+                              "a successful fetch was reported as a failed request");
+
+    g_mockRestApi.reset();
+    g_mockRestApi.getSensorTypesListHttpFailed = true;
+    httpFailed = false;
+    types = g_hybridApiService->getSensorTypesList(&httpFailed);
+
+    TEST_ASSERT_EQUAL_UINT32(0, (uint32_t)types.size());
+    TEST_ASSERT_TRUE_MESSAGE(httpFailed,
+                             "a failed request came back through this service as an empty catalog "
+                             "from a server that answered");
+}
+
+// No REST service at all is not "this account has no sensor models" either.
+void test_sensor_types_list_reports_a_failure_when_there_is_no_rest_service() {
+    HybridAPIService service(nullptr, &g_mockMqttApi, &g_mockModuleConfig, &g_mockLogger,
+                             &g_mockDebugSystem, ApiPriority::REST_PREFERRED);
+
+    bool httpFailed = false;
+    std::vector<SensorType> types = service.getSensorTypesList(&httpFailed);
+
+    TEST_ASSERT_EQUAL_UINT32(0, (uint32_t)types.size());
+    TEST_ASSERT_TRUE_MESSAGE(httpFailed,
+                             "with no REST service the catalog fetch reported success with an "
+                             "empty list");
+}
+
+extern "C" void run_hybrid_api_service_tests(void) {
     RUN_TEST(test_init_returns_true_if_either_api_is_available);
     RUN_TEST(test_is_module_online_with_both_apis);
     RUN_TEST(test_send_to_server_module_structure_with_different_priorities);
@@ -703,6 +749,6 @@ extern "C" int run_hybrid_api_service_tests(void) {
     RUN_TEST(test_failure_tracking);
     RUN_TEST(test_rest_only_methods);
     RUN_TEST(test_device_command_execution_result_with_different_priorities);
-    
-    return UNITY_END();
+    RUN_TEST(test_sensor_types_list_carries_the_http_failure_flag_through);
+    RUN_TEST(test_sensor_types_list_reports_a_failure_when_there_is_no_rest_service);
 }

@@ -2,6 +2,7 @@
 #define I_WIFI_ADAPTER_H
 
 class ILogger;
+class WifiLinkLogUseCase;
 
 class IWifiAdapter {
 public:
@@ -21,7 +22,6 @@ public:
     
     // Multi-network functionality
     virtual bool addNetwork(const char* ssid, const char* password) = 0;
-    virtual bool connectToNetworks(unsigned long timeout = 60000) = 0;
     virtual void clearNetworks() = 0;
     
     // Network information
@@ -43,6 +43,10 @@ public:
     // AP diagnostics (used by test mode for verbose logging)
     virtual void enableApEventLogging(ILogger* logger) = 0;
     virtual int getConnectedClientCount() = 0;
+
+    // The station link as the radio reports it: a connect and a drop are system events, and only
+    // the event carries the reason code for a drop. Armed once, before the first association.
+    virtual void reportLinkEventsTo(WifiLinkLogUseCase* linkLog) = 0;
 };
 
 #endif // I_WIFI_ADAPTER_H

@@ -33,6 +33,20 @@ public:
      */
     virtual std::unique_ptr<ISpiffsFileWriter> openForRewrite(const char* filePath) = 0;
     virtual unsigned int getFileSize(const char* filePath) = 0;
+
+    /**
+     * @brief Look a file up the way the file system indexes it, without opening it
+     *
+     * Unlike fileExists() and getFileSize(), which open the file to answer and so answer "not
+     * there" or 0 when the open itself fails, this asks the file system's own index: what it
+     * answers about a file that is there does not depend on whether the file could be opened.
+     *
+     * @param size Set to the file's size when the file is there
+     * @param missing Set to true when the file system says the file is not there; false when the
+     *        lookup itself failed
+     * @return true when the file is there
+     */
+    virtual bool statFile(const char* filePath, size_t& size, bool& missing) = 0;
     virtual bool directoryExists(const char* path) = 0;
     virtual bool createDirectory(const char* path) = 0;
     virtual FileSystemStatusEnum getFileSystemStatus() = 0;

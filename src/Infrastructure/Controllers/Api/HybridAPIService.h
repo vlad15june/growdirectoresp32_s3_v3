@@ -755,57 +755,78 @@ public:
         return commands;
     }
 
-    std::vector<Rule> getRuleList() override
+    std::vector<Rule> getRuleList(bool* httpFailed = nullptr, bool* readWhole = nullptr) override
     {
         std::vector<Rule> rules;
-        
+
+        if (httpFailed != nullptr)
+            *httpFailed = false;
+        if (readWhole != nullptr)
+            *readWhole = false;
+
         // This method always uses REST API only, regardless of priority setting
         if (_restApiService != nullptr)
         {
-            rules = _restApiService->getRuleList();
+            rules = _restApiService->getRuleList(httpFailed, readWhole);
             log("HYBRID API: Get rule list via REST - rule count: %d", rules.size());
         }
         else
         {
             log("HYBRID API: REST API service not available for getRuleList");
+            if (httpFailed != nullptr)
+                *httpFailed = true;
         }
-        
+
         return rules;
     }
     
-    std::vector<SensorType> getSensorTypesList() override
+    std::vector<SensorType> getSensorTypesList(bool* httpFailed = nullptr) override
     {
         std::vector<SensorType> sensorTypes;
-        
+
+        if (httpFailed != nullptr)
+        {
+            *httpFailed = false;
+        }
+
         // This method always uses REST API only, regardless of priority setting
         if (_restApiService != nullptr)
         {
-            sensorTypes = _restApiService->getSensorTypesList();
+            sensorTypes = _restApiService->getSensorTypesList(httpFailed);
             log("HYBRID API: Get sensor types list via REST - sensor type count: %d", sensorTypes.size());
         }
         else
         {
             log("HYBRID API: REST API service not available for getSensorTypesList");
+            if (httpFailed != nullptr)
+            {
+                *httpFailed = true;
+            }
         }
-        
+
         return sensorTypes;
     }
     
-    std::vector<ModuleCommandDto> getModuleCommand() override
+    std::vector<ModuleCommandDto> getModuleCommand(bool* httpFailed = nullptr) override
     {
         std::vector<ModuleCommandDto> commands;
-        
+
+        if (httpFailed != nullptr)
+            *httpFailed = false;
+
         // This method always uses REST API only, regardless of priority setting
         if (_restApiService != nullptr)
         {
-            commands = _restApiService->getModuleCommand();
+            commands = _restApiService->getModuleCommand(httpFailed);
             log("HYBRID API: Get module commands via REST - command count: %d", commands.size());
         }
         else
         {
             log("HYBRID API: REST API service not available for getModuleCommand");
+            if (httpFailed != nullptr)
+                *httpFailed = true;
         }
-        
+
         return commands;
     }
     

@@ -10,33 +10,39 @@ public:
     bool initCalled = false;
     bool loopCalled = false;
     bool forceSyncCalled = false;
+    bool syncNowCalled = false;
     bool getLastSyncStatusCalled = false;
     bool getLastSyncTimeCalled = false;
     
     // Return values
     bool initReturnValue = true;
     bool forceSyncReturnValue = true;
+    bool syncNowReturnValue = true;
     bool lastSyncStatusReturnValue = true;
     time_t lastSyncTimeReturnValue = 0;
     
     // Call counters
     int loopCallCount = 0;
     int forceSyncCallCount = 0;
+    int syncNowCallCount = 0;
     
     void reset() {
         initCalled = false;
         loopCalled = false;
         forceSyncCalled = false;
+        syncNowCalled = false;
         getLastSyncStatusCalled = false;
         getLastSyncTimeCalled = false;
         
         initReturnValue = true;
         forceSyncReturnValue = true;
+        syncNowReturnValue = true;
         lastSyncStatusReturnValue = true;
         lastSyncTimeReturnValue = 0;
         
         loopCallCount = 0;
         forceSyncCallCount = 0;
+        syncNowCallCount = 0;
     }
     
     // ISyncSensorTypesUseCase implementation
@@ -54,6 +60,12 @@ public:
         forceSyncCalled = true;
         forceSyncCallCount++;
         return forceSyncReturnValue;
+    }
+
+    bool syncNow() override {
+        syncNowCalled = true;
+        syncNowCallCount++;
+        return syncNowReturnValue;
     }
     
     bool getLastSyncStatus() const override {

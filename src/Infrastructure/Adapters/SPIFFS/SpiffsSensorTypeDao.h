@@ -108,7 +108,20 @@ protected:
     }
 
     bool jsonToEntities(const std::string& jsonStr, std::vector<SensorType>& sensorTypes) {
-        return jsonConverter->sensorTypesFromJson(jsonStr, sensorTypes);
+        // Unchanged for the same reason as SpiffsRuleDao: true has always meant "the file holds
+        // at least one sensor type", and getAll() below passes that on as its own result.
+        size_t skipped = 0;
+        const bool read = jsonConverter->sensorTypesFromJson(jsonStr, sensorTypes, skipped) == JsonListParse::Ok;
+
+        // A stored model that cannot be read is left out, and the catalog is that much shorter for
+        // the rest of the module's life. The result says "the file was read"; only this says what
+        // it cost.
+        if (skipped > 0) {
+            log("SpiffsSensorTypeDao: WARNING - %d of %d stored sensor types could not be read and were skipped",
+                static_cast<int>(skipped), static_cast<int>(skipped + sensorTypes.size()));
+        }
+
+        return read;
     }
 
     /**
@@ -166,13 +179,18 @@ protected:
         return false;
     }
 
+    /**
+     * @brief Work out where the catalog lives; every entry point calls it on first use.
+     *
+     * Not called from the constructor: this DAO is a member of the dependency graph, which is
+     * built before the file system is mounted, so anything it asks of storage there fails.
+     *
+     * No directory is made: SPIFFS is flat, mkdir() on it always answers ENOTSUP, and the base
+     * path is simply the first part of the file's name.
+     */
     void initialize() {
         log("SpiffsSensorTypeDao: Initializing");
         std::string basePath = getBasePath();
-        if (!spiffsAdapter->directoryExists(basePath.c_str())) {
-            log("SpiffsSensorTypeDao: Creating directory: %s", basePath.c_str());
-            spiffsAdapter->createDirectory(basePath.c_str());
-        }
         filePath = basePath + "/" + getFileName();
         log("SpiffsSensorTypeDao: File path set to: %s", filePath.c_str());
     }
@@ -200,7 +218,6 @@ public:
         if (!spiffsAdapter || !jsonConverter) {
             throw std::invalid_argument("Adapters cannot be null");
         }
-        initialize();
     }
 
     bool clear() override {

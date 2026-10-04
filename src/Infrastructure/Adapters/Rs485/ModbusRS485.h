@@ -15,8 +15,14 @@ private:
     int _txPin;           // TX pin
     int _sensorPowerPin;  // Sensor power pin
     bool _isPoweredOn;    // Track power state
+    PortPower _power;     // When the power pin last moved, see powerRecord()
+    uint32_t _droppedFrames = 0;  // Frames refused because the UART was never begun
+    bool _dropReported = false;   // The first refusal on this port has been logged
 
 public:
+    /** Name of the counters-line column that sums droppedFrameCount() over the ports. */
+    static constexpr const char *DROP_COLUMN = "rs485_drop_uninit";
+
     ModbusRS485(HardwareSerial &port, int controlPin, const char *portName, IArduinoAdapter &arduino, uint32_t config, int rxPin, int txPin, int sensorPowerPin)
         : _port(port), _controlPin(controlPin), _portName(portName), _arduino(arduino), _config(config), _rxPin(rxPin), _txPin(txPin), _sensorPowerPin(sensorPowerPin), _isPoweredOn(false)
     {
@@ -59,8 +65,43 @@ public:
 
     void sendData(uint8_t *data, uint8_t length) override
     {
-        _arduino.digitalWrite(_sensorPowerPin, _arduino.getDigitalHigh());
-        _arduino.delay(100);
+        // The 100 ms is a sensor's power-up settling time, so it is owed to the *transition*
+        // from unpowered to powered - not to every request. Sleeping on each send would mean, on
+        // a port that has been powered since boot, waiting for an event that already happened,
+        // once per channel per attempt: 100 ms of every ~145 ms a healthy channel costs, and
+        // 300 ms of every silent sensor's 1400 ms.
+        //
+        // `_isPoweredOn` is maintained by powerOnPort() and
+        // powerOffPort(), and the wait is skipped when it is set. State is per instance and each
+        // instance owns one SENSOR_POWER_n pin (globals.h, `modbusRS485_pin1` to `modbusRS485_pin4`), so this is per port, not
+        // global - two ports sharing a UART still have their own power pin and their own flag.
+        if (!_isPoweredOn)
+        {
+            _arduino.digitalWrite(_sensorPowerPin, _arduino.getDigitalHigh());
+            _arduino.delay(100);
+            _isPoweredOn = true;
+            _power.wentOn(static_cast<uint32_t>(_arduino.millis()));
+        }
+
+        // A UART nobody has begun has no driver behind it: HardwareSerial::write() still returns 1
+        // and flush() returns at once, but not a bit reaches the TX pin and nothing is ever
+        // received (uartWrite(), uartFlushTxOnly() and uartAvailable() return early on a NULL
+        // uart). So the frame is refused here instead of being written into that silence: the
+        // first refusal on the port is logged, every one is counted. The UARTs are begun once at
+        // boot, before any frame (ModuleSetupService::setupSensorBus()), so on a sensor module
+        // this stays at zero.
+        if (!_port)
+        {
+            _droppedFrames++;
+            if (!_dropReported)
+            {
+                _dropReported = true;
+                Serial.printf("[%s] RS485: frame dropped - port not initialized (DE pin %d); "
+                              "further drops on this port are only counted (%s)\n",
+                              _portName, _controlPin, DROP_COLUMN);
+            }
+            return;
+        }
 
         Serial.printf("[%s] Sending request: ", _portName);
         for (int i = 0; i < length; i++)
@@ -92,6 +133,12 @@ public:
     const char *getPortName() const override
     {
         return _portName;
+    }
+
+    /** @brief Frames sendData() refused because this port's UART had not been begun. */
+    uint32_t droppedFrameCount() const
+    {
+        return _droppedFrames;
     }
 
     bool writeRegister(int slaveAddress, int registerAddress, uint16_t value) override
@@ -189,6 +236,7 @@ public:
         _arduino.digitalWrite(_sensorPowerPin, _arduino.getDigitalHigh());
         _arduino.delay(100);
         _isPoweredOn = true;
+        _power.wentOn(static_cast<uint32_t>(_arduino.millis()));
         Serial.printf("[%s] Port powered ON\n", _portName);
         return true;
     }
@@ -200,10 +248,27 @@ public:
             return false;
         }
         _arduino.digitalWrite(_sensorPowerPin, _arduino.getDigitalLow());
+        _power.wentOff(static_cast<uint32_t>(_arduino.millis()));
         _arduino.delay(100);
         _isPoweredOn = false;
         Serial.printf("[%s] Port powered OFF\n", _portName);
         return true;
+    }
+
+    /**
+     * The moments are the ones the sensor sees: the power is there to use once the 100 ms of
+     * settling are over, and it is gone the moment the pin goes low. The constructor drives the pin
+     * low without a transition, so a port nothing has switched on yet is dark with no record of it.
+     */
+    PortPower powerRecord() const override
+    {
+        return _power;
+    }
+
+    /** The HardwareSerial this port was built on: ports built on one share a wire (globals.h). */
+    const void *wire() const override
+    {
+        return &_port;
     }
 };
 #endif

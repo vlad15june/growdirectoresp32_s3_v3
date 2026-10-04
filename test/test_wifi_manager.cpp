@@ -6,20 +6,20 @@
 #include "Mock/Infrastructure/SPIFFS/MockSpiffsAdapter.h"
 #include "Mock/Infrastructure/Wifi/MockWifiAdapter.h"
 #include "Mock/Infrastructure/Configuration/MockSettings.h"
-#include "Infrastructure/Adapters/Json/JsonConverter.h"
+#include "Infrastructure/Adapters/Json/ArduinoJsonConverter.h"
 
 // Test fixtures
 static MockSpiffsAdapter* mockSpiffs;
 static MockWifiAdapter* mockWifiAdapter;
 static MockSettings* mockSettings;
-static JsonConverter* jsonConverter;
+static ArduinoJsonConverter* jsonConverter;
 static WiFiManager* wifiManager;
 
 void setUp_wifi_manager(void) {
     mockSpiffs = new MockSpiffsAdapter();
     mockWifiAdapter = new MockWifiAdapter();
     mockSettings = new MockSettings();
-    jsonConverter = new JsonConverter();
+    jsonConverter = new ArduinoJsonConverter();
     wifiManager = new WiFiManager(mockWifiAdapter, mockSettings, nullptr, nullptr, mockSpiffs, jsonConverter);
 }
 
@@ -98,7 +98,8 @@ void test_add_wifi_registers_with_adapter(void) {
     tearDown_wifi_manager();
 }
 
-// Pre-populated SPIFFS file: setupWifiConnection() loads all networks into adapter
+// Pre-populated SPIFFS file: registerNetworks() hands all of them to the adapter, and associates
+// with none
 void test_setup_loads_from_file(void) {
     setUp_wifi_manager();
 
@@ -107,11 +108,11 @@ void test_setup_loads_from_file(void) {
     mockSpiffs->writeToFile("/wifiNetworks.json", fileContent);
 
     mockWifiAdapter->reset();
-    mockWifiAdapter->connectToNetworksSuccess = true;
-    wifiManager->setupWifiConnection();
+    TEST_ASSERT_EQUAL(2, wifiManager->registerNetworks());
 
     // Both networks should have been registered
     TEST_ASSERT_EQUAL(2, static_cast<int>(mockWifiAdapter->savedNetworks.size()));
+    TEST_ASSERT_FALSE_MESSAGE(mockWifiAdapter->reconnectCalled, "handing over the networks associated");
 
     tearDown_wifi_manager();
 }
@@ -122,8 +123,7 @@ void test_setup_falls_back_to_eeprom_when_file_empty(void) {
 
     // No file in SPIFFS
     mockWifiAdapter->reset();
-    mockWifiAdapter->connectToNetworksSuccess = true;
-    wifiManager->setupWifiConnection();
+    TEST_ASSERT_EQUAL(1, wifiManager->registerNetworks());
 
     // Must have called addNetwork exactly once (the EEPROM fallback)
     TEST_ASSERT_EQUAL(1, static_cast<int>(mockWifiAdapter->savedNetworks.size()));

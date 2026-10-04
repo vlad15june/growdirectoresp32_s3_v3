@@ -1,0 +1,62 @@
+# WiFi driver buffer counts - the half of the ceiling that lives in the configuration.
+#
+# Overlay applied on top of sdkconfig.defaults, the conservative TLS overlay and the lean WiFi
+# overlay; none of them is edited here. It is only in force in a build that also defines
+# GD_WIFI_STATIC_BUFFERS, because the Arduino core replaces these counts with its own in the
+# structure it hands the driver unless the firmware asks it to keep them; the two halves check
+# each other at compile time in src/Infrastructure/Adapters/WiFi/WifiDriverBufferProfile.h.
+#
+# What the counts mean, from esp_wifi/Kconfig and from the driver's buffer setup: the static
+# receive buffers are allocated once, at initialisation, and pinned until the driver is torn down;
+# the dynamic ones are allocated per received frame and freed when the network stack is done with
+# the frame, and their count is a hard ceiling - past it the allocation is refused and the frame
+# is dropped rather than the heap growing. The same split holds for the transmit side.
+#
+# STATIC_RX_BUFFER_NUM 8 -> 4. Four is what the core hands the driver today, so the pinned part of
+# the receive path does not change; the Kconfig entry is brought to the same number so that the
+# configuration and the radio agree. Four also keeps the block-ack window of the lean overlay
+# within the rule ESP-IDF checks at build time (6 <= 2 * 4), which with the core's numbers was
+# checked against a static count the radio never saw.
+#
+# DYNAMIC_RX_BUFFER_NUM 32 -> 12. This is the ceiling of one burst: what the radio hands the stack
+# at once during a burst of group frames or after a reordering window closes. Thirty-two buffers
+# of up to 1.6 KB are about 51 KB - more than the free heap of this firmware in its steady state,
+# so today the burst is limited by the allocator failing, not by the configuration. Twelve is
+# about 19 KB, and it is chosen against the two floors the receive path has: at least the
+# block-ack window (6), so a full window can be held, and at least the number of static receive
+# buffers (Kconfig help), with room for a window's worth of frames already on their way to the
+# stack while the next window fills.
+#
+# TX type static -> dynamic, DYNAMIC_TX_BUFFER_NUM 16. The base configuration selects static
+# transmit buffers, which are pinned whole at initialisation, 1.6 KB each, whether or not anything
+# is being sent; dynamic ones are allocated per frame, sized to the frame, and capped by this count
+# - about 25 KB worst case against 51 KB with the factory count of 32. The dynamic type is offered
+# by Kconfig only when the build has no external RAM allocator, which is this build; the line
+# printed at station start says which of the two the driver got.
+#
+# CACHE_TX_BUFFER_NUM is deliberately not set, and cannot usefully be. The entry exists only for
+# builds with external RAM support, where its Kconfig range starts at 16 and a value below a range
+# is not clamped but ignored in favour of the Kconfig default (32) - so there is no value here that
+# lowers it. The driver allocates that cache whole at initialisation and does so only when the
+# external-RAM feature bit is compiled in; without that support the entry is gone, the bit is
+# clear, and no cache is allocated at all. That is why GD_WIFI_STATIC_BUFFERS refuses to build
+# against a configuration that still has the support.
+#
+# LWIP_TCP_OOSEQ_MAX_PBUFS 0 -> 4, and this one is not an extra: it is what keeps the receive
+# ceiling from turning into a stall. A frame the driver hands up is not copied - the pbuf the
+# stack gets points into the driver's buffer and releases it when the pbuf is freed
+# (lwip/port/esp32/netif/wlanif.c, PBUF_REF with the buffer held in p->l2_buf). So every segment
+# lwIP parks in a connection's out-of-order queue keeps one dynamic RX buffer allocated. With the
+# queue unlimited - which is what 0 means - a connection on a lossy link can park every buffer the
+# driver is allowed to have, and then the retransmission that would fill the gap has nothing to be
+# received into. ESP-IDF's own help states the rule: OOSEQ_MAX_PBUFS <= DYNAMIC_RX_BUFFER_NUM /
+# (number of TCP connections + 1); with twelve dynamic buffers and the two connections this
+# firmware holds (MQTT and the REST/TLS one) that is 4, which is also the Kconfig default for a
+# build whose WiFi buffers cannot spill into external RAM. Four is a whole receive window
+# (LWIP_TCP_WND_DEFAULT 5760 = 4 x MSS 1436), so a single lost segment in a full window is still
+# reassembled without a retransmission.
+CONFIG_ESP32_WIFI_STATIC_RX_BUFFER_NUM=4
+CONFIG_ESP32_WIFI_DYNAMIC_RX_BUFFER_NUM=12
+CONFIG_ESP32_WIFI_DYNAMIC_TX_BUFFER=y
+CONFIG_ESP32_WIFI_DYNAMIC_TX_BUFFER_NUM=16
+CONFIG_LWIP_TCP_OOSEQ_MAX_PBUFS=4

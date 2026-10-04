@@ -3,6 +3,7 @@
 #include "SpiffsDao.h"
 #include "ISpiffsRuleDao.h"
 #include "Core/Domain/Data/Entities/Rule.h"
+#include <functional>
 
 /**
  * @brief Implementation of Rule-specific DAO using SPIFFS storage
@@ -32,7 +33,11 @@ protected:
     }
 
     bool jsonToEntities(const std::string& jsonStr, std::vector<Rule>& rules) override {
-        return jsonConverter->rulesFromJson(jsonStr, rules);
+        // "true" here means "there is at least one rule in the file", and SpiffsDao::getAll()
+        // reports that as its own success - a stored "[]" answers false. Whether an empty rule
+        // file should count as a successful load is a real question, but it is a storage-layer
+        // question, deliberately not answered here.
+        return jsonConverter->rulesFromJson(jsonStr, rules) == JsonListParse::Ok;
     }
 
     bool filterRules(const std::function<bool(const Rule&)>& predicate, std::vector<Rule>& rules) {
@@ -61,7 +66,6 @@ public:
      */
     SpiffsRuleDao(ISpiffsAdapter* spiffsAdapter, IJsonConverter* jsonConverter, IDebugSystem* debugSystem = nullptr, ILogger* logger = nullptr)
         : SpiffsDao<Rule>(spiffsAdapter, jsonConverter, debugSystem, logger) {
-        initialize(); // Initialize after object creation
     }
 
     // Implementation of ISpiffsDao methods - needed to resolve ambiguity
@@ -83,6 +87,10 @@ public:
 
     bool getAll(std::vector<Rule>& entities) override {
         return SpiffsDao<Rule>::getAll(entities);
+    }
+
+    StoredRead readAll(std::vector<Rule>& entities) override {
+        return SpiffsDao<Rule>::readAll(entities);
     }
 
     bool clear() override {

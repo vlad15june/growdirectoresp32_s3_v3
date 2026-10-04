@@ -7,10 +7,26 @@
 #include <vector>
 #include <string>
 #include <set>
+#include <stdint.h>
 
 class IRuleRepository : public IRepository<Rule> {
 public:
     virtual ~IRuleRepository() = default;
+
+    /**
+     * @brief Revision of the stored rule set, changed by every successful mutation
+     *
+     * Lets a caller that evaluates the rules periodically keep a snapshot and re-read the
+     * repository only when the content actually changed, instead of copying the full registry
+     * on every pass. The value carries no meaning beyond "different from before".
+     *
+     * @return Current revision. 0 is reserved for "no revision available - treat every call
+     *         as a potential change": this default (no revision tracking) always answers 0,
+     *         and a tracking implementation must not answer 0 in its normal course - a
+     *         permanent 0 disables the caller's snapshot entirely and re-copies the registry
+     *         on every pass. Reading 0 as "changed" costs a re-read, never a stale snapshot.
+     */
+    virtual uint32_t rulesRevision() { return 0; }
 
     /**
      * @brief Get rules by their type

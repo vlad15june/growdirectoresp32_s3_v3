@@ -13,7 +13,7 @@
 #include "Application/DTOs/DeviceDto.h"
 #include "Application/DTOs/RuleStateUpdateDto.h"
 #include "Application/DTOs/CommandDto.h"
-#include "Infrastructure/Adapters/Json/JsonConverter.h"
+#include "Infrastructure/Adapters/Json/ArduinoJsonConverter.h"
 #include "Application/Services/Rules/RuleValidator.h"
 #include "Application/Services/CommandService.h"
 
@@ -58,7 +58,7 @@ public:
 
 static void test_workflow_fields_parsed(void)
 {
-    JsonConverter c;
+    ArduinoJsonConverter c;
     Rule rule;
     TEST_ASSERT_TRUE(c.ruleFromJson(kWorkflowRuleJson, rule));
 
@@ -71,7 +71,7 @@ static void test_workflow_fields_parsed(void)
 
 static void test_standalone_defaults_when_absent(void)
 {
-    JsonConverter c;
+    ArduinoJsonConverter c;
     Rule rule;
     TEST_ASSERT_TRUE(c.ruleFromJson(kStandaloneRuleJson, rule));
 
@@ -84,7 +84,7 @@ static void test_standalone_defaults_when_absent(void)
 
 static void test_workflow_fields_roundtrip(void)
 {
-    JsonConverter c;
+    ArduinoJsonConverter c;
     Rule rule;
     TEST_ASSERT_TRUE(c.ruleFromJson(kWorkflowRuleJson, rule));
 
@@ -180,7 +180,7 @@ static void test_predecessor_and_priority_do_not_gate(void)
 
 static void test_updateToJson_emits_for_workflow_device(void)
 {
-    JsonConverter c;
+    ArduinoJsonConverter c;
     UpdateDto u;
 
     DeviceDto d;
@@ -200,7 +200,7 @@ static void test_updateToJson_emits_for_workflow_device(void)
 
 static void test_updateToJson_omits_for_standalone_device(void)
 {
-    JsonConverter c;
+    ArduinoJsonConverter c;
     UpdateDto u;
 
     DeviceDto d;

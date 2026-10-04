@@ -161,6 +161,18 @@ public:
             sensorValue.sensorUid = sensorUid;
         }
         sensorValue.currentValue = value;
+        sensorValue.hasCurrentValue = true;
+    }
+
+    /**
+     * @brief Check if a single sensor value has been stored
+     * @param sensorUid Sensor UID
+     * @return True once a single value has been stored for this UID, whatever the value
+     */
+    bool hasSensorValue(const std::string& sensorUid) const override {
+        std::lock_guard<std::mutex> lock(valuesMutex);
+        auto sensorIt = sensorValues.find(sensorUid);
+        return sensorIt != sensorValues.end() && sensorIt->second.hasCurrentValue;
     }
 
     void setLastReadTime(const std::string& sensorUid, uint32_t time) override {

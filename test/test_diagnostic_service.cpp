@@ -1,5 +1,11 @@
 #include <unity.h>
+
+// Arduino.h stand-in first: ArduinoJsonConverter.h pulls in headers that expect it (env:native).
+#include "Mock/ArduinoMock.h"
+
 #include "Application/Services/DiagnosticService.h"
+#include "Application/Services/Net/LinkSupervisor.h"
+#include "Mock/Application/MockOutbox.h"
 #include "Mock/Infrastructure/HTTP/MockRestAPIService.h"
 #include "Mock/Infrastructure/Configuration/MockModuleConfig.h"
 #include "Mock/Infrastructure/Logging/MockLogger.h"
@@ -10,7 +16,7 @@
 #include "Mock/Infrastructure/MockArduinoAdapter.h"
 #include "Mock/Infrastructure/Mqtt/MockMqttManager.h"
 #include "Mock/Infrastructure/Api/MockHybridAPIService.h"
-#include "Infrastructure/Adapters/Json/JsonConverter.h"
+#include "Infrastructure/Adapters/Json/ArduinoJsonConverter.h"
 #include "Application/DTOs/DeviceCommandUpdateDto.h"
 
 // Global test variables
@@ -24,8 +30,9 @@ static MockNTPTimeAdapter g_mockTimeAdapter;
 static MockWifiAdapter g_mockWifiAdapter;
 static MockArduinoAdapter g_mockArduinoAdapter;
 static MockMqttManager g_mockMqttManager;
-static JsonConverter g_jsonConverter;
+static ArduinoJsonConverter g_jsonConverter;
 static DiagnosticService* g_diagnosticService;
+static LinkSupervisor* g_linkSupervisor;
 
 // Test setup and teardown functions
 void diagnostic_service_setup(void) {
@@ -91,11 +98,19 @@ void diagnostic_service_setup(void) {
         &g_mockMqttManager,
         &g_mockHybridApi
     );
+
+    // What the report reads the network failures off: the decisions about the link.
+    g_linkSupervisor = new LinkSupervisor(&g_mockRestApi, &g_mockModuleConfig, g_mockLogger, g_mockDebugSystem,
+                                          &g_mockWifiAdapter, &g_mockTimeAdapter, &g_mockArduinoAdapter,
+                                          &g_mockMqttManager);
+    g_diagnosticService->setLinkSupervisor(g_linkSupervisor);
 }
 
 void diagnostic_service_teardown(void) {
     delete g_diagnosticService;
     g_diagnosticService = nullptr;
+    delete g_linkSupervisor;
+    g_linkSupervisor = nullptr;
 }
 
 // Test cases
@@ -144,6 +159,20 @@ void test_perform_serializes_psram_to_json(void) {
     diagnostic_service_teardown();
 }
 
+// The largest block a single allocation can still get. Free heap can be plentiful while this
+// number is already too small for the next TLS handshake, which is what a fragmented heap looks
+// like from the outside - so it has to leave the module with the diagnostics.
+void test_perform_serializes_max_alloc_heap_to_json(void) {
+    diagnostic_service_setup();
+
+    DiagnosticDto diagnosticData = g_diagnosticService->perform();
+    std::string json = g_jsonConverter.diagnosticToJson(diagnosticData);
+
+    TEST_ASSERT_TRUE(json.find("\"maxAllocHeap\":150000") != std::string::npos);
+
+    diagnostic_service_teardown();
+}
+
 // GDV1-3813: the count of inbound messages dropped for exceeding the MQTT size limit
 // has to leave the module with the diagnostics, otherwise the drop is only visible
 // with a live debug session attached.
@@ -167,7 +196,8 @@ void test_perform_handles_offline_state(void) {
     g_mockHybridApi.isModuleOnlineReturnValue = false;
     g_mockRestApi.countOffline = 10;
     
-    // Perform diagnostics
+    // The link's supervision decides; the report reads what it decided
+    g_linkSupervisor->superviseOnce();
     DiagnosticDto diagnosticData = g_diagnosticService->perform();
     
     // Verify offline state is detected
@@ -257,7 +287,7 @@ void test_perform_records_failures(void) {
     
     // Record some failures
     for (int i = 0; i < 3; i++) {
-        g_diagnosticService->recordFailure();
+        g_linkSupervisor->recordFailure();
     }
     
     // Perform diagnostics
@@ -269,18 +299,57 @@ void test_perform_records_failures(void) {
     diagnostic_service_teardown();
 }
 
+// The report decides nothing: a link that was there and went away, a module offline for over an hour -
+// the report of both restarts no radio, asks for no restart and has no clock synchronized. Those are
+// the link's supervision's decisions, on its own tick.
+void test_perform_is_a_report_and_decides_nothing(void) {
+    diagnostic_service_setup();
+    MockOutbox outbox;
+    g_diagnosticService->setOutbox(&outbox);
+    g_mockModuleConfig.setModuleType(MODULE_TYPE_SENSOR);
+    g_mockModuleConfig.setRequestedModuleMode(ModuleModeEnum::CONFIGURED_DONE);
+    g_mockTimeAdapter.reset();
+
+    g_mockArduinoAdapter.currentMillis = 30000;
+    g_diagnosticService->perform();
+
+    // The link goes, and stays gone, with the broker and the server, for over an hour.
+    g_mockWifiAdapter.setConnected(false);
+    g_mockMqttManager.isConnectedReturnValue = false;
+    g_mockRestApi.countOffline = 10;
+    for (unsigned long now = 60000; now <= 60000 + 2 * 60 * 60 * 1000UL; now += 30000) {
+        g_mockArduinoAdapter.currentMillis = now;
+        g_diagnosticService->perform();
+    }
+    // And comes back.
+    g_mockWifiAdapter.setConnected(true);
+    g_mockMqttManager.isConnectedReturnValue = true;
+    g_mockRestApi.countOffline = 0;
+    g_mockArduinoAdapter.currentMillis += 30000;
+    g_diagnosticService->perform();
+
+    TEST_ASSERT_EQUAL_UINT32_MESSAGE(0, outbox.wifiReconnectRequests,
+                                     "the diagnostic report asked for the radio to be restarted");
+    TEST_ASSERT_EQUAL_INT_MESSAGE(0, g_mockWifiAdapter.reconnectCallCount,
+                                  "the diagnostic report restarted the radio");
+    TEST_ASSERT_EQUAL_MESSAGE(ModuleModeEnum::CONFIGURED_DONE, g_mockModuleConfig.getRequestedModuleMode(),
+                              "the diagnostic report asked for a restart");
+    TEST_ASSERT_FALSE_MESSAGE(g_mockTimeAdapter.wasModified("forceSyncTime"),
+                              "the diagnostic report had the clock synchronized");
+
+    diagnostic_service_teardown();
+}
+
 // Run all tests
-extern "C" int run_diagnostic_service_tests(void) {
-    UNITY_BEGIN();
-    
+extern "C" void run_diagnostic_service_tests(void) {
     RUN_TEST(test_perform_collects_correct_diagnostic_data);
     RUN_TEST(test_perform_serializes_psram_to_json);
+    RUN_TEST(test_perform_serializes_max_alloc_heap_to_json);
     RUN_TEST(test_perform_serializes_mqtt_oversize_drops_to_json);
     RUN_TEST(test_perform_handles_offline_state);
     RUN_TEST(test_perform_and_send_uses_hybrid_api);
     RUN_TEST(test_perform_and_send_falls_back_to_rest_api);
     RUN_TEST(test_perform_and_send_handles_failure);
     RUN_TEST(test_perform_records_failures);
-    
-    return UNITY_END();
+    RUN_TEST(test_perform_is_a_report_and_decides_nothing);
 }

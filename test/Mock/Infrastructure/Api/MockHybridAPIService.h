@@ -14,6 +14,7 @@ public:
     bool initCalled = false;
     bool isModuleOnlineCalled = false;
     bool sendToServerModuleStructureCalled = false;
+    int sendToServerModuleStructureCallCount = 0;
     bool sendRuleStateCommandCalled = false;
     bool sendByUidRuleStateCommandCalled = false;
     bool sendFirmwareVersionCalled = false;
@@ -26,8 +27,11 @@ public:
     bool getDeviceCommandCalled = false;
     bool sendCommandResultCalled = false;
     bool getRuleListCalled = false;
+    bool getRuleListHttpFailed = false;
     bool getModuleCommandCalled = false;
     bool getSensorTypesListCalled = false;
+    bool getSensorTypesListHttpFailed = false;
+    int getSensorTypesListCallCount = 0;
     
     // Return values
     bool initReturnValue = true;
@@ -82,6 +86,7 @@ public:
         initCalled = false;
         isModuleOnlineCalled = false;
         sendToServerModuleStructureCalled = false;
+        sendToServerModuleStructureCallCount = 0;
         sendRuleStateCommandCalled = false;
         sendByUidRuleStateCommandCalled = false;
         sendFirmwareVersionCalled = false;
@@ -94,8 +99,11 @@ public:
         getDeviceCommandCalled = false;
         sendCommandResultCalled = false;
         getRuleListCalled = false;
+        getRuleListHttpFailed = false;
         getModuleCommandCalled = false;
         getSensorTypesListCalled = false;
+        getSensorTypesListHttpFailed = false;
+        getSensorTypesListCallCount = 0;
         
         initReturnValue = true;
         isModuleOnlineReturnValue = true;
@@ -159,6 +167,7 @@ public:
     
     bool sendToServerModuleStructure(const ModuleStructure& moduleStructure, ApiPriority priority = ApiPriority::UNDEFINED) override {
         sendToServerModuleStructureCalled = true;
+        sendToServerModuleStructureCallCount++;
         lastModuleStructure = &moduleStructure;
         lastModuleStructurePriority = priority;
         return sendModuleStructureReturnValue;
@@ -257,18 +266,34 @@ public:
         return deviceCommandsReturnValue;
     }
     
-    std::vector<Rule> getRuleList() override {
+    std::vector<Rule> getRuleList(bool* httpFailed = nullptr, bool* readWhole = nullptr) override {
         getRuleListCalled = true;
+        if (httpFailed != nullptr)
+            *httpFailed = getRuleListHttpFailed;
+        // Answers as a transport that read every rule of the answer, which is what a stand-in
+        // that hands back a ready vector did: a test that wants the other case says so.
+        if (readWhole != nullptr)
+            *readWhole = getRuleListReadWhole;
         return ruleListReturnValue;
     }
+
+    /** Whether the answer is reported as one the module read whole. */
+    bool getRuleListReadWhole = true;
     
-    std::vector<ModuleCommandDto> getModuleCommand() override {
+    bool getModuleCommandHttpFailed = false;
+
+    std::vector<ModuleCommandDto> getModuleCommand(bool* httpFailed = nullptr) override {
         getModuleCommandCalled = true;
+        if (httpFailed != nullptr)
+            *httpFailed = getModuleCommandHttpFailed;
         return moduleCommandsReturnValue;
     }
     
-    std::vector<SensorType> getSensorTypesList() override {
+    std::vector<SensorType> getSensorTypesList(bool* httpFailed = nullptr) override {
         getSensorTypesListCalled = true;
+        getSensorTypesListCallCount++;
+        if (httpFailed != nullptr)
+            *httpFailed = getSensorTypesListHttpFailed;
         return sensorTypesListReturnValue;
     }
     

@@ -25,7 +25,6 @@
 class RemoteSensorReceiver : public IRemoteSensorReceiver {
 private:
     static const size_t MAX_SUBSCRIPTIONS = 50;
-    static const uint32_t SUBSCRIPTION_BOOT_DELAY_MS = 10000;
 
     class InboundUpdateTopicHandler : public BaseTopicHandler {
     private:
@@ -213,18 +212,20 @@ public:
 
         log("init udp=%d handler=%d", udpReady ? 1 : 0, handlerReady ? 1 : 0);
 
+        // The subscriptions are not reconciled here: the boot does it on the broker's first CONNACK,
+        // and every change of the rule set does it again.
         _initialized = true;
-        onRuleSetChanged();
         return true;
     }
 
+    /**
+     * Subscribe to the modules whose sensors the rules read, and drop the ones no rule reads any more.
+     *
+     * At any moment, connected or not: MqttManager keeps every topic it is asked to subscribe to and
+     * subscribes them all again on each CONNACK, so a subscription asked for before the broker has
+     * answered is not lost.
+     */
     void onRuleSetChanged() override {
-        uint32_t now = _arduinoAdapter ? _arduinoAdapter->millis() : 0;
-        if (now < SUBSCRIPTION_BOOT_DELAY_MS) {
-            log("reconcile_skip boot_delay millis=%u", now);
-            return;
-        }
-
         std::vector<Rule> rules;
         if (_ruleRepository) {
             rules = _ruleRepository->getAll();

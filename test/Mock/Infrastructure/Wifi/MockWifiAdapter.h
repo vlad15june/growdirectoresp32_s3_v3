@@ -22,7 +22,6 @@ public:
     bool getLocalIPCalled = false;
     bool getMACAddressCalled = false;
     bool addNetworkCalled = false;
-    bool connectToNetworksCalled = false;
     bool clearNetworksCalled = false;
 
     // Parameters captured from last call
@@ -41,7 +40,6 @@ public:
     bool connected = false;
     bool configureAccessPointSuccess = true;
     bool addNetworkSuccess = true;
-    bool connectToNetworksSuccess = true;
     
     char localIP[32] = "192.168.0.1";
     char macAddress[32] = "00:11:22:33:44:55";
@@ -69,7 +67,6 @@ public:
         getLocalIPCalled = false;
         getMACAddressCalled = false;
         addNetworkCalled = false;
-        connectToNetworksCalled = false;
         clearNetworksCalled = false;
         
         lastSSID[0] = '\0';
@@ -86,13 +83,15 @@ public:
         connected = false;
         configureAccessPointSuccess = true;
         addNetworkSuccess = true;
-        connectToNetworksSuccess = true;
         
         strcpy(localIP, "192.168.0.1");
         strcpy(macAddress, "00:11:22:33:44:55");
         rssi = -70;
-        
+
         savedNetworks.clear();
+
+        linkLog = nullptr;
+        reportLinkEventsToCallCount = 0;
     }
     
     // Helper methods for tests
@@ -222,14 +221,6 @@ public:
         return addNetworkSuccess;
     }
     
-    bool connectToNetworks(unsigned long timeout = 20000) override {
-        connectToNetworksCalled = true;
-        if (connectToNetworksSuccess && !savedNetworks.empty()) {
-            connected = true;
-        }
-        return connectToNetworksSuccess;
-    }
-    
     void clearNetworks() override {
         clearNetworksCalled = true;
         savedNetworks.clear();
@@ -237,6 +228,15 @@ public:
 
     void enableApEventLogging(ILogger* /*logger*/) override {}
     int getConnectedClientCount() override { return 0; }
+
+    /** The link log the boot armed the radio's events with, and when it did so. */
+    WifiLinkLogUseCase* linkLog = nullptr;
+    int reportLinkEventsToCallCount = 0;
+
+    void reportLinkEventsTo(WifiLinkLogUseCase* linkLogInstance) override {
+        linkLog = linkLogInstance;
+        reportLinkEventsToCallCount++;
+    }
 };
 
 #endif // MOCK_WIFI_ADAPTER_H

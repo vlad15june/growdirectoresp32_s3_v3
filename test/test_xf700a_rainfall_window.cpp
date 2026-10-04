@@ -24,16 +24,22 @@ public:
     uint16_t readbackValue = 1;
     bool powered = false;
 
-    void begin(unsigned long) override {}
+    // Strict like the board: a UART nobody began sends nothing and receives nothing.
+    bool begun = false;
+    int droppedBeforeBegin = 0;
+
+    // A zero rate leaves the board's UART without a driver: the core's rate detection fails.
+    void begin(unsigned long baud) override { begun = (baud != 0); }
 
     void sendData(uint8_t *data, uint8_t length) override {
+        if (!begun) { droppedBeforeBegin++; return; }
         Frame f;
         f.bytes.assign(data, data + length);
         sent.push_back(f);
     }
 
     int readAvailable(uint8_t *buffer, size_t maxLength) override {
-        if (sent.empty()) return 0;
+        if (!begun || sent.empty()) return 0;
         const auto &last = sent.back().bytes;
         if (last.size() < 2) return 0;
         int addr = last[0];
@@ -54,17 +60,23 @@ public:
     uint16_t calculateCRC(uint8_t *, uint8_t) override { return 0; }
 
     bool writeRegister(int slave, int reg, uint16_t value) override {
+        if (!begun) { droppedBeforeBegin++; return false; }
         writes.push_back({ true, slave, reg, value });
         return true;
     }
 
     bool writeSingleRegister(int slave, int reg, uint16_t value) override {
+        if (!begun) { droppedBeforeBegin++; return false; }
         writes.push_back({ false, slave, reg, value });
         return true;
     }
 
     bool powerOnPort() override { bool ch = !powered; powered = true; return ch; }
     bool powerOffPort() override { bool ch = powered; powered = false; return ch; }
+    // No clock: a port it has put up is up for good.
+    PortPower powerRecord() const override { PortPower r; r.on = powered; return r; }
+    // A wire of its own: nothing else is plugged into this stand's line.
+    const void *wire() const override { return this; }
 
     int countWritesToRegister(int reg) const {
         int c = 0;

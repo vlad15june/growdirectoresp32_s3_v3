@@ -27,6 +27,10 @@ public:
     bool writeSingleRegister(int, int, uint16_t) override { return true; }
     bool powerOnPort() override { bool ch = !powered; powered = true; return ch; }
     bool powerOffPort() override { bool ch = powered; powered = false; return ch; }
+    // No clock: a port it has put up is up for good.
+    PortPower powerRecord() const override { PortPower r; r.on = powered; return r; }
+    // A wire of its own: nothing else is plugged into this stand's line.
+    const void *wire() const override { return this; }
 };
 
 SensorEntity makeModbusSensor() {

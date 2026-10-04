@@ -1,0 +1,14 @@
+# Per-task heap accounting, diagnostic builds only (GD_HEAP_FORENSICS).
+#
+# Overlay applied on top of sdkconfig.defaults and the conservative TLS overlay; neither is edited
+# here. HEAP_TASK_TRACKING makes the allocator stamp every block with the task that asked for it,
+# which is what heap_caps_get_per_task_info() adds up; it depends on heap poisoning being enabled,
+# and sdkconfig.defaults already carries HEAP_POISONING_LIGHT. It costs four more bytes per
+# allocated block. FREERTOS_USE_TRACE_FACILITY is what uxTaskGetSystemState() needs: the owner of
+# a block is a task handle, and the list of live tasks is what turns a handle into a name - or
+# says that the task is gone. It adds two words to every task control block and queue.
+#
+# src/Infrastructure/Adapters/ArduinoAdapter.h refuses to compile with GD_HEAP_FORENSICS unless
+# both options reached the generated sdkconfig, so this file cannot silently fail to arrive.
+CONFIG_HEAP_TASK_TRACKING=y
+CONFIG_FREERTOS_USE_TRACE_FACILITY=y

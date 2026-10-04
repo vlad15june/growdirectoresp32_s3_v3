@@ -30,6 +30,7 @@ public:
     bool getMaxAllocHeapCalled = false;
     bool getPsramSizeCalled = false;
     bool getFreePsramCalled = false;
+    bool getMaxAllocPsramCalled = false;
 
     int delayCount = 0;
     int feedTaskWatchdogCount = 0;
@@ -46,6 +47,7 @@ public:
     uint32_t maxAllocHeapValue = 0;
     uint32_t psramSizeValue = 0;
     uint32_t psramFreeValue = 0;
+    uint32_t maxAllocPsramValue = 0;
 
     // Store pin mode settings
     std::map<uint8_t, uint8_t> pinModes;
@@ -212,6 +214,11 @@ public:
         return psramFreeValue;
     }
 
+    uint32_t getMaxAllocPsram() override {
+        getMaxAllocPsramCalled = true;
+        return maxAllocPsramValue;
+    }
+
     // Additional methods for testing
     
     // Set a digital input value to be returned by digitalRead
@@ -249,6 +256,10 @@ public:
         psramFreeValue = value;
     }
 
+    void setMaxAllocPsram(uint32_t value) {
+        maxAllocPsramValue = value;
+    }
+
     // Get the current pin mode
     uint8_t getPinMode(uint8_t pin) const {
         auto it = pinModes.find(pin);
@@ -283,6 +294,7 @@ public:
         getMaxAllocHeapCalled = false;
         getPsramSizeCalled = false;
         getFreePsramCalled = false;
+        getMaxAllocPsramCalled = false;
 
         delayCount = 0;
         delayMicrosecondsCount = 0;
@@ -297,6 +309,7 @@ public:
         maxAllocHeapValue = 0;
         psramSizeValue = 0;
         psramFreeValue = 0;
+        maxAllocPsramValue = 0;
 
         pinModes.clear();
         digitalOutputs.clear();

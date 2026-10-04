@@ -212,8 +212,8 @@ void test_sensor_type_repository_get_by_name(void) {
     mockDao->addToStorage(testSensorType);
     
     // Act
-    SensorType* result = repository->getSensorTypeByName("unique_name");
-    SensorType* notFound = repository->getSensorTypeByName("non_existent_name");
+    const SensorType* result = repository->getSensorTypeByName("unique_name");
+    const SensorType* notFound = repository->getSensorTypeByName("non_existent_name");
     
     // Assert
     TEST_ASSERT_NOT_NULL(result);

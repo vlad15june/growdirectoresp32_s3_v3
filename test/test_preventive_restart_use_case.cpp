@@ -17,6 +17,12 @@
 #include "Mock/UseCases/Rules/MockEvaluateRulesUseCase.h"
 #include "Mock/Infrastructure/Logging/MockBootEventLog.h"
 
+#ifdef PREVENTIVE_RESTART_DISABLED
+// Only a build with the nightly restart compiled out follows the restart request downstream here.
+#include "Core/Domain/UseCases/ModuleMode/OnChangeModuleModeUseCase.h"
+#include "Mock/Infrastructure/MockArduinoAdapter.h"
+#endif
+
 static MockSettings g_settings;
 static MockModuleConfig g_moduleConfig;
 static MockNTPTimeAdapter g_timeAdapter;
@@ -282,9 +288,71 @@ void test_preventive_restart_skipped_not_configured() {
     TEST_ASSERT_EQUAL_UINT8(0, g_settings.getBootType());
 }
 
-extern "C" int run_preventive_restart_use_case_tests() {
-    UNITY_BEGIN();
+#ifdef PREVENTIVE_RESTART_DISABLED
 
+// Same scenario as test_preventive_restart_triggers_when_safe: inside the window, first pass of
+// the day, every device off, no rule about to start. With PREVENTIVE_RESTART_DISABLED in the
+// build the module must be left exactly as it was found - no restart request, no boot type, no
+// event log entry, and above all no day marker written into the settings sector.
+void test_preventive_restart_not_requested_under_build_flag() {
+    resetAll();
+    setupUseCase();
+
+    g_moduleConfig.setRequestedModuleMode(CONFIGURED_DONE);
+    int startMinutes = PreventiveRestartUseCase::PREVENTIVE_RESTART_HOUR * 60 +
+                       PreventiveRestartUseCase::PREVENTIVE_RESTART_MINUTE;
+    setTimeFromMinutes(startMinutes + 14, 15);
+
+    g_device.deviceUid = "relay_1";
+    g_device.state = DEVICE_STATE_OFF;
+    g_deviceModel.addDevice(&g_device);
+
+    g_useCase->perform();
+
+    TEST_ASSERT_EQUAL_INT(CONFIGURED_DONE, g_moduleConfig.getRequestedModuleMode());
+    TEST_ASSERT_EQUAL_UINT8(0, g_settings.getBootType());
+    TEST_ASSERT_EQUAL_UINT8(0, g_settings.getLastPreventiveRestartDay());
+    TEST_ASSERT_FALSE(g_restartEventLog.hasPending());
+}
+
+// The step after the request: OnChangeModuleModeUseCase is what turns CONFIGURED_NEED_RESTART
+// into a reset of the board. Under the flag it finds nothing to act on, so the whole night
+// passes without the board resetting.
+void test_preventive_restart_does_not_reach_a_reset_under_build_flag() {
+    resetAll();
+    setupUseCase();
+
+    g_moduleConfig.setRequestedModuleMode(CONFIGURED_DONE);
+    g_moduleConfig.setCurrentModuleMode(CONFIGURED_DONE);
+    int startMinutes = PreventiveRestartUseCase::PREVENTIVE_RESTART_HOUR * 60 +
+                       PreventiveRestartUseCase::PREVENTIVE_RESTART_MINUTE;
+    setTimeFromMinutes(startMinutes + 14, 15);
+
+    g_device.deviceUid = "relay_1";
+    g_device.state = DEVICE_STATE_OFF;
+    g_deviceModel.addDevice(&g_device);
+
+    g_useCase->perform();
+
+    MockArduinoAdapter arduino;
+    OnChangeModuleModeUseCase modeUseCase(arduino, g_moduleConfig, g_logger, g_debugSystem,
+                                          &g_timeAdapter);
+    modeUseCase.loop();
+
+    TEST_ASSERT_FALSE(arduino.hardResetCalled);
+    TEST_ASSERT_FALSE(arduino.restartCalled);
+}
+
+#endif // PREVENTIVE_RESTART_DISABLED
+
+extern "C" void run_preventive_restart_use_case_tests() {
+#ifdef PREVENTIVE_RESTART_DISABLED
+    RUN_TEST(test_preventive_restart_not_requested_under_build_flag);
+    RUN_TEST(test_preventive_restart_does_not_reach_a_reset_under_build_flag);
+#else
+    // Each scenario below describes a decision a build with PREVENTIVE_RESTART_DISABLED never
+    // makes: it either expects the restart to be requested, or expects one of the conditions to
+    // have been asked about at all.
     RUN_TEST(test_preventive_restart_triggers_when_safe);
     RUN_TEST(test_preventive_restart_triggers_at_window_end);
     RUN_TEST(test_preventive_restart_skipped_outside_window);
@@ -295,6 +363,5 @@ extern "C" int run_preventive_restart_use_case_tests() {
     RUN_TEST(test_preventive_restart_skipped_rule_starts_soon);
     RUN_TEST(test_preventive_restart_skipped_ota_in_progress);
     RUN_TEST(test_preventive_restart_skipped_not_configured);
-
-    return UNITY_END();
+#endif
 }

@@ -244,7 +244,7 @@ private:
 
         if (!sensor.model.empty())
         {
-            SensorType *byName = _sensorTypeRepository->getSensorTypeByName(sensor.model);
+            const SensorType *byName = _sensorTypeRepository->getSensorTypeByName(sensor.model);
             if (byName)
             {
                 outSensorType = *byName;

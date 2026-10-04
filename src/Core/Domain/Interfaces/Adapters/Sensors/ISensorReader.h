@@ -3,6 +3,7 @@
 
 #include "Core/Domain/Data/Entities/Sensor/Sensor.h"
 #include "Core/Domain/Data/Models/SensorReadResult.h"
+#include "Core/Domain/Interfaces/Adapters/Sensors/PortPower.h"
 #include <vector>
 
 class ISensorReader
@@ -54,6 +55,20 @@ public:
      */
     virtual bool writeSensorAddress(const SensorEntity& sensor, int newAddress) = 0;
 
+    /**
+     * @brief Write a new address to whatever is on the sensor's port, without knowing its address
+     *        (only for Modbus sensors)
+     * @param sensor Entity carrying the model's addressing fields and the port; its address is
+     *        not used
+     * @param newAddress New address to set
+     * @return true when a device answers at the new address afterwards
+     *
+     * The broadcast half of writeSensorAddress(): the model's own write addressed to 0x00, then
+     * the blind register 0/1 sequence. It neither isolates the port nor waits for it - whoever
+     * calls it has arranged the power of the ports sharing the wire.
+     */
+    virtual bool writeSensorAddressByBroadcast(const SensorEntity& sensor, int newAddress) = 0;
+
     virtual void prepareSensorsForReading(const std::vector<SensorEntity>& sensors) = 0;
 
     /**
@@ -63,6 +78,12 @@ public:
      * @return true if the underlying reader accepted the request, false otherwise
      */
     virtual bool setModbusPortPower(int portIndex, bool on) = 0;
+
+    /**
+     * @brief What a Modbus port's power pin has done, and when - whoever moved it
+     * @param portIndex Port index
+     */
+    virtual PortPower modbusPortPower(int portIndex) = 0;
 };
 
 #endif // I_SENSOR_READER_H

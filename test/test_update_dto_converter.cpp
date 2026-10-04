@@ -1,6 +1,6 @@
 #include <unity.h>
 #include "Application/DTOs/UpdateDto.h"
-#include "Infrastructure/Adapters/Json/JsonConverter.h"
+#include "Infrastructure/Adapters/Json/ArduinoJsonConverter.h"
 
 // Sample update JSON for testing
 static const char* test_update_json = R"({
@@ -98,8 +98,8 @@ void test_serialize_update_dto() {
     device2.state_hw = "off";
     updateDto.devices.push_back(device2);
     
-    // Test with JsonConverter
-    JsonConverter jsonConverter;
+    // Test with ArduinoJsonConverter
+    ArduinoJsonConverter jsonConverter;
     std::string json = jsonConverter.updateToJson(updateDto);
     
     // Verify the serialized JSON contains expected elements
@@ -157,8 +157,8 @@ void test_serialize_full_update_dto() {
     
     updateDto.devices.push_back(device);
     
-    // Test with JsonConverter
-    JsonConverter jsonConverter;
+    // Test with ArduinoJsonConverter
+    ArduinoJsonConverter jsonConverter;
     std::string json = jsonConverter.updateToJson(updateDto);
     
     // Basic validation
@@ -222,7 +222,7 @@ void test_update_dto_edge_cases() {
     emptyDevices.time = "2025-05-11T00:00:00.000Z";
     emptyDevices.millis = 1000;
     
-    JsonConverter jsonConverter;
+    ArduinoJsonConverter jsonConverter;
     std::string emptyDevicesJson = jsonConverter.updateToJson(emptyDevices);
     
     TEST_ASSERT_NOT_NULL(emptyDevicesJson.c_str());

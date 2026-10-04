@@ -9,13 +9,13 @@
 #include "Core/Domain/Data/Models/IDeviceModel.h"
 #include "Infrastructure/Repositories/RuleRepository.h"
 #include "Core/Domain/UseCases/Rules/EvaluateRulesUseCase.h"
-#include "Infrastructure/Adapters/Json/JsonConverter.h"
+#include "Infrastructure/Adapters/Json/ArduinoJsonConverter.h"
 #include "Application/Services/CommandService.h"
 #include "Application/DTOs/CommandDto.h"
 
 #include "Mock/Infrastructure/SPIFFS/MockSpiffsRuleDao.h"
 #include "Mock/Infrastructure/Repositories/MockRuleRepository.h"
-#include "Mock/Infrastructure/Api/MockHybridAPIService.h"
+#include "Mock/Application/MockOutbox.h"
 #include "Mock/Core/Domain/Models/MockSensorValueModel.h"
 #include "Mock/Infrastructure/MockArduinoAdapter.h"
 #include "Mock/Infrastructure/Configuration/MockNTPTimeAdapter.h"
@@ -265,7 +265,7 @@ static void test_consumer_switches_off_active_device(void)
 
 static void test_converter_parses_deleting_state(void)
 {
-    JsonConverter c;
+    ArduinoJsonConverter c;
     Rule r;
     c.ruleFromJson(R"({"uid":"u1","deviceUid":"dev-1","ruleType":"sensor","state":"Deleting"})", r);
     TEST_ASSERT_TRUE(r.state == RuleState::DELETING);
@@ -273,7 +273,7 @@ static void test_converter_parses_deleting_state(void)
 
 static void test_converter_serializes_deleting_roundtrip(void)
 {
-    JsonConverter c;
+    ArduinoJsonConverter c;
     Rule r = makeSensorRule("u1", RuleMode::ON, RuleState::DELETING);
 
     std::string json = c.ruleToJson(r);
@@ -286,14 +286,15 @@ static void test_converter_serializes_deleting_roundtrip(void)
 
 static void test_push_deleting_via_command_service(void)
 {
-    JsonConverter converter;
+    ArduinoJsonConverter converter;
     MockSpiffsRuleDao dao;
     RuleRepository repo(&dao);
-    MockHybridAPIService api;
+    MockOutbox api;
     MockNTPTimeAdapter time;
 
-    CommandService svc(nullptr, nullptr, nullptr, &api, nullptr,
+    CommandService svc(nullptr, nullptr, nullptr, nullptr,
                        nullptr, nullptr, &time, &converter, &repo);
+    svc.setOutbox(&api);
 
     CommandDto cmd;
     cmd.type = "RuleCommandNotification";
@@ -305,9 +306,9 @@ static void test_push_deleting_via_command_service(void)
 
     TEST_ASSERT_TRUE(result);
     TEST_ASSERT_TRUE(findStored(repo, "u1").state == RuleState::DELETING);
-    TEST_ASSERT_TRUE(api.sendByUidRuleStateCommandCalled);
-    TEST_ASSERT_EQUAL_STRING("u1", api.lastByUidRuleStateUid.c_str());
-    TEST_ASSERT_TRUE(jsonContains(api.lastByUidRuleStateCommandStr, "Synchronized"));
+    TEST_ASSERT_EQUAL_INT(1, (int)api.ruleStateUids.size());
+    TEST_ASSERT_EQUAL_STRING("u1", api.ruleStateUids[0].c_str());
+    TEST_ASSERT_TRUE(jsonContains(api.ruleStateBodies[0], "Synchronized"));
 }
 
 extern "C" void run_rule_phase3_deletion_tests(void)

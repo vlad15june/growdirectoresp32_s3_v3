@@ -1,9 +1,29 @@
 #ifndef RULE_H
 #define RULE_H
 
+#include <cstddef>
 #include <string>
 #include <vector>
 #include "Core/Domain/Enums/RuleEnums.h"
+
+namespace RuleLimits {
+
+/**
+ * @brief How many rules one module keeps, at most.
+ *
+ * A declared capacity: rules are read one at a time, so nothing in the parsing decides how many of
+ * them there can be, and something has to. The number is read off the product - a module drives at
+ * most four devices (ModuleConfig assigns 4 to the relay board, 3 to the hydro one, 2 to a socket
+ * or a dimmer) and every rule names one, because a rule without a deviceUid is refused - so this
+ * is six rules per device on the largest board, against rule sets of nine to fifteen in the field.
+ *
+ * It bounds three things that have to agree: what the registry stores, how many runtime states it
+ * can hold, and how many rules the module builds out of a server's answer, however long that
+ * answer is.
+ */
+static const size_t MAX_RULES_PER_MODULE = 24;
+
+} // namespace RuleLimits
 
 class RuleCondition;
 class ScheduleItem;

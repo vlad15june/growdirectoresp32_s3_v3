@@ -25,7 +25,7 @@
 
 #include "Mock/ArduinoMock.h"
 #include "Infrastructure/Adapters/SPIFFS/SpiffsSensorTypeDao.h"
-#include "Infrastructure/Adapters/Json/JsonConverter.h"
+#include "Infrastructure/Adapters/Json/ArduinoJsonConverter.h"
 #include "Core/Domain/UseCases/SensorTypes/SyncSensorTypesUseCase.h"
 #include "Core/Domain/UseCases/ModuleCommand/ModuleCommandExecutionUseCase.h"
 #include "Mock/Infrastructure/SPIFFS/MockSpiffsAdapter.h"
@@ -101,28 +101,23 @@ static std::vector<SensorType> createCatalog(size_t count) {
  * Serializing one sensor type stays inside the budget; serializing the whole catalog into one string
  * does not, and that allocation is exactly what used to fail on a fragmented heap.
  */
-class BudgetedJsonConverter : public JsonConverter {
+class BudgetedJsonConverter : public ArduinoJsonConverter {
 public:
     explicit BudgetedJsonConverter(size_t budget) : budget(budget) {}
 
     std::string sensorTypeToJson(const SensorType& sensorType) override {
-        std::string result = plain().sensorTypeToJson(sensorType);
+        std::string result = ArduinoJsonConverter::sensorTypeToJson(sensorType);
         if (result.size() > budget) throw std::bad_alloc();
         return result;
     }
 
     std::string sensorTypesToJson(const std::vector<SensorType>& sensorTypes) override {
-        std::string result = plain().sensorTypesToJson(sensorTypes);
+        std::string result = ArduinoJsonConverter::sensorTypesToJson(sensorTypes);
         if (result.size() > budget) throw std::bad_alloc();
         return result;
     }
 
 private:
-    // JsonConverter implements the interface with private members, so the real conversion is reached
-    // through the interface of a plain instance rather than by calling the base class directly.
-    IJsonConverter& plain() { return inner; }
-
-    JsonConverter inner;
     size_t budget;
 };
 
@@ -137,7 +132,7 @@ static size_t largestTypeJsonSize(IJsonConverter& converter, const std::vector<S
 // The whole catalog of 14 types is stored, and no single write carried the whole payload.
 static void test_bulk_save_streams_the_whole_catalog(void) {
     MockSpiffsAdapter spiffsAdapter;
-    JsonConverter jsonConverter;
+    ArduinoJsonConverter jsonConverter;
     MockLogger logger;
     MockDebugSystem debugSystem;
     SpiffsSensorTypeDao dao(&spiffsAdapter, &jsonConverter, &debugSystem, &logger);
@@ -166,7 +161,7 @@ static void test_bulk_save_streams_the_whole_catalog(void) {
 // A heap that can serve one sensor type but not the whole catalog still stores the catalog.
 static void test_bulk_save_survives_heap_too_small_for_whole_catalog(void) {
     MockSpiffsAdapter spiffsAdapter;
-    JsonConverter plainConverter;
+    ArduinoJsonConverter plainConverter;
     MockLogger logger;
     MockDebugSystem debugSystem;
 
@@ -190,7 +185,7 @@ static void test_bulk_save_survives_heap_too_small_for_whole_catalog(void) {
 // Serialization that fails is reported as such and does not touch the stored catalog.
 static void test_failed_serialization_reports_reason_and_keeps_catalog(void) {
     MockSpiffsAdapter spiffsAdapter;
-    JsonConverter jsonConverter;
+    ArduinoJsonConverter jsonConverter;
     MockLogger logger;
     MockDebugSystem debugSystem;
 
@@ -219,7 +214,7 @@ static void test_failed_serialization_reports_reason_and_keeps_catalog(void) {
 // A write that dies in the middle neither corrupts nor replaces the stored catalog.
 static void test_partial_write_keeps_catalog_and_leaves_no_temp_file(void) {
     MockSpiffsAdapter spiffsAdapter;
-    JsonConverter jsonConverter;
+    ArduinoJsonConverter jsonConverter;
     MockLogger logger;
     MockDebugSystem debugSystem;
     SpiffsSensorTypeDao dao(&spiffsAdapter, &jsonConverter, &debugSystem, &logger);
@@ -248,7 +243,7 @@ static void test_partial_write_keeps_catalog_and_leaves_no_temp_file(void) {
 // again, so a second failure (or a power cut) meant the catalog existed nowhere at all.
 static void test_failed_publish_keeps_catalog_and_leaves_no_leftovers(void) {
     MockSpiffsAdapter spiffsAdapter;
-    JsonConverter jsonConverter;
+    ArduinoJsonConverter jsonConverter;
     MockLogger logger;
     MockDebugSystem debugSystem;
     SpiffsSensorTypeDao dao(&spiffsAdapter, &jsonConverter, &debugSystem, &logger);
@@ -276,7 +271,7 @@ static void test_failed_publish_keeps_catalog_and_leaves_no_leftovers(void) {
 // A rewrite that succeeds leaves the catalog alone in storage: no temporary file, no reserve.
 static void test_successful_rewrite_leaves_no_temp_or_backup_file(void) {
     MockSpiffsAdapter spiffsAdapter;
-    JsonConverter jsonConverter;
+    ArduinoJsonConverter jsonConverter;
     MockLogger logger;
     MockDebugSystem debugSystem;
     SpiffsSensorTypeDao dao(&spiffsAdapter, &jsonConverter, &debugSystem, &logger);
@@ -296,7 +291,7 @@ static void test_successful_rewrite_leaves_no_temp_or_backup_file(void) {
 // has to come up with sensor types anyway — nothing else can heal this state.
 static void test_catalog_is_recovered_from_temp_file_after_power_cut(void) {
     MockSpiffsAdapter spiffsAdapter;
-    JsonConverter jsonConverter;
+    ArduinoJsonConverter jsonConverter;
     MockLogger logger;
     MockDebugSystem debugSystem;
     SpiffsSensorTypeDao dao(&spiffsAdapter, &jsonConverter, &debugSystem, &logger);
@@ -326,7 +321,7 @@ static void test_catalog_is_recovered_from_temp_file_after_power_cut(void) {
 // so it is not a catalog and the reserve is what comes back.
 static void test_truncated_temp_file_is_rejected_and_backup_is_used(void) {
     MockSpiffsAdapter spiffsAdapter;
-    JsonConverter jsonConverter;
+    ArduinoJsonConverter jsonConverter;
     MockLogger logger;
     MockDebugSystem debugSystem;
     SpiffsSensorTypeDao dao(&spiffsAdapter, &jsonConverter, &debugSystem, &logger);
@@ -354,7 +349,7 @@ static void test_truncated_temp_file_is_rejected_and_backup_is_used(void) {
 // Clearing the catalog clears it for good: a leftover companion file must not be adopted afterwards.
 static void test_clear_drops_leftover_companion_files(void) {
     MockSpiffsAdapter spiffsAdapter;
-    JsonConverter jsonConverter;
+    ArduinoJsonConverter jsonConverter;
     MockLogger logger;
     MockDebugSystem debugSystem;
     SpiffsSensorTypeDao dao(&spiffsAdapter, &jsonConverter, &debugSystem, &logger);
@@ -381,7 +376,7 @@ static void test_sync_logs_reason_and_heap_when_bulk_write_is_refused(void) {
     MockSensorTypeRepository repository;
     MockArduinoAdapter arduinoAdapter;
     MockNTPTimeAdapter ntpTimeAdapter;
-    JsonConverter jsonConverter;
+    ArduinoJsonConverter jsonConverter;
     MockLogger logger;
     MockDebugSystem debugSystem;
 
@@ -436,10 +431,85 @@ static void test_reboot_with_scan_keeps_sensor_type_catalog(void) {
     TEST_ASSERT_EQUAL(3, sensorTypeRepository.getAll().size());
 }
 
+/**
+ * @brief A converter that reports a failure the way the wired one does: by returning ""
+ *
+ * The tests above stage a serialization failure by throwing std::bad_alloc out of the converter,
+ * which lands in the catch of writeEntitiesToWriter(). The converter this firmware runs with is
+ * ArduinoJsonConverter (globals.h), and it does not throw: it catches inside itself and returns an
+ * empty string rather than "{}" - and "{}" is a valid
+ * object and would travel into the stored catalog unnoticed. That return value enters the DAO through
+ * a different branch than the throw does, and it is the branch the module takes.
+ */
+class SilentlyFailingJsonConverter : public ArduinoJsonConverter {
+public:
+    std::string failingUid;          // the type that cannot be serialized
+    std::string failureValue = "";   // what the converter answers for it
+
+    std::string sensorTypeToJson(const SensorType& sensorType) override {
+        if (sensorType.uid == failingUid) {
+            return failureValue;
+        }
+        return ArduinoJsonConverter::sensorTypeToJson(sensorType);
+    }
+
+};
+
+// One unserializable type in the middle of the catalog: the write is refused with a reason, and the
+// catalog that was there stays there. Same outcome as the throwing converter, different branch.
+static void test_a_converter_that_returns_nothing_is_a_serialization_failure(void) {
+    MockSpiffsAdapter spiffsAdapter;
+    ArduinoJsonConverter jsonConverter;
+    MockLogger logger;
+    MockDebugSystem debugSystem;
+
+    SpiffsSensorTypeDao dao(&spiffsAdapter, &jsonConverter, &debugSystem, &logger);
+    std::vector<SensorType> catalog = createCatalog(4);
+    TEST_ASSERT_TRUE(dao.saveAll(catalog));
+    const std::string storedBefore = spiffsAdapter.getFileContent(BULK_SAVE_FILE);
+
+    SilentlyFailingJsonConverter brokenConverter;
+    brokenConverter.failingUid = "type-uid-2";
+    SpiffsSensorTypeDao failingDao(&spiffsAdapter, &brokenConverter, &debugSystem, &logger);
+
+    TEST_ASSERT_FALSE(failingDao.saveAll(createCatalog(6)));
+    TEST_ASSERT_EQUAL(STORAGE_WRITE_ERROR_SERIALIZATION, failingDao.getLastSaveError());
+    TEST_ASSERT_EQUAL_STRING_MESSAGE(storedBefore.c_str(),
+                                     spiffsAdapter.getFileContent(BULK_SAVE_FILE).c_str(),
+                                     "an unserializable type replaced the stored catalog");
+    TEST_ASSERT_FALSE(spiffsAdapter.fileExists(BULK_SAVE_TEMP_FILE));
+}
+
+// The value a failing converter must not return: "{}". It is a well-formed JSON object, so
+// nothing downstream can tell it from a real sensor type - the DAO has to refuse it by name.
+static void test_an_empty_object_is_a_serialization_failure_too(void) {
+    MockSpiffsAdapter spiffsAdapter;
+    ArduinoJsonConverter jsonConverter;
+    MockLogger logger;
+    MockDebugSystem debugSystem;
+
+    SpiffsSensorTypeDao dao(&spiffsAdapter, &jsonConverter, &debugSystem, &logger);
+    TEST_ASSERT_TRUE(dao.saveAll(createCatalog(4)));
+    const std::string storedBefore = spiffsAdapter.getFileContent(BULK_SAVE_FILE);
+
+    SilentlyFailingJsonConverter brokenConverter;
+    brokenConverter.failingUid = "type-uid-2";
+    brokenConverter.failureValue = "{}";
+    SpiffsSensorTypeDao failingDao(&spiffsAdapter, &brokenConverter, &debugSystem, &logger);
+
+    TEST_ASSERT_FALSE(failingDao.saveAll(createCatalog(6)));
+    TEST_ASSERT_EQUAL(STORAGE_WRITE_ERROR_SERIALIZATION, failingDao.getLastSaveError());
+    TEST_ASSERT_EQUAL_STRING_MESSAGE(storedBefore.c_str(),
+                                     spiffsAdapter.getFileContent(BULK_SAVE_FILE).c_str(),
+                                     "a placeholder object replaced the stored catalog");
+}
+
 extern "C" int run_sensor_types_bulk_save_tests(void) {
     RUN_TEST(test_bulk_save_streams_the_whole_catalog);
     RUN_TEST(test_bulk_save_survives_heap_too_small_for_whole_catalog);
     RUN_TEST(test_failed_serialization_reports_reason_and_keeps_catalog);
+    RUN_TEST(test_a_converter_that_returns_nothing_is_a_serialization_failure);
+    RUN_TEST(test_an_empty_object_is_a_serialization_failure_too);
     RUN_TEST(test_partial_write_keeps_catalog_and_leaves_no_temp_file);
     RUN_TEST(test_failed_publish_keeps_catalog_and_leaves_no_leftovers);
     RUN_TEST(test_successful_rewrite_leaves_no_temp_or_backup_file);

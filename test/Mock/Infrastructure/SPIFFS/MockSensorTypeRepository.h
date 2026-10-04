@@ -6,6 +6,7 @@
 #include "Core/Utils/Optional.h"
 #include <vector>
 #include <algorithm>
+#include <memory>
 #include <string>
 
 class MockSensorTypeRepository : public ISensorTypeRepository {
@@ -21,6 +22,7 @@ public:
     // Call tracking
     bool getCalled;
     bool getAllCalled;
+    bool catalogSnapshotCalled;
     bool saveCalled;
     bool saveAllCalled;
     bool removeCalled;
@@ -45,6 +47,7 @@ public:
         lastSaveBytes = 0;
         getCalled = false;
         getAllCalled = false;
+        catalogSnapshotCalled = false;
         saveCalled = false;
         saveAllCalled = false;
         removeCalled = false;
@@ -98,6 +101,19 @@ public:
             return std::vector<SensorType>();
         }
         return sensorTypes;
+    }
+
+    SensorTypeCatalog catalogSnapshot() override {
+        // Both flags. getAllCalled is what the tests asking "did this reader go to the catalog at
+        // all" watch, and several of them assert it is false; a reader moving from getAll() to the
+        // snapshot must not turn such an assertion green by leaving no trace behind.
+        getAllCalled = true;
+        catalogSnapshotCalled = true;
+        // Built on every ask: this double's catalog is edited in place by the tests that own it,
+        // so it has no held snapshot to hand out. What the sharing is worth is measured on the
+        // real repository, not here.
+        return std::make_shared<const std::vector<SensorType>>(
+            shouldReturnEmpty ? std::vector<SensorType>() : sensorTypes);
     }
 
     bool save(const SensorType& sensorType) override {
@@ -231,8 +247,8 @@ public:
         return result;
     }
 
-    SensorType* getSensorTypeByName(const std::string& name) override {
-        for (auto& sensorType : sensorTypes) {
+    const SensorType* getSensorTypeByName(const std::string& name) override {
+        for (const auto& sensorType : sensorTypes) {
             if (sensorType.name == name) {
                 return &sensorType;
             }

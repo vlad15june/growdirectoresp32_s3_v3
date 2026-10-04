@@ -8,9 +8,12 @@
 #include <FS.h>
 #include <SPIFFS.h>
 #include <esp_partition.h>
+#include <errno.h>
 #include <memory>
 #include <stdarg.h>
+#include <stdio.h>
 #include <string>
+#include <sys/stat.h>
 
 class SpiffsAdapter : public ISpiffsAdapter {
 public:
@@ -20,6 +23,9 @@ public:
 
     SpiffsAdapter(ILogger *logger = nullptr, IDebugSystem *debugSystem = nullptr)
         : logger(logger), debugSystem(debugSystem), fileSystemStatus(FILE_SYSTEM_STATUS_NONE) {}
+
+    /** @brief Where SPIFFS is mounted in the VFS; statFile() looks files up under it. */
+    static const char* mountPoint() { return "/spiffs"; }
 
     void setLogger(ILogger *loggerInstance) {
         logger = loggerInstance;
@@ -45,7 +51,7 @@ public:
         unsigned long t0 = millis();
         Serial.print("SPIFFS: begin(false)...");
         Serial.flush();
-        bool mounted = SPIFFS.begin(false);
+        bool mounted = SPIFFS.begin(false, mountPoint());
         Serial.printf(" %s in %lu ms\n", mounted ? "ok" : "fail", millis() - t0);
         Serial.flush();
 
@@ -79,7 +85,7 @@ public:
         t0 = millis();
         Serial.print("SPIFFS: begin(true) after erase...");
         Serial.flush();
-        mounted = SPIFFS.begin(true);
+        mounted = SPIFFS.begin(true, mountPoint());
         Serial.printf(" %s in %lu ms\n", mounted ? "ok" : "fail", millis() - t0);
         Serial.flush();
 
@@ -198,6 +204,31 @@ public:
         unsigned int size = file.size();
         file.close();
         return size;
+    }
+
+    /**
+     * Through stat() rather than SPIFFS.exists() or a File: both of those build a VFSFileImpl,
+     * which allocates (malloc, strdup, fopen) before it looks the file up, so a heap that cannot
+     * serve them makes a file that is there look missing. stat() goes esp_vfs_stat() ->
+     * vfs_spiffs_stat() -> SPIFFS_stat() and allocates nothing; SPIFFS reports a missing file as
+     * ENOENT and a file with no bytes as size 0.
+     */
+    bool statFile(const char* filePath, size_t& size, bool& missing) override {
+        size = 0;
+        missing = false;
+        char fullPath[64];
+        const int length = snprintf(fullPath, sizeof(fullPath), "%s%s", mountPoint(), filePath);
+        if (length < 0 || length >= static_cast<int>(sizeof(fullPath))) {
+            log("Path too long to look up: %s", filePath);
+            return false;
+        }
+        struct stat fileStat;
+        if (stat(fullPath, &fileStat) != 0) {
+            missing = (errno == ENOENT);
+            return false;
+        }
+        size = static_cast<size_t>(fileStat.st_size);
+        return true;
     }
 
     bool directoryExists(const char* path) override {

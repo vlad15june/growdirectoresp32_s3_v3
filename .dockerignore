@@ -1,0 +1,15 @@
+# The image build needs only the files that define the build environments; the
+# sources are bind-mounted at run time, never sent as build context. Beyond
+# requirements.txt and platformio.ini, the source-built environment's warmup
+# compiles a scratch project against the real build inputs - the IDF project
+# files, the pinned sdkconfig and partition table, and the extra_scripts - so
+# those travel too.
+*
+!requirements.txt
+!platformio.ini
+!CMakeLists.txt
+!sdkconfig.defaults
+!default_8MB.csv
+!VERSION
+!scripts
+!src/CMakeLists.txt

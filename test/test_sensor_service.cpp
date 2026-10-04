@@ -101,7 +101,6 @@ static void sensor_service_setup(void)
         &g_debugSystem,
         nullptr, // udpManager - UDP path is out of scope here
         nullptr, // jsonConverter
-        &g_mqttManager,
         nullptr, // plausibilityUseCase - the gate has its own suite (GDV1-3810)
         &g_virtualChannels);
 }

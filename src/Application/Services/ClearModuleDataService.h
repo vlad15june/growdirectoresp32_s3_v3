@@ -2,6 +2,7 @@
 #define CLEAR_MODULE_DATA_SERVICE_H
 
 #include "Core/Domain/Interfaces/IClearModuleDataService.h"
+#include "Infrastructure/Adapters/SPIFFS/ISpiffsAdapter.h"
 #include "Infrastructure/Adapters/SPIFFS/ISpiffsRuleDao.h"
 #include "Infrastructure/Adapters/SPIFFS/ISpiffsSensorDao.h"
 #include "Infrastructure/Adapters/SPIFFS/ISpiffsSensorTypeDao.h"
@@ -23,6 +24,7 @@ private:
     ILogger* logger;
     IDebugSystem* debugSystem;
     ISettings* settings;
+    ISpiffsAdapter* spiffsAdapter;
 
     void log(const char *format, ...) {
         if (logger != nullptr && debugSystem != nullptr && 
@@ -44,15 +46,76 @@ public:
         ISpiffsSensorTypeDao* sensorTypeDao,
         ILogger* logger = nullptr,
         IDebugSystem* debugSystem = nullptr,
-        ISettings* settings = nullptr
+        ISettings* settings = nullptr,
+        ISpiffsAdapter* spiffsAdapter = nullptr
     ) : ruleDao(ruleDao),
         sensorDao(sensorDao),
         sensorTypeDao(sensorTypeDao),
         logger(logger), 
         debugSystem(debugSystem),
-        settings(settings) {}
+        settings(settings),
+        spiffsAdapter(spiffsAdapter) {}
     
     ~ClearModuleDataService() override = default;
+
+    /**
+     * @brief The boot half of a factory reset: drop the stored files the flag asked for
+     *
+     * clearAllData() marks storage for deletion and the module restarts; the files themselves go
+     * here, on the next boot, before anything reads them.
+     *
+     * The catalog and the sensor registry are dropped through their DAOs rather than by file name,
+     * because each of them is stored as up to three files: a replacement that was interrupted
+     * leaves the file complete under `.tmp` or `.bak`, and load-time recovery takes it from there
+     * and gives it its name back. A reset that removes only the name would be undone by the first
+     * read after it.
+     *
+     * The rule file goes here as well. clearAllData() empties it before the restart, but behind
+     * the rule repository's back, and the control loop runs on until the restart: a rule written
+     * through the repository in that time stores the rules the repository still holds.
+     */
+    bool clearStoredFiles() {
+        bool success = true;
+
+        if (sensorTypeDao != nullptr) {
+            if (sensorTypeDao->clear()) {
+                log("Removed the stored sensor type catalog");
+            } else {
+                log("Failed to remove the stored sensor type catalog");
+                success = false;
+            }
+        } else {
+            log("WARNING: sensorTypeDao is null");
+            success = false;
+        }
+
+        if (sensorDao != nullptr) {
+            sensorDao->clear();
+            log("Removed the stored sensors");
+        } else {
+            log("WARNING: sensorDao is null");
+            success = false;
+        }
+
+        if (ruleDao != nullptr) {
+            ruleDao->clear();
+            log("Removed the stored rules");
+        } else {
+            log("WARNING: ruleDao is null");
+            success = false;
+        }
+
+        if (spiffsAdapter != nullptr) {
+            spiffsAdapter->removeFile("/sensors/sensors.json");
+            spiffsAdapter->removeFile("/wifiNetworks.json");
+            log("Removed the legacy sensors file and the WiFi networks");
+        } else {
+            log("WARNING: spiffsAdapter is null");
+            success = false;
+        }
+
+        return success;
+    }
     
     bool clearAllData() override {
         log("Clearing module data files...");

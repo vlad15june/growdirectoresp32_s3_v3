@@ -18,6 +18,7 @@
 #include <set>
 #include <cstdarg>
 #include <cstdio>
+#include <stdint.h>
 
 enum class SensorVerdict { TURN_ON, TURN_OFF, HOLD, INERT };
 
@@ -220,6 +221,26 @@ private:
     // Rules whose persisted cycle counter has already been dropped for being out of play
     std::set<std::string> _stepCycleDropped;
 
+    // Snapshot of the rule registry, shared by every consumer of one evaluation tick: the
+    // evaluation pass walks _activeRulesSnapshot, the purge and deactivation sweeps walk
+    // _allRulesSnapshot, and _activeUids mirrors the uids of the active snapshot. The copies
+    // are re-taken only when refreshRuleSnapshotsIfStale() sees a new repository revision or
+    // a new calendar day (the active-rule filter depends on day of week/month); a quiet tick
+    // reuses them and takes nothing from the heap.
+    std::vector<Rule> _allRulesSnapshot;
+    std::vector<Rule> _activeRulesSnapshot;
+    std::set<std::string> _activeUids;
+    uint32_t _snapshotRevision = 0;
+    int _snapshotWday = -1;
+    int _snapshotMday = -1;
+    bool _snapshotsValid = false;
+
+    // Per-tick scratch reused across evaluations so the strings and vectors keep their
+    // buffers between ticks instead of being reallocated every second.
+    RuleEvaluationResult _evaluationScratch;
+    std::vector<bool> _conditionFiredScratch;
+    StepCycleCounter _stepCycleScratch;
+
     static const int DELETING_PURGE_MAX_RETRIES = 3;
     static const unsigned long SENSOR_FRESHNESS_WINDOW_MS = 300000;
 
@@ -329,9 +350,9 @@ private:
     }
 
     // --- Persisted STEP cycle counter (GDV1-3811) ---------------------------------------------
-    // currentCycle lives on the device entity, i.e. in RAM, and used to be lost on every reboot:
-    // the protective shutdown could then only ever see the cycles run since the last restart.
-    // The counter is written to IStepCycleStore while a tracked step run is in progress and
+    // currentCycle lives on the device entity, i.e. in RAM, and RAM alone would lose it on every
+    // reboot - the protective shutdown could then only ever see the cycles run since the last
+    // restart. The counter is written to IStepCycleStore while a tracked step run is in progress and
     // restored at boot, so the count continues across a restart. The store is NOT the EEPROM: the
     // value changes once per completed cycle and the EEPROM has a finite write endurance (owner,
     // review of PR #20, 2026-08-13) - it lives in the memory of the clock, see StepCycleStore.
@@ -376,7 +397,10 @@ private:
             return;
         }
 
-        StepCycleCounter stored;
+        // Member scratch: this runs every tick while a tracked step rule cycles, and the
+        // stored record's strings should reuse their buffers. Whatever the scratch held from
+        // a previous call is only read after getStepCycleCounter() has overwritten it.
+        StepCycleCounter& stored = _stepCycleScratch;
         if (_stepCycleStore->getStepCycleCounter(rule.deviceUid.c_str(), stored) &&
             stored.ruleUid == rule.uid &&
             stored.cyclesToSetPoint == rule.cyclesToSetPoint &&
@@ -453,11 +477,78 @@ private:
             rule.uid.c_str(), rule.deviceUid.c_str(), storedCycle, rule.cyclesToSetPoint);
     }
 
+    // True when RULE_DEBUG output would actually be emitted. log()/logSerial() already check
+    // this internally; the explicit form exists for call sites whose *arguments* are expensive
+    // to build (e.g. a per-tick std::string), so the work is skipped when the line is dropped.
+    bool isRuleDebugLoggingEnabled() const {
+        return _logger && _debugSystem && _debugSystem->isFeatureEnabled(DebugFeatures::RULE_DEBUG);
+    }
+
+    // The calendar day as the active-rule filter sees it: RuleRepository::getActiveRules()
+    // resolves daysOfWeek/daysOfMonth against local time of the NTP adapter (falling back to
+    // system time), so the snapshot's day key must be computed the same way.
+    void currentFilterDay(int& wday, int& mday) const {
+        time_t now;
+        if (_ntpTimeAdapter) {
+            now = static_cast<time_t>(_ntpTimeAdapter->getEpochTime());
+        } else {
+            time(&now);
+        }
+        struct tm timeinfo;
+        localtime_r(&now, &timeinfo);
+        wday = timeinfo.tm_wday;
+        mday = timeinfo.tm_mday;
+    }
+
+    // Re-take the registry snapshots when the repository content or the calendar day changed;
+    // reuse them otherwise. A repository that does not track revisions (rulesRevision() == 0)
+    // is re-read on every call: a needless re-read is safe, a stale snapshot is not.
+    void refreshRuleSnapshotsIfStale() {
+        if (!_ruleRepository) {
+            return;
+        }
+
+        uint32_t revision = _ruleRepository->rulesRevision();
+        int wday = -1;
+        int mday = -1;
+        currentFilterDay(wday, mday);
+
+        if (_snapshotsValid && revision != 0 && revision == _snapshotRevision &&
+            wday == _snapshotWday && mday == _snapshotMday) {
+            return;
+        }
+
+        _allRulesSnapshot = _ruleRepository->getAll();
+        _activeRulesSnapshot = _ruleRepository->getActiveRules();
+        _activeUids.clear();
+        for (const auto& rule : _activeRulesSnapshot) {
+            _activeUids.insert(rule.uid);
+        }
+        _snapshotRevision = revision;
+        _snapshotWday = wday;
+        _snapshotMday = mday;
+        _snapshotsValid = true;
+    }
+
     void purgeDeletingRules() {
         if (!_ruleRepository) {
             return;
         }
 
+        refreshRuleSnapshotsIfStale();
+        bool anyDeleting = false;
+        for (const auto& rule : _allRulesSnapshot) {
+            if (rule.state == RuleState::DELETING) {
+                anyDeleting = true;
+                break;
+            }
+        }
+        if (!anyDeleting) {
+            return;
+        }
+
+        // Work on a copy: the removals below mutate the repository under this iteration, and
+        // the next refreshRuleSnapshotsIfStale() call re-takes the snapshots afterwards.
         std::vector<Rule> allRules = _ruleRepository->getAll();
         for (const auto& rule : allRules) {
             if (rule.state != RuleState::DELETING) {
@@ -536,7 +627,8 @@ private:
             return;
         }
 
-        std::vector<Rule> allRules = _ruleRepository->getAll();
+        // Nothing in this sweep writes to the repository, so the shared snapshot is stable.
+        const std::vector<Rule>& allRules = _allRulesSnapshot;
         for (const auto& rule : allRules) {
             if (activeUids.count(rule.uid)) {
                 continue;
@@ -590,7 +682,8 @@ private:
             return;
         }
 
-        std::vector<Rule> allRules = _ruleRepository->getAll();
+        // Nothing in this sweep writes to the repository, so the shared snapshot is stable.
+        const std::vector<Rule>& allRules = _allRulesSnapshot;
         for (const auto& rule : allRules) {
             if (rule.ruleType != RuleType::LOOP && rule.ruleType != RuleType::STEP) {
                 continue;
@@ -802,16 +895,19 @@ public:
 
         purgeDeletingRules();
 
-        // Get active rules from repository
-        std::vector<Rule> activeRules = _ruleRepository->getActiveRules();
-        
+        // Get active rules from the shared snapshot (re-read after the purge if it removed
+        // anything). _activeUids mirrors the snapshot's uids for the deactivation sweeps.
+        // The loop below iterates the member vector by reference: nothing inside it may call
+        // refreshRuleSnapshotsIfStale(), or `rule` becomes a dangling reference. Repository
+        // writes are fine - they only mark the snapshot stale for the next refresh call.
+        refreshRuleSnapshotsIfStale();
+        const std::vector<Rule>& activeRules = _activeRulesSnapshot;
+
         logSerial("EVALUATE_RULES: Starting rule evaluation cycle - %d active rules",
             static_cast<int>(activeRules.size()));
-        
+
         // Evaluate all active rules
-        std::set<std::string> activeUids;
         for (const auto& rule : activeRules) {
-            activeUids.insert(rule.uid);
             if (rule.state == RuleState::SYNCHRONIZED) {
                 _stepCycleDropped.erase(rule.uid);  // active again: a later switch-off drops anew
                 restoreStepCycle(rule);
@@ -831,36 +927,50 @@ public:
             }
         }
 
-        deactivateDroppedRules(activeUids);
-        deactivateInactiveCyclingRules(activeUids);
+        // The evaluation pass may have written to the repository (protective shutdown, sensor
+        // staleness); re-take the snapshot then, so the deactivation sweeps see those writes.
+        // On a quiet tick this is a no-op.
+        refreshRuleSnapshotsIfStale();
+        deactivateDroppedRules(_activeUids);
+        deactivateInactiveCyclingRules(_activeUids);
     }
 
     RuleEvaluationResult evaluateRule(const Rule& rule) override {
+        RuleEvaluationResult result;
+        evaluateRuleInto(rule, result);
+        return result;
+    }
+
+private:
+    // The body of evaluateRule(), writing into a caller-provided result. The evaluation tick
+    // passes one member scratch instance here for every rule, so a steady second re-uses the
+    // same buffers instead of building and dropping a strings-bearing result per rule.
+    void evaluateRuleInto(const Rule& rule, RuleEvaluationResult& result) {
         logSerial("EVALUATE_RULES: Evaluating rule %s", rule.uid.c_str());
-        
-        // Create result with basic rule information
-        RuleEvaluationResult result(rule.uid, rule.ruleType, rule.version);
+
+        // Start from a clean result with basic rule information
+        result.resetForRule(rule.uid, rule.ruleType, rule.version);
         result.workflowUid = rule.workflowUid;
         result.workflowVersion = rule.workflowVersion;
-        
+
         // Skip if rule is not active
         if (rule.mode != RuleMode::ON) {
             log("EVALUATE_RULES: Rule %s is not in ON mode", rule.uid.c_str());
             result.state = DEVICE_STATE_OFF;
-            return result;
+            return;
         }
-        
+
         // Validate rule first
         auto validationResult = _ruleValidator.validateRuleExecution(rule);
         if (!validationResult.isValid) {
             log("EVALUATE_RULES: Rule %s validation failed: %s", rule.uid.c_str(), validationResult.errorMessage.c_str());
             result.state = DEVICE_STATE_OFF;
             result.ruleStopReason = validationResult.errorMessage;
-            return result;
+            return;
         }
 
         if (!isRuleActiveNow(rule, result)) {
-            return result;
+            return;
         }
 
         // Fill sensor information
@@ -910,7 +1020,7 @@ public:
         
         switch (rule.ruleType) {
             case RuleType::SCHEDULE:
-                result = evaluateScheduleRule(rule, result);
+                evaluateScheduleRule(rule, result);
                 conditionMet = result.isRuleTurnOnDevice;
                 resultState = result.state;
                 break;
@@ -983,27 +1093,30 @@ public:
             default:
                 log("EVALUATE_RULES: Unsupported rule type for rule %s", rule.uid.c_str());
                 result.state = DEVICE_STATE_OFF;
-                return result;
-        }                
-        
+                return;
+        }
+
         // Store evaluation result
         _lastEvaluationResults[rule.uid] = result;
         if (_arduinoAdapter) {
             _ruleLastEvaluated[rule.uid] = _arduinoAdapter->millis();
         }
-        
+
         logSerial("EVALUATE_RULES: Rule %s condition %s, state: %s",
             rule.uid.c_str(), conditionMet ? "MET" : "NOT MET", getDeviceStateName(result.state));
-        return result;
     }
 
+public:
     bool executeRuleActions(const Rule& rule) override {
         logSerial("EVALUATE_RULES: Executing actions for rule %s", rule.uid.c_str());
-        
-        RuleEvaluationResult currentState = _ruleActiveStates[rule.uid];
-        RuleEvaluationResult evaluationResult = evaluateRule(rule);
-        
-        if (currentState.state == evaluationResult.state) {
+
+        // operator[] on purpose: a rule seen for the first time gets an entry in the OFF
+        // state, and the comparison below starts from it.
+        DeviceStateEnum currentState = _ruleActiveStates[rule.uid].state;
+        RuleEvaluationResult& evaluationResult = _evaluationScratch;
+        evaluateRuleInto(rule, evaluationResult);
+
+        if (currentState == evaluationResult.state) {
             refreshReportedSensorDescriptor(rule, evaluationResult);
             return true; // No change needed
         }
@@ -1012,12 +1125,12 @@ public:
         bool success = executeDeviceAction(rule.deviceUid, evaluationResult);
         if (success) {
             _ruleActiveStates[rule.uid] = evaluationResult;
-            log("EVALUATE_RULES: Rule %s action executed - device state %s", 
+            log("EVALUATE_RULES: Rule %s action executed - device state %s",
                 rule.uid.c_str(), getDeviceStateName(evaluationResult.state));
         } else {
             log("EVALUATE_RULES: Failed to execute action for rule %s", rule.uid.c_str());
         }
-        
+
         return success;
     }
     
@@ -1182,7 +1295,9 @@ private:
         return true;
     }
 
-    RuleEvaluationResult evaluateScheduleRule(const Rule& rule, RuleEvaluationResult& result) {
+    // Mutates the caller's result in place; kept void so the tick's scratch instance is not
+    // copied through a return value every second.
+    void evaluateScheduleRule(const Rule& rule, RuleEvaluationResult& result) {
         log("EVALUATE_RULES: Evaluating schedule rule %s", rule.uid.c_str());
         
         #ifdef DEBUG
@@ -1243,7 +1358,7 @@ private:
             result.state = DEVICE_STATE_OFF;
             result.isRuleTurnOnDevice = false;
             result.ruleStopReason = "time_not_available_error";
-            return result;
+            return;
         }
         
         // Get current time
@@ -1254,7 +1369,7 @@ private:
             result.state = DEVICE_STATE_OFF;
             result.isRuleTurnOnDevice = false;
             result.ruleStopReason = "time_not_available_error";
-            return result;
+            return;
         }
         
         logSerial("EVALUATE_RULES: LocalTime = %d:%d", timeinfo.tm_hour, timeinfo.tm_min);
@@ -1263,7 +1378,7 @@ private:
             log("EVALUATE_RULES: No schedule items in rule %s", rule.uid.c_str());
             result.state = DEVICE_STATE_OFF;
             result.isRuleTurnOnDevice = false;
-            return result;
+            return;
         }
         
         logSerial("EVALUATE_RULES: rules[%s][schedule].size= %d", rule.uid.c_str(), static_cast<int>(rule.schedule.size()));
@@ -1352,7 +1467,7 @@ private:
             result.ruleStopReason = "time_reach";
         }
 
-        return result;
+        return;
     }
 
     std::string sensorEventTimestamp() {
@@ -1410,7 +1525,10 @@ private:
         }
         if (!rule.conditions.empty()) {
             std::vector<bool>& condHeld = conditionHoldStates(rule);
-            std::vector<bool> condFired;
+            // Member scratch: cleared per call, buffer kept between ticks. Never used by two
+            // condition walks at once - each rule's walk finishes before the next begins.
+            std::vector<bool>& condFired = _conditionFiredScratch;
+            condFired.clear();
             condFired.reserve(rule.conditions.size());
             for (size_t i = 0; i < rule.conditions.size(); ++i) {
                 const RuleCondition& cond = rule.conditions[i];
@@ -1454,11 +1572,15 @@ private:
             if (firedIndex) {
                 *firedIndex = firedAt;
             }
-            logSerial("EVALUATE_RULES: SENSOR_COND uid=%s mode=%s ops=%s nConds=%d targetOn=%d fired=%d",
-                rule.uid.c_str(),
-                conditionsHaveJoinOp(rule.conditions) ? "dnf" : "legacy",
-                conditionsOpsString(rule.conditions).c_str(),
-                static_cast<int>(rule.conditions.size()), targetOn ? 1 : 0, firedAt);
+            // Gated explicitly: the ops string argument is built on the heap, which is only
+            // worth doing when the line is actually emitted.
+            if (isRuleDebugLoggingEnabled()) {
+                logSerial("EVALUATE_RULES: SENSOR_COND uid=%s mode=%s ops=%s nConds=%d targetOn=%d fired=%d",
+                    rule.uid.c_str(),
+                    conditionsHaveJoinOp(rule.conditions) ? "dnf" : "legacy",
+                    conditionsOpsString(rule.conditions).c_str(),
+                    static_cast<int>(rule.conditions.size()), targetOn ? 1 : 0, firedAt);
+            }
             return targetOn ? SensorVerdict::TURN_ON : SensorVerdict::TURN_OFF;
         }
 
@@ -1695,7 +1817,9 @@ private:
             *firedIndex = -1;
         }
         if (!rule.conditions.empty()) {
-            std::vector<bool> condFired;
+            // Member scratch, same contract as in evaluateSensorRule().
+            std::vector<bool>& condFired = _conditionFiredScratch;
+            condFired.clear();
             condFired.reserve(rule.conditions.size());
             for (const auto& cond : rule.conditions) {
                 bool fires;
@@ -1719,11 +1843,14 @@ private:
             if (firedIndex) {
                 *firedIndex = firedAt;
             }
-            logSerial("EVALUATE_RULES: STEP_COND uid=%s mode=%s ops=%s nConds=%d firing=%d fired=%d",
-                rule.uid.c_str(),
-                conditionsHaveJoinOp(rule.conditions) ? "dnf" : "legacy",
-                conditionsOpsString(rule.conditions).c_str(),
-                static_cast<int>(rule.conditions.size()), firing ? 1 : 0, firedAt);
+            // Gated explicitly, like the SENSOR_COND line: the ops string is heap-built.
+            if (isRuleDebugLoggingEnabled()) {
+                logSerial("EVALUATE_RULES: STEP_COND uid=%s mode=%s ops=%s nConds=%d firing=%d fired=%d",
+                    rule.uid.c_str(),
+                    conditionsHaveJoinOp(rule.conditions) ? "dnf" : "legacy",
+                    conditionsOpsString(rule.conditions).c_str(),
+                    static_cast<int>(rule.conditions.size()), firing ? 1 : 0, firedAt);
+            }
             return firing;
         }
 
@@ -1741,14 +1868,12 @@ private:
     }
 
     SensorVerdict evaluateAverageSensorRule(const Rule& rule, bool committedOn, RuleEvaluationResult& result) {
-        std::vector<std::string> uids = rule.conditions.empty()
-            ? std::vector<std::string>()
-            : rule.conditions[0].sensorUids;
-
-        if (uids.empty()) {
+        if (rule.conditions.empty() || rule.conditions[0].sensorUids.empty()) {
             log("EVALUATE_RULES: AVG_EVAL inert uid=%s reason=no_sensors", rule.uid.c_str());
             return SensorVerdict::INERT;
         }
+
+        const std::vector<std::string>& uids = rule.conditions[0].sensorUids;
 
         double mean = computeMean(rule.uid, uids);
         result.sensorUid = uids[0];
@@ -1935,28 +2060,51 @@ private:
         return uids;
     }
 
-    FreshnessVerdict ruleSensorFreshness(const Rule& rule, unsigned long now) {
-        std::vector<std::string> uids = collectSensorUids(rule);
-        if (uids.empty()) {
-            return FreshnessVerdict::FRESH;
+    // One sensor's contribution to ruleSensorFreshness(); factored out so the rule's sensors
+    // can be visited where they already live instead of being copied into a temporary list
+    // on every evaluation tick.
+    void checkSensorFreshness(const Rule& rule, const std::string& uid, unsigned long now,
+                              bool& anyNeverSeen, bool& anyStale) {
+        uint32_t last = _sensorValueModel ? _sensorValueModel->getLastReadTime(uid) : 0;
+        if (last == 0) {
+            anyNeverSeen = true;
+            log("EVALUATE_RULES: FRESHNESS uid=%s sensor=%s last=0 age=NA now=%lu verdict=never_seen",
+                rule.uid.c_str(), uid.c_str(), now);
+        } else {
+            unsigned long age = (now >= (unsigned long)last) ? (now - (unsigned long)last) : 0UL;
+            if (age > SENSOR_FRESHNESS_WINDOW_MS) {
+                anyStale = true;
+                log("EVALUATE_RULES: FRESHNESS uid=%s sensor=%s last=%u age=%lu now=%lu verdict=stale",
+                    rule.uid.c_str(), uid.c_str(), last, age, now);
+            }
         }
+    }
 
+    FreshnessVerdict ruleSensorFreshness(const Rule& rule, unsigned long now) {
+        // Visits the same sensors in the same order as collectSensorUids(): the rule's own
+        // sensor first, then each condition's sensors.
         bool anyNeverSeen = false;
         bool anyStale = false;
-        for (const auto& uid : uids) {
-            uint32_t last = _sensorValueModel ? _sensorValueModel->getLastReadTime(uid) : 0;
-            if (last == 0) {
-                anyNeverSeen = true;
-                log("EVALUATE_RULES: FRESHNESS uid=%s sensor=%s last=0 age=NA now=%lu verdict=never_seen",
-                    rule.uid.c_str(), uid.c_str(), now);
-            } else {
-                unsigned long age = (now >= (unsigned long)last) ? (now - (unsigned long)last) : 0UL;
-                if (age > SENSOR_FRESHNESS_WINDOW_MS) {
-                    anyStale = true;
-                    log("EVALUATE_RULES: FRESHNESS uid=%s sensor=%s last=%u age=%lu now=%lu verdict=stale",
-                        rule.uid.c_str(), uid.c_str(), last, age, now);
+        const std::string* firstUid = nullptr;
+
+        if (!rule.sensorUid.empty()) {
+            firstUid = &rule.sensorUid;
+            checkSensorFreshness(rule, rule.sensorUid, now, anyNeverSeen, anyStale);
+        }
+        for (const auto& cond : rule.conditions) {
+            for (const auto& sensorUid : cond.sensorUids) {
+                if (sensorUid.empty()) {
+                    continue;
                 }
+                if (!firstUid) {
+                    firstUid = &sensorUid;
+                }
+                checkSensorFreshness(rule, sensorUid, now, anyNeverSeen, anyStale);
             }
+        }
+
+        if (!firstUid) {
+            return FreshnessVerdict::FRESH;
         }
 
         if (anyStale) {
@@ -1969,7 +2117,7 @@ private:
             if (it == _sensorWaitSince.end()) {
                 _sensorWaitSince[rule.uid] = now;
                 log("EVALUATE_RULES: SENSOR_WAIT uid=%s sensor=%s waitSince=%lu",
-                    rule.uid.c_str(), uids[0].c_str(), now);
+                    rule.uid.c_str(), firstUid->c_str(), now);
                 return FreshnessVerdict::WAITING;
             }
             if ((unsigned long)(now - it->second) < SENSOR_FRESHNESS_WINDOW_MS) {
@@ -2028,8 +2176,7 @@ private:
             return false;
         }
 
-        if (device->ruleUid && std::string(device->ruleUid).length() > 0 &&
-            rule.uid != std::string(device->ruleUid)) {
+        if (device->ruleUid && device->ruleUid[0] != '\0' && rule.uid != device->ruleUid) {
             return false;
         }
 

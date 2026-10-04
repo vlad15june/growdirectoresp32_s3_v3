@@ -5,8 +5,10 @@ class IWifiManager {
 public:
     virtual ~IWifiManager() = default;
     
-    // Setup WiFi connection using configured settings
-    virtual bool setupWifiConnection() = 0;
+    // Hand the radio the networks it may associate with: the stored list, or the credentials in
+    // the settings when there is none. Associates with nothing - the station is associated by the
+    // link's supervision, on the network task. Returns how many networks were handed over.
+    virtual int registerNetworks() = 0;
     
     // Add a WiFi network to the list of available networks
     virtual bool addWifiNetwork(const char* ssid, const char* password) = 0;

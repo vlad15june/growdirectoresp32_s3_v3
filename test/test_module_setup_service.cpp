@@ -22,11 +22,15 @@
 #include "Mock/Infrastructure/Repositories/MockSensorRepository.h"
 #include "Mock/Core/Domain/Adapters/Sensors/MockSensorReader.h"
 #include "Mock/Infrastructure/MockArduinoAdapter.h"
-#include "Mock/Application/MockClearModuleDataService.h"
-#include "Mock/UseCases/ModuleMode/MockCheckModuleDeletionUseCase.h"
-#include "Mock/UseCases/ModuleMode/MockCheckFirmwareUpdateOnStartupUseCase.h"
 #include "Core/Domain/UseCases/Sensors/ModbusAddressAllocator.h"
 #include "Core/Domain/Enums/ModuleModeEnum.h"
+#include "Mock/Infrastructure/Api/MockHybridAPIService.h"
+#include "Infrastructure/Controllers/HTTP/RestApiService.h"
+#include "Infrastructure/Controllers/Api/HybridAPIService.h"
+#include "Infrastructure/Adapters/Json/ArduinoJsonConverter.h"
+#include "Sim/SimHttpClient.h"
+#include "Mock/Infrastructure/Udp/MockUdpManager.h"
+#include "Infrastructure/Controllers/UDP/UdpInboundDispatcher.h"
 
 // Helper class for tests
 class ModuleSetupServiceTestHelper {
@@ -67,21 +71,6 @@ public:
         }
     }
 
-    static void callFindDuplicateAddresses(ModuleSetupService* service,
-                                           const std::map<int, std::vector<SensorEntity*>>& addressMap,
-                                           std::vector<SensorEntity*>& sensorsNeedingNewAddress) {
-        if (service) {
-            service->findDuplicateAddresses(addressMap, sensorsNeedingNewAddress);
-        }
-    }
-
-    static void callAssignNewAddresses(ModuleSetupService* service,
-                                       std::vector<SensorEntity*>& sensorsNeedingNewAddress,
-                                       const std::map<int, std::vector<SensorEntity*>>& addressMap) {
-        if (service) {
-            service->assignNewAddresses(sensorsNeedingNewAddress, addressMap);
-        }
-    }
 };
 
 // Global test variables
@@ -284,9 +273,12 @@ static void test_setup_module_triggers_led_use_cases(void) {
     if (debug_file != nullptr) fprintf(debug_file, "Calling setupModule()\n");
     g_moduleSetupService->setupModule();
     
-    if (debug_file != nullptr) fprintf(debug_file, "Checking if ledOnLoad was called: %s\n", 
-                                g_mockLedUseCases.onLoadCalled ? "Yes" : "No");
-    TEST_ASSERT_TRUE(g_mockLedUseCases.onLoadCalled);
+    // The LED is told the module is coming up as soon as its pins exist. That is what the boot
+    // shows: the boot pattern, not the steady light of ledOnLoad().
+    if (debug_file != nullptr) fprintf(debug_file, "Checking if the boot was announced: %s\n", 
+                                g_mockLedUseCases.stages.empty() ? "No" : "Yes");
+    TEST_ASSERT_TRUE(!g_mockLedUseCases.stages.empty());
+    TEST_ASSERT_EQUAL(LED_BOOT_STAGE_BOOTING, g_mockLedUseCases.stages[0]);
     
     module_setup_service_teardown();
     if (debug_file != nullptr) fprintf(debug_file, "Finished test_setup_module_triggers_led_use_cases\n");
@@ -379,6 +371,91 @@ static void test_module_mode_handling_for_configured_done(void) {
     
     module_setup_service_teardown();
     if (debug_file != nullptr) fprintf(debug_file, "Finished test_module_mode_handling_for_configured_done\n");
+}
+
+/**
+ * The link log is armed by the boot, and armed before the boot hands the radio its networks - and so
+ * before anything can ask the radio to associate with them.
+ *
+ * What it is armed with is the radio's own events, and the first of them is the connect the boot's
+ * own association produces: a module whose events are armed afterwards has no line for the link it
+ * is running on, and a reconnect hours later would be the first thing its log ever said about the
+ * network.
+ */
+static void test_setup_arms_the_link_log_before_it_asks_for_the_association(void) {
+    module_setup_service_setup();
+
+    g_mockSettings.setConfigured(ModuleModeEnum::CONFIGURED_DONE);
+
+    WifiLinkLogUseCase linkLog(&g_mockLogger, &g_mockDebugSystem, nullptr);
+    g_moduleSetupService->setWifiLinkLog(&linkLog);
+
+    int armedWhenAsked = 0;
+    g_mockWiFiManager.onRegisterNetworks = [&armedWhenAsked]() {
+        armedWhenAsked = g_mockWifiAdapter.reportLinkEventsToCallCount;
+    };
+
+    g_moduleSetupService->setupModule();
+
+    TEST_ASSERT_TRUE_MESSAGE(g_mockWiFiManager.registerNetworksCalled,
+                             "the boot never handed the radio its networks - there is no ordering "
+                             "to assert");
+    TEST_ASSERT_EQUAL_MESSAGE(1, g_mockWifiAdapter.reportLinkEventsToCallCount,
+                              "the boot did not arm the radio's link events exactly once");
+    TEST_ASSERT_EQUAL_PTR_MESSAGE(&linkLog, g_mockWifiAdapter.linkLog,
+                                  "the radio was armed with something other than the link log the "
+                                  "boot was given");
+    TEST_ASSERT_EQUAL_MESSAGE(1, armedWhenAsked,
+                              "the networks were handed over before the link events were armed - "
+                              "the connect they produce would not reach the log");
+
+    module_setup_service_teardown();
+}
+
+/**
+ * And a module wired without one boots the same: the link log is a late dependency, injected by
+ * globals.h, and every stand in these tests is built without it.
+ */
+static void test_setup_without_a_link_log_leaves_the_radio_alone(void) {
+    module_setup_service_setup();
+
+    g_mockSettings.setConfigured(ModuleModeEnum::CONFIGURED_DONE);
+
+    g_moduleSetupService->setupModule();
+
+    TEST_ASSERT_TRUE_MESSAGE(g_mockWiFiManager.registerNetworksCalled,
+                             "the boot never reached the radio");
+    TEST_ASSERT_EQUAL_MESSAGE(0, g_mockWifiAdapter.reportLinkEventsToCallCount,
+                              "a boot with no link log armed the radio with a null one");
+
+    module_setup_service_teardown();
+}
+
+/**
+ * The end of the boot, said once. The milestone is the one the front panel changes hands on, and
+ * until now it could only be inferred from the uptime the next line to be written happened to
+ * carry.
+ */
+static void test_setup_says_the_boot_is_over_once(void) {
+    module_setup_service_setup();
+
+    g_mockSettings.setConfigured(ModuleModeEnum::CONFIGURED_DONE);
+
+    // MockLogger::reset() keeps what it captured, and every test in this file boots a module, so
+    // the boot under test is the lines from here on.
+    const size_t linesBefore = g_mockLogger.messages.size();
+
+    g_moduleSetupService->setupModule();
+
+    int said = 0;
+    for (size_t i = linesBefore; i < g_mockLogger.messages.size(); i++) {
+        if (g_mockLogger.messages[i].find("BOOT: complete in ") == 0) {
+            said++;
+        }
+    }
+    TEST_ASSERT_EQUAL_MESSAGE(1, said, "a boot did not say exactly once that it was over");
+
+    module_setup_service_teardown();
 }
 
 static void test_handle_module_mode_invokes_startup_factory_reset(void) {
@@ -476,9 +553,13 @@ static void test_setup_module_handles_led_sequences(void) {
     if (debug_file != nullptr) fprintf(debug_file, "Calling setupModule()\n");
     g_moduleSetupService->setupModule();
     
-    if (debug_file != nullptr) fprintf(debug_file, "Checking if ledOnLoad was called: %s\n", 
-                                g_mockLedUseCases.onLoadCalled ? "Yes" : "No");
-    TEST_ASSERT_TRUE(g_mockLedUseCases.onLoadCalled);
+    // In at the start, out at the end: the boot announces itself when the LED pins exist and
+    // hands the LED over, cleared, when setup is done.
+    if (debug_file != nullptr) fprintf(debug_file, "Checking the boot sequence on the LED: %u stage(s)\n", 
+                                (unsigned)g_mockLedUseCases.stages.size());
+    TEST_ASSERT_EQUAL(2, (int)g_mockLedUseCases.stages.size());
+    TEST_ASSERT_EQUAL(LED_BOOT_STAGE_BOOTING, g_mockLedUseCases.stages[0]);
+    TEST_ASSERT_EQUAL(LED_BOOT_STAGE_RUNNING, g_mockLedUseCases.stages[1]);
     
     if (debug_file != nullptr) fprintf(debug_file, "Checking if ledOffLoad was called: %s\n", 
                                 g_mockLedUseCases.offLoadCalled ? "Yes" : "No");
@@ -1235,6 +1316,51 @@ static void test_configure_done_mode_configure_handles_mqtt_connection_subscribe
     if (debug_file != nullptr) fprintf(debug_file, "Finished test_configure_done_mode_configure_handles_mqtt_connection_failure\n");
 }
 
+// The broker keeps the session - the subscriptions and the pushes the module missed - under the
+// client ID, so the ID is what the guarantee hangs on: the same string on every boot of this
+// module, and a different one on every other module. It is the deployment prefix plus the module
+// UID, and the UID is the station MAC, which comes from the chip rather than from storage.
+//
+// Setup runs once per boot today, so what this pins is the composition itself: doing it twice must
+// produce the same ID, not prefix+uid+uid. A module that changes its client ID is a client the
+// broker has no session for, and everything queued under the old one is dropped without a word.
+static void test_the_mqtt_client_id_is_the_prefix_and_the_module_uid_however_often_setup_runs() {
+    module_setup_service_setup();
+
+    delete g_moduleSetupService;
+    g_moduleSetupService = new ModuleSetupService(
+        &g_mockLogger,
+        &g_mockDebugSystem,
+        &g_mockModuleConfig,
+        &g_mockLedAdapter,
+        nullptr, // buttonAdapter
+        &g_mockLedUseCases,
+        &g_mockButtonUseCases,
+        &g_mockWifiAdapter,
+        &g_mockWiFiManager,
+        &g_mockWebServerLauncher,
+        &g_mockLoopServiceFactory,
+        &g_mockMqttManager
+    );
+    g_moduleSetupService->setSensorStructureUseCase(&g_sensorStructureUseCase);
+
+    // What globals.h builds the manager with, and what ModuleConfig answers on the board.
+    g_mockMqttManager.reset();
+    g_mockMqttManager.clientId = "GrowDirectorWifiClient";
+    g_mockMqttManager.connectReturnValue = true;
+    g_mockModuleConfig.setModuleUid("AA:BB:CC:DD:EE:01");
+
+    ModuleSetupServiceTestHelper::callConfigureDoneModeConfigure(g_moduleSetupService);
+    TEST_ASSERT_EQUAL_STRING("GrowDirectorWifiClientAA:BB:CC:DD:EE:01",
+                             g_mockMqttManager.clientId.c_str());
+
+    ModuleSetupServiceTestHelper::callConfigureDoneModeConfigure(g_moduleSetupService);
+    TEST_ASSERT_EQUAL_STRING("GrowDirectorWifiClientAA:BB:CC:DD:EE:01",
+                             g_mockMqttManager.clientId.c_str());
+
+    module_setup_service_teardown();
+}
+
 static void test_configure_done_mode_configure_handles_missing_mqtt_manager() {
     if (debug_file != nullptr) fprintf(debug_file, "Starting test_configure_done_mode_configure_handles_missing_mqtt_manager\n");
     module_setup_service_setup();
@@ -1268,43 +1394,34 @@ static void test_configure_done_mode_configure_handles_missing_mqtt_manager() {
 }
 
 // WiFi Manager Tests
+
+// Setup hands the radio its networks and associates with none of them: the boot's association is
+// the link supervision's, once the loop runs. How long setup takes does not depend on the network.
 static void test_configure_done_mode_configure_uses_wifi_manager() {
-    if (debug_file != nullptr) fprintf(debug_file, "Starting test_configure_done_mode_configure_uses_wifi_manager\n");
     module_setup_service_setup();
-    
-    // Set up mocks for success case
     g_mockWiFiManager.reset();
-    g_mockWiFiManager.setupWifiConnectionSuccess = true;
-    
-    // Call the method under test
+    g_mockWifiAdapter.reset();
+
     ModuleSetupServiceTestHelper::callConfigureDoneModeConfigure(g_moduleSetupService);
-    
-    // Verify WiFi connection was attempted using the WiFiManager
-    TEST_ASSERT_TRUE(g_mockWiFiManager.setupWifiConnectionCalled);
-    
+
+    TEST_ASSERT_TRUE_MESSAGE(g_mockWiFiManager.registerNetworksCalled, "setup did not hand the radio its networks");
+    TEST_ASSERT_FALSE_MESSAGE(g_mockWifiAdapter.reconnectCalled, "setup associated the station itself");
+
     module_setup_service_teardown();
-    if (debug_file != nullptr) fprintf(debug_file, "Finished test_configure_done_mode_configure_uses_wifi_manager\n");
 }
 
+// No network to hand over is no reason to stop: the boot goes on, and says how many it handed.
 static void test_configure_done_mode_configure_handles_wifi_manager_failure() {
-    if (debug_file != nullptr) fprintf(debug_file, "Starting test_configure_done_mode_configure_handles_wifi_manager_failure\n");
     module_setup_service_setup();
-    
-    // Set up mocks for failure case
     g_mockWiFiManager.reset();
-    g_mockWiFiManager.setupWifiConnectionSuccess = false;
-    
-    // Call the method under test
+    g_mockWiFiManager.registerNetworksResult = 0;
+
     ModuleSetupServiceTestHelper::callConfigureDoneModeConfigure(g_moduleSetupService);
-    
-    // Verify WiFi connection was attempted but failed
-    TEST_ASSERT_TRUE(g_mockWiFiManager.setupWifiConnectionCalled);
-    
-    // Verify error was logged
-    TEST_ASSERT_TRUE(g_mockLogger.printCalled);
-    
+
+    TEST_ASSERT_TRUE(g_mockWiFiManager.registerNetworksCalled);
+    TEST_ASSERT_TRUE_MESSAGE(g_mockDeviceService.wasInitCalled(), "the boot stopped after no network was handed over");
+
     module_setup_service_teardown();
-    if (debug_file != nullptr) fprintf(debug_file, "Finished test_configure_done_mode_configure_handles_wifi_manager_failure\n");
 }
 
 static void test_configure_done_mode_configure_handles_missing_wifi_manager() {
@@ -1539,10 +1656,11 @@ static void test_configure_done_mode_configure_sets_up_mqtt_topic_handlers_on_su
     if (debug_file != nullptr) fprintf(debug_file, "Finished test_configure_done_mode_configure_sets_up_mqtt_topic_handlers_on_successful_connection\n");
 }
 
-static void test_configure_done_mode_configure_do_not_sets_up_mqtt_topic_handlers_on_unsuccessful_connection() {
-    if (debug_file != nullptr) fprintf(debug_file, "Starting test_configure_done_mode_configure_do_not_sets_up_mqtt_topic_handlers_on_unsuccessful_connection\n");
+// A boot with no link registers the topic handlers all the same: connect() only configures the
+// client then, and the subscriptions it buffers are made on the first CONNACK.
+static void test_configure_done_mode_configure_sets_up_mqtt_topic_handlers_without_a_link() {
     module_setup_service_setup();
-    
+
     // Recreate service with MQTT manager
     delete g_moduleSetupService;
     g_moduleSetupService = new ModuleSetupService(
@@ -1560,24 +1678,18 @@ static void test_configure_done_mode_configure_do_not_sets_up_mqtt_topic_handler
         &g_mockMqttManager
     );
     g_moduleSetupService->setSensorStructureUseCase(&g_sensorStructureUseCase);
-    
-    // Set up mocks for failed connection
+
+    // No link: the manager configures the client and says no
     g_mockMqttManager.reset();
     g_mockMqttManager.connectReturnValue = false;
-    
-    // Call the method under test
+
     ModuleSetupServiceTestHelper::callConfigureDoneModeConfigure(g_moduleSetupService);
-    
-    // Verify MQTT connection was attempted but failed
-    TEST_ASSERT_TRUE(g_mockMqttManager.connectCalled);
+
     TEST_ASSERT_EQUAL(1, g_mockMqttManager.connectCallCount);
-    
-    // Verify that setupMqttTopicHandlers was NOT called since connection failed
-    TEST_ASSERT_FALSE(g_mockMqttManager.setupMqttTopicHandlersCalled);
-    TEST_ASSERT_EQUAL(0, g_mockMqttManager.setupMqttTopicHandlersCallCount);
-    
+    TEST_ASSERT_EQUAL_MESSAGE(1, g_mockMqttManager.setupMqttTopicHandlersCallCount,
+                              "a boot with no link registered no MQTT topic handlers");
+
     module_setup_service_teardown();
-    if (debug_file != nullptr) fprintf(debug_file, "Finished test_configure_done_mode_configure_do_not_sets_up_mqtt_topic_handlers_on_unsuccessful_connection\n");
 }
 
 static void test_handle_module_mode_sets_no_scan_sensors_flag_when_button_pressed() {
@@ -1617,86 +1729,116 @@ static void test_handle_module_mode_does_not_set_no_scan_sensors_flag_when_butto
 }
 
 static MockArduinoAdapter g_mockArduinoAdapter;
-static MockClearModuleDataService g_mockClearModuleDataService;
-static MockCheckModuleDeletionUseCase g_mockCheckModuleDeletionUseCase;
-static MockCheckFirmwareUpdateOnStartupUseCase g_mockCheckFirmwareUpdateOnStartupUseCase;
 
-static void build_service_with_deletion_fork(void) {
+/** @brief The service of a configured module, with this API service behind it and nothing of the network else. */
+static void build_service_with_api(IHybridAPIService* api) {
     delete g_moduleSetupService;
     g_moduleSetupService = new ModuleSetupService(
-        &g_mockLogger,
-        &g_mockDebugSystem,
-        &g_mockModuleConfig,
-        &g_mockLedAdapter,
-        nullptr,
-        &g_mockLedUseCases,
-        &g_mockButtonUseCases,
-        &g_mockWifiAdapter,
-        &g_mockWiFiManager,
-        &g_mockWebServerLauncher,
-        &g_mockLoopServiceFactory,
-        &g_mockMqttManager,
-        nullptr,
-        &g_mockDeviceService,
-        nullptr,
-        nullptr,
-        nullptr,
-        nullptr,
-        nullptr,
-        nullptr,
-        nullptr,
-        nullptr,
-        nullptr,
-        &g_mockClearModuleDataService,
-        &g_mockArduinoAdapter,
-        nullptr,
-        nullptr,
-        nullptr,
-        nullptr,
-        &g_mockCheckModuleDeletionUseCase,
-        &g_mockCheckFirmwareUpdateOnStartupUseCase);
+        &g_mockLogger, &g_mockDebugSystem, &g_mockModuleConfig, &g_mockLedAdapter, nullptr,
+        &g_mockLedUseCases, &g_mockButtonUseCases, &g_mockWifiAdapter, &g_mockWiFiManager,
+        &g_mockWebServerLauncher, &g_mockLoopServiceFactory, &g_mockMqttManager, nullptr,
+        &g_mockDeviceService, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr,
+        api, &g_mockArduinoAdapter);
     g_moduleSetupService->setSensorStructureUseCase(&g_sensorStructureUseCase);
 }
 
-static void test_configure_done_skips_deletion_when_update_applied() {
+// The REST client learns the server's address and the module's token from setup itself, and not as
+// a side effect of a request that setup happens to make.
+static void test_configure_done_gives_the_rest_client_the_stored_server_address(void) {
     module_setup_service_setup();
-
     g_mockArduinoAdapter = MockArduinoAdapter();
-    g_mockClearModuleDataService.reset();
-    g_mockCheckModuleDeletionUseCase.reset();
-    g_mockCheckFirmwareUpdateOnStartupUseCase.reset();
-
     g_mockSettings.setConfigured(ModuleModeEnum::CONFIGURED_DONE);
-    g_mockSettings.setWasInitialSyncCompleted(1);
-    g_mockCheckFirmwareUpdateOnStartupUseCase.runReturnValue = true;
 
-    build_service_with_deletion_fork();
+    MockHybridAPIService api;
+    build_service_with_api(&api);
     ModuleSetupServiceTestHelper::callConfigureDoneModeConfigure(g_moduleSetupService);
 
-    TEST_ASSERT_TRUE(g_mockCheckFirmwareUpdateOnStartupUseCase.runCalled);
-    TEST_ASSERT_FALSE(g_mockCheckModuleDeletionUseCase.evaluateCalled);
+    TEST_ASSERT_TRUE_MESSAGE(api.initCalled, "setup did not hand the REST client the stored server address");
 
     module_setup_service_teardown();
 }
 
-static void test_configure_done_runs_deletion_when_no_update() {
+// Guard, with the real transport: the first request after the boot - here the module command fetch,
+// which does not read the settings itself - goes to the stored server with the stored token.
+static void test_the_first_request_after_the_boot_carries_the_stored_server_and_token(void) {
     module_setup_service_setup();
-
     g_mockArduinoAdapter = MockArduinoAdapter();
-    g_mockClearModuleDataService.reset();
-    g_mockCheckModuleDeletionUseCase.reset();
-    g_mockCheckFirmwareUpdateOnStartupUseCase.reset();
-
     g_mockSettings.setConfigured(ModuleModeEnum::CONFIGURED_DONE);
-    g_mockSettings.setWasInitialSyncCompleted(1);
-    g_mockCheckFirmwareUpdateOnStartupUseCase.runReturnValue = false;
-    g_mockCheckModuleDeletionUseCase.evaluateReturnValue = ModuleDeletionStatusEnum::NOT_DELETED;
+    g_mockSettings.setServerUrl("http://gd.test");
+    g_mockSettings.setToken("TOK123");
+    g_mockModuleConfig.setModuleUid("UID-1");
 
-    build_service_with_deletion_fork();
+    ArduinoJsonConverter json;
+    hostsim::SimHttpClient http;
+    http.alwaysRespond(200, "[]");
+    RestAPIService rest(&http, &g_mockModuleConfig, &g_mockSettings, &g_mockLogger, &g_mockDebugSystem, &json);
+    HybridAPIService api(&rest, nullptr, &g_mockModuleConfig, &g_mockLogger, &g_mockDebugSystem,
+                         ApiPriority::REST_PREFERRED);
+    build_service_with_api(&api);
     ModuleSetupServiceTestHelper::callConfigureDoneModeConfigure(g_moduleSetupService);
 
-    TEST_ASSERT_TRUE(g_mockCheckFirmwareUpdateOnStartupUseCase.runCalled);
-    TEST_ASSERT_TRUE(g_mockCheckModuleDeletionUseCase.evaluateCalled);
+    api.getModuleCommand();
+
+    TEST_ASSERT_TRUE_MESSAGE(http.requestCount() >= 1, "the module command fetch made no request");
+    const std::string url = http.lastRequest().url;
+    TEST_ASSERT_TRUE_MESSAGE(url.compare(0, strlen("http://gd.test/"), "http://gd.test/") == 0,
+                             ("the first request after the boot went to \"" + url + "\"").c_str());
+    TEST_ASSERT_TRUE_MESSAGE(url.find("token=TOK123") != std::string::npos,
+                             ("the first request after the boot carried no token: \"" + url + "\"").c_str());
+
+    module_setup_service_teardown();
+}
+
+/** @brief A UDP manager whose controller exists only once it has been initialized, as UdpManager's does. */
+class ListeningUdpManager : public MockUdpManager {
+public:
+    int initializeCalls = 0;
+    uint16_t port = 0;
+    std::string group;
+
+    bool initialize(uint16_t localPort, const char* multicastIP) override {
+        initializeCalls++;
+        port = localPort;
+        group = multicastIP != nullptr ? multicastIP : "";
+        return true;
+    }
+
+    IUdpController* getController() override { return initializeCalls > 0 ? &controller : nullptr; }
+};
+
+// Setup opens no UDP listener - it has no link to listen on. The first link does, through
+// startListening(): the port and the group, then the dispatcher on the controller that made, so that a
+// packet reaches the handlers registered in setup.
+static void test_setup_opens_no_udp_listener_and_the_first_link_does(void) {
+    module_setup_service_setup();
+    g_mockArduinoAdapter = MockArduinoAdapter();
+    g_mockSettings.setConfigured(ModuleModeEnum::CONFIGURED_DONE);
+
+    ListeningUdpManager udp;
+    UdpInboundDispatcher dispatcher(&udp, &g_mockLogger, &g_mockDebugSystem);
+    int delivered = 0;
+    // What the remote sensor receiver does in setup: a handler on the dispatcher.
+    dispatcher.addHandler([&delivered](const UdpPacketData&) { delivered++; });
+
+    delete g_moduleSetupService;
+    g_moduleSetupService = new ModuleSetupService(
+        &g_mockLogger, &g_mockDebugSystem, &g_mockModuleConfig, &g_mockLedAdapter, nullptr,
+        &g_mockLedUseCases, &g_mockButtonUseCases, &g_mockWifiAdapter, &g_mockWiFiManager,
+        &g_mockWebServerLauncher, &g_mockLoopServiceFactory, &g_mockMqttManager, nullptr,
+        &g_mockDeviceService, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, &udp,
+        nullptr, &g_mockArduinoAdapter, nullptr, nullptr, nullptr, nullptr, &dispatcher, nullptr);
+    g_moduleSetupService->setSensorStructureUseCase(&g_sensorStructureUseCase);
+
+    g_moduleSetupService->setupModule();
+    TEST_ASSERT_EQUAL_MESSAGE(0, udp.initializeCalls, "setup opened the UDP listeners with no link to listen on");
+
+    g_moduleSetupService->startListening();
+    TEST_ASSERT_EQUAL_MESSAGE(1, udp.initializeCalls, "the first link did not open the UDP listeners");
+    TEST_ASSERT_EQUAL(1234, udp.port);
+    TEST_ASSERT_EQUAL_STRING("239.1.2.3", udp.group.c_str());
+
+    udp.controller.emitPacket("{}");
+    TEST_ASSERT_EQUAL_MESSAGE(1, delivered, "a packet on the listener did not reach the handler registered in setup");
 
     module_setup_service_teardown();
 }
@@ -1843,14 +1985,44 @@ static void test_structure_skips_vpd_channel_on_overflow(void) {
     module_setup_service_teardown();
 }
 
-// --- GDV1-3847: prepareSensorsForReading must run on every setup pass ---
-// The XF700A rainfall-window write lives in prepareSensorsForReading; before the fix it
-// only ran on the noScanSensors fast path, so a normally scanned module never wrote the
-// sensor's accumulation window and rainfall never returned to zero after rain stopped.
+// --- The boot does not talk to the line ---
+// Filling the sensor structure describes the registry and arms the discovery; the pings, the pin
+// scans, the address writes and the per-model register writes are steps the
+// acquisition task takes afterwards. What is asserted here is the boot's side of that split.
 
 static MockSensorRepository g_mockSensorRepository;
 static MockSensorReader g_mockSensorReader;
 static ModuleStructure g_prepareModuleStructure;
+
+class SetupBootScanProbe : public IStartupSensorScan {
+public:
+    int armCalls = 0;
+    int rescanCalls = 0;
+    int rescanPin = -1;
+    int prepareArmCalls = 0;
+    int describeCalls = 0;
+
+    /** Records what the boot asked for; the records themselves are the structure use case's job. */
+    void describeStoredSensors(Node& node) override {
+        describeCalls++;
+        (void)node;
+    }
+    void arm() override { armCalls++; }
+    void rescan(int pin) override { rescanCalls++; rescanPin = pin; }
+    void armPreparationOnly() override { prepareArmCalls++; }
+    bool isRunning() const override { return armCalls > 0 || prepareArmCalls > 0; }
+    bool isScanEntryRunning() const override { return isRunning() || rescanCalls > 0; }
+    bool takeNextStep(StartupScanStep&) override { return false; }
+    void returnStep() override {}
+    StartupScanOutcome runStepOnBus(const StartupScanStep&) override { return StartupScanOutcome(); }
+    void applyStepOutcome(const StartupScanOutcome&) override {}
+    bool holdsAWindowOpen() const override { return false; }
+    bool keepsThePortDark(int) const override { return false; }
+    void reviewSensorLiveness() override {}
+    void onDescribedStructureSettled(bool) override {}
+};
+
+static SetupBootScanProbe g_startupScanProbe;
 
 static SensorEntity makePrepareTestWeatherSensor(void) {
     SensorEntity sensor;
@@ -1885,12 +2057,14 @@ static void build_service_with_sensor_pipeline(void) {
         nullptr, // sensorTypeRepository
         &g_mockSensorReader);
     g_moduleSetupService->setSensorStructureUseCase(&g_sensorStructureUseCase);
+    g_moduleSetupService->setStartupSensorScan(&g_startupScanProbe);
 }
 
 static void prepare_test_setup(void) {
     module_setup_service_setup();
     g_mockSensorRepository = MockSensorRepository();
     g_mockSensorReader.reset();
+    g_startupScanProbe = SetupBootScanProbe();
     g_prepareModuleStructure.nodes.clear();
     g_mockModuleConfig.setModuleType(MODULE_TYPE_SENSOR);
     g_mockModuleConfig.setModuleSubType(MODULE_SUBTYPE_NONE);
@@ -1898,22 +2072,88 @@ static void prepare_test_setup(void) {
     build_service_with_sensor_pipeline();
 }
 
-// Normal scan path: repository sensors are verified via scanSensor and preparation runs
-static void test_prepare_sensors_runs_on_normal_scan_path(void) {
+// A normal boot: nothing on the line, and the discovery is armed to do it later
+static void test_boot_touches_no_sensor_and_arms_the_discovery(void) {
     prepare_test_setup();
 
     g_mockSettings.setNoScanSensors(0);
 
     ModuleSetupServiceTestHelper::callFillModuleStructure(g_moduleSetupService);
 
-    TEST_ASSERT_EQUAL(1, g_mockSensorReader.scanSensorCallCount);
-    TEST_ASSERT_EQUAL(1, g_mockSensorReader.prepareSensorsForReadingCallCount);
+    TEST_ASSERT_EQUAL(0, g_mockSensorReader.scanSensorCallCount);
+    TEST_ASSERT_EQUAL(0, g_mockSensorReader.prepareSensorsForReadingCallCount);
+    TEST_ASSERT_EQUAL(0, g_mockSensorReader.writeSensorAddressCallCount);
+    TEST_ASSERT_EQUAL(1, g_startupScanProbe.armCalls);
+    TEST_ASSERT_EQUAL(0, g_startupScanProbe.prepareArmCalls);
+    TEST_ASSERT_EQUAL(1, g_startupScanProbe.describeCalls);
 
     module_setup_service_teardown();
 }
 
-// Fast path: no verification scan, but preparation still runs exactly once (not twice)
-static void test_prepare_sensors_runs_once_on_no_scan_fast_path(void) {
+/** @brief How many times the boot switched this port on through the sensor reader. */
+static int powerOnsOfPort(int pin) {
+    int ons = 0;
+    for (size_t i = 0; i < g_mockSensorReader.portPowerCalls.size(); i++) {
+        if (g_mockSensorReader.portPowerCalls[i].first == pin && g_mockSensorReader.portPowerCalls[i].second) {
+            ons++;
+        }
+    }
+    return ons;
+}
+
+// A configured sensor module gives the port of each stored ModBus sensor its power during the setup,
+// once - so the port has come up by the sweep's first visit - and leaves the free ports alone.
+static void test_the_boot_powers_the_stored_sensor_ports_of_a_configured_sensor_module(void) {
+    prepare_test_setup();
+    // The board's sensor module has its four sensor pins (ModuleConfig::getSensorPinCount()).
+    g_mockModuleConfig.setSensorPinCount(SENSOR_PIN_COUNT);
+    g_mockSettings.setConfigured(ModuleModeEnum::CONFIGURED_DONE);
+
+    g_moduleSetupService->setupModule();
+
+    TEST_ASSERT_TRUE_MESSAGE(g_mockSensorReader.initCalled, "the boot did not begin the sensor bus");
+    TEST_ASSERT_EQUAL_INT_MESSAGE(1, powerOnsOfPort(2),
+                                  "the boot did not switch the stored sensor's port on, once");
+    TEST_ASSERT_EQUAL_INT_MESSAGE(0, powerOnsOfPort(0) + powerOnsOfPort(1) + powerOnsOfPort(3),
+                                  "the boot switched a free port on");
+
+    module_setup_service_teardown();
+}
+
+// Nowhere else: not in the board test, not in the configuration modes - none of their loops reads a
+// sensor - and not on a module of another type, whose line is never begun.
+static void test_the_boot_powers_no_port_outside_a_configured_sensor_module(void) {
+    const ModuleModeEnum modes[3] = {ModuleModeEnum::AP_TEST_MODE, ModuleModeEnum::USER_CAN_CONFIGURE,
+                                     ModuleModeEnum::USER_CAN_RE_CONFIGURE};
+    for (int m = 0; m < 3; m++) {
+        prepare_test_setup();
+        g_mockModuleConfig.setSensorPinCount(SENSOR_PIN_COUNT);
+        g_mockSettings.setConfigured(modes[m]);
+        g_moduleSetupService->setupModule();
+        char message[96];
+        snprintf(message, sizeof(message), "the boot in mode %d switched a port on", (int)modes[m]);
+        TEST_ASSERT_EQUAL_INT_MESSAGE(0, powerOnsOfPort(2), message);
+        module_setup_service_teardown();
+    }
+
+    // A hydro module has sensor pins too (ModuleConfig::getSensorPinCount()), and its UART pins
+    // drive pumps (ModuleSetupService::setupSensorBus()).
+    const int types[2] = {MODULE_TYPE_DEVICE, MODULE_TYPE_HYDRO};
+    for (int t = 0; t < 2; t++) {
+        prepare_test_setup();
+        g_mockModuleConfig.setModuleType(types[t]);
+        g_mockModuleConfig.setSensorPinCount(SENSOR_PIN_COUNT);
+        g_mockSettings.setConfigured(ModuleModeEnum::CONFIGURED_DONE);
+        g_moduleSetupService->setupModule();
+        char message[96];
+        snprintf(message, sizeof(message), "the boot of a module of type %d switched a port on", types[t]);
+        TEST_ASSERT_EQUAL_INT_MESSAGE(0, powerOnsOfPort(2), message);
+        module_setup_service_teardown();
+    }
+}
+
+// The fast path: the flag is consumed by the boot that used it, and no discovery is armed
+static void test_boot_with_no_scan_flag_does_not_arm_the_discovery(void) {
     prepare_test_setup();
 
     g_mockSettings.setNoScanSensors(1);
@@ -1921,165 +2161,16 @@ static void test_prepare_sensors_runs_once_on_no_scan_fast_path(void) {
     ModuleSetupServiceTestHelper::callFillModuleStructure(g_moduleSetupService);
 
     TEST_ASSERT_EQUAL(0, g_mockSensorReader.scanSensorCallCount);
-    TEST_ASSERT_EQUAL(1, g_mockSensorReader.prepareSensorsForReadingCallCount);
+    TEST_ASSERT_EQUAL(0, g_mockSensorReader.prepareSensorsForReadingCallCount);
+    TEST_ASSERT_EQUAL(0, g_startupScanProbe.armCalls);
+    TEST_ASSERT_EQUAL(1, g_startupScanProbe.prepareArmCalls);
+    TEST_ASSERT_EQUAL(1, g_startupScanProbe.describeCalls);
     TEST_ASSERT_EQUAL_UINT8(0, g_mockSettings.getNoScanSensors());
 
     module_setup_service_teardown();
 }
 
 // Main test runner function
-/**
- * @brief Build a ModBus entity of the module for the duplicate-address tests
- * @param uid Uid of the entity
- * @param pin Port the entity sits on
- * @param address ModBus address the entity holds
- */
-static SensorEntity makeDuplicateFixtureEntity(const char* uid, int pin, int address) {
-    SensorEntity entity;
-    entity.uid = uid;
-    entity.pin = pin;
-    entity.protocol = "ModBus";
-    entity.modbusDeviceAddress = address;
-    entity.status = SENSOR_STATUS_ADDED;
-    return entity;
-}
-
-/**
- * @brief Build a setup service wired with the collaborators of the boot address resolution
- * @param sensorRepository Repository of the module
- * @param sensorReader Reader that writes the address into the device
- * @param allocator Owner of the ModBus addresses of the module
- */
-static ModuleSetupService* makeAddressManagementService(MockSensorRepository* sensorRepository,
-                                                        MockSensorReader* sensorReader,
-                                                        ModbusAddressAllocator* allocator) {
-    ModuleSetupService* service = new ModuleSetupService(
-        &g_mockLogger,
-        &g_mockDebugSystem,
-        &g_mockModuleConfig,
-        nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr,
-        nullptr, nullptr, nullptr,
-        sensorRepository,
-        nullptr,
-        sensorReader);
-    service->setModbusAddressAllocator(allocator);
-    return service;
-}
-
-/**
- * GDV1-3831, the 2026-08-15 fixture: .02 on pin 2 and .03 on pin 3 both at 0x72. The entity kept is
- * the one sitting on the address of its own port, whatever order the repository returned them in.
- */
-static void test_find_duplicate_addresses_keeps_the_entity_on_its_own_port_address(void) {
-    g_mockLogger.reset();
-
-    SensorEntity onOwnAddress = makeDuplicateFixtureEntity("module.02", 2, MODBUS_ADDRESS_MIN + 2);
-    SensorEntity onForeignAddress = makeDuplicateFixtureEntity("module.03", 3, MODBUS_ADDRESS_MIN + 2);
-
-    MockSensorRepository sensorRepository;
-    MockSensorReader sensorReader;
-    ModbusAddressAllocator allocator(&sensorRepository);
-    ModuleSetupService* service = makeAddressManagementService(&sensorRepository, &sensorReader, &allocator);
-
-    std::map<int, std::vector<SensorEntity*>> addressMap;
-    addressMap[MODBUS_ADDRESS_MIN + 2] = {&onForeignAddress, &onOwnAddress};
-    std::vector<SensorEntity*> sensorsNeedingNewAddress;
-
-    ModuleSetupServiceTestHelper::callFindDuplicateAddresses(service, addressMap, sensorsNeedingNewAddress);
-
-    TEST_ASSERT_EQUAL(1, static_cast<int>(sensorsNeedingNewAddress.size()));
-    TEST_ASSERT_EQUAL_STRING("module.03", sensorsNeedingNewAddress[0]->uid.c_str());
-    TEST_ASSERT_TRUE(g_mockLogger.jsonDetailsFor("duplicate_owner_chosen").find("per_port_match") != std::string::npos);
-    TEST_ASSERT_TRUE(g_mockLogger.jsonDetailsFor("duplicate_owner_chosen").find("module.02") != std::string::npos);
-
-    std::map<int, std::vector<SensorEntity*>> reversedMap;
-    reversedMap[MODBUS_ADDRESS_MIN + 2] = {&onOwnAddress, &onForeignAddress};
-    std::vector<SensorEntity*> reversedResult;
-
-    ModuleSetupServiceTestHelper::callFindDuplicateAddresses(service, reversedMap, reversedResult);
-
-    TEST_ASSERT_EQUAL(1, static_cast<int>(reversedResult.size()));
-    TEST_ASSERT_EQUAL_STRING("module.03", reversedResult[0]->uid.c_str());
-
-    delete service;
-}
-
-/**
- * Neither entity sits on the address of its own port: the survivor is the first one, as before.
- */
-static void test_find_duplicate_addresses_falls_back_to_the_first_entity(void) {
-    g_mockLogger.reset();
-
-    SensorEntity first = makeDuplicateFixtureEntity("module.00", 0, MODBUS_ADDRESS_MIN + 2);
-    SensorEntity second = makeDuplicateFixtureEntity("module.01", 1, MODBUS_ADDRESS_MIN + 2);
-
-    MockSensorRepository sensorRepository;
-    MockSensorReader sensorReader;
-    ModbusAddressAllocator allocator(&sensorRepository);
-    ModuleSetupService* service = makeAddressManagementService(&sensorRepository, &sensorReader, &allocator);
-
-    std::map<int, std::vector<SensorEntity*>> addressMap;
-    addressMap[MODBUS_ADDRESS_MIN + 2] = {&first, &second};
-    std::vector<SensorEntity*> sensorsNeedingNewAddress;
-
-    ModuleSetupServiceTestHelper::callFindDuplicateAddresses(service, addressMap, sensorsNeedingNewAddress);
-
-    TEST_ASSERT_EQUAL(1, static_cast<int>(sensorsNeedingNewAddress.size()));
-    TEST_ASSERT_EQUAL_STRING("module.01", sensorsNeedingNewAddress[0]->uid.c_str());
-    TEST_ASSERT_TRUE(g_mockLogger.jsonDetailsFor("duplicate_owner_chosen").find("first_in_repository") != std::string::npos);
-
-    delete service;
-}
-
-/**
- * The address the boot resolution moves a device to is the address of its own port when that one is
- * free, not simply the lowest free one.
- */
-static void test_assign_new_addresses_prefers_the_own_address_of_the_port(void) {
-    SensorEntity moved = makeDuplicateFixtureEntity("module.03", 3, MODBUS_ADDRESS_MIN + 2);
-    SensorEntity kept = makeDuplicateFixtureEntity("module.02", 2, MODBUS_ADDRESS_MIN + 2);
-
-    MockSensorRepository sensorRepository;
-    MockSensorReader sensorReader;
-    ModbusAddressAllocator allocator(&sensorRepository);
-    ModuleSetupService* service = makeAddressManagementService(&sensorRepository, &sensorReader, &allocator);
-
-    std::map<int, std::vector<SensorEntity*>> addressMap;
-    addressMap[MODBUS_ADDRESS_MIN + 2] = {&kept};
-    std::vector<SensorEntity*> sensorsNeedingNewAddress = {&moved};
-
-    ModuleSetupServiceTestHelper::callAssignNewAddresses(service, sensorsNeedingNewAddress, addressMap);
-
-    TEST_ASSERT_EQUAL(MODBUS_ADDRESS_MIN + 3, sensorReader.lastWriteToAddress);
-    TEST_ASSERT_EQUAL(MODBUS_ADDRESS_MIN + 3, moved.modbusDeviceAddress);
-    TEST_ASSERT_EQUAL(1, sensorRepository.createOrUpdateSensorCallCount);
-
-    delete service;
-}
-
-/**
- * The repository row still follows the device: a refused write leaves both untouched.
- */
-static void test_assign_new_addresses_keeps_the_repository_update_gated_on_the_write(void) {
-    SensorEntity moved = makeDuplicateFixtureEntity("module.03", 3, MODBUS_ADDRESS_MIN + 2);
-
-    MockSensorRepository sensorRepository;
-    MockSensorReader sensorReader;
-    sensorReader.writeSensorAddressReturnValue = false;
-    ModbusAddressAllocator allocator(&sensorRepository);
-    ModuleSetupService* service = makeAddressManagementService(&sensorRepository, &sensorReader, &allocator);
-
-    std::map<int, std::vector<SensorEntity*>> addressMap;
-    std::vector<SensorEntity*> sensorsNeedingNewAddress = {&moved};
-
-    ModuleSetupServiceTestHelper::callAssignNewAddresses(service, sensorsNeedingNewAddress, addressMap);
-
-    TEST_ASSERT_EQUAL(0, sensorRepository.createOrUpdateSensorCallCount);
-    TEST_ASSERT_EQUAL(MODBUS_ADDRESS_MIN + 2, moved.modbusDeviceAddress);
-
-    delete service;
-}
-
 extern "C" int run_module_setup_service_tests(void) {
     if (debug_file != nullptr) fprintf(debug_file, "\n----- Running ModuleSetupService Tests -----\n");
     
@@ -2092,6 +2183,9 @@ extern "C" int run_module_setup_service_tests(void) {
     RUN_TEST(test_setup_module_launches_web_server_in_config_mode);
     RUN_TEST(test_module_mode_handling_for_user_can_configure);
     RUN_TEST(test_module_mode_handling_for_configured_done);
+    RUN_TEST(test_setup_arms_the_link_log_before_it_asks_for_the_association);
+    RUN_TEST(test_setup_without_a_link_log_leaves_the_radio_alone);
+    RUN_TEST(test_setup_says_the_boot_is_over_once);
     RUN_TEST(test_handle_module_mode_invokes_startup_factory_reset);
     RUN_TEST(test_module_mode_handling_for_test_mode);
     RUN_TEST(test_module_mode_initialization_when_invalid);
@@ -2118,9 +2212,10 @@ extern "C" int run_module_setup_service_tests(void) {
     RUN_TEST(test_get_loop_service_for_each_module_mode);
     
     RUN_TEST(test_configure_done_mode_configure_sets_up_mqtt_connection);
+    RUN_TEST(test_the_mqtt_client_id_is_the_prefix_and_the_module_uid_however_often_setup_runs);
     RUN_TEST(test_configure_done_mode_configure_handles_mqtt_connection_subscribe_was_not_called);
     RUN_TEST(test_configure_done_mode_configure_sets_up_mqtt_topic_handlers_on_successful_connection);
-    RUN_TEST(test_configure_done_mode_configure_do_not_sets_up_mqtt_topic_handlers_on_unsuccessful_connection);
+    RUN_TEST(test_configure_done_mode_configure_sets_up_mqtt_topic_handlers_without_a_link);
     RUN_TEST(test_configure_done_mode_configure_handles_missing_mqtt_manager);
     
     // Run WiFi Manager tests
@@ -2138,8 +2233,9 @@ extern "C" int run_module_setup_service_tests(void) {
     RUN_TEST(test_handle_module_mode_sets_no_scan_sensors_flag_when_button_pressed);
     RUN_TEST(test_handle_module_mode_does_not_set_no_scan_sensors_flag_when_button_not_pressed);
 
-    RUN_TEST(test_configure_done_skips_deletion_when_update_applied);
-    RUN_TEST(test_configure_done_runs_deletion_when_no_update);
+    RUN_TEST(test_configure_done_gives_the_rest_client_the_stored_server_address);
+    RUN_TEST(test_the_first_request_after_the_boot_carries_the_stored_server_and_token);
+    RUN_TEST(test_setup_opens_no_udp_listener_and_the_first_link_does);
 
     // Computed VPD channel in the module structure (GDV1-3782)
     RUN_TEST(test_structure_adds_vpd_channel_for_air_sensor);
@@ -2149,14 +2245,12 @@ extern "C" int run_module_setup_service_tests(void) {
     RUN_TEST(test_structure_skips_vpd_channel_on_overflow);
 
     // Sensor preparation on every setup pass (GDV1-3847)
-    RUN_TEST(test_prepare_sensors_runs_on_normal_scan_path);
-    RUN_TEST(test_prepare_sensors_runs_once_on_no_scan_fast_path);
+    RUN_TEST(test_boot_touches_no_sensor_and_arms_the_discovery);
+    RUN_TEST(test_the_boot_powers_the_stored_sensor_ports_of_a_configured_sensor_module);
+    RUN_TEST(test_the_boot_powers_no_port_outside_a_configured_sensor_module);
+    RUN_TEST(test_boot_with_no_scan_flag_does_not_arm_the_discovery);
 
     // Boot-time duplicate ModBus address resolution (GDV1-3831)
-    RUN_TEST(test_find_duplicate_addresses_keeps_the_entity_on_its_own_port_address);
-    RUN_TEST(test_find_duplicate_addresses_falls_back_to_the_first_entity);
-    RUN_TEST(test_assign_new_addresses_prefers_the_own_address_of_the_port);
-    RUN_TEST(test_assign_new_addresses_keeps_the_repository_update_gated_on_the_write);
 
     if (debug_file != nullptr) fprintf(debug_file, "\n----- ModuleSetupService Tests Complete -----\n");
     

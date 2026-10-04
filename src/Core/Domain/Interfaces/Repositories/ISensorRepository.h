@@ -12,6 +12,16 @@ public:
     virtual ~ISensorRepository() = default;
 
     /**
+     * @brief Whether the registry the readers get is what a read of storage that did not come back
+     *        whole left - nothing - rather than the stored sensors.
+     *
+     * An empty registry and one that did not read back answer every other question alike, and a
+     * decision that a port is free must not be made on the second. A repository with no storage
+     * behind it answers false.
+     */
+    virtual bool storedSensorsUnread() { return false; }
+
+    /**
      * @brief Get sensors by protocol type
      * @param protocol Protocol type (e.g., "ModBus", "I2C")
      * @return Vector of sensors using the specified protocol
@@ -34,9 +44,14 @@ public:
 
     /**
      * @brief Get only active sensors (where isActive is true)
-     * @return Vector of active sensors
+     *
+     * By reference, not by value: the control loop asks on every iteration, and an iteration in
+     * which nothing changed must not copy the registry. The reference is valid until the next
+     * call that changes sensors; a caller that mutates sensors while iterating must take a copy.
+     *
+     * @return Active sensors, owned by the repository
      */
-    virtual std::vector<SensorEntity> getActiveSensors() = 0;
+    virtual const std::vector<SensorEntity>& getActiveSensors() = 0;
 
     /**
      * @brief Get sensors with errors (where isError is true)

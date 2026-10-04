@@ -160,21 +160,30 @@ public:
     
     /**
      * Get rule list from the server (REST only)
+     * @param httpFailed Optional: true when the request failed rather than the server reporting
+     *        that this module has no rules. Both return an empty vector.
+     * @param readWhole Optional: true when every rule the answer carried reached the caller. See
+     *        IRestAPIService::getRuleList - a snapshot the module did not read whole must not be
+     *        treated as the complete set of the account's rules.
      * @return vector of Rule containing the rule details, empty if no rules or error
      */
-    virtual std::vector<Rule> getRuleList() = 0;
+    virtual std::vector<Rule> getRuleList(bool* httpFailed = nullptr, bool* readWhole = nullptr) = 0;
 
     /**
      * Get sensor types list from the server (REST only)
+     * @param httpFailed Optional: true when the request failed rather than the server reporting
+     *        that this account has no sensor models. Both return an empty vector.
      * @return vector of SensorType containing the sensor type definitions, empty if no sensor types or error
      */
-    virtual std::vector<SensorType> getSensorTypesList() = 0;
+    virtual std::vector<SensorType> getSensorTypesList(bool* httpFailed = nullptr) = 0;
 
     /**
      * Get module commands from the server (REST only)
+     * @param httpFailed Optional: true when the request failed rather than the server reporting
+     *        that this module has no commands. Both return an empty vector.
      * @return vector of ModuleCommandDto containing the command details, empty if no commands or error
      */
-    virtual std::vector<ModuleCommandDto> getModuleCommand() = 0;
+    virtual std::vector<ModuleCommandDto> getModuleCommand(bool* httpFailed = nullptr) = 0;
 
     /**
      * Query the server for the module deletion status (REST only).

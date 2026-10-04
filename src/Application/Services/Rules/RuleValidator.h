@@ -331,48 +331,52 @@ public:
     }
 };
 
-// Rule validator factory
-class RuleValidatorFactory {
-private:
-    ILogger* _logger;
-    IDebugSystem* _debugSystem;
-    
-public:
-    RuleValidatorFactory(ILogger* logger = nullptr, IDebugSystem* debugSystem = nullptr)
-        : _logger(logger), _debugSystem(debugSystem) {}
-    
-    BaseRuleValidator* createValidator(RuleType ruleType) {
-        switch (ruleType) {
-            case RuleType::SCHEDULE:
-                return new ScheduleRuleValidator(_logger, _debugSystem);
-            case RuleType::SENSOR:
-                return new SensorRuleValidator(_logger, _debugSystem);
-            case RuleType::EC:
-                return new ECRuleValidator(_logger, _debugSystem);
-            case RuleType::PH:
-                return new PHRuleValidator(_logger, _debugSystem);
-            case RuleType::DIMMER_AUTO:
-                return new DimmerAutoRuleValidator(_logger, _debugSystem);
-            case RuleType::DIMMER_MANUAL:
-                return new DimmerManualRuleValidator(_logger, _debugSystem);
-            case RuleType::LOOP:
-                return new LoopRuleValidator(_logger, _debugSystem);
-            case RuleType::STEP:
-                return new StepRuleValidator(_logger, _debugSystem);
-            case RuleType::AVERAGE_SENSOR:
-                return new AverageSensorRuleValidator(_logger, _debugSystem);
-            default:
-                return new UnknownRuleValidator(_logger, _debugSystem);
-        }
-    }
-};
-
-// Main rule validator service
+// Main rule validator service.
+//
+// One long-lived validator per rule type: validation runs for every rule on every evaluation
+// tick, so the strategies are members picked by a switch rather than heap objects built and
+// destroyed per call. The strategies hold no per-rule state - only the logger and debug system
+// wiring - and must stay that way: every validate() call has to answer from the rule alone,
+// as if the validator had just been constructed.
 class RuleValidator {
 private:
-    RuleValidatorFactory _factory;
+    ScheduleRuleValidator _scheduleValidator;
+    SensorRuleValidator _sensorValidator;
+    ECRuleValidator _ecValidator;
+    PHRuleValidator _phValidator;
+    DimmerAutoRuleValidator _dimmerAutoValidator;
+    DimmerManualRuleValidator _dimmerManualValidator;
+    LoopRuleValidator _loopValidator;
+    StepRuleValidator _stepValidator;
+    AverageSensorRuleValidator _averageSensorValidator;
+    UnknownRuleValidator _unknownValidator;
     ILogger* _logger;
     IDebugSystem* _debugSystem;
+
+    BaseRuleValidator& validatorFor(RuleType ruleType) {
+        switch (ruleType) {
+            case RuleType::SCHEDULE:
+                return _scheduleValidator;
+            case RuleType::SENSOR:
+                return _sensorValidator;
+            case RuleType::EC:
+                return _ecValidator;
+            case RuleType::PH:
+                return _phValidator;
+            case RuleType::DIMMER_AUTO:
+                return _dimmerAutoValidator;
+            case RuleType::DIMMER_MANUAL:
+                return _dimmerManualValidator;
+            case RuleType::LOOP:
+                return _loopValidator;
+            case RuleType::STEP:
+                return _stepValidator;
+            case RuleType::AVERAGE_SENSOR:
+                return _averageSensorValidator;
+            default:
+                return _unknownValidator;
+        }
+    }
     
     void log(const char* format, ...) {
         if (_logger && _debugSystem && _debugSystem->isFeatureEnabled(DebugFeatures::RULE_DEBUG)) {
@@ -387,7 +391,18 @@ private:
 
 public:
     RuleValidator(ILogger* logger = nullptr, IDebugSystem* debugSystem = nullptr)
-        : _factory(logger, debugSystem), _logger(logger), _debugSystem(debugSystem) {}
+        : _scheduleValidator(logger, debugSystem),
+          _sensorValidator(logger, debugSystem),
+          _ecValidator(logger, debugSystem),
+          _phValidator(logger, debugSystem),
+          _dimmerAutoValidator(logger, debugSystem),
+          _dimmerManualValidator(logger, debugSystem),
+          _loopValidator(logger, debugSystem),
+          _stepValidator(logger, debugSystem),
+          _averageSensorValidator(logger, debugSystem),
+          _unknownValidator(logger, debugSystem),
+          _logger(logger),
+          _debugSystem(debugSystem) {}
     
     // Validate a single rule
     RuleValidationResult validateRule(const Rule& rule) {
@@ -399,10 +414,8 @@ public:
             return RuleValidationResult(true);
         }
         
-        BaseRuleValidator* validator = _factory.createValidator(rule.ruleType);
-        RuleValidationResult result = validator->validate(rule);
-        delete validator; // Clean up
-        
+        RuleValidationResult result = validatorFor(rule.ruleType).validate(rule);
+
         if (!result.isValid) {
             log("RULE_VALIDATION: Rule %s validation failed: %s", rule.uid.c_str(), result.errorMessage.c_str());
         } else {
@@ -443,11 +456,7 @@ public:
     RuleValidationResult validateRuleExecution(const Rule& rule) {
         log("RULE_VALIDATION: Validating rule execution for %s", rule.uid.c_str());
         
-        BaseRuleValidator* validator = _factory.createValidator(rule.ruleType);
-        RuleValidationResult result = validator->validateExecution(rule);
-        delete validator; // Clean up
-        
-        return result;
+        return validatorFor(rule.ruleType).validateExecution(rule);
     }
 };
 

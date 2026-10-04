@@ -4,16 +4,22 @@
 #include "Infrastructure/Adapters/SPIFFS/ISpiffsSensorTypeDao.h"
 #include "Core/Domain/Interfaces/ILogger.h"
 #include "Core/Domain/Interfaces/IDebugSystem.h"
+#include <memory>
 #include <string>
+#include <utility>
 #include <vector>
-#include <unordered_map>
 #include <stdarg.h>
 
 class SensorTypeRepository : public ISensorTypeRepository {
 private:
     ISpiffsSensorTypeDao* sensorTypeDao;
-    mutable std::unordered_map<std::string, SensorType> cache;
+    // The held catalog, as one immutable list every reader can share - see SensorTypeCatalog.h.
+    // Never null; empty when the module holds no catalog. Replaced as a whole on every change, so
+    // a reader holding a snapshot keeps reading the catalog it took.
+    mutable SensorTypeCatalog cache;
     mutable bool isCacheValid;
+    // Another task is writing storage; see setStorageWriteInFlight().
+    bool storageWriteInFlight;
     ILogger* logger;
     IDebugSystem* debugSystem;
 
@@ -30,18 +36,51 @@ private:
     }
 
     /**
+     * @brief Let go of the held catalog
+     *
+     * The list is not emptied - it is let go of, and a fresh empty one takes its place, because a
+     * reader may still be holding the old one. Skipped when nothing is held, so that a module whose
+     * storage cannot be read does not allocate an empty list on every read attempt.
+     */
+    void releaseCache() const {
+        if (!cache->empty()) {
+            cache = std::make_shared<const std::vector<SensorType>>();
+        }
+    }
+
+    /**
+     * @brief One type per uid, keeping the first of a repeated one
+     *
+     * The catalog is addressed by uid by everything that reads it, so a stored file that carries
+     * one uid twice must not make the module hold, count and scan the same type twice.
+     */
+    static void dropRepeatedUids(std::vector<SensorType>& sensorTypes) {
+        for (size_t kept = 0; kept < sensorTypes.size(); kept++) {
+            for (size_t i = sensorTypes.size(); i > kept + 1; i--) {
+                if (sensorTypes[i - 1].uid == sensorTypes[kept].uid) {
+                    sensorTypes.erase(sensorTypes.begin() + (i - 1));
+                }
+            }
+        }
+    }
+
+    /**
      * @brief Load all sensor types into cache if not already loaded
      */
     void loadCache() const {
-        if (!isCacheValid) {
+        // Not while another task is writing storage: what is held - nothing, when the cache is not
+        // valid - is the answer until the write lands.
+        if (!isCacheValid && !storageWriteInFlight) {
             log("SensorTypeRepository: Loading cache from storage");
-            cache.clear();
+            releaseCache();
             std::vector<SensorType> sensorTypes;
             if (sensorTypeDao->getAll(sensorTypes) && !sensorTypes.empty()) {
-                for (const auto& sensorType : sensorTypes) {
-                    cache[sensorType.uid] = sensorType;
-                }
-                log("SensorTypeRepository: Loaded %zu sensor types into cache", sensorTypes.size());
+                dropRepeatedUids(sensorTypes);
+                const size_t loaded = sensorTypes.size();
+                // Taken over, not copied into place: what storage handed back becomes the held
+                // catalog itself.
+                cache = std::make_shared<const std::vector<SensorType>>(std::move(sensorTypes));
+                log("SensorTypeRepository: Loaded %zu sensor types into cache", loaded);
                 isCacheValid = true;
             } else {
                 log("SensorTypeRepository: Failed to load sensor types from storage");
@@ -49,23 +88,34 @@ private:
         }
     }
 
-    /**
-     * @brief Clear cache and mark as invalid
-     */
-    void invalidateCache() const {
-        cache.clear();
-        isCacheValid = false;
-    }
-
 public:
     ~SensorTypeRepository() noexcept override = default;
 
     SensorTypeRepository(ISpiffsSensorTypeDao* dao, IDebugSystem* debugSystem = nullptr, ILogger* logger = nullptr)
-        : sensorTypeDao(dao), isCacheValid(false), logger(logger), debugSystem(debugSystem) {
+        : sensorTypeDao(dao), cache(std::make_shared<const std::vector<SensorType>>()),
+          isCacheValid(false), storageWriteInFlight(false), logger(logger),
+          debugSystem(debugSystem) {
         if (!dao) {
             throw std::invalid_argument("DAO cannot be null");
         }
         log("SensorTypeRepository: constructed");
+    }
+
+    /**
+     * @brief Clear cache and mark as invalid
+     */
+    void invalidateCache() override {
+        releaseCache();
+        isCacheValid = false;
+    }
+
+    void setStorageWriteInFlight(bool inFlight) override {
+        storageWriteInFlight = inFlight;
+    }
+
+    SensorTypeCatalog catalogSnapshot() override {
+        loadCache();
+        return cache;
     }
 
     Utils::Optional<SensorType> get(const char* uid) override {
@@ -74,10 +124,11 @@ public:
             return Utils::Optional<SensorType>();
         }
         loadCache();
-        auto it = cache.find(uid);
-        if (it != cache.end()) {
-            log("SensorTypeRepository: get() found uid=%s", uid);
-            return Utils::Optional<SensorType>(it->second);
+        for (const auto& sensorType : *cache) {
+            if (sensorType.uid == uid) {
+                log("SensorTypeRepository: get() found uid=%s", uid);
+                return Utils::Optional<SensorType>(sensorType);
+            }
         }
         log("SensorTypeRepository: get() not found uid=%s", uid);
         return Utils::Optional<SensorType>();
@@ -85,13 +136,22 @@ public:
 
     std::vector<SensorType> getAll() override {
         loadCache();
-        std::vector<SensorType> sensorTypes;
-        sensorTypes.reserve(cache.size());
-        for (const auto& pair : cache) {
-            sensorTypes.push_back(pair.second);
-        }
+        std::vector<SensorType> sensorTypes = *cache;
         log("SensorTypeRepository: getAll() returning %zu sensor types", sensorTypes.size());
         return sensorTypes;
+    }
+
+    void adoptStoredCatalog(std::vector<SensorType> catalog) override {
+        // The catalog that arrives is the one being adopted, and the one being dropped is the one
+        // this object holds: let go of first, so that the two are never both whole at once. What
+        // arrives is then taken over as it stands - a move of the list, not a copy of the types.
+        releaseCache();
+        dropRepeatedUids(catalog);
+        cache = std::make_shared<const std::vector<SensorType>>(std::move(catalog));
+        // Empty is a state, not a failure: loadCache() leaves the cache invalid when storage holds
+        // nothing, and a stored catalog with no types in it has to read back the same way.
+        isCacheValid = !cache->empty();
+        log("SensorTypeRepository: adoptStoredCatalog() holding %zu sensor types", cache->size());
     }
 
     bool save(const SensorType& entity) override {
@@ -158,7 +218,7 @@ public:
 
     int count() override {
         loadCache();
-        int cnt = cache.size();
+        int cnt = cache->size();
         log("SensorTypeRepository: count() = %d", cnt);
         return cnt;
     }
@@ -166,7 +226,13 @@ public:
     bool exists(const char* uid) override {
         if (!uid) return false;
         loadCache();
-        bool found = cache.find(uid) != cache.end();
+        bool found = false;
+        for (const auto& sensorType : *cache) {
+            if (sensorType.uid == uid) {
+                found = true;
+                break;
+            }
+        }
         log("SensorTypeRepository: exists() uid=%s -> %s", uid, found ? "true" : "false");
         return found;
     }
@@ -174,9 +240,9 @@ public:
     std::vector<SensorType> getSensorTypesByProtocol(SensorProtocol protocol) override {
         loadCache();
         std::vector<SensorType> filteredSensorTypes;
-        for (const auto& pair : cache) {
-            if (pair.second.protocol == protocol) {
-                filteredSensorTypes.push_back(pair.second);
+        for (const auto& sensorType : *cache) {
+            if (sensorType.protocol == protocol) {
+                filteredSensorTypes.push_back(sensorType);
             }
         }
         log("SensorTypeRepository: getSensorTypesByProtocol() protocol=%d found %zu types",
@@ -205,20 +271,20 @@ public:
     std::vector<SensorType> getCanScan() override {
         loadCache();
         std::vector<SensorType> result;
-        for (const auto& pair : cache) {
-            if (pair.second.canScan) {
-                result.push_back(pair.second);
+        for (const auto& sensorType : *cache) {
+            if (sensorType.canScan) {
+                result.push_back(sensorType);
             }
         }
         log("SensorTypeRepository: getCanScan() returning %zu sensor types", result.size());
         return result;
     }
 
-    SensorType* getSensorTypeByName(const std::string& name) override {
+    const SensorType* getSensorTypeByName(const std::string& name) override {
         loadCache();
-        for (auto& pair : cache) {
-            if (pair.second.name == name) {
-                return &pair.second;
+        for (const auto& sensorType : *cache) {
+            if (sensorType.name == name) {
+                return &sensorType;
             }
         }
         return nullptr;
@@ -231,7 +297,7 @@ public:
         log("SensorTypeRepository: refreshCache() called");
         invalidateCache();
         loadCache();
-        log("SensorTypeRepository: cache refreshed with %zu sensor types", cache.size());
+        log("SensorTypeRepository: cache refreshed with %zu sensor types", cache->size());
     }
 
     /**

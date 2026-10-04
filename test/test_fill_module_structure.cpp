@@ -8,9 +8,19 @@
 #include "Mock/Infrastructure/Wifi/MockWifiAdapter.h"
 #include "Mock/Infrastructure/MockArduinoAdapter.h"
 #include "Core/Domain/Data/Models/ModuleStructure.h"
+#include "Core/Domain/UseCases/SensorTypes/SyncSensorTypesUseCase.h"
+#include "Mock/Application/MockOutbox.h"
+#include "Mock/Infrastructure/Api/MockHybridAPIService.h"
+#include "Mock/Infrastructure/MockArduinoAdapter.h"
+#include "Mock/Infrastructure/Configuration/MockNTPTimeAdapter.h"
+#include "Mock/Infrastructure/Repositories/MockSensorRepository.h"
+#include "Mock/Infrastructure/SPIFFS/MockSensorTypeRepository.h"
+
 #include "Core/Domain/Enums/BootTypeEnum.h"
 #include "Core/Domain/UseCases/ModuleCommand/ModuleCommandExecutionUseCase.h"
 #include "Application/DTOs/ModuleCommandDto.h"
+
+#include <cstdio>
 
 // Helper class for tests
 class FillModuleStructureTestHelper {
@@ -425,10 +435,97 @@ static void test_fill_module_structure_handles_null_settings() {
     fill_module_structure_teardown();
 }
 
-// GDV1-3820. The other end of the command path: the boot type recorded by a Reboot command has to
-// reach the published structure as "reboot-user" and only then fall back to power-on. The reset
-// here is what used to swallow the field nobody set, so a commanded restart arrived at the backend
-// as a power loss.
+
+// --- first boot: a module with no catalog builds its structure without asking the server --------
+//
+// Setup does nothing on the network. With no sensor type catalog on flash the structure is built of
+// "none" placeholders, one per pin, and the discovery the boot owes is armed for the catalog that the
+// control loop asks for once the boot's structure has settled. The catalog sync is wired with an
+// outbox, as globals.h wires it, so that a fetch handed to it would be seen too.
+
+namespace {
+
+struct FirstBootUnderTest {
+    MockOutbox outbox;
+    MockHybridAPIService api;
+    MockSensorTypeRepository sensorTypeRepository;
+    MockSensorRepository sensorRepository;
+    MockArduinoAdapter arduinoAdapter;
+    MockNTPTimeAdapter ntpTimeAdapter;
+    SyncSensorTypesUseCase syncSensorTypes;
+
+    FirstBootUnderTest()
+        : syncSensorTypes(&api, &sensorTypeRepository, &arduinoAdapter, &ntpTimeAdapter, nullptr,
+                          &g_testLogger, &g_testDebugSystem)
+    {
+        syncSensorTypes.setOutbox(&outbox);
+    }
+
+    static SensorType catalogEntry(const std::string& uid, const std::string& name)
+    {
+        SensorType sensorType;
+        sensorType.uid = uid;
+        sensorType.name = name;
+        sensorType.updatedAt = "2026-02-11T09:01:35.44352+00:00";
+        return sensorType;
+    }
+};
+
+// The module setup service, wired the way globals.h wires it for a sensor module with storage.
+ModuleSetupService* makeFirstBootSetupService(FirstBootUnderTest& module)
+{
+    return new ModuleSetupService(
+        &g_testLogger,
+        &g_testDebugSystem,
+        &g_testModuleConfig,
+        nullptr, nullptr, nullptr, nullptr,   // ledAdapter, buttonAdapter, ledUseCases, buttonUseCases
+        &g_testWifiAdapter,
+        nullptr, nullptr, nullptr, nullptr,   // wifiManager, webServerLauncher, loopServiceFactory, mqttManager
+        &g_testModuleStructure,
+        nullptr, nullptr,                     // deviceService, ruleService
+        &module.sensorRepository,
+        &module.sensorTypeRepository,
+        nullptr,                              // sensorReader
+        nullptr, nullptr, nullptr, nullptr,   // spiffsAdapter, jsonConverter, boardTest, udpManager
+        &module.api,
+        &module.arduinoAdapter,
+        &module.syncSensorTypes);
+}
+
+} // namespace
+
+void test_first_boot_asks_the_server_for_no_catalog_and_builds_placeholders(void) {
+    fill_module_structure_setup();
+    delete g_testModuleSetupService;
+
+    FirstBootUnderTest module;
+    module.api.sensorTypesListReturnValue.push_back(FirstBootUnderTest::catalogEntry("uid-1", "type_1"));
+
+    g_testModuleConfig.setModuleType(MODULE_TYPE_SENSOR);
+    g_testModuleConfig.setModuleSubType(MODULE_SUBTYPE_NONE);
+    g_testSettings.setNoScanSensors(false);
+
+    g_testModuleSetupService = makeFirstBootSetupService(module);
+    FillModuleStructureTestHelper::callFillModuleStructure(g_testModuleSetupService);
+
+    TEST_ASSERT_EQUAL_INT_MESSAGE(0, module.api.getSensorTypesListCallCount,
+                                  "setup asked the server for the sensor type catalog");
+    TEST_ASSERT_EQUAL_UINT32_MESSAGE(0, (uint32_t)module.outbox.sensorTypesRequests,
+                                     "setup handed a catalog fetch to the outbox");
+    TEST_ASSERT_EQUAL_INT_MESSAGE(0, module.sensorTypeRepository.saveCallCount,
+                                  "setup wrote a catalog to storage");
+
+    TEST_ASSERT_FALSE(g_testModuleStructure.nodes.empty());
+    TEST_ASSERT_EQUAL_INT_MESSAGE(g_testModuleConfig.getSensorPinCount(),
+                                  (int)g_testModuleStructure.nodes[0].sensors.size(),
+                                  "a module with no catalog did not build the placeholder node");
+    for (const auto& sensor : g_testModuleStructure.nodes[0].sensors) {
+        TEST_ASSERT_EQUAL_STRING("none", sensor.type.c_str());
+    }
+
+    fill_module_structure_teardown();
+}
+
 static void test_fill_module_structure_reports_commanded_reboot_as_user() {
     fill_module_structure_setup();
 
@@ -481,6 +578,7 @@ extern "C" void run_fill_module_structure_tests(void) {
     RUN_TEST(test_fill_module_structure_handles_null_module_structure);
     RUN_TEST(test_fill_module_structure_handles_null_module_config);
     RUN_TEST(test_fill_module_structure_handles_null_settings);
+    RUN_TEST(test_first_boot_asks_the_server_for_no_catalog_and_builds_placeholders);
     RUN_TEST(test_fill_module_structure_reports_commanded_reboot_as_user);
 
     printf("\n----- FillModuleStructure Tests Complete -----\n");

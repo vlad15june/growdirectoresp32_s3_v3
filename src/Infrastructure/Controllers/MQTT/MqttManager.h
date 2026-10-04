@@ -10,10 +10,10 @@
 #include <string>
 #include "freertos/FreeRTOS.h"
 #include "freertos/queue.h"
-#include "freertos/task.h"
 #include "Core/Domain/Interfaces/ILogger.h"
 #include "Core/Domain/Interfaces/IDebugSystem.h"
 #include "Core/Domain/Interfaces/Mqtt/IMessageProcessor.h"
+#include "Core/Domain/Interfaces/Mqtt/IMqttLinkMachine.h"
 #include "Core/Domain/Interfaces/Mqtt/IMqttManager.h"
 #include "Core/Domain/Interfaces/Adapters/IWifiAdapter.h"
 #include "MqttInboundSizeGuard.h"
@@ -21,7 +21,15 @@
 #include <cstdarg>
 #include <cstdio>
 
-class MqttManager : public IMqttManager
+/**
+ * @brief The MQTT client of the module: subscriptions, inbound dispatch, and the reconnect.
+ *
+ * The reconnect is a state machine and not a task. Idle, Closing and Connecting are advanced by
+ * whoever calls serviceLinkOnce() - on the device the outbox network task, between the REST calls
+ * it makes - so that a broker socket is never rebuilt in the same seconds as a TLS handshake. The
+ * machine keeps its own timers and backoff; the caller only lends it a task.
+ */
+class MqttManager : public IMqttManager, public IMqttLinkMachine
 {
 private:
     AsyncMqttClient &_mqttClient;
@@ -35,13 +43,43 @@ private:
     std::string _clientId;
     const char *_username;
     const char *_password;
-    bool _cleanSession;
     uint32_t _lastReconnectAttempt;
     uint32_t _reconnectInterval;
     uint32_t _reconnectAt;
     int _mqttFails;
     int _consecutivePublishFails = 0;
     static const int PUBLISH_FAIL_RECONNECT_THRESHOLD = 10;
+
+    /**
+     * @brief The QoS every subscription of this module is taken with.
+     *
+     * A message is delivered with the lower of two guarantees: the one the publisher asked of the
+     * broker, and the one the subscriber asked for in its SUBSCRIBE. At QoS 0 the broker writes
+     * the message to whatever socket is open at that moment and forgets it - a module that is
+     * offline, or whose link drops mid-transfer, never learns the message existed, and the server
+     * cannot tell the difference. At QoS 1 the broker holds the message until this client
+     * acknowledges it, and holds it for the length of an outage while the session is kept.
+     *
+     * The price is that a message can arrive more than once - at-least-once is what this level
+     * means - so what a subscription feeds must tolerate a repeat. Both the command topic and the
+     * peer sensor topic do: a command notification makes the module ask the server for the
+     * authoritative list, and a rule snapshot is merged by version.
+     */
+    static const uint8_t SUBSCRIBE_QOS = 1;
+
+    /**
+     * @brief Whether the broker may throw this client's session away at CONNECT.
+     *
+     * It may not, and this is not a wiring option: a broker keeps the subscriptions and the
+     * messages a client missed only for a session it was asked to keep. With a clean session the
+     * queue the QoS above buys does not exist - everything published while the module was away is
+     * discarded at the moment it reconnects, silently on both sides.
+     *
+     * The other half of it is the client id: the session is filed under that string, so the
+     * guarantee only holds as long as the module presents the same id after a restart. See
+     * ModuleSetupService::setupMqttConnection(), which composes it from the module UID.
+     */
+    static const bool CLEAN_SESSION = false;
     volatile bool _connected;
     bool _configured;
     std::set<String> _subscribedTopics;
@@ -51,11 +89,9 @@ private:
     uint32_t _closeStartedAt = 0;
     uint32_t _connectStartedAt = 0;
     volatile bool _disconnectEvent = false;
-    static const uint32_t CLOSE_GRACE_MS = 2000;
-    static const uint32_t CONNECT_TIMEOUT_MS = 10000;
-
-    TaskHandle_t _recoveryTask = nullptr;
-    static const uint32_t RECOVERY_INTERVAL_MS = 200;
+    // Whether the client has been asked to dial since the boot: until then it has no socket to tear
+    // down, and the reconnect goes straight to CONNECT.
+    bool _connectIssued = false;
 
     std::recursive_mutex *_clientMutex;
 
@@ -110,7 +146,7 @@ private:
             _mqttClient.setClientId(_clientId.c_str());
         }
         _mqttClient.setKeepAlive(30);
-        _mqttClient.setCleanSession(_cleanSession);
+        _mqttClient.setCleanSession(CLEAN_SESSION);
 
         _mqttClient.onConnect([this](bool sessionPresent) { onMqttConnect(sessionPresent); });
         _mqttClient.onDisconnect([this](AsyncMqttClientDisconnectReason reason) { onMqttDisconnect(reason); });
@@ -119,7 +155,7 @@ private:
             onMqttMessage(topic, payload, len, index, total);
         });
 
-        log("MQTT: client configured broker=%s:%u cleanSession=%d", _broker.toString().c_str(), _port, _cleanSession ? 1 : 0);
+        log("MQTT: client configured broker=%s:%u cleanSession=%d", _broker.toString().c_str(), _port, CLEAN_SESSION ? 1 : 0);
         _configured = true;
     }
 
@@ -134,7 +170,7 @@ private:
         OptLock lock(_clientMutex);
         for (const auto &topic : _subscribedTopics)
         {
-            _mqttClient.subscribe(topic.c_str(), 0);
+            _mqttClient.subscribe(topic.c_str(), SUBSCRIBE_QOS);
         }
     }
 
@@ -244,38 +280,6 @@ private:
         }
     }
 
-    void ensureRecoveryTask()
-    {
-        if (_recoveryTask != nullptr)
-        {
-            return;
-        }
-        xTaskCreatePinnedToCore(recoveryTaskTrampoline, "MqttRecovery", 4096, this, 1, &_recoveryTask, 0);
-        log("MQTT: recovery task started");
-    }
-
-    static void recoveryTaskTrampoline(void *arg)
-    {
-        static_cast<MqttManager *>(arg)->recoveryTaskRun();
-    }
-
-    void recoveryTaskRun()
-    {
-        log("MQTT: recovery task running on core %d", xPortGetCoreID());
-        uint32_t beats = 0;
-        for (;;)
-        {
-            isConnected();
-            serviceReconnect();
-            if ((beats++ % 25) == 0)
-            {
-                log("MQTT: task heartbeat connected=%d state=%d fails=%d interval=%ums",
-                    _connected ? 1 : 0, static_cast<int>(_connState), _mqttFails, _reconnectInterval);
-            }
-            vTaskDelay(pdMS_TO_TICKS(RECOVERY_INTERVAL_MS));
-        }
-    }
-
     void serviceReconnect()
     {
         bool wifiOk = (_wifiAdapter != nullptr && _wifiAdapter->isConnected());
@@ -291,7 +295,18 @@ private:
         switch (_connState)
         {
             case ConnState::Idle:
-                if (now >= _reconnectAt)
+                if (now >= _reconnectAt && !_connectIssued)
+                {
+                    // The boot's first CONNECT: the client has never dialled, so there is no stale
+                    // socket to close and no close to wait for.
+                    log("MQTT: first connect of the boot, nothing to tear down");
+                    if (!connect())
+                    {
+                        _reconnectAt = now + _reconnectInterval;
+                        log("MQTT: connect refused (wifi down), back to idle");
+                    }
+                }
+                else if (now >= _reconnectAt)
                 {
                     _disconnectEvent = false;
                     {
@@ -336,6 +351,17 @@ private:
     }
 
 public:
+    /**
+     * @brief The two waits inside one connect act.
+     *
+     * Public because they are the act's length as the network task sees it: a stale socket is
+     * given CLOSE_GRACE_MS to close when no disconnect event settles it, and a CONNECT is given
+     * CONNECT_TIMEOUT_MS to be answered. Their sum is the longest a REST request waits behind a
+     * broker that says nothing at all.
+     */
+    static const uint32_t CLOSE_GRACE_MS = 2000;
+    static const uint32_t CONNECT_TIMEOUT_MS = 10000;
+
     MqttManager(
         AsyncMqttClient &mqttClient,
         ILogger *logger,
@@ -345,7 +371,6 @@ public:
         uint16_t port,
         const char *username = nullptr,
         const char *password = nullptr,
-        bool cleanSession = true,
         IMessageProcessor *messageProcessor = nullptr,
         TopicHandlerFactory *topicHandlerFactory = nullptr,
         IWifiAdapter *wifiAdapter = nullptr,
@@ -360,7 +385,6 @@ public:
                                                        _clientId(clientId != nullptr ? clientId : ""),
                                                        _username(username),
                                                        _password(password),
-                                                       _cleanSession(cleanSession),
                                                        _lastReconnectAttempt(0),
                                                        _reconnectInterval(5000),
                                                        _reconnectAt(0),
@@ -407,7 +431,6 @@ public:
         if (_wifiAdapter != nullptr && !_wifiAdapter->isConnected())
         {
             log("MQTT: WiFi not connected, connect deferred");
-            ensureRecoveryTask();
             return false;
         }
 
@@ -417,11 +440,26 @@ public:
             _connState = ConnState::Connecting;
             _connectStartedAt = millis();
             _lastReconnectAttempt = _connectStartedAt;
+            _connectIssued = true;
             _mqttClient.connect();
         }
         log("MQTT: connect requested to %s:%u clientId=%s", _broker.toString().c_str(), _port, _clientId.c_str());
-        ensureRecoveryTask();
         return true;
+    }
+
+    bool serviceLinkOnce() override
+    {
+        // Nothing to keep alive before the boot has asked for the broker: configureClient() runs
+        // first thing in connect(), and until then the client has no id to present - a CONNECT
+        // made here would file the session under the wrong one.
+        if (!_configured)
+        {
+            return false;
+        }
+
+        isConnected();
+        serviceReconnect();
+        return _connState != ConnState::Idle;
     }
 
     void disconnect() override
@@ -470,7 +508,7 @@ public:
         }
 
         OptLock lock(_clientMutex);
-        uint16_t packetId = _mqttClient.subscribe(topic, 0);
+        uint16_t packetId = _mqttClient.subscribe(topic, SUBSCRIBE_QOS);
         if (packetId != 0)
         {
             log("Subscribed to topic: %s", topic);

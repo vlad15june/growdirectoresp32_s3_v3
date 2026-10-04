@@ -32,16 +32,23 @@ public:
     size_t respondAfterWriteCount = 0;
     bool powered = false;
 
-    void begin(unsigned long) override {}
+    // Strict like the board: a UART nobody began sends nothing and receives nothing. Every
+    // stand below begins it through reader.init(), as the boot does before the first frame.
+    bool begun = false;
+    int droppedBeforeBegin = 0;
+
+    // A zero rate leaves the board's UART without a driver: the core's rate detection fails.
+    void begin(unsigned long baud) override { begun = (baud != 0); }
 
     void sendData(uint8_t *data, uint8_t length) override {
+        if (!begun) { droppedBeforeBegin++; return; }
         Frame f;
         f.bytes.assign(data, data + length);
         sent.push_back(f);
     }
 
     int readAvailable(uint8_t *buffer, size_t maxLength) override {
-        if (sent.empty()) return 0;
+        if (!begun || sent.empty()) return 0;
         const auto &last = sent.back().bytes;
         if (last.size() < 2) return 0;
         int addr = last[0];
@@ -84,17 +91,23 @@ public:
     uint16_t calculateCRC(uint8_t *, uint8_t) override { return 0; }
 
     bool writeRegister(int slave, int reg, uint16_t value) override {
+        if (!begun) { droppedBeforeBegin++; return false; }
         writes.push_back({ true, slave, reg, value });
         return true;
     }
 
     bool writeSingleRegister(int slave, int reg, uint16_t value) override {
+        if (!begun) { droppedBeforeBegin++; return false; }
         writes.push_back({ false, slave, reg, value });
         return true;
     }
 
     bool powerOnPort() override { bool ch = !powered; powered = true; return ch; }
     bool powerOffPort() override { bool ch = powered; powered = false; return ch; }
+    // No clock: a port it has put up is up for good.
+    PortPower powerRecord() const override { PortPower r; r.on = powered; return r; }
+    // A wire of its own: nothing else is plugged into this stand's line.
+    const void *wire() const override { return this; }
 
     bool anyFrameStartsWith(const std::vector<uint8_t> &prefix) const {
         for (const auto &f : sent) {
@@ -139,6 +152,7 @@ void test_primary_confirmed_skips_ff_fallback(void) {
     std::vector<IModbusRS485 *> ports{ &fake };
     MockArduinoAdapter arduino;
     ModbusSensorReader reader(ports, arduino, nullptr, nullptr);
+    reader.init();
 
     bool ok = reader.writeSensorAddress(10, 22, 0, 0x0100, 16, 0x0100);
 
@@ -156,6 +170,7 @@ void test_ws12s_stage_query_write_ping_confirms(void) {
     std::vector<IModbusRS485 *> ports{ &fake };
     MockArduinoAdapter arduino;
     ModbusSensorReader reader(ports, arduino, nullptr, nullptr);
+    reader.init();
 
     bool ok = reader.writeSensorAddress(10, 22, 0, 0x0100, 16, 0x0100);
 
@@ -173,6 +188,7 @@ void test_cwyw_stage_runs_after_ws12s_timeout_and_confirms(void) {
     std::vector<IModbusRS485 *> ports{ &fake };
     MockArduinoAdapter arduino;
     ModbusSensorReader reader(ports, arduino, nullptr, nullptr);
+    reader.init();
 
     bool ok = reader.writeSensorAddress(10, 22, 0, 0x0100, 16, 0x0100);
 
@@ -197,6 +213,7 @@ void test_cwyw_stage_accepts_partial_frame_chunks(void) {
     std::vector<IModbusRS485 *> ports{ &fake };
     MockArduinoAdapter arduino;
     ModbusSensorReader reader(ports, arduino, nullptr, nullptr);
+    reader.init();
 
     bool ok = reader.writeSensorAddress(10, 22, 0, 0x0100, 16, 0x0100);
 
@@ -211,6 +228,7 @@ void test_both_stages_fail_then_legacy_loop_runs(void) {
     std::vector<IModbusRS485 *> ports{ &fake };
     MockArduinoAdapter arduino;
     ModbusSensorReader reader(ports, arduino, nullptr, nullptr);
+    reader.init();
 
     bool ok = reader.writeSensorAddress(10, 22, 0, 0x0100, 16, 0x0100);
 
@@ -229,6 +247,7 @@ void test_ff_query_crc_mismatch_skips_stage(void) {
     std::vector<IModbusRS485 *> ports{ &fake };
     MockArduinoAdapter arduino;
     ModbusSensorReader reader(ports, arduino, nullptr, nullptr);
+    reader.init();
 
     reader.writeSensorAddress(10, 22, 0, 0x0100, 16, 0x0100);
 
@@ -245,6 +264,7 @@ void test_ws12s_address_parsed_from_payload_not_slave_byte(void) {
     std::vector<IModbusRS485 *> ports{ &fake };
     MockArduinoAdapter arduino;
     ModbusSensorReader reader(ports, arduino, nullptr, nullptr);
+    reader.init();
 
     reader.writeSensorAddress(10, 22, 0, 0x0100, 16, 0x0100);
 
@@ -258,6 +278,7 @@ void test_ws12s_address_byte_zero_in_payload_skips_stage(void) {
     std::vector<IModbusRS485 *> ports{ &fake };
     MockArduinoAdapter arduino;
     ModbusSensorReader reader(ports, arduino, nullptr, nullptr);
+    reader.init();
 
     reader.writeSensorAddress(10, 22, 0, 0x0100, 16, 0x0100);
 
@@ -273,6 +294,7 @@ void test_ws12s_address_byte_above_247_skips_stage(void) {
     std::vector<IModbusRS485 *> ports{ &fake };
     MockArduinoAdapter arduino;
     ModbusSensorReader reader(ports, arduino, nullptr, nullptr);
+    reader.init();
 
     reader.writeSensorAddress(10, 22, 0, 0x0100, 16, 0x0100);
 
@@ -287,6 +309,7 @@ void test_ff_query_fc_mismatch_skips_stage(void) {
     std::vector<IModbusRS485 *> ports{ &fake };
     MockArduinoAdapter arduino;
     ModbusSensorReader reader(ports, arduino, nullptr, nullptr);
+    reader.init();
 
     reader.writeSensorAddress(10, 22, 0, 0x0100, 16, 0x0100);
 
@@ -302,6 +325,7 @@ void test_no_restore_factory_frame_ever_emitted(void) {
     std::vector<IModbusRS485 *> ports{ &fake };
     MockArduinoAdapter arduino;
     ModbusSensorReader reader(ports, arduino, nullptr, nullptr);
+    reader.init();
 
     reader.writeSensorAddress(10, 22, 0, 0x0100, 16, 0x0100);
 
@@ -316,6 +340,7 @@ void test_other_channels_keep_server_multiplier(void) {
     std::vector<IModbusRS485 *> ports{ &fake };
     MockArduinoAdapter arduino;
     ModbusSensorReader reader(ports, arduino, nullptr, nullptr);
+    reader.init();
 
     ModbusRegisterConfig cfg;
     cfg.functionCode = 0x03;

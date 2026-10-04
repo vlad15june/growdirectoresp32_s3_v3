@@ -17,6 +17,8 @@ public:
     // Single sensor value operations
     virtual float getSensorValue(const std::string& sensorUid) const = 0;
     virtual void setSensorValue(const std::string& sensorUid, float value) = 0;
+    // Whether a single value has been stored for this uid. getSensorValue() answers 0 either way.
+    virtual bool hasSensorValue(const std::string& sensorUid) const = 0;
     virtual void setLastReadTime(const std::string& sensorUid, uint32_t time) = 0;
     virtual uint32_t getLastReadTime(const std::string& sensorUid) const = 0;
     

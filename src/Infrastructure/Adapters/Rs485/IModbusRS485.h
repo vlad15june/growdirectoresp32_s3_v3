@@ -1,6 +1,8 @@
 #ifndef IMODBUS_RS485_H
 #define IMODBUS_RS485_H
 
+#include "../../../Core/Domain/Interfaces/Adapters/Sensors/PortPower.h"
+
 // Interface for Modbus RS-485 communication
 class IModbusRS485
 {
@@ -35,6 +37,14 @@ public:
     // Returns true if state changed, false if already in that state
     virtual bool powerOnPort() = 0;
     virtual bool powerOffPort() = 0;
+
+    // What this port's power pin has done, and when - including a pin sendData() raised itself
+    virtual PortPower powerRecord() const = 0;
+
+    // The UART this port's frames go out on, as an identity and nothing more. Two ports that
+    // answer the same are one electrical line: a frame put on either is heard by whatever is
+    // plugged into both, and only a port's power keeps what is behind it off that line.
+    virtual const void *wire() const = 0;
 };
 
 #endif

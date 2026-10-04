@@ -10,7 +10,7 @@
 #include "Core/Domain/Data/Models/IDeviceModel.h"
 #include "Core/Domain/UseCases/Rules/EvaluateRulesUseCase.h"
 #include "Application/Services/Rules/RuleStateReportingService.h"
-#include "Infrastructure/Adapters/Json/JsonConverter.h"
+#include "Infrastructure/Adapters/Json/ArduinoJsonConverter.h"
 #include "Infrastructure/Repositories/RuleRepository.h"
 
 #include "Mock/Infrastructure/SPIFFS/MockSpiffsRuleDao.h"
@@ -347,7 +347,7 @@ static void test_reporting_service_emits_report_and_event(void) {
     MockModuleConfig moduleConfig;
     MockNTPTimeAdapter ntp;
     ntp.setEpochTime(1700000000);
-    JsonConverter json;
+    ArduinoJsonConverter json;
 
     RuleStateReportingService service(&hybridApi, &json, &settings, &moduleConfig, &ntp);
 
@@ -370,7 +370,7 @@ static void test_reporting_service_recovery_report_only(void) {
     MockModuleConfig moduleConfig;
     MockNTPTimeAdapter ntp;
     ntp.setEpochTime(1700000000);
-    JsonConverter json;
+    ArduinoJsonConverter json;
 
     RuleStateReportingService service(&hybridApi, &json, &settings, &moduleConfig, &ntp);
 
@@ -400,7 +400,7 @@ static void test_sync_preserves_sensor_unreachable(void) {
 }
 
 static void test_rule_errortype_json_roundtrip(void) {
-    JsonConverter json;
+    ArduinoJsonConverter json;
     Rule rule = makeSensorRule();
     rule.errorType = "sensor_unreachable";
 

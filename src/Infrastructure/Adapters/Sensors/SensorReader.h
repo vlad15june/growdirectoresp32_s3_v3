@@ -4,6 +4,7 @@
 #include "../../../Core/Domain/Interfaces/Adapters/Sensors/ISensorReader.h"
 #include "../../../Core/Domain/Interfaces/Adapters/Sensors/IAnalogSensorReader.h"
 #include "../../../Core/Domain/Interfaces/Adapters/Sensors/IModbusSensorReader.h"
+#include "../../../Core/Domain/Interfaces/Adapters/Sensors/IBusLock.h"
 #include "../../../Core/Domain/Interfaces/Adapters/IArduinoAdapter.h"
 #include "../../../Core/Domain/Interfaces/ILogger.h"
 #include "../../../Core/Domain/Interfaces/IDebugSystem.h"
@@ -23,6 +24,7 @@ private:
     IArduinoAdapter *_arduino;
     ILogger *_logger;
     IDebugSystem *_debugSystem;
+    IBusLock *_busLock = nullptr;
 
     static constexpr const char *XF700A_MODEL = "XF700A";
     static constexpr uint16_t RAIN_ACCUM_TIME_REGISTER = 0x0107;
@@ -39,6 +41,26 @@ public:
           _arduino(arduino),
           _logger(logger),
           _debugSystem(debugSystem) {}
+
+    /**
+     * @brief Hold the RS-485 line across a whole sequence, not just across each transaction.
+     *
+     * ModbusSensorReader locks per transaction, which is right for polling: it bounds how long a
+     * command coming in on the control loop waits. Two sequences here need more than that, because
+     * their correctness depends on the state of the *ports* rather than on one request:
+     *
+     *  - `scanModbusSensor()` cuts power to the other port of the target's wire, waits 10 s for
+     *    the target to settle, then pings. Ports 0 and 1 share one UART and ports 2 and 3 share the
+     *    other (globals.h, `modbusRS485_pin1` to `modbusRS485_pin4`), so while this sequence sleeps, a poll of the paired port finds
+     *    `_isPoweredOn == false`, raises that port's power pin again and puts frames on the very
+     *    line being isolated. Before the acquisition task existed this could not happen - scanning
+     *    and polling ran on the same task and never overlapped.
+     *  - `prepareModbusSensors()` does the same power arrangement plus the same 10 s warm-up.
+     *
+     * Symmetric with `ModbusSensorReader::writeSensorAddress()`, which holds the line for the same
+     * kind of reason. Reentrancy makes the nested per-transaction locks below free.
+     */
+    void setBusLock(IBusLock *busLock) { _busLock = busLock; }
 
     void init(unsigned long modbusBaud = 9600)
     {
@@ -208,6 +230,22 @@ public:
         }
     }
 
+    bool writeSensorAddressByBroadcast(const SensorEntity &sensor, int newAddress) override
+    {
+        if (sensor.protocol != "ModBus" || !_modbusReader)
+        {
+            log("SensorReader: Broadcast address writing not available for protocol: %s",
+                sensor.protocol.c_str());
+            return false;
+        }
+
+        return _modbusReader->writeAddressByBroadcast(newAddress, sensor.pin,
+                                                      sensor.registerToStoreModbusDeviceAddress,
+                                                      sensor.writeRegistersCommand,
+                                                      sensor.modbusPingAddress,
+                                                      sensor.applyAddressAfterPowerCycle);
+    }
+
     bool setModbusPortPower(int portIndex, bool on) override
     {
         if (!_modbusReader)
@@ -215,6 +253,11 @@ public:
             return false;
         }
         return on ? _modbusReader->powerOnPort(portIndex) : _modbusReader->powerOffPort(portIndex);
+    }
+
+    PortPower modbusPortPower(int portIndex) override
+    {
+        return _modbusReader ? _modbusReader->portPower(portIndex) : PortPower();
     }
 
     void prepareSensorsForReading(const std::vector<SensorEntity>& sensors) override
@@ -243,9 +286,14 @@ private:
             return;
         }
 
+        // Power arrangement plus a 10 s warm-up: nobody else may put a frame on the line, or
+        // raise a port's power pin back up, while it runs. See setBusLock().
+        BusLockGuard busGuard(_busLock);
+
         initModbusReader(sensors);
         bool stateChanged = configureModbusPortsPower(sensors);
         warmupModbusPortsIfChanged(stateChanged);
+        waitForThePortsToComeUp(sensors);
         applyXf700aRainfallWindow(sensors);
     }
 
@@ -389,6 +437,48 @@ private:
         }
     }
 
+    /**
+     * @brief The rest of the warm-up of a port someone else switched on moments ago.
+     *
+     * The waits above count from a transition they made themselves. A port that was already up may
+     * have been switched on by the sweep, by another step or by a raw command a second before, and
+     * what is on it answers nothing until it has had its power for PortPower::WAKE_UP_MS.
+     */
+    uint32_t warmUpOwedByPort(int portIndex)
+    {
+        if (!_modbusReader || !_arduino)
+        {
+            return 0;
+        }
+        return _modbusReader->portPower(portIndex).wakeUpOwedMs(static_cast<uint32_t>(_arduino->millis()));
+    }
+
+    /**
+     * @brief Wait for every port an XF700A is on to have come up: the rainfall window is written
+     *        into them next - the same XF700As applyXf700aRainfallWindow() writes. Nothing else of
+     *        the preparation talks to a port, so no other port is waited for: the sweep does not
+     *        read a port before it has come up either.
+     */
+    void waitForThePortsToComeUp(const std::vector<SensorEntity>& sensors)
+    {
+        uint32_t owedMs = 0;
+        for (const auto& sensor : sensors)
+        {
+            if (sensor.protocol == "ModBus" && equalsIgnoreCase(sensor.model, XF700A_MODEL) &&
+                sensor.modbusDeviceAddress != 0 && sensor.pin >= 0 && sensor.pin < 4)
+            {
+                const uint32_t portOwedMs = warmUpOwedByPort(sensor.pin);
+                owedMs = (portOwedMs > owedMs) ? portOwedMs : owedMs;
+            }
+        }
+        if (owedMs > 0 && _arduino)
+        {
+            log("SensorReader: a port came up less than 10 s ago, warmup %lu ms", (unsigned long)owedMs);
+            _arduino->feedTaskWatchdog();
+            _arduino->delay(owedMs);
+        }
+    }
+
     bool readAnalogSensor(const SensorEntity &sensor, float &outValue)
     {
         if (!_analogReader)
@@ -480,9 +570,18 @@ private:
             _arduino->feedTaskWatchdog();
         }
 
+        // The whole of "isolate the port -> warm it up -> ping -> read every channel" is one
+        // sequence on the line and has to be held as one. The acquisition task polls the paired
+        // port of the same UART, and ModbusRS485::sendData() would raise that port's power pin
+        // back up mid-isolation. See setBusLock().
+        BusLockGuard busGuard(_busLock);
+
         int portIndex = sensor.pin;
         _modbusReader->init(sensor.baudRate);
 
+        // The target up and the ports sharing its wire down, so that what answers is on the target:
+        // a frame on this wire is heard by what is plugged into any of its ports. A port on the
+        // other UART is not on this wire, and its sensor keeps its power and its warm-up.
         log("SensorReader: Configuring port states for scanning (target port: %d)", portIndex);
         bool stateChanged = false;
         for (int i = 0; i < 4; i++) // NOTE: TODO: need read/set from config
@@ -499,7 +598,7 @@ private:
                     log("SensorReader: Port %d already powered on", i);
                 }
             }
-            else
+            else if (_modbusReader->sharesAWire(portIndex, i))
             {
                 if (_modbusReader->powerOffPort(i))
                 {
@@ -518,6 +617,17 @@ private:
             log("SensorReader: Port state changed, warmup 10s");
             _arduino->feedTaskWatchdog();
             _arduino->delay(10000);
+        }
+        else
+        {
+            const uint32_t owedMs = warmUpOwedByPort(portIndex);
+            if (owedMs > 0 && _arduino)
+            {
+                log("SensorReader: Port %d came up less than 10 s ago, warmup %lu ms", portIndex,
+                    (unsigned long)owedMs);
+                _arduino->feedTaskWatchdog();
+                _arduino->delay(owedMs);
+            }
         }
 
         ModbusRegisterConfig pingProbe;

@@ -11,10 +11,16 @@
 #include <vector>
 
 #include "Application/Services/Sensors/SensorService.h"
+#include "Application/Services/Sensors/SensorAcquisitionService.h"
 #include "Core/Domain/UseCases/Sensors/SensorPlausibilityUseCase.h"
 #include "Core/Domain/Data/Entities/Sensor/Sensor.h"
 #include "Core/Domain/Data/Entities/Sensor/SensorType.h"
+#include "Core/Domain/Data/Models/ModuleStructure.h"
 #include "Mock/Core/Domain/Models/MockSensorValueModel.h"
+#include "Mock/Infrastructure/Configuration/MockModuleConfig.h"
+#include "Mock/Infrastructure/Configuration/MockSettings.h"
+#include "Mock/Infrastructure/Logging/MockDebugSystem.h"
+#include "Mock/Infrastructure/Logging/MockLogger.h"
 #include "Mock/Infrastructure/MockArduinoAdapter.h"
 #include "Mock/Infrastructure/Repositories/MockSensorRepository.h"
 #include "Mock/Infrastructure/SPIFFS/MockSensorTypeRepository.h"
@@ -55,8 +61,10 @@ public:
     }
 
     bool writeSensorAddress(const SensorEntity &, int) override { return false; }
+    bool writeSensorAddressByBroadcast(const SensorEntity &, int) override { return false; }
     void prepareSensorsForReading(const std::vector<SensorEntity> &) override {}
     bool setModbusPortPower(int, bool) override { return true; }
+    PortPower modbusPortPower(int) override { PortPower power; power.on = true; return power; }
 };
 
 SensorType makeAirTempSensorType(float limitMin, float limitMax) {
@@ -107,7 +115,6 @@ struct Fixture {
                   &sensorValueModel,
                   nullptr,
                   &arduinoAdapter,
-                  nullptr,
                   nullptr,
                   nullptr,
                   nullptr,
@@ -550,6 +557,104 @@ void test_gate_without_repository_accepts_everything(void) {
     TEST_ASSERT_FALSE(limits.defined);
 }
 
+// -------- the union on the path this firmware actually polls with --------
+//
+// Everything above drives SensorService::readSensor(). That is the fallback path here: when an
+// acquisition service is wired - and globals.h wires one - readModbusSensors() hands the sensor set
+// to SensorAcquisitionService and returns, the bus is walked on that service's own task, and the
+// gate is consulted in applyReading() as the answers are drained. So a fix proven through
+// readSensor() alone is not proven on the module. Same sensor and same reading as
+// test_zero_lux_at_night_is_accepted, taken the way the module takes it.
+//
+// Only the bus is substituted (FakeSensorReader). The acquisition service, the sensor service, the
+// gate and the value model are the production classes.
+
+struct AcquisitionPathFixture {
+    MockLogger logger;
+    MockDebugSystem debugSystem;
+    MockSettings settings;
+    MockModuleConfig moduleConfig;
+    ModuleStructure moduleStructure;
+    MockSensorRepository sensorRepository;
+    MockSensorTypeRepository sensorTypeRepository;
+    FakeSensorReader sensorReader;
+    MockSensorValueModel sensorValueModel;
+    MockArduinoAdapter arduinoAdapter;
+    SensorPlausibilityUseCase plausibility;
+    // No scheduler: step() polls one sensor without a task, which is what is under test here.
+    SensorAcquisitionService acquisition;
+    SensorService service;
+
+    AcquisitionPathFixture()
+        : moduleConfig(&logger, &debugSystem, &settings),
+          plausibility(&sensorTypeRepository),
+          acquisition(&sensorReader, &arduinoAdapter, nullptr),
+          service(&moduleConfig,
+                  &moduleStructure,
+                  &sensorRepository,
+                  &sensorReader,
+                  &sensorValueModel,
+                  nullptr,
+                  &arduinoAdapter,
+                  nullptr,
+                  nullptr,
+                  nullptr,
+                  nullptr,
+                  nullptr,
+                  &plausibility) {
+        debugSystem.featureEnabled = false;
+        service.setAcquisition(&acquisition);
+    }
+
+    // One poll on the acquisition side, then the control loop, which drains what the poll produced
+    // - the two halves the module performs on its two tasks.
+    void pollAndApply(const SensorEntity &sensor) {
+        sensorRepository.sensors.push_back(sensor);
+        sensorRepository.modbusSensors = sensorRepository.sensors;
+        acquisition.setSensors(sensorRepository.modbusSensors);
+        acquisition.step();
+        service.loop();
+    }
+};
+
+// Darkness at night, read by the task the module reads with: lux is catalogued as 1..200000 and
+// the register config of the channel starts at zero, so zero is a reading. Gating on the sub type
+// alone dropped it here too - and here it is the only path there is.
+void test_zero_lux_at_night_is_accepted_on_the_acquisition_path(void) {
+    AcquisitionPathFixture f;
+    f.sensorTypeRepository.addSensorType(
+        makeOneChannelSensorType(LUX_SENSOR_TYPE_UID, "XF700A", "lux", 1.0f, 200000.0f));
+    f.sensorReader.multiValues[SENSOR_UID + ".01"] = 0.0f;
+
+    f.pollAndApply(makeRegisterChannelSensor(LUX_SENSOR_TYPE_UID, "XF700A", "lux", 0.0f, 200000.0f));
+
+    // The count and not only the value: zero is also what the value model reads as when nothing
+    // was ever stored, so the value alone cannot tell an accepted reading from a dropped one.
+    TEST_ASSERT_EQUAL_INT_MESSAGE(1, f.sensorValueModel.setChannelValueCallCount,
+                                  "the zero reading never reached the value model");
+    TEST_ASSERT_EQUAL_FLOAT(0.0f, f.sensorValueModel.getChannelValue(SENSOR_UID, SENSOR_UID + ".01"));
+    TEST_ASSERT_EQUAL_INT(1, f.sensorValueModel.setLastReadTimeCallCount);
+    TEST_ASSERT_FALSE_MESSAGE(f.sensorRepository.lastStatusIsError,
+                              "a channel reading zero left the sensor reported as disconnected");
+}
+
+// The control for the case above, green either way: it holds the gate to being live on this path,
+// so that the test above cannot be satisfied by a gate that stopped rejecting anything at all. A
+// value outside both sources is dropped and the sensor goes to error, as on the inline path.
+void test_the_acquisition_path_still_drops_a_value_outside_both_sources(void) {
+    AcquisitionPathFixture f;
+    f.sensorTypeRepository.addSensorType(
+        makeOneChannelSensorType(LUX_SENSOR_TYPE_UID, "XF700A", "lux", 1.0f, 200000.0f));
+    f.sensorReader.multiValues[SENSOR_UID + ".01"] = 900000.0f;
+
+    f.pollAndApply(makeRegisterChannelSensor(LUX_SENSOR_TYPE_UID, "XF700A", "lux", 0.0f, 200000.0f));
+
+    TEST_ASSERT_EQUAL_INT_MESSAGE(0, f.sensorValueModel.setChannelValueCallCount,
+                                  "an implausible value reached the value model through the "
+                                  "acquisition path");
+    TEST_ASSERT_TRUE(f.sensorRepository.lastStatusIsError);
+}
+
 // The service depends on the interface, not on the sensor type catalog: a stub verdict is enough
 // to drive the reading path, which is the point of injecting the gate (PR #18 review).
 class AlwaysRejectingGate : public ISensorPlausibilityUseCase {
@@ -584,7 +689,7 @@ void test_service_uses_the_injected_gate(void) {
     AlwaysRejectingGate gate;
     SensorService service(nullptr, nullptr, &sensorRepository, &sensorReader, &sensorValueModel,
                           nullptr, &arduinoAdapter, nullptr, nullptr, nullptr, nullptr, nullptr,
-                          nullptr, &gate);
+                          &gate);
 
     sensorReader.singleValue = 21.5f;  // a perfectly normal value: only the gate rejects it
 
@@ -626,6 +731,8 @@ extern "C" int run_sensor_plausibility_limits_tests(void) {
     RUN_TEST(test_i2c_channel_without_can_connect_keeps_the_sub_type_range);
     RUN_TEST(test_unknown_sub_type_is_not_gated_by_the_register_config);
     RUN_TEST(test_limits_are_the_union_of_the_two_sources);
+    RUN_TEST(test_zero_lux_at_night_is_accepted_on_the_acquisition_path);
+    RUN_TEST(test_the_acquisition_path_still_drops_a_value_outside_both_sources);
     RUN_TEST(test_limits_resolution_and_decision);
     RUN_TEST(test_gate_without_repository_accepts_everything);
     RUN_TEST(test_service_uses_the_injected_gate);

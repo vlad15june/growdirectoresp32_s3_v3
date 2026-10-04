@@ -4,7 +4,7 @@
 #include <vector>
 
 #include "Core/Domain/UseCases/SensorTypes/SyncSensorTypesUseCase.h"
-#include "Infrastructure/Adapters/Json/JsonConverter.h"
+#include "Infrastructure/Adapters/Json/ArduinoJsonConverter.h"
 #include "Mock/Infrastructure/Api/MockHybridAPIService.h"
 #include "Mock/Infrastructure/Configuration/MockNTPTimeAdapter.h"
 #include "Mock/Infrastructure/Logging/MockDebugSystem.h"
@@ -48,7 +48,7 @@ struct PruningFixture {
     MockSensorTypeRepository repository;
     MockArduinoAdapter arduinoAdapter;
     MockNTPTimeAdapter ntpTimeAdapter;
-    JsonConverter jsonConverter;
+    ArduinoJsonConverter jsonConverter;
     MockLogger logger;
     MockDebugSystem debugSystem;
     SyncSensorTypesUseCase syncUseCase;
@@ -260,8 +260,6 @@ static void test_normal_sync_keeps_everything_the_server_publishes(void) {
 }
 
 extern "C" int run_sensor_types_catalog_pruning_tests(void) {
-    UNITY_BEGIN();
-
     RUN_TEST(test_type_missing_from_server_is_dropped_from_the_catalog);
     RUN_TEST(test_pure_prune_is_written_and_reported_as_a_successful_sync);
     RUN_TEST(test_prune_and_update_in_the_same_sync);
@@ -272,5 +270,5 @@ extern "C" int run_sensor_types_catalog_pruning_tests(void) {
     RUN_TEST(test_pruning_does_not_wipe_the_catalog_first);
     RUN_TEST(test_normal_sync_keeps_everything_the_server_publishes);
 
-    return UNITY_END();
+    return 0;
 }

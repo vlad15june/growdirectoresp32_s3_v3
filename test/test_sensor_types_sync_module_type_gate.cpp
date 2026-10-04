@@ -7,13 +7,14 @@
 #include "Mock/Infrastructure/Logging/MockDebugSystem.h"
 #include "Mock/Infrastructure/Configuration/MockNTPTimeAdapter.h"
 #include "Mock/Infrastructure/Configuration/MockModuleConfig.h"
-#include "Infrastructure/Adapters/Json/JsonConverter.h"
+#include "Mock/Core/Domain/MockNetworkStatusProvider.h"
+#include "Infrastructure/Adapters/Json/ArduinoJsonConverter.h"
 
 static MockHybridAPIService g_syncGateApiService;
 static MockSensorTypeRepository g_syncGateRepository;
 static MockArduinoAdapter g_syncGateArduinoAdapter;
 static MockNTPTimeAdapter g_syncGateNtpTimeAdapter;
-static JsonConverter g_syncGateJsonConverter;
+static ArduinoJsonConverter g_syncGateJsonConverter;
 static MockLogger g_syncGateLogger;
 static MockDebugSystem g_syncGateDebugSystem;
 static MockModuleConfig* g_syncGateModuleConfig = nullptr;
@@ -112,6 +113,29 @@ void test_sync_gate_analog_input_device_does_not_fetch(void) {
     sync_gate_teardown();
 }
 
+// The gate is upstream of the re-arm as well as of the fetch: a module type with no local sensor
+// pins is not a module with a stale catalog, so a link coming back is nothing it has to answer.
+void test_sync_gate_device_module_does_not_rearm_on_the_control_loop(void) {
+    sync_gate_setup(MODULE_TYPE_DEVICE);
+
+    MockNetworkStatusProvider networkStatus;
+    g_syncGateUseCase->setNetworkStatusProvider(&networkStatus);
+
+    // A simulated day of control loop over a link that comes back every other minute.
+    for (unsigned long minute = 1; minute <= 24 * 60; minute++) {
+        networkStatus.offline = (minute % 2) == 0;
+        g_syncGateArduinoAdapter.setMillis(minute * 60UL * 1000UL);
+        g_syncGateUseCase->loop();
+    }
+
+    TEST_ASSERT_FALSE_MESSAGE(g_syncGateApiService.getSensorTypesListCalled,
+                              "a module type with no local sensor pins went for the catalog");
+    TEST_ASSERT_FALSE(g_syncGateRepository.getAllCalled);
+    TEST_ASSERT_FALSE(g_syncGateRepository.saveAllCalled);
+
+    sync_gate_teardown();
+}
+
 void test_sync_gate_sensor_module_still_syncs(void) {
     sync_gate_setup(MODULE_TYPE_SENSOR);
 
@@ -147,14 +171,13 @@ void test_sync_gate_without_module_config_still_syncs(void) {
 }
 
 extern "C" int run_sensor_types_sync_module_type_gate_tests(void) {
-    UNITY_BEGIN();
-
     RUN_TEST(test_sync_gate_device_module_does_not_fetch_on_force_sync);
     RUN_TEST(test_sync_gate_device_module_does_not_fetch_on_loop);
     RUN_TEST(test_sync_gate_analog_input_device_does_not_fetch);
+    RUN_TEST(test_sync_gate_device_module_does_not_rearm_on_the_control_loop);
     RUN_TEST(test_sync_gate_sensor_module_still_syncs);
     RUN_TEST(test_sync_gate_hydro_module_still_syncs);
     RUN_TEST(test_sync_gate_without_module_config_still_syncs);
 
-    return UNITY_END();
+    return 0;
 }

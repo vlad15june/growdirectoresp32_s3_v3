@@ -1,6 +1,6 @@
 #include <unity.h>
 #include "Core/Domain/Data/Entities/Rule.h"
-#include "Infrastructure/Adapters/Json/JsonConverter.h"
+#include "Infrastructure/Adapters/Json/ArduinoJsonConverter.h"
 
 // Sample step rule JSON
 static const char* test_step_rule_json = R"({
@@ -170,7 +170,7 @@ static const char* test_rules_array_json = R"([
 ])";
 
 void test_step_rule_parse_json_converter(void) {
-    JsonConverter jsonConverter;
+    ArduinoJsonConverter jsonConverter;
     Rule rule;
     
     TEST_ASSERT_TRUE(jsonConverter.ruleFromJson(test_step_rule_json, rule));
@@ -211,7 +211,7 @@ void test_step_rule_parse_json_converter(void) {
 }
 
 void test_sensor_rule_parse_json_converter(void) {
-    JsonConverter jsonConverter;
+    ArduinoJsonConverter jsonConverter;
     Rule rule;
     
     TEST_ASSERT_TRUE(jsonConverter.ruleFromJson(test_sensor_rule_json, rule));
@@ -249,7 +249,7 @@ void test_sensor_rule_parse_json_converter(void) {
 }
 
 void test_schedule_rule_parse_json_converter(void) {
-    JsonConverter jsonConverter;
+    ArduinoJsonConverter jsonConverter;
     Rule rule;
     
     TEST_ASSERT_TRUE(jsonConverter.ruleFromJson(test_schedule_rule_json, rule));
@@ -270,7 +270,7 @@ void test_schedule_rule_parse_json_converter(void) {
 }
 
 void test_rule_roundtrip_json_converter(void) {
-    JsonConverter jsonConverter;
+    ArduinoJsonConverter jsonConverter;
     Rule rule;
     
     // Parse and then serialize step rule
@@ -292,7 +292,7 @@ void test_rule_roundtrip_json_converter(void) {
 }
 
 void test_step_between_rule_parse_json_converter(void) {
-    JsonConverter jsonConverter;
+    ArduinoJsonConverter jsonConverter;
     Rule rule;
 
     TEST_ASSERT_TRUE(jsonConverter.ruleFromJson(test_step_between_rule_json, rule));
@@ -306,7 +306,7 @@ void test_step_between_rule_parse_json_converter(void) {
 }
 
 void test_step_between_rule_roundtrip_json_converter(void) {
-    JsonConverter jsonConverter;
+    ArduinoJsonConverter jsonConverter;
     Rule rule;
 
     TEST_ASSERT_TRUE(jsonConverter.ruleFromJson(test_step_between_rule_json, rule));
@@ -322,10 +322,10 @@ void test_step_between_rule_roundtrip_json_converter(void) {
 }
 
 void test_rule_array_parse_json_converter(void) {
-    JsonConverter jsonConverter;
+    ArduinoJsonConverter jsonConverter;
     std::vector<Rule> rules;
     
-    TEST_ASSERT_TRUE(jsonConverter.rulesFromJson(test_rules_array_json, rules));
+    TEST_ASSERT_EQUAL(JsonListParse::Ok, jsonConverter.rulesFromJson(test_rules_array_json, rules));
     TEST_ASSERT_EQUAL(2, rules.size());
     
     // Check first rule (step rule)
@@ -338,18 +338,18 @@ void test_rule_array_parse_json_converter(void) {
 }
 
 void test_rule_array_roundtrip_json_converter(void) {
-    JsonConverter jsonConverter;
+    ArduinoJsonConverter jsonConverter;
     std::vector<Rule> rules;
     
     // Parse rules array
-    TEST_ASSERT_TRUE(jsonConverter.rulesFromJson(test_rules_array_json, rules));
+    TEST_ASSERT_EQUAL(JsonListParse::Ok, jsonConverter.rulesFromJson(test_rules_array_json, rules));
     
     // Serialize back to JSON
     std::string rulesJson = jsonConverter.rulesToJson(rules);
     
     // Parse again
     std::vector<Rule> rules2;
-    TEST_ASSERT_TRUE(jsonConverter.rulesFromJson(rulesJson, rules2));
+    TEST_ASSERT_EQUAL(JsonListParse::Ok, jsonConverter.rulesFromJson(rulesJson, rules2));
     
     // Verify arrays are the same size
     TEST_ASSERT_EQUAL(rules.size(), rules2.size());
@@ -445,7 +445,7 @@ static const char* test_unknown_rule_json = R"({
 })";
 
 void test_loop_rule_parse_json_converter(void) {
-    JsonConverter jsonConverter;
+    ArduinoJsonConverter jsonConverter;
     Rule rule;
 
     TEST_ASSERT_TRUE(jsonConverter.ruleFromJson(test_loop_rule_json, rule));
@@ -458,7 +458,7 @@ void test_loop_rule_parse_json_converter(void) {
 }
 
 void test_loop_rule_roundtrip_json_converter(void) {
-    JsonConverter jsonConverter;
+    ArduinoJsonConverter jsonConverter;
     Rule rule;
     TEST_ASSERT_TRUE(jsonConverter.ruleFromJson(test_loop_rule_json, rule));
 
@@ -472,7 +472,7 @@ void test_loop_rule_roundtrip_json_converter(void) {
 }
 
 void test_average_rule_parse_json_converter(void) {
-    JsonConverter jsonConverter;
+    ArduinoJsonConverter jsonConverter;
     Rule rule;
 
     TEST_ASSERT_TRUE(jsonConverter.ruleFromJson(test_average_rule_json, rule));
@@ -486,7 +486,7 @@ void test_average_rule_parse_json_converter(void) {
 }
 
 void test_average_rule_roundtrip_json_converter(void) {
-    JsonConverter jsonConverter;
+    ArduinoJsonConverter jsonConverter;
     Rule rule;
     TEST_ASSERT_TRUE(jsonConverter.ruleFromJson(test_average_rule_json, rule));
 
@@ -500,7 +500,7 @@ void test_average_rule_roundtrip_json_converter(void) {
 }
 
 void test_between_rule_parse_json_converter(void) {
-    JsonConverter jsonConverter;
+    ArduinoJsonConverter jsonConverter;
     Rule rule;
 
     TEST_ASSERT_TRUE(jsonConverter.ruleFromJson(test_between_rule_json, rule));
@@ -514,7 +514,7 @@ void test_between_rule_parse_json_converter(void) {
 }
 
 void test_between_rule_roundtrip_json_converter(void) {
-    JsonConverter jsonConverter;
+    ArduinoJsonConverter jsonConverter;
     Rule rule;
     TEST_ASSERT_TRUE(jsonConverter.ruleFromJson(test_between_rule_json, rule));
 
@@ -528,14 +528,14 @@ void test_between_rule_roundtrip_json_converter(void) {
 }
 
 void test_unknown_rule_type_json_converter(void) {
-    JsonConverter jsonConverter;
+    ArduinoJsonConverter jsonConverter;
     Rule rule;
     TEST_ASSERT_TRUE(jsonConverter.ruleFromJson(test_unknown_rule_json, rule));
     TEST_ASSERT_EQUAL(RuleType::UNKNOWN, rule.ruleType);
 }
 
 void test_rule_joinop_roundtrip_json_converter(void) {
-    JsonConverter jsonConverter;
+    ArduinoJsonConverter jsonConverter;
 
     Rule rule;
     rule.uid = "dnf-rule-1";
@@ -591,7 +591,7 @@ void test_rule_joinop_roundtrip_json_converter(void) {
 }
 
 void test_rule_joinop_unset_not_serialized_json_converter(void) {
-    JsonConverter jsonConverter;
+    ArduinoJsonConverter jsonConverter;
 
     Rule rule;
     rule.uid = "dnf-rule-2";

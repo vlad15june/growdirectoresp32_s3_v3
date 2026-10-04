@@ -27,7 +27,7 @@ void ProcessAnalogDeviceStateUseCase::loop()
 
 void ProcessAnalogDeviceStateUseCase::controlAnalogInputDeviceState()
 {
-    auto devices = deviceModel->getAllDevices();
+    const auto& devices = deviceModel->allDevices();
 
     for (int i = 0; i < devices.size(); i++)
     {

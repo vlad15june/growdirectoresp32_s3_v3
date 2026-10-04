@@ -8,7 +8,20 @@
 #include "globals.h"
 #include "Infrastructure/Adapters/ExternalWDT/ExternalWDT.h"
 #include "Infrastructure/Adapters/Http/TlsMemoryPool.h"
+#include "Core/Domain/Diagnostics/AllocationFailureCounter.h"
 #include "esp_task_wdt.h"
+
+// The Arduino core confirms a freshly flashed image with the bootloader before setup() runs
+// (initArduino in esp32-hal-misc.c), which reduces the bootloader's app-rollback machinery to a
+// formality: an image proves nothing by merely reaching its first instruction. Overriding this
+// weak hook keeps the new image in its pending-verify state; confirmation is then earned in
+// ConfirmRunningFirmwareUseCase once the control loop demonstrates the module works, and until
+// it is, any reset - crash, watchdog, power cycle - makes the bootloader boot the previous
+// image. C linkage, because the core declares and calls the hook as a C symbol.
+extern "C" bool verifyRollbackLater()
+{
+  return true;
+}
 
 // Global loop service instance
 std::unique_ptr<ILoopService> loopService;
@@ -257,10 +270,24 @@ void setup()
   initDependencies();
 
   Serial.begin(115200);
+  // alloc_fails is only worth reading if something is watching the heap; the registration
+  // happens before the port is up, so an unarmed hook is reported here.
+  if (!AllocationFailureCounter::isHeapHookInstalled())
+  {
+    Serial.println("HEAP: allocation-failure hook not installed - alloc_fails counts only the "
+                   "call sites that check their own result");
+  }
   TlsMemoryPool::install();
   Serial.printf("[%lu ms] System initialized.\n", millis());
   Serial.print("Free heap: ");
   Serial.println(ESP.getFreeHeap());
+
+#ifdef PREVENTIVE_RESTART_DISABLED
+  // States on the console what the build flag did, so a log from a long run says which firmware
+  // produced it. ESP_LOGI would say nothing here: the SDK is built with
+  // CONFIG_LOG_MAXIMUM_LEVEL=1, which compiles out everything above ESP_LOGE.
+  Serial.printf("[%lu ms] PREVENTIVE_RESTART: nightly restart disabled by build flag\n", millis());
+#endif
 
   ExternalWDT& wdt = ExternalWDT::getInstance();
   if (wdt.init() == ESP_OK && wdt.enable() == ESP_OK && wdt.startTask() == ESP_OK)
@@ -272,10 +299,13 @@ void setup()
     Serial.printf("[%lu ms] External WDT failed to start.\n", millis());
   }
 
-  esp_err_t wdtInitRc = esp_task_wdt_init(WDT_TIMEOUT_S, true);
+  // Armed with the startup budget first: setup runs on this same task, and its legal waits are
+  // local ones (see WDT_STARTUP_TIMEOUT_S in constants.h). The steady-state threshold is armed at
+  // the end of setup(), when the control loop is about to start.
+  esp_err_t wdtInitRc = esp_task_wdt_init(WDT_STARTUP_TIMEOUT_S, true);
   esp_err_t wdtAddRc = esp_task_wdt_add(NULL);
   if (wdtInitRc == ESP_OK && wdtAddRc == ESP_OK) {
-    Serial.printf("[%lu ms] WDT: task_wdt_armed timeout_s=%d\n", millis(), WDT_TIMEOUT_S);
+    Serial.printf("[%lu ms] WDT: task_wdt_armed timeout_s=%d\n", millis(), WDT_STARTUP_TIMEOUT_S);
   } else {
     Serial.printf("[%lu ms] WDT: task_wdt_arm_fail init_rc=%d add_rc=%d\n",
                   millis(), wdtInitRc, wdtAddRc);
@@ -306,10 +336,7 @@ void setup()
  
   if (settings.getNeedClearSpiffs() == NEED_CLEAR_SPIFFS_MARKER) {
     Serial.println("needClearSpiffs flag set — removing SPIFFS files");
-    spiffsAdapter.removeFile("/data/sensorTypes.json");
-    spiffsAdapter.removeFile("/data/sensors.json");
-    spiffsAdapter.removeFile("/sensors/sensors.json");
-    spiffsAdapter.removeFile("/wifiNetworks.json");
+    clearModuleDataService.clearStoredFiles();
     settings.setNeedClearSpiffs(0);
     Serial.println("SPIFFS files removed, needClearSpiffs flag cleared");
   }
@@ -334,11 +361,24 @@ void setup()
 
   // Create loop service according to module mode and module type
   loopService = moduleSetupService.getLoopService();
+
+  // Setup is done: from here on the loop paces the module, and its legal pauses are bounded by
+  // WDT_WORST_LEGAL_PAUSE_S (see constants.h) - so the watchdog tightens to the steady-state
+  // threshold. Re-init only changes the period; the subscriptions stay.
+  esp_err_t wdtTightenRc = esp_task_wdt_init(WDT_TIMEOUT_S, true);
+  Serial.printf("[%lu ms] WDT: task_wdt_tightened timeout_s=%d rc=%d\n",
+                millis(), WDT_TIMEOUT_S, wdtTightenRc);
+
+  // The external watchdog's kicks become conditional on the loop actually beating. The stall
+  // limit is the task watchdog threshold: a loop silent past it means the software watchdog
+  // already acted or is broken - either way the kicks must stop and let the chip decide.
+  wdt.configureLoopGate((uint32_t)WDT_TIMEOUT_S * 1000UL);
 }
 
 void loop()
 {
   esp_task_wdt_reset();
+  ExternalWDT::getInstance().noteLoopAlive();
 
   if (loopService)
   {

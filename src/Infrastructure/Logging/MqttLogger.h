@@ -8,7 +8,11 @@
 #include <mutex>
 #include <stdarg.h>
 
-// Concrete implementation of MQTT Logger
+// Concrete implementation of MQTT Logger.
+// Topic strings ("<defaultTopic>/<topic>[/<moduleUid>]") are built only on the branch that
+// publishes them: every concatenation is a heap-allocating String temporary, and log calls are
+// the most frequent calls in the system, so a call whose output goes only to Serial must not
+// pay for a topic it never uses.
 class MqttLogger : public ILogger {
 private:
     AsyncMqttClient& _mqttClient;
@@ -207,10 +211,9 @@ public:
     
     // Methods for specific topic
     void print(const char* topic, const char* message) override {
-        String baseTopic = _defaultTopic + "/" + topic;
-        String fullTopic = getTopicWithModuleUid(baseTopic);
-        
         if (shouldLogToMqtt()) {
+            String baseTopic = _defaultTopic + "/" + topic;
+            String fullTopic = getTopicWithModuleUid(baseTopic);
             publishMqtt(fullTopic.c_str(), message);
         }
         
@@ -220,10 +223,9 @@ public:
     }
     
     void println(const char* topic, const char* message) override {
-        String baseTopic = _defaultTopic + "/" + topic;
-        String fullTopic = getTopicWithModuleUid(baseTopic);
-        
         if (shouldLogToMqtt()) {
+            String baseTopic = _defaultTopic + "/" + topic;
+            String fullTopic = getTopicWithModuleUid(baseTopic);
             publishMqtt(fullTopic.c_str(), message);
         }
         
@@ -238,10 +240,9 @@ public:
         vsnprintf(_buffer, sizeof(_buffer), format, args);
         va_end(args);
         
-        String baseTopic = _defaultTopic + "/" + topic;
-        String fullTopic = getTopicWithModuleUid(baseTopic);
-        
         if (shouldLogToMqtt()) {
+            String baseTopic = _defaultTopic + "/" + topic;
+            String fullTopic = getTopicWithModuleUid(baseTopic);
             publishMqtt(fullTopic.c_str(), _buffer);
         }
         
@@ -252,10 +253,9 @@ public:
     
     // New overloaded methods with channel override for specific topic
     void print(const char* topic, const char* message, MqttLoggerMode channelOverride) override {
-        String baseTopic = _defaultTopic + "/" + topic;
-        String fullTopic = getTopicWithModuleUid(baseTopic);
-        
         if (shouldLogToMqtt(channelOverride)) {
+            String baseTopic = _defaultTopic + "/" + topic;
+            String fullTopic = getTopicWithModuleUid(baseTopic);
             publishMqtt(fullTopic.c_str(), message);
         }
         
@@ -265,10 +265,9 @@ public:
     }
     
     void println(const char* topic, const char* message, MqttLoggerMode channelOverride) override {
-        String baseTopic = _defaultTopic + "/" + topic;
-        String fullTopic = getTopicWithModuleUid(baseTopic);
-        
         if (shouldLogToMqtt(channelOverride)) {
+            String baseTopic = _defaultTopic + "/" + topic;
+            String fullTopic = getTopicWithModuleUid(baseTopic);
             publishMqtt(fullTopic.c_str(), message);
         }
         
@@ -283,10 +282,9 @@ public:
         vsnprintf(_buffer, sizeof(_buffer), format, args);
         va_end(args);
         
-        String baseTopic = _defaultTopic + "/" + topic;
-        String fullTopic = getTopicWithModuleUid(baseTopic);
-        
         if (shouldLogToMqtt(channelOverride)) {
+            String baseTopic = _defaultTopic + "/" + topic;
+            String fullTopic = getTopicWithModuleUid(baseTopic);
             publishMqtt(fullTopic.c_str(), _buffer);
         }
         
@@ -297,13 +295,12 @@ public:
     
     // Methods for specific topic with custom mode
     void print(const char* topic, MqttLoggerMode mode, const char* message) override {
-        String baseTopic = _defaultTopic + "/" + topic;
-        String fullTopic = getTopicWithModuleUid(baseTopic);
-        
         bool logToMqtt = (mode == MqttLoggerMode::MqttOnly || mode == MqttLoggerMode::MqttAndSerial) && _mqttClient.connected();
         bool logToSerial = (mode == MqttLoggerMode::SerialOnly || mode == MqttLoggerMode::MqttAndSerial);
-        
+
         if (logToMqtt) {
+            String baseTopic = _defaultTopic + "/" + topic;
+            String fullTopic = getTopicWithModuleUid(baseTopic);
             publishMqtt(fullTopic.c_str(), message);
         }
         
@@ -313,13 +310,12 @@ public:
     }
     
     void println(const char* topic, MqttLoggerMode mode, const char* message) override {
-        String baseTopic = _defaultTopic + "/" + topic;
-        String fullTopic = getTopicWithModuleUid(baseTopic);
-        
         bool logToMqtt = (mode == MqttLoggerMode::MqttOnly || mode == MqttLoggerMode::MqttAndSerial) && _mqttClient.connected();
         bool logToSerial = (mode == MqttLoggerMode::SerialOnly || mode == MqttLoggerMode::MqttAndSerial);
-        
+
         if (logToMqtt) {
+            String baseTopic = _defaultTopic + "/" + topic;
+            String fullTopic = getTopicWithModuleUid(baseTopic);
             publishMqtt(fullTopic.c_str(), message);
         }
         
@@ -334,13 +330,12 @@ public:
         vsnprintf(_buffer, sizeof(_buffer), format, args);
         va_end(args);
         
-        String baseTopic = _defaultTopic + "/" + topic;
-        String fullTopic = getTopicWithModuleUid(baseTopic);
-        
         bool logToMqtt = (mode == MqttLoggerMode::MqttOnly || mode == MqttLoggerMode::MqttAndSerial) && _mqttClient.connected();
         bool logToSerial = (mode == MqttLoggerMode::SerialOnly || mode == MqttLoggerMode::MqttAndSerial);
-        
+
         if (logToMqtt) {
+            String baseTopic = _defaultTopic + "/" + topic;
+            String fullTopic = getTopicWithModuleUid(baseTopic);
             publishMqtt(fullTopic.c_str(), _buffer);
         }
         
@@ -366,10 +361,9 @@ public:
     void log(LogLevel level, const char* topic, const char* message) override {
         snprintf(_buffer, sizeof(_buffer), "[%s] %s", logLevelToString(level), message);
         
-        String baseTopic = _defaultTopic + "/" + topic;
-        String fullTopic = getTopicWithModuleUid(baseTopic);
-        
         if (shouldLogToMqtt()) {
+            String baseTopic = _defaultTopic + "/" + topic;
+            String fullTopic = getTopicWithModuleUid(baseTopic);
             publishMqtt(fullTopic.c_str(), _buffer);
         }
         
@@ -399,10 +393,9 @@ public:
                  "{\"log_level\":\"info\",\"uid\":\"%s\",\"email\":\"%s\",\"accountUid\":\"%s\",\"moduleUid\":\"%s\",\"feature\":\"%s\",\"action\":\"%s\",\"details\":%s}",
                  _deviceId.c_str(), _userEmail.c_str(), _accountUid.c_str(), _moduleUid.c_str(), feature, action, details);
         
-        String baseTopic = _defaultTopic + "/" + topic;
-        String fullTopic = getTopicWithModuleUid(baseTopic);
-        
         if (shouldLogToMqtt()) {
+            String baseTopic = _defaultTopic + "/" + topic;
+            String fullTopic = getTopicWithModuleUid(baseTopic);
             publishMqtt(fullTopic.c_str(), _buffer);
         }
         

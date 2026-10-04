@@ -1,6 +1,7 @@
 #ifndef ISYNC_RULES_USE_CASE_H
 #define ISYNC_RULES_USE_CASE_H
 
+#include "Application/Interfaces/IOutbox.h"
 #include "Core/Domain/Data/Entities/Rule.h"
 #include <vector>
 
@@ -10,6 +11,15 @@
 class ISyncRulesUseCase {
 public:
     virtual ~ISyncRulesUseCase() = default;
+
+    /**
+     * Told, on the control loop, how a request submitted to the outbox ended. For rule sync this
+     * is where the fetched rules arrive: the GET is asked for in loop() and answered here, so
+     * nothing waits for the server inside the loop iteration that asked.
+     *
+     * Default: nothing, for implementations that submit nothing.
+     */
+    virtual void onOutboxCompletion(const OutboxCompletion& completion) { (void)completion; }
     
     /**
      * Initialize the use case

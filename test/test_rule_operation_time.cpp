@@ -15,7 +15,6 @@
 #include "Core/Domain/Data/Models/IDeviceModel.h"
 #include "Core/Domain/UseCases/Rules/EvaluateRulesUseCase.h"
 #include "Application/Services/Rules/RuleValidator.h"
-#include "Infrastructure/Adapters/Json/JsonConverter.h"
 #include "Infrastructure/Adapters/Json/ArduinoJsonConverter.h"
 
 #include "Mock/Infrastructure/Repositories/MockRuleRepository.h"
@@ -182,7 +181,7 @@ static void test_days_of_week_gate(void)
 
 static void test_operation_time_converter_round_trip(void)
 {
-    JsonConverter converter;
+    ArduinoJsonConverter converter;
     Rule rule;
     rule.uid = "op-rt";
     rule.version = 1;
@@ -205,10 +204,9 @@ static void test_operation_time_converter_round_trip(void)
 
 // ---------------------------------------------------------------------------
 // GDV1-3807: the Operation Time window must reach every rule type, not only
-// sensor rules. These cases go through ArduinoJsonConverter - the converter
-// that is actually wired into the firmware (src/globals.h) - because the
-// legacy JsonConverter used above parses the window unconditionally and would
-// stay green while the production path is broken.
+// sensor rules. The round trip above is a sensor rule, and the reader takes a
+// different branch per rule type, so a window that arrives for one type says
+// nothing about the rest - each type it must reach is spelled out below.
 // ---------------------------------------------------------------------------
 
 // Window 15:00:00 - 15:20:00 UTC, exactly how the backend sends it.

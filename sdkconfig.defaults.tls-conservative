@@ -1,0 +1,15 @@
+# TLS record buffer sizes, conservative profile (GD_TLS_BUFFER_PROFILE=1).
+#
+# Overlay applied on top of sdkconfig.defaults, which is a byte-for-byte copy of the factory
+# configuration and is not edited here. It replaces the factory's symmetric 16 KB record buffers
+# with the asymmetric pair ESP-IDF itself defaults to: incoming records keep the 16384 bytes the
+# TLS standard allows a peer to send without negotiation, outgoing records drop to 4096. What the
+# module sends is fragmented by mbedtls and reassembled by the peer, so the outgoing limit is not
+# visible on the wire; HTTPClient writes a request body in a loop and a request header in one
+# call, and the header of every call this firmware makes is a few hundred bytes.
+#
+# The matching slot geometry is in src/Infrastructure/Adapters/Http/TlsBufferProfile.h. The two
+# are checked against each other at compile time, so this file cannot silently fail to arrive.
+CONFIG_MBEDTLS_ASYMMETRIC_CONTENT_LEN=y
+CONFIG_MBEDTLS_SSL_IN_CONTENT_LEN=16384
+CONFIG_MBEDTLS_SSL_OUT_CONTENT_LEN=4096

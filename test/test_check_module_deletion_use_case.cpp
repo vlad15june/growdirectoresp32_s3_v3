@@ -101,8 +101,7 @@ void test_evaluate_null_api_returns_unknown(void) {
     TEST_ASSERT_TRUE(useCase.evaluate() == ModuleDeletionStatusEnum::UNKNOWN);
 }
 
-extern "C" int run_check_module_deletion_use_case_tests(void) {
-    UNITY_BEGIN();
+extern "C" void run_check_module_deletion_use_case_tests(void) {
     RUN_TEST(test_evaluate_sustained_403_returns_deleted);
     RUN_TEST(test_evaluate_200_is_deleted_true_returns_deleted);
     RUN_TEST(test_evaluate_200_is_deleted_false_returns_not_deleted);
@@ -110,5 +109,4 @@ extern "C" int run_check_module_deletion_use_case_tests(void) {
     RUN_TEST(test_evaluate_query_failed_returns_unknown);
     RUN_TEST(test_evaluate_200_unparseable_body_returns_unknown);
     RUN_TEST(test_evaluate_null_api_returns_unknown);
-    return UNITY_END();
 }

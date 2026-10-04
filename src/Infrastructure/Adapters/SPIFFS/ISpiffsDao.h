@@ -1,7 +1,21 @@
 #pragma once
 
+#include <cstdint>
 #include <string>
 #include <vector>
+
+/**
+ * @brief What a read of everything stored brought back.
+ */
+enum class StoredRead : uint8_t {
+    /** The stored entities, at least one of them. */
+    Read,
+    /** Nothing is stored: no file, or a complete list with nothing in it that can be read. */
+    Nothing,
+    /** Something is stored and did not come back whole. Not the same as Nothing: a write built
+     *  on it would replace every stored entity with the few it was given. */
+    Unreadable,
+};
 
 /**
  * @brief Interface for data access operations using SPIFFS
@@ -11,6 +25,16 @@ template <typename T>
 class ISpiffsDao {
 public:
     virtual ~ISpiffsDao() = default;
+
+    /**
+     * @brief Read everything stored, and say whether what came back is all of it
+     *
+     * A store that cannot tell a read that failed from an empty one answers from getAll(): Read
+     * when it returned true, Nothing otherwise.
+     */
+    virtual StoredRead readAll(std::vector<T>& entities) {
+        return getAll(entities) ? StoredRead::Read : StoredRead::Nothing;
+    }
 
     /**
      * @brief Save an entity to SPIFFS

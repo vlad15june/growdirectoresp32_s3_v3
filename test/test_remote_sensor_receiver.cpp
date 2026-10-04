@@ -4,10 +4,11 @@
 #include "Infrastructure/Adapters/Sensors/RemoteSensors/RemoteSensorClient.h"
 #include "Infrastructure/Controllers/UDP/UdpInboundDispatcher.h"
 #include "Core/Domain/UseCases/Rules/EvaluateRulesUseCase.h"
-#include "Infrastructure/Adapters/Json/JsonConverter.h"
+#include "Infrastructure/Adapters/Json/ArduinoJsonConverter.h"
 #include "Application/DTOs/UpdateDto.h"
 
 #include "Mock/Core/Domain/Models/MockSensorValueModel.h"
+#include "Mock/Application/MockOutbox.h"
 #include "Mock/Core/Domain/MockRemoteSensorReceiver.h"
 #include "Mock/Infrastructure/Udp/MockUdpManager.h"
 #include "Mock/Infrastructure/Mqtt/MockMqttManager.h"
@@ -27,7 +28,7 @@ struct ReceiverFixture {
     MockSensorValueModel sensorValueModel;
     MockRuleRepository ruleRepository;
     MockSensorRepository sensorRepository;
-    JsonConverter jsonConverter;
+    ArduinoJsonConverter jsonConverter;
     MockArduinoAdapter arduinoAdapter;
     MockLogger logger;
     MockDebugSystem debugSystem;
@@ -159,6 +160,7 @@ static void test_reconcile_subscribe_idempotent(void) {
     f.arduinoAdapter.currentMillis = 20000;
     f.ruleRepository.rules.push_back(makeRemoteSensorRule("r1", "84:F7:03:FE:88:2C.00.01"));
     f.receiver.init();
+    f.receiver.onRuleSetChanged(); // the broker's first CONNACK
 
     TEST_ASSERT_EQUAL_INT(1, f.mqttManager.subscribeCallCount);
     TEST_ASSERT_EQUAL_STRING("hardware/update/84:F7:03:FE:88:2C", f.mqttManager.lastSubscribeTopic.c_str());
@@ -172,6 +174,7 @@ static void test_reconcile_unsubscribe(void) {
     f.arduinoAdapter.currentMillis = 20000;
     f.ruleRepository.rules.push_back(makeRemoteSensorRule("r1", "84:F7:03:FE:88:2C.00.01"));
     f.receiver.init();
+    f.receiver.onRuleSetChanged(); // the broker's first CONNACK
     TEST_ASSERT_EQUAL_INT(1, f.mqttManager.subscribeCallCount);
 
     f.ruleRepository.rules.clear();
@@ -181,16 +184,19 @@ static void test_reconcile_unsubscribe(void) {
     TEST_ASSERT_EQUAL_STRING("hardware/update/84:F7:03:FE:88:2C", f.mqttManager.lastUnsubscribeTopic.c_str());
 }
 
-static void test_boot_delay_gate(void) {
+// The subscriptions are reconciled when the broker first answers, not by init() and not on a timer:
+// MqttManager keeps a topic asked for before the CONNACK and subscribes it on the CONNACK, so a
+// reconcile asked for at any uptime takes effect.
+static void test_init_leaves_the_reconcile_to_the_first_connack_and_any_uptime_will_do(void) {
     ReceiverFixture f;
     f.arduinoAdapter.currentMillis = 5000;
     f.ruleRepository.rules.push_back(makeRemoteSensorRule("r1", "84:F7:03:FE:88:2C.00.01"));
     f.receiver.init();
     TEST_ASSERT_EQUAL_INT(0, f.mqttManager.subscribeCallCount);
 
-    f.arduinoAdapter.currentMillis = 15000;
     f.receiver.onRuleSetChanged();
-    TEST_ASSERT_EQUAL_INT(1, f.mqttManager.subscribeCallCount);
+    TEST_ASSERT_EQUAL_INT_MESSAGE(1, f.mqttManager.subscribeCallCount,
+                                  "a reconcile five seconds into the boot subscribed to nothing");
 }
 
 static void test_local_sensor_not_subscribed(void) {
@@ -201,6 +207,7 @@ static void test_local_sensor_not_subscribed(void) {
     f.sensorRepository.sensors.push_back(local);
     f.ruleRepository.rules.push_back(makeRemoteSensorRule("r1", "11:22:33:44:55:66.00.01"));
     f.receiver.init();
+    f.receiver.onRuleSetChanged(); // the broker's first CONNACK
 
     TEST_ASSERT_EQUAL_INT(0, f.mqttManager.subscribeCallCount);
 }
@@ -210,6 +217,7 @@ static void test_owner_derivation(void) {
     f.arduinoAdapter.currentMillis = 20000;
     f.ruleRepository.rules.push_back(makeRemoteSensorRule("r1", "84:F7:03:FE:88:2C.00.01"));
     f.receiver.init();
+    f.receiver.onRuleSetChanged(); // the broker's first CONNACK
 
     TEST_ASSERT_EQUAL_STRING("hardware/update/84:F7:03:FE:88:2C", f.mqttManager.lastSubscribeTopic.c_str());
 }
@@ -223,6 +231,7 @@ static void test_subscription_cap(void) {
         f.ruleRepository.rules.push_back(makeRemoteSensorRule("r" + std::to_string(i), mac));
     }
     f.receiver.init();
+    f.receiver.onRuleSetChanged(); // the broker's first CONNACK
 
     TEST_ASSERT_EQUAL_INT(50, f.mqttManager.subscribeCallCount);
 }
@@ -258,7 +267,7 @@ static void test_multi_channel_flattened(void) {
 }
 
 static void test_parser_round_trip(void) {
-    JsonConverter converterImpl;
+    ArduinoJsonConverter converterImpl;
     IJsonConverter& converter = converterImpl;
 
     UpdateDto dto;
@@ -289,7 +298,7 @@ static void test_parser_round_trip(void) {
 }
 
 static void test_parser_rejects_non_sensor(void) {
-    JsonConverter converterImpl;
+    ArduinoJsonConverter converterImpl;
     IJsonConverter& converter = converterImpl;
     std::vector<RemoteSensorValue> pairs;
 
@@ -302,11 +311,13 @@ static void test_notification_hook(void) {
     MockRemoteSensorReceiver receiver;
     MockLogger logger;
     MockDebugSystem debug;
-    JsonConverter converter;
+    ArduinoJsonConverter converter;
     MockRuleRepository ruleRepo;
     ruleRepo.synchronizeReturnValue = 1;
-    CommandService commandService(nullptr, nullptr, nullptr, nullptr, nullptr,
+    MockOutbox outbox;
+    CommandService commandService(nullptr, nullptr, nullptr, nullptr,
                                   &logger, &debug, nullptr, &converter, &ruleRepo);
+    commandService.setOutbox(&outbox);
     commandService.setRemoteSensorReceiver(&receiver);
 
     CommandDto command;
@@ -326,6 +337,7 @@ static void test_condition_sensor_subscribed_non_average(void) {
     f.ruleRepository.rules.push_back(
         makeConditionRule("r1", RuleType::SENSOR, {"84:F7:03:FE:88:2C.00.01"}));
     f.receiver.init();
+    f.receiver.onRuleSetChanged(); // the broker's first CONNACK
 
     TEST_ASSERT_EQUAL_INT(1, f.mqttManager.subscribeCallCount);
     TEST_ASSERT_EQUAL_STRING("hardware/update/84:F7:03:FE:88:2C", f.mqttManager.lastSubscribeTopic.c_str());
@@ -338,6 +350,7 @@ static void test_multiple_conditions_distinct_modules(void) {
         makeConditionRule("r1", RuleType::STEP,
                           {"84:F7:03:FE:88:2C.00.01", "11:22:33:44:55:66.00.02"}));
     f.receiver.init();
+    f.receiver.onRuleSetChanged(); // the broker's first CONNACK
 
     TEST_ASSERT_EQUAL_INT(2, f.mqttManager.subscribeCallCount);
 }
@@ -349,6 +362,7 @@ static void test_average_sensor_reads_all_conditions(void) {
         makeConditionRule("r1", RuleType::AVERAGE_SENSOR,
                           {"84:F7:03:FE:88:2C.00.01", "11:22:33:44:55:66.00.02"}));
     f.receiver.init();
+    f.receiver.onRuleSetChanged(); // the broker's first CONNACK
 
     TEST_ASSERT_EQUAL_INT(2, f.mqttManager.subscribeCallCount);
 }
@@ -362,6 +376,7 @@ static void test_local_condition_sensor_not_subscribed(void) {
     f.ruleRepository.rules.push_back(
         makeConditionRule("r1", RuleType::SENSOR, {"11:22:33:44:55:66.00.02"}));
     f.receiver.init();
+    f.receiver.onRuleSetChanged(); // the broker's first CONNACK
 
     TEST_ASSERT_EQUAL_INT(0, f.mqttManager.subscribeCallCount);
 }
@@ -371,6 +386,7 @@ static void test_logging_records(void) {
     f.arduinoAdapter.currentMillis = 20000;
     f.ruleRepository.rules.push_back(makeRemoteSensorRule("r1", "84:F7:03:FE:88:2C.00.01"));
     f.receiver.init();
+    f.receiver.onRuleSetChanged(); // the broker's first CONNACK
 
     TEST_ASSERT_TRUE(f.logger.hasMessageContaining("init udp="));
     TEST_ASSERT_TRUE(f.logger.hasMessageContaining("reconcile rules="));
@@ -389,7 +405,7 @@ extern "C" void run_remote_sensor_tests(void) {
     RUN_TEST(test_last_read_time_stamped);
     RUN_TEST(test_reconcile_subscribe_idempotent);
     RUN_TEST(test_reconcile_unsubscribe);
-    RUN_TEST(test_boot_delay_gate);
+    RUN_TEST(test_init_leaves_the_reconcile_to_the_first_connack_and_any_uptime_will_do);
     RUN_TEST(test_local_sensor_not_subscribed);
     RUN_TEST(test_owner_derivation);
     RUN_TEST(test_condition_sensor_subscribed_non_average);

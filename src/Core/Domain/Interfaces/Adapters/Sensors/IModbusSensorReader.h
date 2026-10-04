@@ -4,6 +4,7 @@
 #include <vector>
 #include <string>
 #include "Core/Domain/Data/Entities/Sensor/ModbusRegisterConfig.h"
+#include "Core/Domain/Interfaces/Adapters/Sensors/PortPower.h"
 
 class IModbusSensorReader
 {
@@ -34,6 +35,26 @@ public:
                                     bool powerCycleToApply = false) = 0;
 
     /**
+     * @brief Write a new address to whatever is on a port, without knowing the address it holds
+     * @param newAddress New address to set
+     * @param portIndex Port index for communication
+     * @param storeRegister Per-model register the device address is written to
+     * @param writeCommand Per-model Modbus function code of that write; anything but 6 or 16
+     *        skips it
+     * @param pingRegister Per-model register read to verify a device responds
+     * @param powerCycleToApply Same as writeSensorAddress()
+     * @return true when a device answers at the new address afterwards
+     *
+     * The two broadcast writes of writeSensorAddress(), in its order, and nothing else of it: the
+     * model's own write addressed to 0x00, then the blind register 0/1 sequence. No isolation and
+     * no warm-up - the caller owns the power of the ports, because a frame to 0x00 is taken by
+     * every device on the wire that hears it.
+     */
+    virtual bool writeAddressByBroadcast(int newAddress, int portIndex, uint16_t storeRegister,
+                                         uint8_t writeCommand, uint16_t pingRegister,
+                                         bool powerCycleToApply = false) = 0;
+
+    /**
      * @brief Power on specific port
      * @param portIndex Port index to power on
      * @return true if state changed, false if already on
@@ -46,6 +67,19 @@ public:
      * @return true if state changed, false if already off
      */
     virtual bool powerOffPort(int portIndex) = 0;
+
+    /**
+     * @brief What a port's power pin has done, and when - whoever moved it
+     * @param portIndex Port index
+     */
+    virtual PortPower portPower(int portIndex) = 0;
+
+    /**
+     * @brief Are two ports one electrical line: is a frame put on either heard behind both?
+     * @return true for two ports wired to one UART, and for a port and itself; false for an index
+     *         the reader has no port for
+     */
+    virtual bool sharesAWire(int portIndex, int otherPortIndex) const = 0;
 
     /**
      * @brief Write a single holding register (FC06)

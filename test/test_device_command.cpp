@@ -1,7 +1,7 @@
 #include <unity.h>
 #include <string>
 
-#include "Infrastructure/Adapters/Json/JsonConverter.h"
+#include "Infrastructure/Adapters/Json/ArduinoJsonConverter.h"
 #include "Application/DTOs/DeviceCommandUpdateDto.h"
 #include "Application/DTOs/CommandDto.h"
 #include "Application/DTOs/UpdateDto.h"
@@ -19,6 +19,7 @@
 #include "Mock/Infrastructure/Logging/MockDebugSystem.h"
 #include "Mock/Infrastructure/Configuration/MockModuleConfig.h"
 #include "Mock/Infrastructure/Configuration/MockNTPTimeAdapter.h"
+#include "Mock/Application/MockOutbox.h"
 #include "Mock/Infrastructure/Api/MockHybridAPIService.h"
 
 static const char* npos_safe(const std::string& s, const char* needle) {
@@ -26,7 +27,7 @@ static const char* npos_safe(const std::string& s, const char* needle) {
 }
 
 static void test_device_command_ack_is_array_with_timestamp(void) {
-    JsonConverter conv;
+    ArduinoJsonConverter conv;
 
     DeviceCommandUpdateDto dto("9C:13:9E:99:47:38.00", "done", "", "2026-06-06T05:56:22.000Z");
     std::string json = conv.deviceCommandUpdateToJson(dto);
@@ -40,7 +41,7 @@ static void test_device_command_ack_is_array_with_timestamp(void) {
 }
 
 static void test_device_command_ack_omits_empty_timestamp(void) {
-    JsonConverter conv;
+    ArduinoJsonConverter conv;
 
     DeviceCommandUpdateDto dto("uid-1", "error", "boom");
     std::string json = conv.deviceCommandUpdateToJson(dto);
@@ -204,7 +205,7 @@ static void test_device_update_sent_immediately_on_state_change(void) {
 }
 
 static void test_manual_device_update_json_has_switchedat_and_numeric_commandid(void) {
-    JsonConverter conv;
+    ArduinoJsonConverter conv;
 
     UpdateDto update;
     update.growdirectorUid = "9C:13:9E:99:47:38";
@@ -302,7 +303,7 @@ static void test_rule_off_update_carries_stop_reason(void) {
     DeviceService svc(&moduleConfig, &ms, &deviceModel, &timeAdapter, &arduino,
                       nullptr, &hybrid, &logger, &debug);
 
-    JsonConverter converter;
+    ArduinoJsonConverter converter;
 
     // Packet 1: rule-stop event carries reason and isAuto=true
     svc.loop();
@@ -331,6 +332,10 @@ static void test_rule_off_update_carries_stop_reason(void) {
     TEST_ASSERT_TRUE(json2.find("\"ruleUid\"") == std::string::npos);
 }
 
+// The command path is asynchronous: process() only asks, and the answer arrives as
+// an outbox completion which the control loop hands back. `delivered == false` is what "the server
+// did not answer" looks like from here - the mapping from an HTTP failure to that flag lives in
+// Outbox::fetchDeviceCommands() and is tested against the real class in test_outbox.cpp.
 static void test_fallback_executes_from_mqtt_when_http_failed(void) {
     ModuleStructure ms;
     Node node;
@@ -351,11 +356,11 @@ static void test_fallback_executes_from_mqtt_when_http_failed(void) {
     arduino.currentMillis = 1000;
     MockLogger logger;
     MockDebugSystem debug;
-    MockHybridAPIService hybrid;
-    hybrid.getDeviceCommandHttpFailed = true;
+    MockOutbox outbox;
 
     DeviceCommandExecutionUseCase uc(&deviceModel, &arduino, &ms, &logger, &debug, &moduleConfig);
-    CommandService svc(&uc, nullptr, nullptr, &hybrid, &ms, &logger, &debug);
+    CommandService svc(&uc, nullptr, nullptr, &ms, &logger, &debug);
+    svc.setOutbox(&outbox);
 
     CommandDto cmd;
     cmd.type = "DeviceCommandNotification";
@@ -368,11 +373,22 @@ static void test_fallback_executes_from_mqtt_when_http_failed(void) {
     bool ok = svc.process(cmd);
 
     TEST_ASSERT_TRUE(ok);
+    TEST_ASSERT_EQUAL_UINT32(1, outbox.deviceCommandFetches);
+    // Nothing has been executed yet: process() only asked.
+    TEST_ASSERT_EQUAL(DEVICE_STATE_OFF, device->state);
+
+    // The server did not answer, and there is no response in the slot.
+    outbox.pushCompletion(OutboxKind::DEVICE_COMMAND_FETCH, 1, false);
+    OutboxCompletion completion;
+    while (outbox.pollCompletion(completion)) {
+        svc.onOutboxCompletion(completion);
+    }
+
     TEST_ASSERT_EQUAL(DEVICE_STATE_ON, device->state);
     TEST_ASSERT_EQUAL_INT(4475, device->commandId);
     TEST_ASSERT_TRUE(device->needToSwitchBack);
     TEST_ASSERT_EQUAL_UINT32(60000, device->durationOn);
-    TEST_ASSERT_TRUE(hybrid.sendDeviceCommandExecutionResultCalled);
+    TEST_ASSERT_EQUAL_UINT32(1, (uint32_t)outbox.deviceCommandResults.size());
 }
 
 static void test_no_fallback_when_http_ok_and_empty(void) {
@@ -393,11 +409,11 @@ static void test_no_fallback_when_http_ok_and_empty(void) {
     arduino.currentMillis = 1000;
     MockLogger logger;
     MockDebugSystem debug;
-    MockHybridAPIService hybrid;
-    hybrid.getDeviceCommandHttpFailed = false;
+    MockOutbox outbox;
 
     DeviceCommandExecutionUseCase uc(&deviceModel, &arduino, &ms, &logger, &debug, &moduleConfig);
-    CommandService svc(&uc, nullptr, nullptr, &hybrid, &ms, &logger, &debug);
+    CommandService svc(&uc, nullptr, nullptr, &ms, &logger, &debug);
+    svc.setOutbox(&outbox);
 
     CommandDto cmd;
     cmd.type = "DeviceCommandNotification";
@@ -406,10 +422,19 @@ static void test_no_fallback_when_http_ok_and_empty(void) {
     cmd.commandId = 4475;
 
     bool ok = svc.process(cmd);
-
     TEST_ASSERT_TRUE(ok);
+
+    // The server answered, and answered that there is nothing pending: an empty list from a
+    // delivered fetch. The MQTT payload must not be executed on the strength of that.
+    outbox.deviceCommandResponseReady = true;
+    outbox.pushCompletion(OutboxKind::DEVICE_COMMAND_FETCH, 1, true);
+    OutboxCompletion completion;
+    while (outbox.pollCompletion(completion)) {
+        svc.onOutboxCompletion(completion);
+    }
+
     TEST_ASSERT_EQUAL(DEVICE_STATE_OFF, device->state);
-    TEST_ASSERT_FALSE(hybrid.sendDeviceCommandExecutionResultCalled);
+    TEST_ASSERT_EQUAL_UINT32(0, (uint32_t)outbox.deviceCommandResults.size());
 }
 
 extern "C" void run_device_command_tests(void) {

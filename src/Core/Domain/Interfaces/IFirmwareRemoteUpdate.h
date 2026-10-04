@@ -8,11 +8,15 @@ public:
     
     /**
      * @brief Update firmware from a given URL
-     * 
+     *
      * @param url The URL to download firmware from
+     * @param expectedMd5 MD5 digest the downloaded image must have, or nullptr/empty when the
+     *        command did not carry one. Without a digest the image is installed on the size the
+     *        server declared alone, which a truncated transfer can satisfy; with one, an image
+     *        that does not match is refused and the running firmware stays.
      * @return true if update was successful, false otherwise
      */
-    virtual bool updateFirmwareFromURL(const char* url) = 0;
+    virtual bool updateFirmwareFromURL(const char* url, const char* expectedMd5) = 0;
 
     /**
      * @brief Check whether an OTA update session is currently running
@@ -30,6 +34,19 @@ public:
      * @return Reason of the last failure, empty string if the last attempt did not fail
      */
     virtual const char* getLastErrorMessage() const = 0;
+
+    /**
+     * @brief The persisted-status value the last update session ended with
+     *
+     * The value ISettings::setUpdateStatus() expects (FIRMWARE_UPDATE_STATE_*), or 0 when the
+     * session ended on a path that never recorded one. The updater does not write it to the
+     * settings itself: it runs on the command network task, and the settings sector is written
+     * from the control loop - so the updater reports the status here and the caller persists it
+     * in its finish step, on the loop, next to the other state writes.
+     *
+     * @return Status of the last session, 0 if none was recorded
+     */
+    virtual uint8_t getLastUpdateStatus() const = 0;
 
     /**
      * @brief HTTP code the last download attempt got back

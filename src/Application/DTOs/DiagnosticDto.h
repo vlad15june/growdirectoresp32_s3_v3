@@ -28,6 +28,11 @@ public:
     uint32_t psramSize;             // Total PSRAM size
     uint32_t psramFree;             // Current free PSRAM
     unsigned long failsInHour;      // Number of failures in the last hour
+    // The last outage the module came back from, carried from the first report after it on.
+    // "router", "internet", "services" or "module"; empty while there has been none since the boot.
+    std::string lastOutageCause;
+    unsigned long lastOutageStartUptimeMs;   // When it began, on the uptime this report carries
+    unsigned long lastOutageDurationMs;      // How long it lasted
     
     DiagnosticDto() : 
         rssi(0), 
@@ -43,5 +48,7 @@ public:
         maxAllocHeap(0),
         psramSize(0),
         psramFree(0),
-        failsInHour(0) {}
+        failsInHour(0),
+        lastOutageStartUptimeMs(0),
+        lastOutageDurationMs(0) {}
 };

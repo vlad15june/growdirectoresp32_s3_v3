@@ -13,7 +13,6 @@
 #include "Infrastructure/Adapters/Rs485/IModbusRS485.h"
 #include "Infrastructure/Adapters/Sensors/HardwareSensors/ModbusSensors/ModbusSensorReader.h"
 #include "Infrastructure/Adapters/Sensors/SensorReader.h"
-#include "Infrastructure/Adapters/Json/JsonConverter.h"
 #include "Infrastructure/Adapters/Json/ArduinoJsonConverter.h"
 #include "Core/Domain/Interfaces/Adapters/Json/IJsonConverter.h"
 #include "Mock/Infrastructure/MockArduinoAdapter.h"
@@ -36,16 +35,23 @@ public:
     int powerOnCount = 0;
     bool requiresSecondPowerOn = false;
 
-    void begin(unsigned long) override {}
+    // Strict like the board: a UART nobody began sends nothing and receives nothing. Every
+    // stand below begins it through reader.init(), as the boot does before the first frame.
+    bool begun = false;
+    int droppedBeforeBegin = 0;
+
+    // A zero rate leaves the board's UART without a driver: the core's rate detection fails.
+    void begin(unsigned long baud) override { begun = (baud != 0); }
 
     void sendData(uint8_t *data, uint8_t length) override {
+        if (!begun) { droppedBeforeBegin++; return; }
         Frame f;
         f.bytes.assign(data, data + length);
         sent.push_back(f);
     }
 
     int readAvailable(uint8_t *buffer, size_t maxLength) override {
-        if (sent.empty()) return 0;
+        if (!begun || sent.empty()) return 0;
         const auto &last = sent.back().bytes;
         if (last.size() < 2) return 0;
         int addr = last[0];
@@ -69,17 +75,23 @@ public:
     uint16_t calculateCRC(uint8_t *, uint8_t) override { return 0; }
 
     bool writeRegister(int slave, int reg, uint16_t value) override {
+        if (!begun) { droppedBeforeBegin++; return false; }
         writes.push_back({ true, slave, reg, value });
         return true;
     }
 
     bool writeSingleRegister(int slave, int reg, uint16_t value) override {
+        if (!begun) { droppedBeforeBegin++; return false; }
         writes.push_back({ false, slave, reg, value });
         return true;
     }
 
     bool powerOnPort() override { bool ch = !powered; powered = true; ++powerOnCount; return ch; }
     bool powerOffPort() override { bool ch = powered; powered = false; return ch; }
+    // No clock: a port it has put up is up for good.
+    PortPower powerRecord() const override { PortPower r; r.on = powered; return r; }
+    // A wire of its own: nothing else is plugged into this stand's line.
+    const void *wire() const override { return this; }
 
     const Frame *firstFrameWithFunctionCode(uint8_t fc) const {
         for (const auto &f : sent) {
@@ -116,8 +128,13 @@ void test_sensor_reader_forwards_addressing_fields_and_power_cycle_flag(void) {
             powerCycleToApply = powerCycle;
             return true;
         }
+        bool writeAddressByBroadcast(int, int, uint16_t, uint8_t, uint16_t, bool) override {
+            return false;
+        }
         bool powerOnPort(int) override { return false; }
         bool powerOffPort(int) override { return false; }
+        PortPower portPower(int) override { PortPower r; r.on = true; return r; }
+        bool sharesAWire(int portIndex, int otherPortIndex) const override { return portIndex == otherPortIndex; }
         bool writeHoldingRegister(uint8_t, uint16_t, uint16_t, int) override { return false; }
         bool readHoldingRegister(uint8_t, uint16_t, uint16_t &, int) override { return false; }
     };
@@ -153,6 +170,7 @@ void test_primary_write_fc16_uses_configured_register_and_current_address(void) 
     std::vector<IModbusRS485 *> ports{ &fake };
     MockArduinoAdapter arduino;
     ModbusSensorReader reader(ports, arduino, nullptr, nullptr);
+    reader.init();
 
     bool ok = reader.writeSensorAddress(10, 22, 0, 0x0100, 16, 0x0100);
 
@@ -176,6 +194,7 @@ void test_primary_write_fc06_uses_single_register(void) {
     std::vector<IModbusRS485 *> ports{ &fake };
     MockArduinoAdapter arduino;
     ModbusSensorReader reader(ports, arduino, nullptr, nullptr);
+    reader.init();
 
     bool ok = reader.writeSensorAddress(10, 22, 0, 0x0007, 6, 0x0007);
 
@@ -197,6 +216,7 @@ void test_primary_write_falls_back_to_broadcast_at_configured_register(void) {
     std::vector<IModbusRS485 *> ports{ &fake };
     MockArduinoAdapter arduino;
     ModbusSensorReader reader(ports, arduino, nullptr, nullptr);
+    reader.init();
 
     bool ok = reader.writeSensorAddress(10, 22, 0, 0x0100, 16, 0x0100);
 
@@ -220,6 +240,7 @@ void test_unconfirmed_primary_falls_back_to_legacy_broadcast(void) {
     std::vector<IModbusRS485 *> ports{ &fake };
     MockArduinoAdapter arduino;
     ModbusSensorReader reader(ports, arduino, nullptr, nullptr);
+    reader.init();
 
     bool ok = reader.writeSensorAddress(10, 22, 0, 0x0100, 16, 0x0100);
 
@@ -246,6 +267,7 @@ void test_zero_fields_skip_primary_and_use_legacy(void) {
     std::vector<IModbusRS485 *> ports{ &fake };
     MockArduinoAdapter arduino;
     ModbusSensorReader reader(ports, arduino, nullptr, nullptr);
+    reader.init();
 
     bool ok = reader.writeSensorAddress(10, 22, 0, 0, 0, 0);
 
@@ -328,7 +350,7 @@ void test_non_modbus_sensor_does_not_write_address(void) {
 
 // Reference sync round-trip: the three fields survive SensorType JSON, including 0.
 void test_sensor_type_json_round_trip(void) {
-    JsonConverter concrete;
+    ArduinoJsonConverter concrete;
     IJsonConverter &converter = concrete;
 
     std::string json =
@@ -361,7 +383,7 @@ void test_sensor_type_json_round_trip(void) {
 // The fields persist on SensorEntity so the duplicate-resolution path keeps them
 // across the repository round-trip.
 void test_sensor_entity_json_round_trip(void) {
-    JsonConverter concrete;
+    ArduinoJsonConverter concrete;
     IJsonConverter &converter = concrete;
 
     SensorEntity sensor;
@@ -387,10 +409,13 @@ void test_read_register_signed_int16(void) {
         std::vector<uint8_t> response;
         bool powered = false;
 
-        void begin(unsigned long) override {}
+        bool begun = false;
+
+        void begin(unsigned long baud) override { begun = (baud != 0); }
         void sendData(uint8_t *, uint8_t) override {}
 
         int readAvailable(uint8_t *buffer, size_t maxLength) override {
+            if (!begun) return 0;
             size_t n = response.size();
             if (n > maxLength) n = maxLength;
             for (size_t i = 0; i < n; i++) buffer[i] = response[i];
@@ -404,6 +429,10 @@ void test_read_register_signed_int16(void) {
         bool writeSingleRegister(int, int, uint16_t) override { return true; }
         bool powerOnPort() override { bool ch = !powered; powered = true; return ch; }
         bool powerOffPort() override { bool ch = powered; powered = false; return ch; }
+        // No clock: a port it has put up is up for good.
+        PortPower powerRecord() const override { PortPower r; r.on = powered; return r; }
+        // A wire of its own: nothing else is plugged into this stand's line.
+        const void *wire() const override { return this; }
     };
 
     StaticResponseModbusRS485 fake;
@@ -413,6 +442,7 @@ void test_read_register_signed_int16(void) {
     std::vector<IModbusRS485 *> ports{ &fake };
     MockArduinoAdapter arduino;
     ModbusSensorReader reader(ports, arduino, nullptr, nullptr);
+    reader.init();
 
     ModbusRegisterConfig cfg;
     cfg.functionCode = 0x03;
@@ -439,6 +469,7 @@ void test_primary_write_confirms_after_power_cycle(void) {
     std::vector<IModbusRS485 *> ports{ &fake };
     MockArduinoAdapter arduino;
     ModbusSensorReader reader(ports, arduino, nullptr, nullptr);
+    reader.init();
 
     bool ok = reader.writeSensorAddress(10, 22, 0, 0x0200, 6, 0x0000, /*powerCycleToApply=*/true);
 
@@ -463,6 +494,7 @@ void test_primary_write_no_power_cycle_without_flag(void) {
     std::vector<IModbusRS485 *> ports{ &fake };
     MockArduinoAdapter arduino;
     ModbusSensorReader reader(ports, arduino, nullptr, nullptr);
+    reader.init();
 
     bool ok = reader.writeSensorAddress(10, 22, 0, 0x0200, 6, 0x0000, /*powerCycleToApply=*/false);
 
@@ -471,7 +503,7 @@ void test_primary_write_no_power_cycle_without_flag(void) {
 }
 
 void test_sensor_entity_json_round_trip_with_data_type(void) {
-    JsonConverter concrete;
+    ArduinoJsonConverter concrete;
     IJsonConverter &converter = concrete;
 
     SensorEntity sensor;
@@ -501,7 +533,7 @@ void test_sensor_entity_json_round_trip_with_data_type(void) {
 }
 
 void test_sensor_entity_json_defaults_data_type_to_uint16(void) {
-    JsonConverter concrete;
+    ArduinoJsonConverter concrete;
     IJsonConverter &converter = concrete;
 
     std::string json =
@@ -517,9 +549,9 @@ void test_sensor_entity_json_defaults_data_type_to_uint16(void) {
     TEST_ASSERT_TRUE(sensor.modbusRegisterConfigs[0].dataType == ModbusDataType::U16);
 }
 
-// The hardware parses the sensor model catalog with ArduinoJsonConverter, so
-// the addressing fields and dataType must be covered through it, not only
-// through the test-side JsonConverter.
+// The catalog reaches the module as a sensor model, not as a sensor record, and
+// the two are read by different methods - so the addressing fields and dataType
+// are covered through the model as well as through the record above.
 void test_sensor_type_arduino_json_round_trip(void) {
     ArduinoJsonConverter converter;
 
@@ -600,6 +632,141 @@ void test_sensor_entity_arduino_json_round_trip_with_flags(void) {
     TEST_ASSERT_TRUE(parsed.modbusRegisterConfigs[0].dataType == ModbusDataType::S16);
 }
 
+// The broadcast half of the address write reaches the Modbus reader with every field of the model
+// that decides what goes on the wire: the port, the new address, the register the model keeps its
+// address in, its write code, its ping register and whether it needs a power cycle to apply it.
+void test_sensor_reader_forwards_the_broadcast_write_fields(void) {
+    class RecordingBroadcastReader : public IModbusSensorReader {
+    public:
+        bool called = false;
+        int newAddress = -1;
+        int portIndex = -1;
+        uint16_t storeRegister = 0;
+        uint8_t writeCommand = 0;
+        uint16_t pingRegister = 0;
+        bool powerCycleToApply = false;
+
+        void init(unsigned long) override {}
+        bool readRegister(uint8_t, const ModbusRegisterConfig &, float &, int) override { return false; }
+        bool pingAddress(uint8_t, const ModbusRegisterConfig &, int) override { return false; }
+        bool writeSensorAddress(int, int, int, uint16_t, uint8_t, uint16_t, bool) override { return false; }
+        bool writeAddressByBroadcast(int address, int port, uint16_t store, uint8_t command,
+                                     uint16_t ping, bool powerCycle) override {
+            called = true;
+            newAddress = address;
+            portIndex = port;
+            storeRegister = store;
+            writeCommand = command;
+            pingRegister = ping;
+            powerCycleToApply = powerCycle;
+            return true;
+        }
+        bool powerOnPort(int) override { return false; }
+        bool powerOffPort(int) override { return false; }
+        PortPower portPower(int) override { PortPower r; r.on = true; return r; }
+        bool sharesAWire(int portIndex, int otherPortIndex) const override { return portIndex == otherPortIndex; }
+        bool writeHoldingRegister(uint8_t, uint16_t, uint16_t, int) override { return false; }
+        bool readHoldingRegister(uint8_t, uint16_t, uint16_t &, int) override { return false; }
+    };
+
+    RecordingBroadcastReader modbusReader;
+    MockArduinoAdapter arduino;
+    SensorReader sensorReader(nullptr, &modbusReader, &arduino, nullptr, nullptr);
+
+    SensorEntity sensor;
+    sensor.protocol = "ModBus";
+    sensor.pin = 2;
+    sensor.modbusDeviceAddress = 255;
+    sensor.modbusPingAddress = 0x0009;
+    sensor.registerToStoreModbusDeviceAddress = 0x00FF;
+    sensor.writeRegistersCommand = 6;
+    sensor.applyAddressAfterPowerCycle = true;
+
+    TEST_ASSERT_TRUE(sensorReader.writeSensorAddressByBroadcast(sensor, 0x72));
+
+    TEST_ASSERT_TRUE(modbusReader.called);
+    TEST_ASSERT_EQUAL_INT(0x72, modbusReader.newAddress);
+    TEST_ASSERT_EQUAL_INT(2, modbusReader.portIndex);
+    TEST_ASSERT_EQUAL_UINT16(0x00FF, modbusReader.storeRegister);
+    TEST_ASSERT_EQUAL_UINT8(6, modbusReader.writeCommand);
+    TEST_ASSERT_EQUAL_UINT16(0x0009, modbusReader.pingRegister);
+    TEST_ASSERT_TRUE(modbusReader.powerCycleToApply);
+}
+
+// A model that writes its address with FC06: the first write goes to 0x00, single-register, into
+// the model's own register, and the ping that verifies it reads the model's ping register.
+void test_broadcast_write_fc06_writes_the_model_register_to_address_zero(void) {
+    FakeModbusRS485 fake;
+    fake.respondAddressAfterWrites = 0x70;
+    fake.respondAfterWriteCount = 1;
+    std::vector<IModbusRS485 *> ports{ &fake };
+    MockArduinoAdapter arduino;
+    ModbusSensorReader reader(ports, arduino, nullptr, nullptr);
+    reader.init();
+
+    bool ok = reader.writeAddressByBroadcast(0x70, 0, 0x00FF, 6, 0x0009);
+
+    TEST_ASSERT_TRUE(ok);
+    TEST_ASSERT_EQUAL_INT(1, (int)fake.writes.size());
+    TEST_ASSERT_FALSE(fake.writes[0].multi);
+    TEST_ASSERT_EQUAL_INT(0x00, fake.writes[0].slave);
+    TEST_ASSERT_EQUAL_INT(0x00FF, fake.writes[0].reg);
+    TEST_ASSERT_EQUAL_UINT16(0x70, fake.writes[0].value);
+
+    const auto *ping = fake.firstFrameWithFunctionCode(0x03);
+    TEST_ASSERT_NOT_NULL(ping);
+    TEST_ASSERT_EQUAL_UINT8(0x70, ping->bytes[0]);
+    TEST_ASSERT_EQUAL_UINT8(0x00, ping->bytes[2]);
+    TEST_ASSERT_EQUAL_UINT8(0x09, ping->bytes[3]);
+}
+
+// The same for a model that applies a new address only after a power cycle: the port is cycled
+// and the address pinged again before the write is given up on - and it is not cycled for a model
+// that does not say so.
+void test_broadcast_write_power_cycles_only_the_model_that_asks(void) {
+    for (int flag = 0; flag < 2; flag++) {
+        FakeModbusRS485 fake;
+        fake.respondingAddresses.insert(0x70);
+        fake.requiresSecondPowerOn = true;
+        std::vector<IModbusRS485 *> ports{ &fake };
+        MockArduinoAdapter arduino;
+        ModbusSensorReader reader(ports, arduino, nullptr, nullptr);
+        reader.init();
+        reader.powerOnPort(0);
+
+        bool ok = reader.writeAddressByBroadcast(0x70, 0, 0x00FF, 6, 0x0000, flag == 1);
+
+        if (flag == 1) {
+            TEST_ASSERT_TRUE(ok);
+            TEST_ASSERT_EQUAL_INT(2, fake.powerOnCount);
+            TEST_ASSERT_EQUAL_INT(1, (int)fake.writes.size());
+        } else {
+            TEST_ASSERT_EQUAL_INT(1, fake.powerOnCount);
+            TEST_ASSERT_TRUE(fake.writes.size() > 1);
+        }
+    }
+}
+
+// A model with no write code of its own goes straight to the blind sequence: FC06 to register 0
+// first.
+void test_broadcast_write_without_a_write_code_starts_blind(void) {
+    FakeModbusRS485 fake;
+    std::vector<IModbusRS485 *> ports{ &fake };
+    MockArduinoAdapter arduino;
+    ModbusSensorReader reader(ports, arduino, nullptr, nullptr);
+    reader.init();
+
+    bool ok = reader.writeAddressByBroadcast(0x71, 0, 0x00FF, 0, 0x0000);
+
+    TEST_ASSERT_FALSE(ok);
+    TEST_ASSERT_EQUAL_INT(6, (int)fake.writes.size());
+    TEST_ASSERT_FALSE(fake.writes[0].multi);
+    TEST_ASSERT_EQUAL_INT(0x00, fake.writes[0].slave);
+    TEST_ASSERT_EQUAL_INT(0x0000, fake.writes[0].reg);
+    TEST_ASSERT_TRUE(fake.writes[1].multi);
+    TEST_ASSERT_EQUAL_INT(0x0001, fake.writes[1].reg);
+}
+
 extern "C" int run_modbus_address_registers_tests(void) {
     RUN_TEST(test_primary_write_fc16_uses_configured_register_and_current_address);
     RUN_TEST(test_primary_write_fc06_uses_single_register);
@@ -608,6 +775,10 @@ extern "C" int run_modbus_address_registers_tests(void) {
     RUN_TEST(test_zero_fields_skip_primary_and_use_legacy);
     RUN_TEST(test_scan_ping_uses_configured_ping_register);
     RUN_TEST(test_sensor_reader_forwards_addressing_fields_and_power_cycle_flag);
+    RUN_TEST(test_sensor_reader_forwards_the_broadcast_write_fields);
+    RUN_TEST(test_broadcast_write_fc06_writes_the_model_register_to_address_zero);
+    RUN_TEST(test_broadcast_write_power_cycles_only_the_model_that_asks);
+    RUN_TEST(test_broadcast_write_without_a_write_code_starts_blind);
     RUN_TEST(test_non_modbus_sensor_does_not_write_address);
     RUN_TEST(test_sensor_type_json_round_trip);
     RUN_TEST(test_sensor_entity_json_round_trip);

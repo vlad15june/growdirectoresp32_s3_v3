@@ -4,7 +4,7 @@
 #include <map>
 #include "Infrastructure/Adapters/SPIFFS/SpiffsSensorTypeDao.h"
 #include "Mock/Infrastructure/SPIFFS/MockSpiffsAdapter.h"
-#include "Infrastructure/Adapters/Json/JsonConverter.h"
+#include "Infrastructure/Adapters/Json/ArduinoJsonConverter.h"
 #include "Mock/Infrastructure/Logging/MockLogger.h"
 #include "Mock/Infrastructure/Logging/MockDebugSystem.h"
 #include "Core/Domain/Data/Entities/Sensor/SensorType.h"
@@ -13,7 +13,7 @@
 
 // Test fixtures
 static MockSpiffsAdapter* mockSpiffsAdapter;
-static JsonConverter* jsonConverter;
+static ArduinoJsonConverter* jsonConverter;
 static MockLogger* mockLogger;
 static MockDebugSystem* mockDebugSystem;
 static SpiffsSensorTypeDao* dao;
@@ -46,7 +46,7 @@ static SensorType createTestSensorType(const std::string& uid, const std::string
 
 void setUp_spiffs_sensor_type_dao(void) {
     mockSpiffsAdapter = new MockSpiffsAdapter();
-    jsonConverter = new JsonConverter();
+    jsonConverter = new ArduinoJsonConverter();
     mockLogger = new MockLogger();
     mockDebugSystem = new MockDebugSystem();
     
@@ -368,7 +368,49 @@ void test_spiffs_sensor_type_dao_spiffs_failure(void) {
 
 
 // Export test runner function
+// The converter says "parsed, empty" for an empty list, and this DAO is the caller that
+// must not notice. Its jsonToEntities() answers "there is at least one sensor type in
+// this file", and SpiffsDao::getAll() passes that on as its own result; an empty stored catalog
+// answers false and has to keep answering false.
+//
+// Without this test the claim is a comment. A mutation that maps the "parsed, empty" outcome
+// to a successful load passes the whole suite otherwise - which is how the neighbouring path gets
+// broken while the reported one gets fixed.
+void test_spiffs_sensor_type_dao_an_empty_stored_catalog_is_not_a_successful_load(void) {
+    setUp_spiffs_sensor_type_dao();
+
+    std::vector<SensorType> none;
+    dao->saveAll(none); // writes "[]"
+
+    std::vector<SensorType> retrieved;
+    const bool result = dao->getAll(retrieved);
+
+    TEST_ASSERT_FALSE_MESSAGE(result,
+                              "an empty stored catalog started reporting a successful load - the "
+                              "storage path changed meaning, which the converter change was not "
+                              "allowed to do");
+    TEST_ASSERT_EQUAL(0, retrieved.size());
+
+    tearDown_spiffs_sensor_type_dao();
+}
+
+// The other side of the same guard, so the assertion above cannot be satisfied by always failing.
+void test_spiffs_sensor_type_dao_a_stored_catalog_with_one_type_is_a_successful_load(void) {
+    setUp_spiffs_sensor_type_dao();
+
+    std::vector<SensorType> one = {createTestSensorType("only-1", "sensor1", SensorProtocol::MODBUS_PROTOCOL)};
+    dao->saveAll(one);
+
+    std::vector<SensorType> retrieved;
+    TEST_ASSERT_TRUE(dao->getAll(retrieved));
+    TEST_ASSERT_EQUAL(1, retrieved.size());
+
+    tearDown_spiffs_sensor_type_dao();
+}
+
 extern "C" int run_spiffs_sensor_type_dao_tests(void) {
+    RUN_TEST(test_spiffs_sensor_type_dao_an_empty_stored_catalog_is_not_a_successful_load);
+    RUN_TEST(test_spiffs_sensor_type_dao_a_stored_catalog_with_one_type_is_a_successful_load);
     RUN_TEST(test_spiffs_sensor_type_dao_save_new);
     RUN_TEST(test_spiffs_sensor_type_dao_save_existing);
     RUN_TEST(test_spiffs_sensor_type_dao_get_by_id);

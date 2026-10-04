@@ -139,6 +139,12 @@ public:
           _debugSystem(debugSystem),
           _restartEventLog(restartEventLog) {}
 
+#ifdef PREVENTIVE_RESTART_DISABLED
+    // PREVENTIVE_RESTART_DISABLED takes the nightly restart out of the build: nothing is asked,
+    // nothing is written - neither the boot type nor the day marker in the settings sector - and
+    // no restart is requested, whoever calls this. Every other restart path is untouched.
+    void perform() {}
+#else
     void perform() {
         if (!_moduleConfig || !_timeAdapter) {
             return;
@@ -193,6 +199,7 @@ public:
         markRestartedToday(localTime);
         triggerRestart();
     }
+#endif // PREVENTIVE_RESTART_DISABLED
 };
 
 #endif // PREVENTIVE_RESTART_USE_CASE_H

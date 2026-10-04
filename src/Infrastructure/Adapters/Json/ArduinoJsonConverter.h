@@ -2,6 +2,7 @@
 
 #include "Core/Domain/Interfaces/Adapters/Json/IJsonConverter.h"
 #include "Core/Domain/Data/Entities/WifiNetworkEntry.h"
+#include "Core/Domain/Diagnostics/MalformedJsonNumberCounter.h"
 #include "Application/DTOs/UpdateDto.h"
 #include "Application/DTOs/CommandDto.h"
 #include "Application/DTOs/CommandResultDto.h"
@@ -13,10 +14,83 @@
 #include "Core/Domain/Enums/SensorStatusEnum.h"
 #include <ArduinoJson.h>
 #include "Infrastructure/Adapters/Json/JsonMemoryPool.h"
+#include "Infrastructure/Adapters/Json/RuleStreamReader.h"
+#include "Infrastructure/Adapters/Json/SensorStreamReader.h"
+#include "Infrastructure/Adapters/Json/SensorTypeStreamReader.h"
 
 class ArduinoJsonConverter : public IJsonConverter
 {
 private:
+    /**
+     * @brief Document capacity for reading one rule, from the length of its text.
+     *
+     * A parsed rule costs its text again in slots and copied strings - measured at 1.9 to 2.5
+     * times the text across the shapes a rule takes, worst for the short ones. Three times it,
+     * plus a constant, covers every shape with room; the floor is what an ordinary rule of 600 to
+     * 700 bytes has always been given, so nothing changes for the rules a module has.
+     *
+     * The size of a rule is what decides this, not the number of rules: a schedule of forty
+     * windows is one rule the module accepts and therefore one it has to be able to read back,
+     * whatever else is in the file with it.
+     */
+    static size_t ruleReadCapacity(size_t textBytes)
+    {
+        const size_t derived = 512 + 3 * textBytes;
+        return derived < 4096 ? 4096 : derived;
+    }
+
+    /**
+     * @brief Document capacity for writing one rule, from what the rule holds.
+     *
+     * The mirror of ruleReadCapacity() on a side that cannot measure the text first: the members
+     * are counted instead, at rates well above what each costs (measured: ~115 bytes per schedule
+     * window, ~295 per condition). A document too small does not fail here - ArduinoJson drops
+     * what does not fit and serializes the rest - so a schedule would silently lose windows on
+     * the way to flash, which is why this is generous and why every shape is round-tripped by a
+     * test.
+     */
+    static size_t ruleWriteCapacity(const Rule &rule)
+    {
+        size_t bytes = 1024;
+        bytes += rule.uid.size() + rule.deviceUid.size() + rule.sensorUid.size() +
+                 rule.workflowUid.size() + rule.dependsOnRuleUid.size() +
+                 rule.modeReason.size() + rule.errorType.size();
+        bytes += 64 * (rule.daysOfWeek.size() + rule.daysOfMonth.size());
+        bytes += 256 * rule.schedule.size();
+        bytes += 256 * rule.advancedRuleValues.size();
+        for (size_t i = 0; i < rule.conditions.size(); i++)
+        {
+            bytes += 384 + 128 * rule.conditions[i].sensorUids.size();
+        }
+        return bytes < 4096 ? 4096 : bytes;
+    }
+
+    /**
+     * @brief The number a key carries, or `defaultValue` when what stands in its place is not one.
+     *
+     * The value is ArduinoJson's own `variant | defaultValue` - the same reading, unchanged; what
+     * is added is the trace. A key that is absent, or explicitly null, is a record an older build
+     * wrote or a field the sender left out: its default is the answer and not an event, or every
+     * such record would be reported as damaged for as long as it is stored. A key that is there
+     * and holds something else - a word, a quoted number, a list - costs that field and nothing
+     * else, and the price of carrying on is a value nobody configured standing in a record that
+     * looks intact. That is what the count is for: a channel scaled by a default multiplier, or a
+     * pump switching at a default threshold, says so here and nowhere else.
+     */
+    template <typename T, typename TVariant>
+    static T numberOr(const TVariant &value, T defaultValue)
+    {
+        if (value.template is<T>())
+        {
+            return value.template as<T>();
+        }
+        if (!value.isNull())
+        {
+            MalformedJsonNumberCounter::record();
+        }
+        return defaultValue;
+    }
+
     // Helper function to parse ISO 8601 time string to time_t
     time_t parseISOTimeToTimeT(const std::string& isoTimeStr) {
         if (isoTimeStr.length() < 19) return 0; // Invalid format
@@ -94,8 +168,8 @@ public:
         moduleStructure.firmware = doc["firmware"] | "";
         moduleStructure.email = doc["email"] | "";
         moduleStructure.accountUid = doc["accountUid"] | "";
-        moduleStructure.latitude = doc["lat"] | 0.0;
-        moduleStructure.longitude = doc["lng"] | 0.0;
+        moduleStructure.latitude = numberOr(doc["lat"], 0.0);
+        moduleStructure.longitude = numberOr(doc["lng"], 0.0);
 
         moduleStructure.nodes.clear();
         if (doc.containsKey("nodes"))
@@ -113,7 +187,7 @@ public:
                 node.ssid = nodeObj["ssid"] | "";
                 node.ip = nodeObj["ip"] | "";
                 node.chip = nodeObj["chip"] | "S3";
-                node.board = nodeObj["board"] | 0;
+                node.board = numberOr(nodeObj["board"], 0);
 
                 node.sensors.clear();
                 if (nodeObj.containsKey("sensors"))
@@ -123,8 +197,8 @@ public:
                         Sensor sensor;
                         sensor.uid = sensorObj["uid"] | "";
                         sensor.type = sensorObj["type"] | "";
-                        sensor.pin = convertPinFromJson(sensorObj["pin"] | 0);
-                        sensor.group = sensorObj["group"] | 0;
+                        sensor.pin = convertPinFromJson(numberOr(sensorObj["pin"], 0));
+                        sensor.group = numberOr(sensorObj["group"], 0);
                         sensor.modelUid = sensorObj["modelUid"] | "";
                         node.sensors.push_back(sensor);
                     }
@@ -137,7 +211,7 @@ public:
                     {
                         Relay relay;
                         relay.uid = relayObj["uid"] | "";
-                        relay.pin = relayObj["pin"] | 0;
+                        relay.pin = numberOr(relayObj["pin"], 0);
                         node.relays.push_back(relay);
                     }
                 }
@@ -149,7 +223,7 @@ public:
                     {
                         Pump pump;
                         pump.uid = pumpObj["uid"] | "";
-                        pump.pin = pumpObj["pin"] | 0;
+                        pump.pin = numberOr(pumpObj["pin"], 0);
                         node.pumps.push_back(pump);
                     }
                 }
@@ -259,6 +333,15 @@ public:
         doc["psramFree"] = diagnosticData.psramFree;
         doc["failsInHour"] = diagnosticData.failsInHour;
 
+        // Present only once the module has come back from an outage since the boot.
+        if (!diagnosticData.lastOutageCause.empty())
+        {
+            JsonObject lastOutage = doc.createNestedObject("lastOutage");
+            lastOutage["cause"] = diagnosticData.lastOutageCause;
+            lastOutage["startUptimeMs"] = diagnosticData.lastOutageStartUptimeMs;
+            lastOutage["durationMs"] = diagnosticData.lastOutageDurationMs;
+        }
+
         std::string output;
         serializeJson(doc, output);
         return output;
@@ -266,18 +349,18 @@ public:
 
     bool ruleFromJson(const std::string &jsonStr, Rule &rule) override
     {
-        PooledJsonDocument doc(4096);
+        PooledJsonDocument doc(ruleReadCapacity(jsonStr.size()));
         DeserializationError error = deserializeJson(doc, jsonStr);
         if (error)
             return false;
 
         // Common properties
         rule.uid = doc["uid"] | "";
-        rule.version = doc["version"] | 0;
+        rule.version = numberOr(doc["version"], 0);
         rule.workflowUid = doc["workflowUid"] | "";
-        rule.workflowVersion = doc["workflowVersion"] | 0;
-        rule.workflowDisplayOrder = doc["workflowDisplayOrder"] | 0;
-        rule.workflowPriority = doc["workflowPriority"] | 0;
+        rule.workflowVersion = numberOr(doc["workflowVersion"], 0);
+        rule.workflowDisplayOrder = numberOr(doc["workflowDisplayOrder"], 0);
+        rule.workflowPriority = numberOr(doc["workflowPriority"], 0);
         rule.dependsOnRuleUid = doc["dependsOnRuleUid"] | "";
         rule.deviceUid = doc["deviceUid"] | "";
 
@@ -409,12 +492,12 @@ public:
 
                     if (rule.isStepRule())
                     {
-                        condition.valueTarget = condObj["valueTarget"] | 0.0;
+                        condition.valueTarget = numberOr(condObj["valueTarget"], 0.0);
                     }
                     else
                     {
-                        condition.valueLow = condObj["valueLow"] | 0.0;
-                        condition.valueHigh = condObj["valueHigh"] | 0.0;
+                        condition.valueLow = numberOr(condObj["valueLow"], 0.0);
+                        condition.valueHigh = numberOr(condObj["valueHigh"], 0.0);
                     }
 
                     // Parse direction
@@ -457,17 +540,17 @@ public:
         // Step rule specific properties
         if (rule.isStepRule())
         {
-            rule.valueTarget = doc["valueTarget"] | 0.0;
-            rule.valueLow = doc["valueLow"] | 0.0;
-            rule.valueHigh = doc["valueHigh"] | 0.0;
+            rule.valueTarget = numberOr(doc["valueTarget"], 0.0);
+            rule.valueLow = numberOr(doc["valueLow"], 0.0);
+            rule.valueHigh = numberOr(doc["valueHigh"], 0.0);
 
             if (doc.containsKey("cyclesToSetPoint") && !doc["cyclesToSetPoint"].isNull())
             {
                 rule.cyclesToSetPoint = doc["cyclesToSetPoint"].as<int>();
             }
 
-            rule.workingTime = doc["workingTime"] | 0;
-            rule.waitingTime = doc["waitingTime"] | 0;
+            rule.workingTime = numberOr(doc["workingTime"], 0);
+            rule.waitingTime = numberOr(doc["waitingTime"], 0);
         }
 
         // Loop / ph / ec working-cycle properties
@@ -475,8 +558,8 @@ public:
             rule.ruleType == RuleType::PH ||
             rule.ruleType == RuleType::EC)
         {
-            rule.workingTime = doc["workingTime"] | 0;
-            rule.waitingTime = doc["waitingTime"] | 0;
+            rule.workingTime = numberOr(doc["workingTime"], 0);
+            rule.waitingTime = numberOr(doc["waitingTime"], 0);
 
             if (doc.containsKey("cyclesToSetPoint") && !doc["cyclesToSetPoint"].isNull())
             {
@@ -489,16 +572,16 @@ public:
             rule.ruleType == RuleType::PH ||
             rule.ruleType == RuleType::EC)
         {
-            rule.valueLow = doc["valueLow"] | 0.0;
-            rule.valueHigh = doc["valueHigh"] | 0.0;
+            rule.valueLow = numberOr(doc["valueLow"], 0.0);
+            rule.valueHigh = numberOr(doc["valueHigh"], 0.0);
         }
 
         // Sensor rule specific properties
         if (rule.isSensorRule())
         {
-            rule.valueLow = doc["valueLow"] | 0.0;
-            rule.valueHigh = doc["valueHigh"] | 0.0;
-            rule.timeToSetPoint = doc["timeToSetPoint"] | 0;
+            rule.valueLow = numberOr(doc["valueLow"], 0.0);
+            rule.valueHigh = numberOr(doc["valueHigh"], 0.0);
+            rule.timeToSetPoint = numberOr(doc["timeToSetPoint"], 0);
             rule.isAdvanced = doc["isAdvanced"] | false;
 
             // Parse advanced rule values
@@ -510,7 +593,7 @@ public:
                     AdvancedRuleValue val;
                     // TODO: Parse time properly
                     val.time = 0;
-                    val.value = valObj["value"] | 0.0;
+                    val.value = numberOr(valObj["value"], 0.0);
                     rule.advancedRuleValues.push_back(val);
                 }
             }
@@ -527,7 +610,7 @@ public:
                     ScheduleItem item;
                     std::string startAtStr = schedObj["startAt"] | "";
                     item.startAt = parseISOTimeToTimeT(startAtStr);
-                    item.duration = schedObj["duration"] | 0;
+                    item.duration = numberOr(schedObj["duration"], 0);
                     rule.schedule.push_back(item);
                 }
             }
@@ -538,7 +621,7 @@ public:
 
     std::string ruleToJson(const Rule &rule) override
     {
-        PooledJsonDocument doc(4096);
+        PooledJsonDocument doc(ruleWriteCapacity(rule));
 
         // Common properties
         doc["uid"] = rule.uid;
@@ -570,13 +653,16 @@ public:
         else if (rule.ruleType == RuleType::DIMMER_MANUAL)
             doc["ruleType"] = "dimmer_manual";
 
-        // Mode
+        // Mode. The last branch is RULE_MODE_WAITING_FOR_USER_CONFIRM - the only other value the
+        // enum has - and it is the mode a protective shutdown puts a rule in locally, so it has
+        // to come back as itself: it is what holds the rule out of the active set until the user
+        // confirms. The word is the one both readers here and the server already use.
         if (rule.mode == RuleMode::ON)
             doc["mode"] = "On";
         else if (rule.mode == RuleMode::OFF)
             doc["mode"] = "Off";
         else
-            doc["mode"] = "Auto";
+            doc["mode"] = "WaitingForUserConfirm";
 
         if (!rule.modeReason.empty())
         {
@@ -777,53 +863,49 @@ public:
         return output;
     }
 
-    bool rulesFromJson(const std::string &jsonStr, std::vector<Rule> &rules) override
+    JsonListParse rulesFromJson(const std::string &jsonStr, std::vector<Rule> &rules) override
     {
-        PooledJsonDocument doc(16384); // Larger capacity for array
-        DeserializationError error = deserializeJson(doc, jsonStr);
-        if (error)
-            return false;
-
         rules.clear();
-        for (JsonObject ruleObj : doc.as<JsonArray>())
-        {
-            Rule rule;
 
-            // Copy to a separate document for individual processing
-            PooledJsonDocument ruleDoc(4096);
-            JsonObject destObj = ruleDoc.to<JsonObject>();
-
-            // Copy all properties from the array element
-            for (JsonPair kv : ruleObj)
-            {
-                destObj[kv.key()] = kv.value();
-            }
-
-            // Serialize and then parse this single rule
-            std::string ruleJson;
-            serializeJson(ruleDoc, ruleJson);
-
-            if (ruleFromJson(ruleJson, rule))
-            {
-                rules.push_back(rule);
-            }
-        }
-
-        return !rules.empty();
+        // One rule at a time, whether the list came off the socket or out of the rule file: the
+        // reader cuts the array into its objects and each one is parsed on its own, so the length
+        // of the list decides neither what reading it costs nor whether it can be read.
+        // Read without the module's intake limits: this reads the module's own rule file as well
+        // as any list handed over as a string, and the file holds what the module itself wrote -
+        // in the stored form, which is larger than the form the intake limit is measured on.
+        RuleStreamReader reader(*this, rules);
+        reader.feed(jsonStr.data(), jsonStr.size());
+        return reader.finish();
     }
 
     std::string rulesToJson(const std::vector<Rule> &rules) override
     {
-        PooledJsonDocument doc(16384); // Larger capacity for array
-        JsonArray rulesArr = doc.to<JsonArray>();
-
-        for (const Rule &rule : rules)
+        // The array is the rules with commas between them, built into a string of exactly the
+        // size they come to. Assembling it in a JSON document instead would put a second copy of
+        // the whole rule set in the document's pool and stop at whatever that document holds,
+        // which on the writing side means a rule set the module cannot store whole.
+        size_t exactSize = 2; // '[' and ']'
+        for (size_t i = 0; i < rules.size(); i++)
         {
-            rulesArr.add(serialized(ruleToJson(rule)));
+            if (i > 0)
+            {
+                exactSize += 1; // ','
+            }
+            exactSize += ruleToJson(rules[i]).size();
         }
 
         std::string output;
-        serializeJson(doc, output);
+        output.reserve(exactSize);
+        output += "[";
+        for (size_t i = 0; i < rules.size(); i++)
+        {
+            if (i > 0)
+            {
+                output += ",";
+            }
+            output += ruleToJson(rules[i]);
+        }
+        output += "]";
         return output;
     }
 
@@ -967,11 +1049,11 @@ public:
         if (commandDto.isDeviceCommand())
         {
             commandDto.deviceUid = doc["deviceUid"] | "";
-            commandDto.commandId = doc["commandId"] | 0;
+            commandDto.commandId = numberOr(doc["commandId"], 0);
             commandDto.requestedState = doc["requestedState"] | "";
             commandDto.needToSwitchBack = doc["needToSwitchBack"] | false;
-            commandDto.secondsToSwitchBack = doc["secondsToSwitchBack"] | 0;
-            commandDto.analogControlPinValue = doc["analogControlPinValue"] | 0;
+            commandDto.secondsToSwitchBack = numberOr(doc["secondsToSwitchBack"], 0);
+            commandDto.analogControlPinValue = numberOr(doc["analogControlPinValue"], 0);
             commandDto.switchType = doc["switchType"] | "";
             commandDto.createdDate = doc["createdDate"] | "";
             commandDto.status = doc["status"] | "";
@@ -1203,13 +1285,13 @@ public:
         if (error)
             return false;
 
-        commandDto.id = doc["id"] | 0;
+        commandDto.id = numberOr(doc["id"], 0);
         commandDto.uid = doc["uid"] | "";
         commandDto.requestedState = doc["requestedState"] | "";
-        commandDto.analogControlPinValue = doc["analogControlPinValue"] | 0;
+        commandDto.analogControlPinValue = numberOr(doc["analogControlPinValue"], 0);
         commandDto.status = doc["status"] | "";
         commandDto.needToSwitchBack = doc["needToSwitchBack"] | false;
-        commandDto.secondsToSwitchBack = doc["secondsToSwitchBack"] | 0;
+        commandDto.secondsToSwitchBack = numberOr(doc["secondsToSwitchBack"], 0);
         commandDto.switchType = doc["switchType"] | "";
         commandDto.errorMessage = doc["errorMessage"] | "";
         commandDto.createdDate = doc["createdDate"] | "";
@@ -1279,13 +1361,13 @@ public:
             for (JsonObject commandObj : doc.as<JsonArray>())
             {
                 DeviceCommandDto command;
-                command.id = commandObj["id"] | 0;
+                command.id = numberOr(commandObj["id"], 0);
                 command.uid = commandObj["uid"] | "";
                 command.requestedState = commandObj["requestedState"] | "";
-                command.analogControlPinValue = commandObj["analogControlPinValue"] | 0;
+                command.analogControlPinValue = numberOr(commandObj["analogControlPinValue"], 0);
                 command.status = commandObj["status"] | "";
                 command.needToSwitchBack = commandObj["needToSwitchBack"] | false;
-                command.secondsToSwitchBack = commandObj["secondsToSwitchBack"] | 0;
+                command.secondsToSwitchBack = numberOr(commandObj["secondsToSwitchBack"], 0);
                 command.switchType = commandObj["switchType"] | "";
                 command.errorMessage = commandObj["errorMessage"] | "";
                 command.createdDate = commandObj["createdDate"] | "";
@@ -1348,7 +1430,16 @@ public:
 
     std::string ruleStateUpdateToJson(const RuleStateUpdateDto& ruleStateUpdate) override
     {
-        PooledJsonDocument doc(4096);
+        // Sized for the rules it is given, not for a number of them fixed here. This report names
+        // every rule of the snapshot the module was sent, and a rule the report leaves out is not
+        // a rule the server has no news about: the backend substitutes an error for it. So a
+        // document that runs out of room silently drops rules onto a path where a dropped rule is
+        // a failed rule. An entry is ~130 bytes of text plus its members' slots.
+        static const size_t REPORT_HEADER_BYTES = 512;
+        static const size_t REPORT_BYTES_PER_RULE = 320;
+
+        PooledJsonDocument doc(REPORT_HEADER_BYTES +
+                               REPORT_BYTES_PER_RULE * ruleStateUpdate.rules.size());
 
         doc["timestamp"] = ruleStateUpdate.timestamp;
         doc["status"] = ruleStateUpdate.status;
@@ -1447,7 +1538,7 @@ public:
             {
                 RuleStateDto ruleState;
                 ruleState.uid = ruleObj["uid"] | "";
-                ruleState.version = ruleObj["version"] | 0;
+                ruleState.version = numberOr(ruleObj["version"], 0);
                 ruleState.state = ruleObj["state"] | "Synchronized";
                 ruleState.mode = ruleObj["mode"] | "Off";
                 ruleState.modeReason = ruleObj["modeReason"] | "";
@@ -1474,24 +1565,24 @@ public:
         sensor.createdAt = doc["createdAt"] | "";
         sensor.isActive = doc["isActive"] | true;
         sensor.isError = doc["isError"] | false;
-        sensor.pin = doc["pin"] | -1;
+        sensor.pin = numberOr(doc["pin"], -1);
         
         std::string statusStr = doc["status"] | "new";
         sensor.status = getSensorStatusFromString(statusStr);
         
-        sensor.modbusDeviceAddress = doc["modbusDeviceAddress"] | 1;
-        sensor.baudRate = doc["baudRate"] | 9600;
-        sensor.modbusPingAddress = doc["modbusPingAddress"] | 0;
-        sensor.registerToStoreModbusDeviceAddress = doc["registerToStoreModbusDeviceAddress"] | 0;
-        sensor.writeRegistersCommand = doc["writeRegistersCommand"] | 0;
+        sensor.modbusDeviceAddress = numberOr(doc["modbusDeviceAddress"], 1);
+        sensor.baudRate = numberOr(doc["baudRate"], 9600);
+        sensor.modbusPingAddress = numberOr(doc["modbusPingAddress"], 0);
+        sensor.registerToStoreModbusDeviceAddress = numberOr(doc["registerToStoreModbusDeviceAddress"], 0);
+        sensor.writeRegistersCommand = numberOr(doc["writeRegistersCommand"], 0);
         sensor.applyAddressAfterPowerCycle = doc["applyAddressAfterPowerCycle"] | false;
         sensor.i2cAddress = doc["i2cAddress"] | "";
         sensor.chipType = doc["chipType"] | "";
         
-        sensor.currentValue = doc["currentValue"] | 0.0f;
-        sensor.lastReadTime = doc["lastReadTime"] | 0;
+        sensor.currentValue = numberOr(doc["currentValue"], 0.0f);
+        sensor.lastReadTime = numberOr(doc["lastReadTime"], 0);
         
-        sensor.sensorTypeId = doc["sensorTypeId"] | 0;
+        sensor.sensorTypeId = numberOr(doc["sensorTypeId"], 0);
         sensor.sensorTypeUid = doc["sensorTypeUid"] | "";
 
         // Note: channelValues are now handled by SensorValueModel, not stored in SensorEntity
@@ -1503,16 +1594,16 @@ public:
             for (JsonObject configObj : doc["modbusRegisterConfigs"].as<JsonArray>())
             {
                 ModbusRegisterConfig config;
-                config.functionCode = configObj["functionCode"] | 3;
-                config.startRegister = configObj["startRegister"] | 0;
-                config.numRegisters = configObj["numRegisters"] | 1;
-                config.multiplier = configObj["multiplier"] | 1.0f;
-                config.offset = configObj["offset"] | 0.0f;
+                config.functionCode = numberOr(configObj["functionCode"], 3);
+                config.startRegister = numberOr(configObj["startRegister"], 0);
+                config.numRegisters = numberOr(configObj["numRegisters"], 1);
+                config.multiplier = numberOr(configObj["multiplier"], 1.0f);
+                config.offset = numberOr(configObj["offset"], 0.0f);
                 config.channelName = configObj["channel_name"] | "";
-                config.channel = configObj["channel"] | 0;
+                config.channel = numberOr(configObj["channel"], 0);
                 config.sensorType = configObj["sensorType"] | "";
-                config.canConnectMinValue = configObj["canConnectMinValue"] | 0.0f;
-                config.canConnectMaxValue = configObj["canConnectMaxValue"] | 100.0f;
+                config.canConnectMinValue = numberOr(configObj["canConnectMinValue"], 0.0f);
+                config.canConnectMaxValue = numberOr(configObj["canConnectMaxValue"], 100.0f);
                 config.dataType = modbusDataTypeFromString(configObj["dataType"] | "u16");
                 sensor.modbusRegisterConfigs.push_back(config);
             }
@@ -1525,12 +1616,12 @@ public:
             for (JsonObject configObj : doc["i2cRegisterConfigs"].as<JsonArray>())
             {
                 I2CRegisterConfig config;
-                config.registerAddr = configObj["register"] | 0;
-                config.length = configObj["length"] | 1;
-                config.multiplier = configObj["multiplier"] | 1.0f;
-                config.offset = configObj["offset"] | 0.0f;
+                config.registerAddr = numberOr(configObj["register"], 0);
+                config.length = numberOr(configObj["length"], 1);
+                config.multiplier = numberOr(configObj["multiplier"], 1.0f);
+                config.offset = numberOr(configObj["offset"], 0.0f);
                 config.channelName = configObj["channel_name"] | "";
-                config.channel = configObj["channel"] | 0;
+                config.channel = numberOr(configObj["channel"], 0);
                 config.sensorType = configObj["sensorType"] | "";
                 sensor.i2cRegisterConfigs.push_back(config);
             }
@@ -1615,51 +1706,64 @@ public:
 
     bool sensorsFromJson(const std::string &jsonStr, std::vector<SensorEntity> &sensors) override
     {
-        PooledJsonDocument doc(16384); // Larger capacity for array
-        DeserializationError error = deserializeJson(doc, jsonStr);
-        if (error)
-            return false;
+        size_t skipped = 0;
+        size_t refused = 0;
+        return sensorsFromJson(jsonStr, sensors, skipped, refused);
+    }
 
+    bool sensorsFromJson(const std::string &jsonStr, std::vector<SensorEntity> &sensors,
+                         size_t &skipped, size_t &refused) override
+    {
         sensors.clear();
-        for (JsonObject sensorObj : doc.as<JsonArray>())
-        {
-            SensorEntity sensor;
 
-            // Copy to a separate document for individual processing
-            PooledJsonDocument sensorDoc(4096);
-            JsonObject destObj = sensorDoc.to<JsonObject>();
+        // One sensor at a time: the reader cuts the array into its records and each one is parsed
+        // on its own, so the number of sensors stored decides neither what reading the registry
+        // costs nor whether it can be read. A document holding the whole array stops at what that
+        // document holds, and a registry one sensor past it comes back empty.
+        SensorStreamReader reader(*this, sensors);
+        reader.feed(jsonStr.data(), jsonStr.size());
+        // The verdict is read for its effect and not for its value: a text this reader cannot make
+        // sense of leaves no sensors behind, and a text every record of which was skipped is not
+        // the same verdict but is the same answer here.
+        reader.finish();
 
-            // Copy all properties from the array element
-            for (JsonPair kv : sensorObj)
-            {
-                destObj[kv.key()] = kv.value();
-            }
+        skipped = reader.skippedCount();
+        refused = reader.refusedCount();
 
-            // Serialize and then parse this single sensor
-            std::string sensorJson;
-            serializeJson(sensorDoc, sensorJson);
-
-            if (sensorFromJson(sensorJson, sensor))
-            {
-                sensors.push_back(sensor);
-            }
-        }
-
+        // Unchanged: true has always meant "this text holds at least one sensor", and the storage
+        // path passes that on as its own result.
         return !sensors.empty();
     }
 
     std::string sensorsToJson(const std::vector<SensorEntity> &sensors) override
     {
-        PooledJsonDocument doc(16384); // Larger capacity for array
-        JsonArray sensorsArr = doc.to<JsonArray>();
-
-        for (const SensorEntity &sensor : sensors)
+        // The array is the records with commas between them, built into a string of exactly the
+        // size they come to. Assembling it in a JSON document instead would put a second copy of
+        // the whole registry in the document's pool and stop at whatever that document holds -
+        // which on the writing side means a registry the module cannot store whole, written as a
+        // shorter one without saying so.
+        size_t exactSize = 2; // '[' and ']'
+        for (size_t i = 0; i < sensors.size(); i++)
         {
-            sensorsArr.add(serialized(sensorToJson(sensor)));
+            if (i > 0)
+            {
+                exactSize += 1; // ','
+            }
+            exactSize += sensorToJson(sensors[i]).size();
         }
 
         std::string output;
-        serializeJson(doc, output);
+        output.reserve(exactSize);
+        output += "[";
+        for (size_t i = 0; i < sensors.size(); i++)
+        {
+            if (i > 0)
+            {
+                output += ",";
+            }
+            output += sensorToJson(sensors[i]);
+        }
+        output += "]";
         return output;
     }
 
@@ -1670,16 +1774,16 @@ public:
         if (error)
             return false;
 
-        config.functionCode = doc["functionCode"] | 3;
-        config.startRegister = doc["startRegister"] | 0;
-        config.numRegisters = doc["numRegisters"] | 1;
-        config.multiplier = doc["multiplier"] | 1.0f;
-        config.offset = doc["offset"] | 0.0f;
+        config.functionCode = numberOr(doc["functionCode"], 3);
+        config.startRegister = numberOr(doc["startRegister"], 0);
+        config.numRegisters = numberOr(doc["numRegisters"], 1);
+        config.multiplier = numberOr(doc["multiplier"], 1.0f);
+        config.offset = numberOr(doc["offset"], 0.0f);
         config.channelName = doc["channel_name"] | "";
-        config.channel = doc["channel"] | 0;
+        config.channel = numberOr(doc["channel"], 0);
         config.sensorType = doc["sensorType"] | "";
-        config.canConnectMinValue = doc["canConnectMinValue"] | 0.0f;
-        config.canConnectMaxValue = doc["canConnectMaxValue"] | 100.0f;
+        config.canConnectMinValue = numberOr(doc["canConnectMinValue"], 0.0f);
+        config.canConnectMaxValue = numberOr(doc["canConnectMaxValue"], 100.0f);
         config.dataType = modbusDataTypeFromString(doc["dataType"] | "u16");
 
         return true;
@@ -1720,16 +1824,16 @@ public:
             for (JsonObject configObj : doc.as<JsonArray>())
             {
                 ModbusRegisterConfig config;
-                config.functionCode = configObj["functionCode"] | 3;
-                config.startRegister = configObj["startRegister"] | 0;
-                config.numRegisters = configObj["numRegisters"] | 1;
-                config.multiplier = configObj["multiplier"] | 1.0f;
-                config.offset = configObj["offset"] | 0.0f;
+                config.functionCode = numberOr(configObj["functionCode"], 3);
+                config.startRegister = numberOr(configObj["startRegister"], 0);
+                config.numRegisters = numberOr(configObj["numRegisters"], 1);
+                config.multiplier = numberOr(configObj["multiplier"], 1.0f);
+                config.offset = numberOr(configObj["offset"], 0.0f);
                 config.channelName = configObj["channel_name"] | "";
-                config.channel = configObj["channel"] | 0;
+                config.channel = numberOr(configObj["channel"], 0);
                 config.sensorType = configObj["sensorType"] | "";
-                config.canConnectMinValue = configObj["canConnectMinValue"] | 0.0f;
-                config.canConnectMaxValue = configObj["canConnectMaxValue"] | 100.0f;
+                config.canConnectMinValue = numberOr(configObj["canConnectMinValue"], 0.0f);
+                config.canConnectMaxValue = numberOr(configObj["canConnectMaxValue"], 100.0f);
                 config.dataType = modbusDataTypeFromString(configObj["dataType"] | "u16");
                 
                 configs.push_back(config);
@@ -1772,12 +1876,12 @@ public:
         if (error)
             return false;
 
-        config.registerAddr = doc["register"] | 0;
-        config.length = doc["length"] | 1;
-        config.multiplier = doc["multiplier"] | 1.0f;
-        config.offset = doc["offset"] | 0.0f;
+        config.registerAddr = numberOr(doc["register"], 0);
+        config.length = numberOr(doc["length"], 1);
+        config.multiplier = numberOr(doc["multiplier"], 1.0f);
+        config.offset = numberOr(doc["offset"], 0.0f);
         config.channelName = doc["channel_name"] | "";
-        config.channel = doc["channel"] | 0;
+        config.channel = numberOr(doc["channel"], 0);
         config.sensorType = doc["sensorType"] | "";
 
         return true;
@@ -1814,12 +1918,12 @@ public:
             for (JsonObject configObj : doc.as<JsonArray>())
             {
                 I2CRegisterConfig config;
-                config.registerAddr = configObj["register"] | 0;
-                config.length = configObj["length"] | 1;
-                config.multiplier = configObj["multiplier"] | 1.0f;
-                config.offset = configObj["offset"] | 0.0f;
+                config.registerAddr = numberOr(configObj["register"], 0);
+                config.length = numberOr(configObj["length"], 1);
+                config.multiplier = numberOr(configObj["multiplier"], 1.0f);
+                config.offset = numberOr(configObj["offset"], 0.0f);
                 config.channelName = configObj["channel_name"] | "";
-                config.channel = configObj["channel"] | 0;
+                config.channel = numberOr(configObj["channel"], 0);
                 config.sensorType = configObj["sensorType"] | "";
                 
                 configs.push_back(config);
@@ -1851,119 +1955,19 @@ public:
         return output;
     }
 
+    /**
+     * @brief Read one sensor type.
+     *
+     * Read member by member rather than into one document: a document has to hold the largest
+     * model the account owns, and the model with the most channels then decides whether any of the
+     * catalog can be read. See SensorTypeStreamParser.
+     */
     bool sensorTypeFromJson(const std::string &jsonStr, SensorType &sensorType) override
     {
-        PooledJsonDocument doc(8192);
-        
-        DeserializationError error = deserializeJson(doc, jsonStr);
-        if (error) {
-            //Serial.printf("ArduinoJsonConverter: sensorTypeFromJson error: %s (JSON length: %d)\n", 
-            //             error.c_str(), jsonStr.length());
-            return false;
-        }
-
-        // Parse main sensor type properties
-        sensorType.uid = doc["uid"] | "";
-        sensorType.name = doc["name"] | "";
-        sensorType.displayName = doc["displayName"] | "";
-        sensorType.canScan = doc["canScan"] | true;
-        sensorType.isSupported = doc["isSupported"] | true;
-        sensorType.createdAt = doc["createdAt"] | "";
-        sensorType.updatedAt = doc["updatedAt"] | "";
-        
-        std::string protocolStr = doc["protocol"] | "";
-        sensorType.setProtocolFromString(protocolStr);
-        
-        sensorType.i2cAddress = doc["i2cAddress"] | "";
-        sensorType.chipType = doc["chipType"] | "";
-        sensorType.modbusDeviceAddress = doc["modbusDeviceAddress"] | 1;
-        sensorType.baudRate = doc["baudRate"] | 9600;
-        sensorType.modbusPingAddress = doc["modbusPingAddress"] | 0;
-        sensorType.registerToStoreModbusDeviceAddress = doc["registerToStoreModbusDeviceAddress"] | 0;
-        sensorType.writeRegistersCommand = doc["writeRegistersCommand"] | 0;
-        sensorType.applyAddressAfterPowerCycle = doc["applyAddressAfterPowerCycle"] | false;
-        sensorType.priorityForScan = doc["priorityForScan"] | 0;
-
-        // Parse legacy id for backward compatibility
-        sensorType.id = doc["id"] | 0;
-
-        // Parse sensorTypes array
-        sensorType.sensorTypes.clear();
-        if (doc.containsKey("sensorTypes"))
-        {
-            for (JsonObject sensorTypeObj : doc["sensorTypes"].as<JsonArray>())
-            {
-                SubSensorType subSensorType;
-                subSensorType.name = sensorTypeObj["name"] | "";
-                subSensorType.displayName = sensorTypeObj["displayName"] | "";
-                subSensorType.isAnalog = sensorTypeObj["isAnalog"] | false;
-                subSensorType.canCalibrate = sensorTypeObj["canCalibrate"] | false;
-                subSensorType.validCalibrationPeriodDays = sensorTypeObj["validCalibrationPeriodDays"] | 0;
-                subSensorType.calibrationTimeInSeconds = sensorTypeObj["calibrationTimeInSeconds"] | 0;
-                subSensorType.minValue = sensorTypeObj["minValue"] | 0.0f;
-                subSensorType.maxValue = sensorTypeObj["maxValue"] | 0.0f;
-                subSensorType.limitMinValue = sensorTypeObj["limitMinValue"] | 0.0f;
-                subSensorType.limitMaxValue = sensorTypeObj["limitMaxValue"] | 0.0f;
-                subSensorType.unit = sensorTypeObj["unit"] | "";
-                subSensorType.step = sensorTypeObj["step"] | 0.0f;
-                subSensorType.precisionPercent = sensorTypeObj["precisionPercent"] | 0.0f;
-                subSensorType.precisionValue = sensorTypeObj["precisionValue"] | 0.0f;
-                subSensorType.createdAt = sensorTypeObj["createdAt"] | "";
-                subSensorType.updatedAt = sensorTypeObj["updatedAt"] | "";
-                sensorType.sensorTypes.push_back(subSensorType);
-            }
-        }
-
-        // Parse I2C register config (renamed in JSON)
-        sensorType.i2cRegisterConfig.clear();
-        if (doc.containsKey("i2CRegisterConfigs"))
-        {
-            for (JsonObject configObj : doc["i2CRegisterConfigs"].as<JsonArray>())
-            {
-                I2CRegisterConfig config;
-                config.registerAddr = configObj["register"] | 0;
-                config.length = configObj["length"] | 1;
-                config.multiplier = configObj["multiplier"] | 1.0f;
-                config.offset = configObj["offset"] | 0.0f;
-                sensorType.i2cRegisterConfig.push_back(config);
-            }
-        }
-
-        // Parse Modbus register config (renamed in JSON)
-        sensorType.modbusRegisterConfig.clear();
-        if (doc.containsKey("modbusRegisterConfigs"))
-        {
-            for (JsonObject configObj : doc["modbusRegisterConfigs"].as<JsonArray>())
-            {
-                ModbusRegisterConfig config;
-                config.functionCode = configObj["functionCode"] | 3;
-                config.startRegister = configObj["startRegister"] | 0;
-                config.numRegisters = configObj["numRegisters"] | 1;
-                config.multiplier = configObj["multiplier"] | 1.0f;
-                config.offset = configObj["offset"] | 0.0f;
-                config.channelName = configObj["channelName"] | "";
-                config.channel = configObj["channel"] | 0;
-                config.sensorType = configObj["sensorType"] | "";
-                config.canConnectMinValue = configObj["canConnectMinValue"] | 0.0f;
-                config.canConnectMaxValue = configObj["canConnectMaxValue"] | 100.0f;
-                config.dataType = modbusDataTypeFromString(configObj["dataType"] | "u16");
-                sensorType.modbusRegisterConfig.push_back(config);
-            }
-        }
-
-        // Parse analog pin configs if present
-        sensorType.analogPinConfig.clear();
-        if (doc.containsKey("analogPinConfigs"))
-        {
-            for (JsonObject configObj : doc["analogPinConfigs"].as<JsonArray>())
-            {
-                AnalogPinConfig config;
-                // Add analog pin config parsing here when needed
-                sensorType.analogPinConfig.push_back(config);
-            }
-        }
-
-        return true;
+        SensorTypeStreamParser parser;
+        parser.begin(sensorType);
+        parser.feed(jsonStr.data(), jsonStr.size());
+        return parser.finish();
     }
 
     std::string sensorTypeToJson(const SensorType &sensorType) override
@@ -2096,7 +2100,11 @@ public:
             //Serial.printf("ArduinoJsonConverter: All arrays created, serializing...\n");
             //Serial.printf("ArduinoJsonConverter: Free heap before serialization: %d\n", ESP.getFreeHeap());
             
+            // Sized before it is written: appended to as it is serialized, the string grows by
+            // doubling, so the type briefly costs the old block and the twice-as-large new one at
+            // once, and the string the catalog write then holds is up to twice the type's length.
             std::string output;
+            output.reserve(measureJson(doc));
             serializeJson(doc, output);
             
             //Serial.printf("ArduinoJsonConverter: Serialized successfully, length: %d\n", output.length());
@@ -2116,66 +2124,30 @@ public:
         }
     }
 
-    bool sensorTypesFromJson(const std::string &jsonStr, std::vector<SensorType> &sensorTypes) override
+    /**
+     * @brief Read a sensor type catalog held in one string - the stored file, on the way back in.
+     *
+     * The same reading as the one the transport does off the socket, and the same reader: a
+     * catalog cut into types and each type read member by member. Two readings of one format would
+     * be two chances to disagree about what a catalog is, and the file and the answer are the same
+     * format.
+     */
+    JsonListParse sensorTypesFromJson(const std::string &jsonStr, std::vector<SensorType> &sensorTypes) override
+    {
+        size_t skipped = 0;
+        return sensorTypesFromJson(jsonStr, sensorTypes, skipped);
+    }
+
+    JsonListParse sensorTypesFromJson(const std::string &jsonStr, std::vector<SensorType> &sensorTypes,
+                                      size_t &skipped) override
     {
         sensorTypes.clear();
 
-        //Serial.printf("ArduinoJsonConverter: Parsing sensor types JSON (length: %d bytes)\n", jsonStr.length());
-        //Serial.printf("ArduinoJsonConverter: Free heap before parsing: %d\n", ESP.getFreeHeap());
-
-        if (jsonStr.empty() || jsonStr == "[]") return false;
-
-        // Extract each top-level JSON object from the array without loading the whole
-        // array into a single ArduinoJson document.  This removes the ~64 KB heap
-        // constraint (which caused "[]" writes on low memory) and allows files of
-        // any size to be read correctly.
-        const size_t len = jsonStr.size();
-        size_t pos = 0;
-        while (pos < len) {
-            size_t start = jsonStr.find('{', pos);
-            if (start == std::string::npos) break;
-
-            int depth = 0;
-            size_t end = start;
-            while (end < len) {
-                char c = jsonStr[end];
-                if (c == '{') {
-                    ++depth;
-                    ++end;
-                } else if (c == '}') {
-                    --depth;
-                    if (depth == 0) break; // end points to closing '}'
-                    ++end;
-                } else if (c == '"') {
-                    ++end; // skip opening '"'
-                    while (end < len) {
-                        if (jsonStr[end] == '\\') { end += 2; } // skip escape
-                        else if (jsonStr[end] == '"') { ++end; break; } // past closing '"'
-                        else { ++end; }
-                    }
-                } else {
-                    ++end;
-                }
-            }
-            if (depth != 0) {
-                sensorTypes.clear();
-                return false;
-            }
-
-            std::string typeJson = jsonStr.substr(start, end - start + 1);
-            SensorType sensorType;
-            if (!sensorTypeFromJson(typeJson, sensorType)) {
-                sensorTypes.clear();
-                return false;
-            }
-            sensorTypes.push_back(sensorType);
-            pos = end + 1;
-        }
-
-        //Serial.printf("ArduinoJsonConverter: Total sensor types parsed: %d\n", sensorTypes.size());
-        //Serial.printf("ArduinoJsonConverter: Free heap after processing: %d\n", ESP.getFreeHeap());
-
-        return !sensorTypes.empty();
+        SensorTypeStreamReader reader(sensorTypes);
+        reader.feed(jsonStr.data(), jsonStr.size());
+        const JsonListParse verdict = reader.finish();
+        skipped = reader.skippedCount();
+        return verdict;
     }
 
     std::string sensorTypesToJson(const std::vector<SensorType> &sensorTypes) override

@@ -48,6 +48,10 @@ private:
     IOtaUpdateLog* otaUpdateLog = nullptr;
     IBootEventLog* bootEventLog = nullptr;
     IBootEventLog* restartEventLog = nullptr;
+    BackgroundActBoard* backgroundActBoard = nullptr;
+#ifdef GD_HEAP_FORENSICS
+    RxFrameClassCounter* rxFrameClasses = nullptr;
+#endif
 
 public:
     LoopServiceFactory(
@@ -117,9 +121,19 @@ public:
                 configDoneService->setDeviceService(deviceService);
                 configDoneService->setSensorService(sensorService);
                 configDoneService->setRuleService(ruleService);
+                configDoneService->setOutbox(outbox);
+                configDoneService->setCommandService(commandService);
+                configDoneService->setSyncSensorTypesUseCase(syncSensorTypesUseCase);
+                configDoneService->setSensorTypeCatalogWriter(sensorTypeCatalogWriter);
+                configDoneService->setRepublishModuleStructureUseCase(republishModuleStructureUseCase);
                 configDoneService->setOtaUpdateLog(otaUpdateLog);
                 configDoneService->setBootEventLog(bootEventLog);
                 configDoneService->setRestartEventLog(restartEventLog);
+                configDoneService->setConfirmRunningFirmwareUseCase(confirmRunningFirmwareUseCase);
+                configDoneService->setWifiRoamUseCase(wifiRoamUseCase);
+                configDoneService->setBootSequencer(bootSequencer);
+                configDoneService->setLinkSupervisor(linkSupervisor);
+                configDoneService->setPreventiveRestartUseCase(preventiveRestartUseCase);
 
                 // Then assign to the service unique_ptr
                 service = std::unique_ptr<LoopServiceBase>(configDoneService);
@@ -136,6 +150,10 @@ public:
         service->setLogging(logger, debugSystem);
         service->setModuleConfig(moduleConfig);
         service->setArduinoAdapter(arduinoAdapter);
+        service->setBackgroundActBoard(backgroundActBoard);
+#ifdef GD_HEAP_FORENSICS
+        service->setRxFrameClasses(rxFrameClasses);
+#endif
         service->setClearModuleDataService(clearModuleDataService);
         
         return service;
@@ -189,6 +207,28 @@ public:
         this->otaUpdateLog = otaLog;
     }
 
+    /** The board every loop service reads when its heap watermark trace finds a new low. */
+    void setBackgroundActBoard(BackgroundActBoard* board) {
+        this->backgroundActBoard = board;
+    }
+
+#ifdef GD_HEAP_FORENSICS
+    /** The frame counter every loop service copies into its account of a heap low. */
+    void setRxFrameClasses(RxFrameClassCounter* counter) {
+        this->rxFrameClasses = counter;
+    }
+#endif
+
+    /** The outbox whose completions the CONFIGURED_DONE loop drains at the top of its iteration. */
+    void setOutbox(IOutbox* outboxToUse) {
+        this->outbox = outboxToUse;
+    }
+
+    /** The command service the CONFIGURED_DONE loop drives once per iteration. */
+    void setCommandService(ICommandService* service) {
+        this->commandService = service;
+    }
+
     void setBootEventLog(IBootEventLog* bootLog) {
         this->bootEventLog = bootLog;
     }
@@ -196,6 +236,58 @@ public:
     void setRestartEventLog(IBootEventLog* restartLog) {
         this->restartEventLog = restartLog;
     }
+
+    /** The catalog sync the CONFIGURED_DONE loop hands SENSOR_TYPES_FETCH completions to. */
+    void setSyncSensorTypesUseCase(ISyncSensorTypesUseCase* useCase) {
+        this->syncSensorTypesUseCase = useCase;
+    }
+
+    /** The storage task the CONFIGURED_DONE loop collects finished catalog writes from. */
+    void setSensorTypeCatalogWriter(ISensorTypeCatalogWriter* writer) {
+        this->sensorTypeCatalogWriter = writer;
+    }
+
+    /** The structure republish the CONFIGURED_DONE loop hands MODULE_STRUCTURE completions to. */
+    void setRepublishModuleStructureUseCase(IRepublishModuleStructureUseCase* useCase) {
+        this->republishModuleStructureUseCase = useCase;
+    }
+
+    /** The confirmation the CONFIGURED_DONE loop reports its completed iterations to. */
+    void setConfirmRunningFirmwareUseCase(IConfirmRunningFirmwareUseCase* useCase) {
+        this->confirmRunningFirmwareUseCase = useCase;
+    }
+
+    /** The roaming decision the CONFIGURED_DONE loop drives once per iteration. */
+    void setWifiRoamUseCase(IWifiRoamUseCase* useCase) {
+        this->wifiRoamUseCase = useCase;
+    }
+
+    /** The boot sequence the CONFIGURED_DONE loop ticks before its producers. */
+    void setBootSequencer(BootSequencer* sequencer) {
+        this->bootSequencer = sequencer;
+    }
+
+    /** The link's supervision the CONFIGURED_DONE loop ticks every thirty seconds. */
+    void setLinkSupervisor(LinkSupervisor* supervisor) {
+        this->linkSupervisor = supervisor;
+    }
+
+    /** The nightly restart, checked on the same tick. */
+    void setPreventiveRestartUseCase(PreventiveRestartUseCase* useCase) {
+        this->preventiveRestartUseCase = useCase;
+    }
+
+private:
+    IOutbox* outbox = nullptr;
+    ICommandService* commandService = nullptr;
+    ISyncSensorTypesUseCase* syncSensorTypesUseCase = nullptr;
+    ISensorTypeCatalogWriter* sensorTypeCatalogWriter = nullptr;
+    IRepublishModuleStructureUseCase* republishModuleStructureUseCase = nullptr;
+    IConfirmRunningFirmwareUseCase* confirmRunningFirmwareUseCase = nullptr;
+    IWifiRoamUseCase* wifiRoamUseCase = nullptr;
+    BootSequencer* bootSequencer = nullptr;
+    LinkSupervisor* linkSupervisor = nullptr;
+    PreventiveRestartUseCase* preventiveRestartUseCase = nullptr;
 };
 
 #endif // LOOP_SERVICE_FACTORY_H

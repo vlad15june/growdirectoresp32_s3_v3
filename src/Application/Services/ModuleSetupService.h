@@ -32,16 +32,15 @@
 #include "Core/Domain/Interfaces/Udp/IUdpInboundDispatcher.h"
 #include "Core/Domain/Interfaces/Adapters/IRemoteModuleCommandReceiver.h"
 #include "Core/Domain/Interfaces/API/IHybridAPIService.h"
-#include "Core/Domain/Interfaces/IClearModuleDataService.h"
 #include "Core/Domain/Interfaces/Adapters/IArduinoAdapter.h"
 #include "Core/Domain/Interfaces/IOtaUpdateLog.h"
 #include "Core/Domain/Interfaces/UseCases/SensorTypes/ISyncSensorTypesUseCase.h"
 #include "Core/Domain/Interfaces/Adapters/Sensors/IRemoteSensorReceiver.h"
 #include "Core/Domain/Interfaces/UseCases/IOnConnectivityRestoredUseCase.h"
-#include "Core/Domain/Interfaces/UseCases/ICheckModuleDeletionUseCase.h"
-#include "Core/Domain/Interfaces/UseCases/ICheckFirmwareUpdateOnStartupUseCase.h"
 #include "Core/Domain/Interfaces/UseCases/ISensorStructureUseCase.h"
-#include "Core/Domain/Interfaces/UseCases/IModbusAddressAllocator.h"
+#include "Core/Domain/Interfaces/UseCases/Sensors/IStartupSensorScan.h"
+#include "Core/Domain/UseCases/Network/WifiLinkLogUseCase.h"
+#include "Application/Interfaces/INetworkListeners.h"
 #include <memory>
 #include <cstdarg>
 #include <cstdio>
@@ -56,8 +55,10 @@ public:
 
 class ModuleSetupServiceTestHelper;
 class FillModuleStructureTestHelper;
+class CatalogReaderTestHelper;
+class StartupScanTestHelper;
 
-class ModuleSetupService : public IModuleSetupService
+class ModuleSetupService : public IModuleSetupService, public INetworkListeners
 {
 private:
     ILogger *logger;
@@ -83,19 +84,17 @@ private:
     IBoardTest *boardTest;
     IUdpManager *udpManager;
     IHybridAPIService *hybridApiService;
-    IClearModuleDataService *clearModuleDataService;
     IArduinoAdapter *arduinoAdapter;
-    ICheckModuleDeletionUseCase *checkModuleDeletionUseCase;
     ISyncSensorTypesUseCase *syncSensorTypesUseCase;
     IRemoteSensorReceiver *remoteSensorReceiver;
     IOnConnectivityRestoredUseCase *onConnectivityRestoredUseCase;
     IOtaUpdateLog *otaUpdateLog;
-    ICheckFirmwareUpdateOnStartupUseCase *checkFirmwareUpdateOnStartupUseCase;
     IUdpInboundDispatcher *udpInboundDispatcher;
     IRemoteModuleCommandReceiver *remoteModuleCommandReceiver;
 
     ISensorStructureUseCase *sensorStructureUseCase;
-    IModbusAddressAllocator *modbusAddressAllocator = nullptr;
+    IStartupSensorScan *startupSensorScan = nullptr;
+    WifiLinkLogUseCase *wifiLinkLog = nullptr;
 
     void log(const char *format, ...);
 
@@ -103,13 +102,13 @@ private:
     bool setupLeds();
     bool setupButtons();
     bool setupRelayOutputs();
+    void setupSensorBus();
+    void powerTheStoredSensorPorts();
     void handleModuleMode();
     void ApTestModeModeConfigure();
     void UserCanConfigModeConfigure();
     void UserReConfigModeConfigure();
     void ConfigureDoneModeConfigure();
-    void checkModuleDeletionOnStartup();
-    bool checkFirmwareUpdateOnStartup();
     void clearAllFileLog();
     void clearStoreRules();
     void setupAP(bool isTestMode = false);
@@ -120,7 +119,7 @@ private:
     void setupWebServer();
     void setupTestModeWebServer();
     void setupMqttConnection();
-    void setupWifiConnection();
+    void registerWifiNetworks();
     void setupUdp();
     void fillModuleStructure();
 
@@ -132,27 +131,13 @@ private:
     void fillDeviceModuleStructure(Node &node);
     void fillAnalogInputDeviceStructure(Node &node);
 
-    void scanEmptyPinsForSensors(Node &node, const std::vector<SensorEntity> &existingSensors);
-    bool isPinOccupied(int pin, const std::vector<SensorEntity> &sensors, const std::string &protocol);
-    void scanPinForSensorTypes(int pin, Node &node);
-    bool detectSensor(Node &node, const SensorEntity &tempSensor, const SensorType &sensorType, int pin);
-
     void addMultiChannelModbusSensor(Node &node, const SensorEntity &sensorEntity);
     void addMultiChannelI2CSensor(Node &node, const SensorEntity &sensorEntity);
     void addSingleChannelSensor(Node &node, const SensorEntity &sensorEntity);
     void addSensorToStructure(Node &node, const SensorEntity &sensorEntity);
-    void removeDisconnectedNewSensorPlaceholders(Node &node, const SensorEntity &sensorEntity);
 
     void createPlaceholderSensors(Node &node);
     void processSensorsFromRepository(Node &node);
-    void handleModbusAddressManagement(Node &node);
-    void collectModbusSensorsAndAddresses(const std::vector<SensorEntity> &allSensorEntities,
-                                          std::map<int, std::vector<SensorEntity *>> &addressMap,
-                                          std::vector<SensorEntity *> &sensorsNeedingNewAddress);
-    void findDuplicateAddresses(const std::map<int, std::vector<SensorEntity *>> &addressMap,
-                                std::vector<SensorEntity *> &sensorsNeedingNewAddress);
-    void assignNewAddresses(std::vector<SensorEntity *> &sensorsNeedingNewAddress,
-                            const std::map<int, std::vector<SensorEntity *>> &addressMap);
 
     void addHydroSensors(Node &node);
     void addHydroPumps(Node &node);
@@ -160,6 +145,11 @@ private:
 public:
     friend class ModuleSetupServiceTestHelper;
     friend class FillModuleStructureTestHelper;
+    friend class CatalogReaderTestHelper;
+    friend class StartupScanTestHelper;
+    friend class LiveFactTestHelper;
+    friend class LivenessTestHelper;
+    friend class RegistryUnreadTestHelper;
 
     ModuleSetupService(
         ILogger *logger,
@@ -185,14 +175,11 @@ public:
         IBoardTest *boardTest = nullptr,
         IUdpManager *udpManager = nullptr,
         IHybridAPIService *hybridApiService = nullptr,
-        IClearModuleDataService *clearModuleDataService = nullptr,
         IArduinoAdapter *arduinoAdapter = nullptr,
         ISyncSensorTypesUseCase *syncSensorTypesUseCase = nullptr,
         IRemoteSensorReceiver *remoteSensorReceiver = nullptr,
         IOnConnectivityRestoredUseCase *onConnectivityRestoredUseCase = nullptr,
         IOtaUpdateLog *otaUpdateLog = nullptr,
-        ICheckModuleDeletionUseCase *checkModuleDeletionUseCase = nullptr,
-        ICheckFirmwareUpdateOnStartupUseCase *checkFirmwareUpdateOnStartupUseCase = nullptr,
         IUdpInboundDispatcher *udpInboundDispatcher = nullptr,
         IRemoteModuleCommandReceiver *remoteModuleCommandReceiver = nullptr);
 
@@ -206,18 +193,32 @@ public:
     void setSensorStructureUseCase(ISensorStructureUseCase *useCase) { sensorStructureUseCase = useCase; }
 
     /**
-     * @brief Inject the owner of the ModBus addresses of the module (GDV1-3831)
+     * @brief Inject the sensor discovery this service arms instead of performing
      *
      * A setter for the same reason as setSensorStructureUseCase above: the constructor of this
-     * service is already 33 positional parameters long. The same instance is given to
-     * ModuleCommandExecutionUseCase, so the boot resolution and the commands see one occupancy.
+     * service is already 33 positional parameters long. Setup decides whether the discovery runs
+     * at all - that is what `noScanSensors` says - and the discovery itself runs on the task that
+     * owns the RS-485 line, after the control loop has started.
      *
-     * @param allocator Allocator reading the sensor repository of this module
+     * @param scan Discovery armed at the end of the sensor structure fill
      */
-    void setModbusAddressAllocator(IModbusAddressAllocator *allocator) { modbusAddressAllocator = allocator; }
+    void setStartupSensorScan(IStartupSensorScan *scan) { startupSensorScan = scan; }
+
+    /**
+     * @brief Inject the log of what happens to the station link
+     *
+     * A setter for the same reason as the two above. Setup is where it is armed, because the radio
+     * has to be reporting its events before the first association is asked for.
+     *
+     * @param linkLog Log the radio's station events are reported to
+     */
+    void setWifiLinkLog(WifiLinkLogUseCase *linkLog) { wifiLinkLog = linkLog; }
 
     void setupModule() override;
     std::unique_ptr<ILoopService> getLoopService() override;
+
+    /** @brief The UDP listeners, once the boot's link has an address. */
+    void startListening() override { setupUdp(); }
 };
 
 // Implementation
@@ -246,14 +247,11 @@ inline ModuleSetupService::ModuleSetupService(
     IBoardTest *boardTest,
     IUdpManager *udpManager,
     IHybridAPIService *hybridApiService,
-    IClearModuleDataService *clearModuleDataService,
     IArduinoAdapter *arduinoAdapter,
     ISyncSensorTypesUseCase *syncSensorTypesUseCase,
     IRemoteSensorReceiver *remoteSensorReceiver,
     IOnConnectivityRestoredUseCase *onConnectivityRestoredUseCase,
     IOtaUpdateLog *otaUpdateLog,
-    ICheckModuleDeletionUseCase *checkModuleDeletionUseCase,
-    ICheckFirmwareUpdateOnStartupUseCase *checkFirmwareUpdateOnStartupUseCase,
     IUdpInboundDispatcher *udpInboundDispatcher,
     IRemoteModuleCommandReceiver *remoteModuleCommandReceiver) : logger(logger),
                                                        debugSystem(debugSystem),
@@ -278,14 +276,11 @@ inline ModuleSetupService::ModuleSetupService(
                                                        boardTest(boardTest),
                                                        udpManager(udpManager),
                                                        hybridApiService(hybridApiService),
-                                                       clearModuleDataService(clearModuleDataService),
                                                        arduinoAdapter(arduinoAdapter),
                                                        syncSensorTypesUseCase(syncSensorTypesUseCase),
                                                        remoteSensorReceiver(remoteSensorReceiver),
                                                        onConnectivityRestoredUseCase(onConnectivityRestoredUseCase),
                                                        otaUpdateLog(otaUpdateLog),
-                                                       checkModuleDeletionUseCase(checkModuleDeletionUseCase),
-                                                       checkFirmwareUpdateOnStartupUseCase(checkFirmwareUpdateOnStartupUseCase),
                                                        udpInboundDispatcher(udpInboundDispatcher),
                                                        remoteModuleCommandReceiver(remoteModuleCommandReceiver),
                                                        sensorStructureUseCase(nullptr)
@@ -408,6 +403,88 @@ inline bool ModuleSetupService::setupRelayOutputs()
     }
 
     return true;
+}
+
+/**
+ * @brief Begin the RS-485 UARTs once, before anything on this module can put a frame on them.
+ *
+ * Every mode goes through here - the ordinary boot, a boot with `noScanSensors`, the board test,
+ * the configuration modes - and it runs before the mode is handled: before the board test sets its
+ * devices up, before the structure is filled, and before the control loop starts the acquisition
+ * task that carries the polls, the discovery and the raw commands from the backend. The first
+ * transaction of a boot is as often one of those as it is a scan, and a UART nobody has begun
+ * writes none of them.
+ *
+ * 9600 baud is the rate of every model of the catalog. A scan still begins the ports again at its
+ * model's own rate on its way in (SensorReader::scanModbusSensor()); this call does not depend on a
+ * scan ever happening.
+ *
+ * A sensor module only: nothing a module of another type does on its own begins this line. The
+ * discovery and the preparation of stored ModBus sensors are armed only by the structure fill of a
+ * sensor module (processSensorsFromRepository()), and a hydro module scans analog sensor types only
+ * (addHydroSensors()). On two of the other types the UART pins are wired to something else
+ * (ModuleConfig.h; the UARTs are RX/TX/DE 18/17/19 and 15/14/20, globals.h): a hydro module drives
+ * its three pumps from 16, 17 and 18 (setupRelayOutputs()) and a green LED from 14, a relay module
+ * its red LEDs from 15 and 14 - beginning a UART there would hand pump 2's output to a TX line.
+ * The DE pins 19 and 20 are outputs held low on every module type, by the ModbusRS485 constructors.
+ */
+inline void ModuleSetupService::setupSensorBus()
+{
+    if (!sensorReader || !moduleConfig)
+    {
+        log("SETUP: RS-485 bus not initialized - no sensor reader or configuration");
+        return;
+    }
+
+    const int moduleType = moduleConfig->getModuleType();
+    if (moduleType != MODULE_TYPE_SENSOR)
+    {
+        log("SETUP: RS-485 bus not initialized - not a sensor module (type %d)", moduleType);
+        return;
+    }
+
+    sensorReader->init(9600);
+}
+
+/**
+ * @brief Give the ports of the stored ModBus sensors their power now, early in the boot.
+ *
+ * The ports start dark - the ModbusRS485 constructors drive every SENSOR_POWER pin low - and the
+ * sweep does not read a port that came up less than PortPower::WAKE_UP_MS ago. Switched on here,
+ * a stored sensor's port has had the rest of the setup to come up by the sweep's first visit. The
+ * transitions go through the port itself (ISensorReader::setModbusPortPower()), so its power
+ * record says when.
+ *
+ * Only where the sweep will read them: a sensor module (the line is begun only there, see
+ * setupSensorBus()) booting CONFIGURED_DONE, the one mode whose loop reads sensors
+ * (LoopServiceFactory). The free ports are left to the discovery, which powers and releases them
+ * itself, and so is a module with no stored row.
+ */
+inline void ModuleSetupService::powerTheStoredSensorPorts()
+{
+    if (!sensorReader || !sensorRepository || !moduleConfig ||
+        moduleConfig->getModuleType() != MODULE_TYPE_SENSOR)
+    {
+        return;
+    }
+    ISettings *settings = moduleConfig->getSettings();
+    if (!settings || settings->getIfConfigured() != ModuleModeEnum::CONFIGURED_DONE)
+    {
+        return;
+    }
+
+    for (const auto &sensor : sensorRepository->getAll())
+    {
+        if (sensor.protocol != "ModBus" || sensor.pin < 0 ||
+            sensor.pin >= moduleConfig->getSensorPinCount())
+        {
+            continue;
+        }
+        if (sensorReader->setModbusPortPower(sensor.pin, true))
+        {
+            log("SETUP: port %d of stored sensor %s powered", sensor.pin, sensor.uid.c_str());
+        }
+    }
 }
 
 inline void ModuleSetupService::handleModuleMode()
@@ -537,40 +614,22 @@ inline void ModuleSetupService::ConfigureDoneModeConfigure()
     unsigned long t0 = arduinoAdapter ? arduinoAdapter->millis() : 0;
     log("[%lu ms] SETUP: ConfigureDoneModeConfigure begin", t0);
 
+    // The server's address and the module's token, read from the settings into the REST client
+    // once: every request of this boot - the outbox's, the command task's - goes out with them, and
+    // in this mode nothing changes them without a restart. Nothing is sent here.
+    if (hybridApiService)
+    {
+        const bool restReady = hybridApiService->init();
+        log("SETUP: REST client given the stored server address: %s", restReady ? "yes" : "no");
+    }
+
+    // The networks the station may associate with, and nothing more: setup waits for no network.
+    // The association is the first thing the link's supervision asks for once the loop runs.
+    registerWifiNetworks();
+
     unsigned long ts = arduinoAdapter ? arduinoAdapter->millis() : 0;
-    setupWifiConnection();
-    log("[%lu ms] SETUP: setupWifiConnection done (took %lu ms)",
-        arduinoAdapter ? arduinoAdapter->millis() : 0,
-        (arduinoAdapter ? arduinoAdapter->millis() : 0) - ts);
-
-    ts = arduinoAdapter ? arduinoAdapter->millis() : 0;
-    bool updateApplied = checkFirmwareUpdateOnStartup();
-    log("[%lu ms] SETUP: checkFirmwareUpdateOnStartup done (took %lu ms)",
-        arduinoAdapter ? arduinoAdapter->millis() : 0,
-        (arduinoAdapter ? arduinoAdapter->millis() : 0) - ts);
-
-    if (updateApplied)
-    {
-        log("SETUP: update applied - skipping deletion check");
-    }
-    else
-    {
-        ts = arduinoAdapter ? arduinoAdapter->millis() : 0;
-        checkModuleDeletionOnStartup();
-        log("[%lu ms] SETUP: checkModuleDeletionOnStartup done (took %lu ms)",
-            arduinoAdapter ? arduinoAdapter->millis() : 0,
-            (arduinoAdapter ? arduinoAdapter->millis() : 0) - ts);
-    }
-
-    ts = arduinoAdapter ? arduinoAdapter->millis() : 0;
     setupMqttConnection();
     log("[%lu ms] SETUP: setupMqttConnection done (took %lu ms)",
-        arduinoAdapter ? arduinoAdapter->millis() : 0,
-        (arduinoAdapter ? arduinoAdapter->millis() : 0) - ts);
-
-    ts = arduinoAdapter ? arduinoAdapter->millis() : 0;
-    setupUdp();
-    log("[%lu ms] SETUP: setupUdp done (took %lu ms)",
         arduinoAdapter ? arduinoAdapter->millis() : 0,
         (arduinoAdapter ? arduinoAdapter->millis() : 0) - ts);
 
@@ -621,84 +680,6 @@ inline void ModuleSetupService::ConfigureDoneModeConfigure()
     log("[%lu ms] SETUP: ConfigureDoneModeConfigure done - module prepared for operation (took %lu ms)",
         arduinoAdapter ? arduinoAdapter->millis() : 0,
         (arduinoAdapter ? arduinoAdapter->millis() : 0) - t0);
-}
-
-inline bool ModuleSetupService::checkFirmwareUpdateOnStartup()
-{
-    if (!checkFirmwareUpdateOnStartupUseCase)
-    {
-        log("SETUP: firmware update check on startup not available");
-        return false;
-    }
-
-    bool updateApplied = checkFirmwareUpdateOnStartupUseCase->run();
-    log("SETUP: firmware update check on startup - applied: %s", updateApplied ? "true" : "false");
-    return updateApplied;
-}
-
-inline void ModuleSetupService::checkModuleDeletionOnStartup()
-{
-    // Only check if in configured done mode
-    if (!moduleConfig || !moduleConfig->getSettings())
-    {
-        return;
-    }
-
-    ModuleModeEnum currentMode = static_cast<ModuleModeEnum>(
-        moduleConfig->getSettings()->getIfConfigured());
-
-    if (currentMode != ModuleModeEnum::CONFIGURED_DONE)
-    {
-        log("SETUP: Skipping deletion check - module not in CONFIGURED_DONE mode");
-        return;
-    }
-
-    // Skip deletion check on first boot after configuration
-    // Module needs to complete initial sync (send structure to server) first
-    uint8_t wasInitialSyncCompleted = moduleConfig->getSettings()->getWasInitialSyncCompleted();
-    if (wasInitialSyncCompleted == 0)
-    {
-        log("SETUP: Skipping deletion check - first boot after configuration (initial sync not yet completed)");
-        return;
-    }
-
-    if (!checkModuleDeletionUseCase || !clearModuleDataService || !arduinoAdapter)
-    {
-        log("SETUP: Cannot check module deletion - missing required services");
-        return;
-    }
-
-    log("SETUP: Checking if module was deleted from server...");
-
-    ModuleDeletionStatusEnum status = ModuleDeletionStatusEnum::UNKNOWN;
-    try
-    {
-        status = checkModuleDeletionUseCase->evaluate();
-    }
-    catch (...)
-    {
-        log("SETUP: Failed to check deletion status - continuing normal operation");
-        return;
-    }
-
-    if (status == ModuleDeletionStatusEnum::DELETED)
-    {
-        log("SETUP: deletion verdict DELETED - factory reset");
-
-        moduleConfig->getSettings()->setConfigured(ModuleModeEnum::USER_CAN_CONFIGURE);
-        log("SETUP: Module mode set to USER_CAN_CONFIGURE");
-
-        clearModuleDataService->clearAllData();
-        log("SETUP: All module data cleared");
-
-        log("SETUP: Restarting module to complete reset...");
-        arduinoAdapter->delay(1000);
-        arduinoAdapter->restart();
-    }
-    else
-    {
-        log("SETUP: deletion verdict %s - continuing normal operation", getModuleDeletionStatusName(status));
-    }
 }
 
 inline void ModuleSetupService::clearAllFileLog()
@@ -932,7 +913,12 @@ inline void ModuleSetupService::setupTestModeWebServer()
     }
 }
 
-inline void ModuleSetupService::setupWifiConnection()
+/**
+ * @brief Arm the radio's link log and hand it the networks it may associate with.
+ *
+ * The local half of the association: the station is associated later, on the network task.
+ */
+inline void ModuleSetupService::registerWifiNetworks()
 {
     if (!wifiManager)
     {
@@ -940,14 +926,16 @@ inline void ModuleSetupService::setupWifiConnection()
         return;
     }
 
-    if (wifiManager->setupWifiConnection())
+    // Before the first association is asked for, so that the connect it produces is on the same
+    // path every later one is: what the radio reports about the link, including the reason code a
+    // drop carries and nothing else does.
+    if (wifiAdapter != nullptr && wifiLinkLog != nullptr)
     {
-        log("SETUP: Connected to WiFi network");
+        wifiAdapter->reportLinkEventsTo(wifiLinkLog);
     }
-    else
-    {
-        log("SETUP: Failed to connect to WiFi network");
-    }
+
+    const int networks = wifiManager->registerNetworks();
+    log("SETUP: %d WiFi network(s) handed to the radio - it associates once the loop runs", networks);
 }
 
 inline void ModuleSetupService::setupMqttConnection()
@@ -958,29 +946,48 @@ inline void ModuleSetupService::setupMqttConnection()
         return;
     }
 
-    // Set dynamic client ID: prefix + module UID
+    // The broker files the session - the subscriptions, and whatever was published to this module
+    // while it was away - under the client ID, so the ID has to be the same string after every
+    // restart and a different one on every module. It is the deployment prefix followed by the
+    // module UID, which is the station MAC read out of the chip: nothing in it comes from storage,
+    // from the network or from a counter, so a restart, a factory reset and a re-registration all
+    // present the broker the same client.
+    //
+    // The UID is appended only if it is not there already: a second pass would otherwise produce
+    // prefix+uid+uid, and a module that changes its client ID hands the broker a client it has no
+    // session for - losing everything queued under the old one, quietly on both sides.
     std::string moduleUid = moduleConfig->getModuleUid();
-    std::string clientId = mqttManager->getClientId() + moduleUid;
+    std::string clientId = mqttManager->getClientId();
+    if (clientId.size() < moduleUid.size() ||
+        clientId.compare(clientId.size() - moduleUid.size(), moduleUid.size(), moduleUid) != 0)
+    {
+        clientId += moduleUid;
+    }
     mqttManager->setClientId(clientId.c_str());
     log("SETUP: MQTT client ID set to: %s", clientId.c_str());
 
+    // Without a link connect() only configures the client and says no; the CONNECT is then made by
+    // the client's own state machine, on the network task, once the link is up.
     if (mqttManager->connect())
     {
         log("SETUP: Connected to MQTT broker");
-
-        mqttManager->setupMqttTopicHandlers();
     }
     else
     {
-        log("SETUP: Failed to connect to MQTT broker");
+        log("SETUP: MQTT client configured - it connects once the link is up");
     }
+
+    // Once, and whatever connect() said: a topic subscribed to while the client is not connected is
+    // kept and subscribed to on every CONNACK, and without the handlers the commands of this boot
+    // would arrive with nobody to take them.
+    mqttManager->setupMqttTopicHandlers();
 }
 
 inline void ModuleSetupService::setupUdp()
 {
     if (!udpManager)
     {
-        log("SETUP: Error - UDP manager is missing");
+        log("UDP: Error - UDP manager is missing");
         return;
     }
 
@@ -990,23 +997,23 @@ inline void ModuleSetupService::setupUdp()
 
     if (udpManager->initialize(udpPort, multicastIP))
     {
-        log("SETUP: UDP initialized successfully on port %d with multicast %s", udpPort, multicastIP);
+        log("UDP: initialized on port %d with multicast %s", udpPort, multicastIP);
     }
     else
     {
-        log("SETUP: Failed to initialize UDP on port %d", udpPort);
+        log("UDP: Failed to initialize on port %d", udpPort);
     }
 
     if (udpInboundDispatcher)
     {
         udpInboundDispatcher->init();
-        log("SETUP: UDP inbound dispatcher initialized");
+        log("UDP: inbound dispatcher initialized");
     }
 
     if (remoteModuleCommandReceiver)
     {
         remoteModuleCommandReceiver->init();
-        log("SETUP: Remote module command receiver initialized");
+        log("UDP: remote module command receiver initialized");
     }
 }
 
@@ -1141,76 +1148,32 @@ inline void ModuleSetupService::fillSensorModuleStructure(Node &node)
         return;
     }
 
-    // Check if sensor types are synchronized, if not - sync them first
+    // No catalog on flash: nothing to describe the sensors by, and setup asks the server for
+    // nothing - the catalog is asked for once the boot's structure has settled. The structure goes
+    // out with placeholders, and what the discovery owes is armed for when the catalog arrives.
     if (sensorTypeRepository)
     {
-        auto sensorTypes = sensorTypeRepository->getAll();
-        if (sensorTypes.empty())
+        // count(), not getAll(): the question is how many types the module holds, and getAll()
+        // answers it with a second copy of the whole catalog.
+        if (sensorTypeRepository->count() == 0)
         {
-            log("SETUP: No sensor types found in repository, attempting synchronization");
-            if (syncSensorTypesUseCase)
+            log("SETUP: No sensor types in the repository, creating placeholders");
+            // Read before createPlaceholderSensors() clears it: the flag is consumed on this
+            // boot, and what it asked for is armed with the catalog that has not arrived yet.
+            ISettings *settings = moduleConfig ? moduleConfig->getSettings() : nullptr;
+            const bool preparationOnly = settings && settings->getNoScanSensors();
+            createPlaceholderSensors(node);
+            if (startupSensorScan)
             {
-                if (syncSensorTypesUseCase->init())
-                {
-                    log("SETUP: Forcing sensor types synchronization");
-                    bool syncResult = syncSensorTypesUseCase->forceSync();
-                    if (syncResult)
-                    {
-                        log("SETUP: Sensor types synchronized successfully");
-                        // Verify that types were actually loaded
-                        sensorTypes = sensorTypeRepository->getAll();
-                        log("SETUP: Now have %zu sensor types available", sensorTypes.size());
-                    }
-                    else
-                    {
-                        log("SETUP: Failed to synchronize sensor types");
-                    }
-                }
-                else
-                {
-                    log("SETUP: Failed to initialize sensor types sync use case");
-                }
+                startupSensorScan->armWhenTheCatalogArrives(preparationOnly);
             }
-            else
-            {
-                log("SETUP: Sensor types sync use case not available");
-            }
+            return;
+        }
 
-            // If still no sensor types after sync attempt, create placeholders
-            sensorTypes = sensorTypeRepository->getAll();
-            if (sensorTypes.empty())
-            {
-                log("SETUP: Still no sensor types available after sync attempt, creating placeholders");
-                createPlaceholderSensors(node);
-                return;
-            }
-        }
-        else
-        {
-            log("SETUP: Found %zu sensor types in repository", sensorTypes.size());
-        }
+        log("SETUP: Found %d sensor types in repository", sensorTypeRepository->count());
     }
 
-    ISettings *settingsForFastPath = moduleConfig ? moduleConfig->getSettings() : nullptr;
-    bool noScanWasSet = settingsForFastPath && settingsForFastPath->getNoScanSensors();
     processSensorsFromRepository(node);
-    if (!noScanWasSet)
-    {
-        handleModbusAddressManagement(node);
-    }
-    else
-    {
-        log("SETUP: noScanSensors flag was set - skipping handleModbusAddressManagement");
-    }
-
-    // Prepare sensors (including per-model register writes like the XF700A rainfall window)
-    // after scanning and address assignment, so the writes reach the final Modbus addresses
-    // and run on every setup pass, not only on the noScanSensors fast path.
-    if (sensorReader && sensorRepository)
-    {
-        auto sensorsToPrepare = sensorRepository->getAll();
-        sensorReader->prepareSensorsForReading(sensorsToPrepare);
-    }
 
     log("SETUP: Sensor module structure filled with %zu sensors", node.sensors.size());
 }
@@ -1233,18 +1196,20 @@ inline void ModuleSetupService::addHydroSensors(Node &node)
     {
         log("SETUP: Scanning for hydro-specific analog sensors");
 
-        // Get all sensor types for hydro module
-        auto allSensorTypes = sensorTypeRepository->getAll();
-        std::vector<SensorType> hydroSensorTypes;
+        // Get all sensor types for hydro module. The catalog is read through the snapshot it is
+        // held as, and the hydro types are picked out of it by address: neither the whole catalog
+        // nor the types picked from it are copied to be walked over.
+        SensorTypeCatalog catalog = sensorTypeRepository->catalogSnapshot();
+        std::vector<const SensorType *> hydroSensorTypes;
 
         // Filter for hydro-specific analog protocols
-        for (const auto &sensorType : allSensorTypes)
+        for (const auto &sensorType : *catalog)
         {
             if (sensorType.protocol == SensorProtocol::ANALOG_BNC_PROTOCOL ||
                 sensorType.protocol == SensorProtocol::ANALOG_EC2CH_PROTOCOL ||
                 sensorType.protocol == SensorProtocol::ANALOG_PH_PROTOCOL)
             {
-                hydroSensorTypes.push_back(sensorType);
+                hydroSensorTypes.push_back(&sensorType);
                 log("SETUP: Found hydro sensor type: %s, protocol: %s",
                     sensorType.name.c_str(), sensorType.getProtocolString().c_str());
             }
@@ -1253,8 +1218,9 @@ inline void ModuleSetupService::addHydroSensors(Node &node)
         std::string moduleUid = moduleConfig->getModuleUid();
         std::vector<bool> pinUsed(sensorPinCount + 1, false);
 
-        for (const auto &sensorType : hydroSensorTypes)
+        for (const auto *hydroSensorType : hydroSensorTypes)
         {
+            const SensorType &sensorType = *hydroSensorType;
             if (!sensorType.analogPinConfig.empty())
             {
                 for (const auto &analogConfig : sensorType.analogPinConfig)
@@ -1586,10 +1552,20 @@ inline void ModuleSetupService::setupModule()
         arduinoAdapter ? arduinoAdapter->millis() : 0,
         (arduinoAdapter ? arduinoAdapter->millis() : 0) - relayStart);
 
+    unsigned long busStart = arduinoAdapter ? arduinoAdapter->millis() : 0;
+    setupSensorBus();
+    log("[%lu ms] SETUP: setupSensorBus done (took %lu ms)",
+        arduinoAdapter ? arduinoAdapter->millis() : 0,
+        (arduinoAdapter ? arduinoAdapter->millis() : 0) - busStart);
+
+    powerTheStoredSensorPorts();
+
     if (ledUseCases)
     {
         unsigned long ts = arduinoAdapter ? arduinoAdapter->millis() : 0;
-        ledUseCases->ledOnLoad();
+        // The pins exist from here on, so the front panel can start saying that the module is
+        // coming up. It says it in one pattern until setup is over.
+        ledUseCases->setBootStage(LED_BOOT_STAGE_BOOTING);
         log("[%lu ms] SETUP: LED on-load sequence executed (took %lu ms)",
             arduinoAdapter ? arduinoAdapter->millis() : 0,
             (arduinoAdapter ? arduinoAdapter->millis() : 0) - ts);
@@ -1601,9 +1577,17 @@ inline void ModuleSetupService::setupModule()
     unsigned long modeEnd = arduinoAdapter ? arduinoAdapter->millis() : 0;
     log("[%lu ms] SETUP: handleModuleMode done (took %lu ms)", modeEnd, modeEnd - modeStart);
 
+    // The end of the boot, in one line and in the module's own uptime: everything above this line
+    // is setup and everything below it is the control loop, and the front panel changes hands on
+    // the same millisecond.
+    log("BOOT: complete in %lu ms", arduinoAdapter ? arduinoAdapter->millis() : 0);
+
     if (ledUseCases)
     {
         unsigned long ts = arduinoAdapter ? arduinoAdapter->millis() : 0;
+        // The boot indication ends before the LED is cleared, so that what it was drawing has
+        // stopped by the time the working indication takes the LED over.
+        ledUseCases->setBootStage(LED_BOOT_STAGE_RUNNING);
         ledUseCases->ledOffLoad();
         log("[%lu ms] SETUP: LED off-load sequence executed (took %lu ms)",
             arduinoAdapter ? arduinoAdapter->millis() : 0,
@@ -1641,328 +1625,6 @@ inline std::unique_ptr<ILoopService> ModuleSetupService::getLoopService()
     {
         log("SETUP: Error creating loop service: %s", e.what());
         return loopServiceFactory->createLoopService(ModuleModeEnum::USER_CAN_CONFIGURE);
-    }
-}
-
-inline bool ModuleSetupService::isPinOccupied(int pin, const std::vector<SensorEntity> &sensors, const std::string &protocol)
-{
-    for (const auto &sensor : sensors)
-    {
-        if (sensor.protocol != protocol || (sensor.status != SENSOR_STATUS_ADDED && sensor.status != SENSOR_STATUS_NEW))
-            continue;
-
-        if (sensor.pin == pin)
-        {
-            return true;
-        }
-    }
-    return false;
-}
-
-inline void ModuleSetupService::scanPinForSensorTypes(int pin, Node &node)
-{
-    if (!sensorTypeRepository || !sensorReader)
-    {
-        log("SETUP: Cannot scan pin %d - missing dependencies", pin);
-        return;
-    }
-
-    log("SETUP: Scanning pin %d for connected sensors", pin);
-
-    // Get all sensor types for scanning
-    auto allSensorTypes = sensorTypeRepository->getAll();
-    if (allSensorTypes.empty())
-    {
-        log("SETUP: No sensor types available for scanning");
-        return;
-    }
-
-    log("SETUP: Received %zu sensor types for scanning on pin %d:", allSensorTypes.size(), pin);
-    for (size_t i = 0; i < allSensorTypes.size(); i++)
-    {
-        log("SETUP:   [%zu] name: %s, uid: %s, protocol: %s",
-            i, allSensorTypes[i].name.c_str(), allSensorTypes[i].uid.c_str(),
-            allSensorTypes[i].getProtocolString().c_str());
-    }
-
-    bool isAdded = false;
-    std::string moduleUid = moduleConfig->getModuleUid();
-    for (const auto &sensorType : allSensorTypes)
-    {
-        mqttManager->loop(); // NOTE: not good solution - Keep MQTT responsive during potentially long operations
-
-        if (!sensorType.canScan || !sensorType.isSupported)
-        {
-            log("SETUP: Skipping sensor type %s (canScan=%s, isSupported=%s)",
-                sensorType.name.c_str(),
-                sensorType.canScan ? "true" : "false",
-                sensorType.isSupported ? "true" : "false");
-            continue;
-        }
-
-        SensorEntity tempSensor;
-        tempSensor.sensorType = sensorType.name;
-        tempSensor.model = sensorType.name;
-        tempSensor.protocol = sensorType.getProtocolString();
-        tempSensor.sensorTypeUid = sensorType.uid;
-        tempSensor.isActive = true;
-        tempSensor.pin = pin;
-        char pinStr[3];
-        snprintf(pinStr, sizeof(pinStr), "%02d", pin);
-        tempSensor.uid = moduleUid + "." + pinStr;
-        tempSensor.status = SensorStatusEnum::SENSOR_STATUS_NEW;
-
-        log("SETUP: Creating temp sensor for scanning - UID: %s, Type: %s, Model: %s, Protocol: %s, Pin: %d, SensorTypeUID: %s",
-            tempSensor.uid.c_str(), tempSensor.sensorType.c_str(), tempSensor.model.c_str(),
-            tempSensor.protocol.c_str(), tempSensor.pin, tempSensor.sensorTypeUid.c_str());
-
-        if (sensorType.isI2CSensor())
-        {
-            tempSensor.i2cAddress = sensorType.i2cAddress;
-            tempSensor.chipType = sensorType.chipType;
-            tempSensor.i2cRegisterConfigs.clear();
-            for (const auto &regConfig : sensorType.i2cRegisterConfig)
-            {
-                tempSensor.i2cRegisterConfigs.push_back(regConfig);
-            }
-            if (detectSensor(node, tempSensor, sensorType, pin))
-            {
-                isAdded = true;
-                break;
-            }
-        }
-        else if (sensorType.isModbusSensor())
-        {
-            tempSensor.baudRate = sensorType.baudRate;
-            tempSensor.modbusRegisterConfigs = sensorType.modbusRegisterConfig;
-            tempSensor.modbusPingAddress = sensorType.modbusPingAddress;
-            tempSensor.registerToStoreModbusDeviceAddress = sensorType.registerToStoreModbusDeviceAddress;
-            tempSensor.writeRegistersCommand = sensorType.writeRegistersCommand;
-            tempSensor.applyAddressAfterPowerCycle = sensorType.applyAddressAfterPowerCycle;
-
-            int scanTargetAddress = MODBUS_ADDRESS_MIN + pin;
-
-            tempSensor.modbusDeviceAddress = sensorType.modbusDeviceAddress;
-            log("SETUP: Attempting to set per-port address 0x%02X via broadcast on port %d for sensor type %s",
-                scanTargetAddress, pin, sensorType.name.c_str());
-
-            sensorReader->writeSensorAddress(tempSensor, scanTargetAddress);
-
-            log("SETUP: Assuming per-port address 0x%02X was set, trying to detect sensor", scanTargetAddress);
-            tempSensor.modbusDeviceAddress = scanTargetAddress;
-            if (detectSensor(node, tempSensor, sensorType, pin))
-            {
-                isAdded = true;
-                break;
-            }
-            log("SETUP: Sensor not detected at per-port address 0x%02X", scanTargetAddress);
-
-            tempSensor.modbusDeviceAddress = sensorType.modbusDeviceAddress;
-            log("SETUP: Trying default ModBus address 0x%02X for sensor type %s", sensorType.modbusDeviceAddress, sensorType.name.c_str());
-
-            if (detectSensor(node, tempSensor, sensorType, pin))
-            {
-                isAdded = true;
-                break;
-            }
-
-            log("SETUP: Sensor not found at default address, scanning range 0x%02X-0x%02X", MODBUS_ADDRESS_MIN, MODBUS_ADDRESS_MAX);
-            for (int address = MODBUS_ADDRESS_MIN; address <= MODBUS_ADDRESS_MAX; address++)
-            {
-                mqttManager->loop(); // NOTE: not good solution - Keep MQTT responsive during potentially long operations
-
-                tempSensor.modbusDeviceAddress = address;
-                log("SETUP: Scanning ModBus address 0x%02X for sensor type %s", address, sensorType.name.c_str());
-
-                if (detectSensor(node, tempSensor, sensorType, pin))
-                {
-                    isAdded = true;
-                    break;
-                }
-            }
-
-            if (isAdded)
-            {
-                break;
-            }
-        }
-    }
-
-    if (isAdded == false)
-    {
-        Sensor sensor;
-        sensor.pin = pin;
-        sensor.type = "none";
-
-        char sensorId[20];
-        snprintf(sensorId, sizeof(sensorId), ".%02d", pin);
-        sensor.uid = node.uid + sensorId;
-
-        node.sensors.push_back(sensor);
-
-        log("SETUP: Added placeholder sensor group %d, type: %s, pin: %d, uid: %s",
-            pin, sensor.type.c_str(), sensor.pin, sensor.uid.c_str());
-
-        // for (int i = 0; i < MAX_SENSOR_CHANNELS; i++)
-        // {
-        //     Sensor sensor;
-        //     sensor.pin = pin;
-        //     sensor.type = "none";
-
-        //     char sensorId[20];
-        //     snprintf(sensorId, sizeof(sensorId), ".%02d.%02d", pin, i + 1);
-        //     sensor.uid = node.uid + sensorId;
-
-        //     node.sensors.push_back(sensor);
-
-        //     log("SETUP: Added placeholder sensor group %d index %d, type: %s, pin: %d, uid: %s",
-        //         pin, i, sensor.type.c_str(), sensor.pin, sensor.uid.c_str());
-        // }
-    }
-}
-
-inline bool ModuleSetupService::detectSensor(Node &node, const SensorEntity &tempSensor, const SensorType &sensorType, int pin)
-{
-    if (!sensorReader || !sensorReader->scanSensor(tempSensor))
-    {
-        return false;
-    }
-
-    // TODO: set new address ModBus sensors
-    log("SETUP: Detected %s sensor on pin %d", sensorType.name.c_str(), pin);
-
-    addSensorToStructure(node, tempSensor);
-
-    if (sensorRepository)
-    {
-        if (sensorRepository->createOrUpdateSensor(tempSensor))
-        {
-            log("SETUP: Successfully saved detected sensor %s to repository with NEW status", tempSensor.uid.c_str());
-        }
-        else
-        {
-            log("SETUP: Failed to save detected sensor %s to repository", tempSensor.uid.c_str());
-        }
-    }
-    else
-    {
-        log("SETUP: Sensor repository not available, cannot save detected sensor");
-    }
-
-    return true;
-}
-
-inline void ModuleSetupService::scanEmptyPinsForSensors(Node &node, const std::vector<SensorEntity> &existingSensors)
-{
-    if (!sensorTypeRepository || !sensorReader)
-    {
-        log("SETUP: Cannot scan for sensors - missing sensor type repository or reader");
-        return;
-    }
-
-    int sensorPinCount = moduleConfig->getSensorPinCount();
-    log("SETUP: Scanning %d pins for undetected sensors", sensorPinCount);
-
-    // Check each available pin
-    for (int pin = 0; pin < sensorPinCount; pin++)
-    {
-        bool pinOccupied = false;
-
-        // Check if pin is occupied by analog sensors
-        if (isPinOccupied(pin, existingSensors, "Analog"))
-        {
-            pinOccupied = true;
-        }
-
-        // Check if pin is occupied by I2C sensors (less common to use pin numbers)
-        if (!pinOccupied && isPinOccupied(pin, existingSensors, "I2C"))
-        {
-            pinOccupied = true;
-        }
-
-        // Check if pin is occupied by ModBus sensors
-        if (!pinOccupied && isPinOccupied(pin, existingSensors, "ModBus"))
-        {
-            pinOccupied = true;
-        }
-
-        if (!pinOccupied)
-        {
-            log("SETUP: Pin %d is empty, scanning for sensors", pin);
-            scanPinForSensorTypes(pin, node);
-        }
-        else
-        {
-            log("SETUP: Pin %d is occupied by existing sensor", pin);
-        }
-    }
-}
-
-inline void ModuleSetupService::removeDisconnectedNewSensorPlaceholders(Node &node, const SensorEntity &sensorEntity)
-{
-    if (sensorEntity.status == SENSOR_STATUS_NEW && sensorRepository)
-    {
-        log("SETUP: Sensor %s was auto-detected but is now disconnected, removing from repository", sensorEntity.uid.c_str());
-        if (sensorRepository->remove(sensorEntity.uid.c_str()))
-        {
-            log("SETUP: Successfully removed disconnected sensor %s from repository", sensorEntity.uid.c_str());
-        }
-        else
-        {
-            log("SETUP: Failed to remove disconnected sensor %s from repository", sensorEntity.uid.c_str());
-        }
-    }
-
-    if (sensorEntity.isMultiChannel())
-    {
-        if (sensorEntity.protocol == "ModBus")
-        {
-            for (const auto &config : sensorEntity.modbusRegisterConfigs)
-            {
-                Sensor sensor;
-                sensor.uid = sensorEntity.uid + "." + (config.channel < 10 ? "0" : "") + std::to_string(config.channel);
-                sensor.type = "none";
-                sensor.pin = sensorEntity.pin;
-                sensor.group = 0;
-
-                node.sensors.push_back(sensor);
-
-                log("SETUP: Added offline ModBus sensor placeholder %s, type: none, channel: %d, pin: %d",
-                    sensor.uid.c_str(), config.channel, sensor.pin);
-            }
-        }
-        else if (sensorEntity.protocol == "I2C")
-        {
-            for (const auto &config : sensorEntity.i2cRegisterConfigs)
-            {
-                Sensor sensor;
-                sensor.uid = sensorEntity.uid + "." + (config.channel < 10 ? "0" : "") + std::to_string(config.channel);
-                sensor.type = "none";
-                sensor.pin = sensorEntity.pin;
-                sensor.group = 0;
-
-                node.sensors.push_back(sensor);
-
-                log("SETUP: Added offline I2C sensor placeholder %s, type: none, channel: %d, pin: %d",
-                    sensor.uid.c_str(), config.channel, sensor.pin);
-            }
-        }
-        else
-        {
-            log("SETUP: Unsupported protocol for offline multi-channel sensor: %s", sensorEntity.protocol.c_str());
-        }
-    }
-    else
-    {
-        Sensor sensor;
-        sensor.uid = sensorEntity.uid + ".01";
-        sensor.type = "none";
-        sensor.pin = sensorEntity.pin;
-
-        node.sensors.push_back(sensor);
-
-        log("SETUP: Added offline single-channel sensor placeholder %s, type: none, protocol: %s, pin: %d",
-            sensor.uid.c_str(), sensorEntity.protocol.c_str(), sensor.pin);
     }
 }
 
@@ -2018,363 +1680,62 @@ inline void ModuleSetupService::createPlaceholderSensors(Node &node)
     }
 }
 
+/**
+ * @brief The sensor records of the structure, built from the registry and from nothing else.
+ *
+ * No transaction on the line happens here. The module describes the sensors it stored
+ * before the restart, starts polling them on the first sweep, and asks the line what else is out
+ * there afterwards - IStartupSensorScan, on the task that owns the line. A boot is seconds,
+ * and the discovery runs while the module is already working.
+ *
+ * `noScanSensors` decides whether the discovery is armed around the sensors the module holds, and
+ * it is cleared here, on the boot that consumed it, exactly as before. What the flag has never
+ * skipped is the preparation of the sensors already stored - the per-model register writes and the
+ * port power arrangement - so a boot that skips the discovery arms that alone. A module that holds
+ * no sensor has nothing to prepare: its discovery is armed whatever the flag says.
+ */
 inline void ModuleSetupService::processSensorsFromRepository(Node &node)
 {
-    auto sensorEntities = sensorRepository->getAll();
-    log("SETUP: Found %zu sensors in repository", sensorEntities.size());
+    log("SETUP: Found %d sensors in repository", sensorRepository->count());
 
     ISettings *settings = moduleConfig->getSettings();
-    bool skipSensorScan = settings && settings->getNoScanSensors();
-
-    if (skipSensorScan)
+    const bool skipDiscovery = settings && settings->getNoScanSensors();
+    if (skipDiscovery)
     {
-        log("SETUP: noScanSensors flag is set - skipping existing sensor verification and empty pin scan");
-
-        for (auto &sensorEntity : sensorEntities)
-        {
-            log("SETUP: Adding sensor %s to structure without verification (noScanSensors)",
-                sensorEntity.uid.c_str());
-            addSensorToStructure(node, sensorEntity);
-            mqttManager->loop();
-        }
-
-        // prepareSensorsForReading is invoked by fillSensorModuleStructure after this
-        // pass, on both the fast path and the normal scan path.
         settings->setNoScanSensors(false);
-        return;
     }
 
-    for (auto &sensorEntity : sensorEntities)
+    if (!startupSensorScan)
     {
-        if (jsonConverter)
+        log("SETUP: startup sensor discovery is not wired - no sensor discovery will happen");
+        for (const auto &sensorEntity : sensorRepository->getAll())
         {
-            std::string sensorJson = jsonConverter->sensorToJson(sensorEntity);
-            log("SETUP: Processing sensor entity: %s", sensorJson.c_str());
-        }
-        else
-        {
-            log("SETUP: Processing sensor entity - UID: %s, Type: %s, Protocol: %s, Status: %s",
-                sensorEntity.uid.c_str(),
-                sensorEntity.sensorType.c_str(),
-                sensorEntity.protocol.c_str(),
-                getSensorStatusName(sensorEntity.status));
-        }
-
-        if (sensorReader && sensorReader->scanSensor(sensorEntity))
-        {
-            log("SETUP: Sensor %s is online, adding to structure", sensorEntity.uid.c_str());
-            log("SETUP: Sensor modbusDeviceAddress %d", sensorEntity.modbusDeviceAddress);
             addSensorToStructure(node, sensorEntity);
         }
-        else
-        {
-            log("SETUP: Sensor %s is offline", sensorEntity.uid.c_str());
-
-            if (sensorEntity.status == SENSOR_STATUS_ADDED)
-            {
-                log("SETUP: Sensor %s was previously added but is now offline, updating status to ERROR", sensorEntity.uid.c_str());
-                addSensorToStructure(node, sensorEntity);
-            }
-            else
-            {
-                log("SETUP: Sensor %s status is %s, adding placeholder with type 'none'",
-                    sensorEntity.uid.c_str(), getSensorStatusName(sensorEntity.status));
-                removeDisconnectedNewSensorPlaceholders(node, sensorEntity);
-            }
-        }
-        mqttManager->loop();
-    }
-
-    scanEmptyPinsForSensors(node, sensorEntities);
-
-    if (settings)
-    {
-        log("SETUP: Sensor scan completed");
-    }
-}
-
-inline void ModuleSetupService::handleModbusAddressManagement(Node &node)
-{
-    log("SETUP: handleModbusAddressManagement called");
-
-    // Address validation and duplicate handling for Modbus sensors
-    if (!sensorRepository)
-    {
-        log("SETUP: Skipping Modbus address management - sensorRepository is NULL");
         return;
     }
 
-    if (!sensorReader)
+    startupSensorScan->describeStoredSensors(node);
+
+    if (skipDiscovery && sensorRepository->count() > 0)
     {
-        log("SETUP: Skipping Modbus address management - sensorReader is NULL");
+        // The flag skips the discovery, not the per-model register writes: those are owed to the
+        // sensors the module already holds, on this boot as on any other.
+        startupSensorScan->armPreparationOnly();
+        log("SETUP: noScanSensors flag is set - only the sensor preparation is armed");
         return;
     }
 
-    if (!modbusAddressAllocator)
+    if (skipDiscovery)
     {
-        log("SETUP: Skipping Modbus address management - modbusAddressAllocator is NULL");
-        return;
+        // A module that holds no sensor has nothing to prepare, and the flag is used up on this
+        // boot: skipped, the discovery would leave it with no sensor and the server with none. The
+        // same rule a catalog that arrives late follows (IStartupSensorScan::onCatalogSettled()).
+        log("SETUP: noScanSensors flag is set, but no sensor is stored - the discovery is armed");
     }
 
-    log("SETUP: Starting address validation and duplicate handling for Modbus sensors");
-
-    // Get all sensors again to include newly detected ones
-    auto allSensorEntities = sensorRepository->getAll();
-    log("SETUP: Retrieved %zu sensor entities from repository", allSensorEntities.size());
-
-    if (allSensorEntities.empty())
-    {
-        log("SETUP: No sensors in repository, skipping address management");
-        return;
-    }
-
-    // Collect all Modbus sensors and their addresses
-    std::map<int, std::vector<SensorEntity *>> addressMap;
-    std::vector<SensorEntity *> sensorsNeedingNewAddress;
-
-    log("SETUP: Calling collectModbusSensorsAndAddresses...");
-    collectModbusSensorsAndAddresses(allSensorEntities, addressMap, sensorsNeedingNewAddress);
-    log("SETUP: collectModbusSensorsAndAddresses completed");
-
-    log("SETUP: Calling findDuplicateAddresses...");
-    findDuplicateAddresses(addressMap, sensorsNeedingNewAddress);
-    log("SETUP: findDuplicateAddresses completed");
-
-    log("SETUP: Calling assignNewAddresses...");
-    assignNewAddresses(sensorsNeedingNewAddress, addressMap);
-    log("SETUP: assignNewAddresses completed");
-}
-
-inline void ModuleSetupService::collectModbusSensorsAndAddresses(const std::vector<SensorEntity> &allSensorEntities,
-                                                                 std::map<int, std::vector<SensorEntity *>> &addressMap,
-                                                                 std::vector<SensorEntity *> &sensorsNeedingNewAddress)
-{
-    log("SETUP: collectModbusSensorsAndAddresses called with %zu sensor entities", allSensorEntities.size());
-#ifdef ESP_PLATFORM
-    log("SETUP: Free heap at start: %d", ESP.getFreeHeap());
-#endif
-
-    int modbusCount = 0;
-    int addedCount = 0;
-    int validAddressCount = 0;
-    int invalidAddressCount = 0;
-
-    for (auto &sensorEntity : const_cast<std::vector<SensorEntity> &>(allSensorEntities))
-    {
-        log("SETUP: Processing sensor - UID: %s, Protocol: %s, Status: %d",
-            sensorEntity.uid.c_str(), sensorEntity.protocol.c_str(), sensorEntity.status);
-
-        if (sensorEntity.protocol == "ModBus")
-        {
-            modbusCount++;
-            log("SETUP: Found ModBus sensor %s with address 0x%02X",
-                sensorEntity.uid.c_str(), sensorEntity.modbusDeviceAddress);
-
-            if (sensorEntity.status == SENSOR_STATUS_NEW || sensorEntity.status == SENSOR_STATUS_ADDED)
-            {
-                addedCount++;
-                int address = sensorEntity.modbusDeviceAddress;
-
-                log("SETUP: ModBus sensor %s has status %d, checking address 0x%02X",
-                    sensorEntity.uid.c_str(), sensorEntity.status, address);
-
-                // Check if address is outside valid range (MODBUS_ADDRESS_MIN-MODBUS_ADDRESS_MAX)
-                if (address < MODBUS_ADDRESS_MIN || address > MODBUS_ADDRESS_MAX)
-                {
-                    invalidAddressCount++;
-                    log("SETUP: Sensor %s has address 0x%02X outside valid range 0x%02X-0x%02X, needs new address",
-                        sensorEntity.uid.c_str(), address, MODBUS_ADDRESS_MIN, MODBUS_ADDRESS_MAX);
-                    sensorsNeedingNewAddress.push_back(&sensorEntity);
-                    log("SETUP: Added sensor %s to sensorsNeedingNewAddress (total: %zu)",
-                        sensorEntity.uid.c_str(), sensorsNeedingNewAddress.size());
-                }
-                else
-                {
-                    validAddressCount++;
-                    addressMap[address].push_back(&sensorEntity);
-                    log("SETUP: Added sensor %s to addressMap at address 0x%02X (sensors at this address: %zu)",
-                        sensorEntity.uid.c_str(), address, addressMap[address].size());
-                }
-            }
-            else
-            {
-                log("SETUP: ModBus sensor %s has status %d (not NEW/ADDED), skipping address validation",
-                    sensorEntity.uid.c_str(), sensorEntity.status);
-            }
-        }
-        else
-        {
-            log("SETUP: Sensor %s has protocol %s (not ModBus), skipping",
-                sensorEntity.uid.c_str(), sensorEntity.protocol.c_str());
-        }
-    }
-
-    log("SETUP: Collection summary - Total sensors: %zu, ModBus: %d, Added: %d, Valid addresses: %d, Invalid addresses: %d",
-        allSensorEntities.size(), modbusCount, addedCount, validAddressCount, invalidAddressCount);
-    log("SETUP: Address map size: %zu, Sensors needing new address: %zu",
-        addressMap.size(), sensorsNeedingNewAddress.size());
-#ifdef ESP_PLATFORM
-    log("SETUP: Free heap at end: %d", ESP.getFreeHeap());
-#endif
-}
-
-inline void ModuleSetupService::findDuplicateAddresses(const std::map<int, std::vector<SensorEntity *>> &addressMap,
-                                                       std::vector<SensorEntity *> &sensorsNeedingNewAddress)
-{
-    log("SETUP: findDuplicateAddresses called with addressMap size: %zu", addressMap.size());
-    log("SETUP: sensorsNeedingNewAddress initial size: %zu", sensorsNeedingNewAddress.size());
-
-    int duplicatesFound = 0;
-    int sensorsMarkedForChange = 0;
-
-    // Find duplicates and mark for address change (keep first, change others)
-    for (const auto &pair : addressMap)
-    {
-        int address = pair.first;
-        const auto &sensors = pair.second;
-
-        log("SETUP: Checking address 0x%02X with %zu sensors", address, sensors.size());
-
-        if (sensors.size() > 1)
-        {
-            duplicatesFound++;
-            log("SETUP: Found %zu sensors with duplicate address 0x%02X", sensors.size(), address);
-
-            // Log all sensors at this address
-            for (size_t i = 0; i < sensors.size(); i++)
-            {
-                log("SETUP: Sensor %zu at address 0x%02X: UID=%s, Status=%d",
-                    i, address, sensors[i]->uid.c_str(), sensors[i]->status);
-            }
-
-            size_t ownerIndex = 0;
-            size_t perPortMatches = 0;
-            for (size_t i = 0; i < sensors.size(); i++)
-            {
-                if (sensors[i]->modbusDeviceAddress == MODBUS_ADDRESS_MIN + sensors[i]->pin)
-                {
-                    if (perPortMatches == 0)
-                    {
-                        ownerIndex = i;
-                    }
-                    perPortMatches++;
-                }
-            }
-
-            const char *rule = "per_port_match";
-            if (perPortMatches != 1)
-            {
-                ownerIndex = 0;
-                rule = "first_in_repository";
-            }
-
-            log("SETUP: Keeping sensor %s by rule %s, marking others for address change",
-                sensors[ownerIndex]->uid.c_str(), rule);
-
-            std::string movedUids;
-            for (size_t i = 0; i < sensors.size(); i++)
-            {
-                if (i == ownerIndex)
-                {
-                    continue;
-                }
-
-                sensorsNeedingNewAddress.push_back(sensors[i]);
-                sensorsMarkedForChange++;
-                if (!movedUids.empty())
-                {
-                    movedUids += ",";
-                }
-                movedUids += "\"" + sensors[i]->uid + "\"";
-                log("SETUP: Sensor %s marked for address change due to duplicate address 0x%02X",
-                    sensors[i]->uid.c_str(), address);
-            }
-
-            if (logger)
-            {
-                char addressText[8];
-                snprintf(addressText, sizeof(addressText), "0x%02X", address);
-                std::string details = "{\"address\":\"" + std::string(addressText) +
-                                      "\",\"keptUid\":\"" + sensors[ownerIndex]->uid +
-                                      "\",\"rule\":\"" + rule +
-                                      "\",\"movedUids\":[" + movedUids + "]}";
-                logger->logJson("SENSOR_ADDRESS", "duplicate_owner_chosen", details.c_str());
-            }
-        }
-        else
-        {
-            log("SETUP: Address 0x%02X has only 1 sensor, no duplicates", address);
-        }
-    }
-
-    log("SETUP: findDuplicateAddresses completed - Duplicate addresses found: %d, Sensors marked for change: %d",
-        duplicatesFound, sensorsMarkedForChange);
-    log("SETUP: sensorsNeedingNewAddress final size: %zu", sensorsNeedingNewAddress.size());
-}
-
-inline void ModuleSetupService::assignNewAddresses(std::vector<SensorEntity *> &sensorsNeedingNewAddress,
-                                                   const std::map<int, std::vector<SensorEntity *>> &addressMap)
-{
-    // Assign new addresses to sensors that need them
-    if (sensorsNeedingNewAddress.empty())
-    {
-        log("SETUP: No sensors need address changes");
-        return;
-    }
-
-    log("SETUP: Assigning new addresses to %zu sensors", sensorsNeedingNewAddress.size());
-
-    ModbusAddressOccupancy occupied;
-    for (const auto &pair : addressMap)
-    {
-        for (const SensorEntity *sensorEntity : pair.second)
-        {
-            occupied[pair.first].push_back(sensorEntity->uid);
-        }
-    }
-
-    for (SensorEntity *sensorEntity : sensorsNeedingNewAddress)
-    {
-        int newAddress = modbusAddressAllocator->nextFreeAddress(occupied, MODBUS_ADDRESS_MIN + sensorEntity->pin);
-
-        if (newAddress != -1)
-        {
-            log("SETUP: Attempting to set new address 0x%02X for sensor %s (current: 0x%02X)",
-                newAddress, sensorEntity->uid.c_str(), sensorEntity->modbusDeviceAddress);
-
-            // Write new address to sensor
-            if (sensorReader->writeSensorAddress(*sensorEntity, newAddress))
-            {
-                int oldAddress = sensorEntity->modbusDeviceAddress;
-                sensorEntity->modbusDeviceAddress = newAddress;
-                log("SETUP: Address successfully changed - Old: 0x%02X, New: 0x%02X", oldAddress, newAddress);
-
-                // Update sensor in repository
-                if (sensorRepository->createOrUpdateSensor(*sensorEntity))
-                {
-                    log("SETUP: Successfully changed sensor %s address from 0x%02X to 0x%02X",
-                        sensorEntity->uid.c_str(), oldAddress, newAddress);
-
-                    occupied[newAddress].push_back(sensorEntity->uid);
-                }
-                else
-                {
-                    log("SETUP: Failed to update sensor %s in repository after address change",
-                        sensorEntity->uid.c_str());
-                }
-            }
-            else
-            {
-                log("SETUP: Failed to write new address 0x%02X to sensor %s",
-                    newAddress, sensorEntity->uid.c_str());
-            }
-        }
-        else
-        {
-            log("SETUP: No available addresses in range 0x%02X-0x%02X for sensor %s",
-                MODBUS_ADDRESS_MIN, MODBUS_ADDRESS_MAX, sensorEntity->uid.c_str());
-        }
-    }
+    startupSensorScan->arm();
+    log("SETUP: startup sensor discovery armed - it runs on the acquisition task");
 }
 
 #endif // MODULE_SETUP_SERVICE_H

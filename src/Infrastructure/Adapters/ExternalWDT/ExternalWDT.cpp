@@ -17,11 +17,29 @@ ExternalWDT::ExternalWDT()
     , enabled_(false)
     , taskRunning_(false)
     , level_(false)
+    , loopGate_()
     , kickCount_(0)
+    , starvedKickCount_(0)
     , taskHandle_(nullptr)
     , timer_(nullptr)
     , mutex_(nullptr)
 {
+}
+
+void ExternalWDT::configureLoopGate(uint32_t stallLimitMs)
+{
+    loopGate_.setStallLimitMs(stallLimitMs);
+    ESP_LOGI(TAG, "Loop gate configured: stall limit %u ms", (unsigned)stallLimitMs);
+}
+
+void ExternalWDT::noteLoopAlive()
+{
+    loopGate_.noteAlive((uint32_t)(esp_timer_get_time() / 1000));
+}
+
+uint64_t ExternalWDT::getStarvedKickCount() const
+{
+    return starvedKickCount_.load();
 }
 
 // Destructor
@@ -147,25 +165,35 @@ esp_err_t ExternalWDT::kick()
 void ExternalWDT::wdtTask(void* param)
 {
     ExternalWDT* wdt = static_cast<ExternalWDT*>(param);
-    ESP_LOGI(TAG, "WDT kick task started");
 
+    // This task carries a 2 KB stack and nothing on its path prints: one esp_log call unrolls
+    // through vprintf, buffered stdio and the UART driver, which is deeper than what is left of
+    // that stack, so a print here would end the task on its stack canary instead of reporting
+    // anything. What happened is in kickCount_ and starvedKickCount_, for a reader on another
+    // task to pick up.
     TickType_t lastWakeTime = xTaskGetTickCount();
     const TickType_t period = pdMS_TO_TICKS(WDT_KICK_INTERVAL_MS);
 
     while (wdt->taskRunning_)
     {
-        // Kick the WDT
-        esp_err_t ret = wdt->kick();
-        if (ret != ESP_OK)
+        // The kick vouches for the whole module, and the module is alive only if its control
+        // loop is. While the loop beats, kick on the chip's own cadence; once the loop has
+        // been silent past the stall limit, stop vouching - the task watchdog has either
+        // already reset the module or is itself broken, and withholding the kicks hands the
+        // decision to the hardware.
+        if (wdt->loopGate_.allowKick((uint32_t)(esp_timer_get_time() / 1000)))
         {
-            ESP_LOGE(TAG, "Failed to kick WDT: %s", esp_err_to_name(ret));
+            wdt->kick();
+        }
+        else
+        {
+            wdt->starvedKickCount_++;
         }
 
         // Wait for next period using absolute timing
         vTaskDelayUntil(&lastWakeTime, period);
     }
 
-    ESP_LOGI(TAG, "WDT kick task stopped");
     vTaskDelete(nullptr);
 }
 

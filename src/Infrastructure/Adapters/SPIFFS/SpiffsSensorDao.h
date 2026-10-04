@@ -3,6 +3,7 @@
 #include "SpiffsDao.h"
 #include "ISpiffsSensorDao.h"
 #include "Core/Domain/Data/Entities/Sensor/Sensor.h"
+#include <functional>
 
 /**
  * @brief Implementation of Sensor-specific DAO using SPIFFS storage
@@ -32,7 +33,26 @@ protected:
     }
 
     bool jsonToEntities(const std::string& jsonStr, std::vector<SensorEntity>& sensors) override {
-        return jsonConverter->sensorsFromJson(jsonStr, sensors);
+        // The result keeps its meaning - "the file holds at least one sensor" - which getAll()
+        // passes straight on as its own. Only the counts below say what reading it cost.
+        size_t skipped = 0;
+        size_t refused = 0;
+        const bool read = jsonConverter->sensorsFromJson(jsonStr, sensors, skipped, refused);
+
+        // A stored sensor that cannot be read is left out, and the module runs one sensor short
+        // until the registry is rewritten. A sensor past the module's capacity is one the registry
+        // has no slot for. Both are silent otherwise: the module simply comes up with fewer
+        // sensors than it stored.
+        if (skipped > 0) {
+            log("SpiffsSensorDao: WARNING - %d of %d stored sensors could not be read and were skipped",
+                static_cast<int>(skipped), static_cast<int>(skipped + refused + sensors.size()));
+        }
+        if (refused > 0) {
+            log("SpiffsSensorDao: WARNING - %d stored sensors past the capacity of %d were refused",
+                static_cast<int>(refused), static_cast<int>(SensorLimits::MAX_SENSORS_PER_MODULE));
+        }
+
+        return read;
     }
 
     bool filterSensors(const std::function<bool(const SensorEntity&)>& predicate, std::vector<SensorEntity>& sensors) {
@@ -61,7 +81,6 @@ public:
      */
     SpiffsSensorDao(ISpiffsAdapter* spiffsAdapter, IJsonConverter* jsonConverter, IDebugSystem* debugSystem = nullptr, ILogger* logger = nullptr)
         : SpiffsDao<SensorEntity>(spiffsAdapter, jsonConverter, debugSystem, logger) {
-        initialize(); // Initialize after object creation
     }
 
     // Implementation of ISpiffsDao methods - needed to resolve ambiguity
@@ -83,6 +102,10 @@ public:
 
     bool getAll(std::vector<SensorEntity>& entities) override {
         return SpiffsDao<SensorEntity>::getAll(entities);
+    }
+
+    StoredRead readAll(std::vector<SensorEntity>& entities) override {
+        return SpiffsDao<SensorEntity>::readAll(entities);
     }
 
     bool clear() override {

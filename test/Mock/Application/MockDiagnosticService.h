@@ -7,7 +7,10 @@ class MockDiagnosticService : public IDiagnosticService {
 public:
     bool performCalled = false;
     bool performAndSendCalled = false;
+    bool sendCalled = false;
+    int sendCount = 0;
     DiagnosticDto lastDiagnosticData;
+    DiagnosticDto lastSentData;
     bool performAndSendReturnValue = true;
 
     DiagnosticDto perform() override {
@@ -19,15 +22,25 @@ public:
         return result;
     }
 
+    bool send(const DiagnosticDto& diagnosticData) override {
+        sendCalled = true;
+        sendCount++;
+        lastSentData = diagnosticData;
+        return performAndSendReturnValue;
+    }
+
     bool performAndSend() override {
         performAndSendCalled = true;
         DiagnosticDto result = perform();
-        return performAndSendReturnValue;
+        return send(result);
     }
 
     void reset() {
         performCalled = false;
         performAndSendCalled = false;
+        sendCalled = false;
+        sendCount = 0;
+        lastSentData = DiagnosticDto();
         performAndSendReturnValue = true;
         // Reset the diagnostic data
         lastDiagnosticData = DiagnosticDto();

@@ -40,6 +40,52 @@ public:
         executeRawCalled = true;
         return executeRawReturnValue;
     }
+
+    // --- The split complex-command path ---------------------------------------------------------
+
+    bool prepareComplexCommandCalled = false;
+    bool executeBusWorkCalled = false;
+    bool executeNetworkWorkCalled = false;
+    bool finishComplexCommandCalled = false;
+
+    /** What prepareComplexCommand() answers; the default routes nothing and answers immediately. */
+    bool prepareReturnValue = false;
+    ComplexCommandWork prepareWorkReturnValue;
+    ModuleCommandExecutionResult prepareImmediateReturnValue{"", "Done"};
+    ComplexCommandOutcome busWorkOutcome;
+    ComplexCommandOutcome networkWorkOutcome;
+    ModuleCommandExecutionResult finishResultReturnValue{"", "Done"};
+
+    bool prepareComplexCommand(const ModuleCommandDto &command,
+                               ComplexCommandWork &work,
+                               ModuleCommandExecutionResult &immediate) override {
+        prepareComplexCommandCalled = true;
+        work = prepareWorkReturnValue;
+        work.command = command;
+        immediate = prepareImmediateReturnValue;
+        immediate.uid = command.uid;
+        return prepareReturnValue;
+    }
+
+    ComplexCommandOutcome executeBusWork(const ComplexCommandWork &work) override {
+        executeBusWorkCalled = true;
+        return busWorkOutcome;
+    }
+
+    ComplexCommandOutcome executeNetworkWork(const ComplexCommandWork &work) override {
+        executeNetworkWorkCalled = true;
+        return networkWorkOutcome;
+    }
+
+    bool finishComplexCommand(const ComplexCommandWork &work,
+                              const ComplexCommandOutcome &outcome,
+                              ModuleCommandExecutionResult &result,
+                              ComplexCommandWork &nextWork) override {
+        finishComplexCommandCalled = true;
+        result = finishResultReturnValue;
+        result.uid = work.command.uid;
+        return true;
+    }
 };
 
 #endif // MOCK_MODULE_COMMAND_EXECUTION_USE_CASE_H

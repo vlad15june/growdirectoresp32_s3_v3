@@ -1,11 +1,12 @@
 #include <unity.h>
 #include <string>
 
-#include "Infrastructure/Adapters/Json/JsonConverter.h"
+#include "Infrastructure/Adapters/Json/ArduinoJsonConverter.h"
 #include "Core/Domain/UseCases/ModuleCommand/ModuleCommandExecutionUseCase.h"
 #include "Infrastructure/Controllers/UDP/UdpInboundDispatcher.h"
 #include "Infrastructure/Controllers/UDP/RemoteModuleCommandReceiver.h"
 #include "Application/Services/CommandService.h"
+#include "Application/Services/Sensors/SensorAcquisitionService.h"
 #include "Application/DTOs/CommandDto.h"
 #include "Core/Domain/Enums/BootTypeEnum.h"
 #include "Core/Domain/Enums/ModuleModeEnum.h"
@@ -16,6 +17,7 @@
 #include "Mock/Infrastructure/Configuration/MockSettings.h"
 #include "Mock/Infrastructure/Configuration/MockModuleConfig.h"
 #include "Mock/Infrastructure/Udp/MockUdpManager.h"
+#include "Mock/Application/MockOutbox.h"
 #include "Mock/Infrastructure/Api/MockHybridAPIService.h"
 #include "Mock/Core/Domain/MockRemoteModuleCommandSender.h"
 
@@ -74,16 +76,25 @@ static void test_sender_missing(void) {
     TEST_ASSERT_TRUE(result.status == ModuleCommandStatus::ERROR);
 }
 
+// RebootRemoteModule is one of the four raw commands, so it is executed by the
+// acquisition task rather than on the control loop that dispatched the MQTT message. The real
+// SensorAcquisitionService is used here, with no scheduler, and stepped by hand: the point of the
+// test is that the same executeRaw() runs and the same "accepted" is reported, one hop later.
 static void test_command_service_route_inline_ack(void) {
     MockLogger logger;
     MockDebugSystem debug;
     MockRemoteModuleCommandSender sender;
-    MockHybridAPIService hybrid;
+    MockOutbox outbox;
 
     ModuleCommandExecutionUseCase uc(&logger, &debug);
     uc.setRemoteModuleCommandSender(&sender);
 
-    CommandService commandService(nullptr, &uc, nullptr, &hybrid, nullptr, &logger, &debug);
+    SensorAcquisitionService acquisition(nullptr, nullptr, nullptr);
+    acquisition.setRawCommandExecutor(&uc);
+
+    CommandService commandService(nullptr, &uc, nullptr, nullptr, &logger, &debug);
+    commandService.setOutbox(&outbox);
+    commandService.setBusCommandExecutor(&acquisition);
 
     CommandDto command;
     command.type = "ModuleCommandNotification";
@@ -93,9 +104,16 @@ static void test_command_service_route_inline_ack(void) {
     bool ok = commandService.process(command);
 
     TEST_ASSERT_TRUE(ok);
-    TEST_ASSERT_TRUE(hybrid.sendCommandResultCalled);
-    TEST_ASSERT_EQUAL_STRING("accepted", hybrid.lastCommandResult.status.c_str());
+    // Accepted, not yet executed: the control loop did not make the call itself.
+    TEST_ASSERT_EQUAL_INT(0, sender.sendRebootCallCount);
+    TEST_ASSERT_EQUAL_UINT32(0, (uint32_t)outbox.commandResults.size());
+
+    acquisition.step();       // the acquisition task's turn
+    commandService.loop();    // the control loop collects the outcome
+
     TEST_ASSERT_EQUAL_INT(1, sender.sendRebootCallCount);
+    TEST_ASSERT_EQUAL_UINT32(1, (uint32_t)outbox.commandResults.size());
+    TEST_ASSERT_EQUAL_STRING("accepted", outbox.commandResults[0].status.c_str());
 }
 
 static void test_dispatcher_fans_out(void) {
@@ -122,7 +140,7 @@ static void test_receiver_reboots_on_self(void) {
     MockUdpManager udpManager;
     MockModuleConfig moduleConfig;
     MockSettings settings;
-    JsonConverter jsonConverter;
+    ArduinoJsonConverter jsonConverter;
 
     moduleConfig.setModuleUid("48:27:E2:00:00:0B");
 
@@ -146,7 +164,7 @@ static void test_receiver_ignores_foreign_target(void) {
     MockUdpManager udpManager;
     MockModuleConfig moduleConfig;
     MockSettings settings;
-    JsonConverter jsonConverter;
+    ArduinoJsonConverter jsonConverter;
 
     moduleConfig.setModuleUid("48:27:E2:00:00:0B");
 
@@ -170,7 +188,7 @@ static void test_receiver_drops_non_command_payload(void) {
     MockUdpManager udpManager;
     MockModuleConfig moduleConfig;
     MockSettings settings;
-    JsonConverter jsonConverter;
+    ArduinoJsonConverter jsonConverter;
 
     moduleConfig.setModuleUid("48:27:E2:00:00:0B");
 
@@ -189,7 +207,7 @@ static void test_receiver_drops_non_command_payload(void) {
 }
 
 static void test_converter_round_trip(void) {
-    JsonConverter converterImpl;
+    ArduinoJsonConverter converterImpl;
     IJsonConverter& converter = converterImpl;
 
     std::string json = converter.remoteModuleCommandToJson("Reboot", "48:27:E2:00:00:0B");
@@ -204,7 +222,7 @@ static void test_converter_round_trip(void) {
 }
 
 static void test_converter_rejects_sensor_payload(void) {
-    JsonConverter converterImpl;
+    ArduinoJsonConverter converterImpl;
     IJsonConverter& converter = converterImpl;
 
     std::string command;

@@ -2,12 +2,13 @@
 #define MOCK_WIFI_MANAGER_H
 
 #include "Core/Domain/Interfaces/IWifiManager.h"
+#include <functional>
 #include <string>
 
 class MockWiFiManager : public IWifiManager {
 public:
     // Mock state variables
-    bool setupWifiConnectionCalled = false;
+    bool registerNetworksCalled = false;
     bool addWifiNetworkCalled = false;
     
     // Parameters captured from last call
@@ -15,23 +16,31 @@ public:
     std::string lastPassword;
     
     // Return values for mock methods
-    bool setupWifiConnectionSuccess = true;
+    int registerNetworksResult = 1;
     bool addWifiNetworkSuccess = true;
     
+    /** Run at the moment the manager is asked to hand the radio its networks, to see what the
+     *  caller did first. */
+    std::function<void()> onRegisterNetworks;
+
     // Reset all state variables
     void reset() {
-        setupWifiConnectionCalled = false;
+        registerNetworksCalled = false;
         addWifiNetworkCalled = false;
         lastSsid = "";
         lastPassword = "";
-        setupWifiConnectionSuccess = true;
+        registerNetworksResult = 1;
         addWifiNetworkSuccess = true;
+        onRegisterNetworks = nullptr;
     }
 
     // IWifiManager implementation
-    bool setupWifiConnection() override {
-        setupWifiConnectionCalled = true;
-        return setupWifiConnectionSuccess;
+    int registerNetworks() override {
+        registerNetworksCalled = true;
+        if (onRegisterNetworks) {
+            onRegisterNetworks();
+        }
+        return registerNetworksResult;
     }
     
     bool addWifiNetwork(const char* ssid, const char* password) override {

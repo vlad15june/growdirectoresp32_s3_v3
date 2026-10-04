@@ -36,6 +36,16 @@ public:
     
     // Check if time is currently synchronized
     virtual bool isTimeSynchronized() = 0;
+
+    // Whether SNTP has set the clock during this boot. A clock that reads only because it was
+    // seeded from storage has not been set by it. Safe to ask from any task.
+    virtual bool wasSetBySntpThisBoot() = 0;
+
+    // The uptime, in ms, at which SNTP first set the clock during this boot; 0 until it has.
+    virtual unsigned long sntpSetAtMs() = 0;
+
+    // Whether this boot's clock was seeded from the time kept in storage.
+    virtual bool wasSeededFromStorage() = 0;
 };
 
 // Default implementation for the destructor

@@ -3,6 +3,8 @@
 
 #include "Core/Domain/Interfaces/UseCases/ILedUseCases.h"
 
+#include <vector>
+
 class MockLedUseCases : public ILedUseCases {
 public:
     bool onLoadCalled = false;
@@ -19,8 +21,13 @@ public:
     int setBlinkingCount = 0;
     bool blinkingState = false;
 
+    LedBootStageEnum stage = LED_BOOT_STAGE_RUNNING;
+    std::vector<LedBootStageEnum> stages;
+
     // Reset all state for fresh test
     void reset() {
+        stage = LED_BOOT_STAGE_RUNNING;
+        stages.clear();
         onLoadCalled = false;
         offLoadCalled = false;
         blinkGreenCalled = false;
@@ -68,6 +75,15 @@ public:
 
     bool isBlinking() const override {
         return blinkingState;
+    }
+
+    void setBootStage(LedBootStageEnum newStage) override {
+        stage = newStage;
+        stages.push_back(newStage);
+    }
+
+    LedBootStageEnum bootStage() const override {
+        return stage;
     }
 };
 

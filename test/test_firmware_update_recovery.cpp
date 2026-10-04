@@ -3,7 +3,6 @@
 #include <vector>
 #include "Mock/ArduinoMock.h"
 #include "Core/Domain/UseCases/ModuleCommand/ModuleCommandExecutionUseCase.h"
-#include "Core/Domain/UseCases/ModuleMode/CheckFirmwareUpdateOnStartupUseCase.h"
 #include "Core/Domain/UseCases/ModuleMode/FirmwareUpdateRecoveryUseCase.h"
 #include "Core/Domain/Enums/BootTypeEnum.h"
 #include "Core/Domain/Enums/ModuleModeEnum.h"
@@ -11,7 +10,7 @@
 #include "Infrastructure/Configuration/PendingFirmwareUpdateStore.h"
 #include "Mock/Core/Domain/MockFirmwareRemoteUpdate.h"
 #include "Mock/Core/Domain/MockNetworkStatusProvider.h"
-#include "Mock/Infrastructure/Api/MockHybridAPIService.h"
+#include "Mock/Core/Domain/MockOtaPartitionControl.h"
 #include "Mock/Infrastructure/Configuration/MockModuleConfig.h"
 #include "Mock/Infrastructure/Configuration/MockSettings.h"
 #include "Mock/Infrastructure/Logging/MockDebugSystem.h"
@@ -34,10 +33,13 @@ struct ModuleState
     MockModuleConfig moduleConfig;
     MockFirmwareRemoteUpdate firmwareUpdater;
     MockNetworkStatusProvider networkStatus;
-    MockHybridAPIService hybridApi;
     MockSpiffsAdapter spiffs;
     ArduinoJsonConverter jsonConverter;
     PendingFirmwareUpdateStore pendingUpdateStore;
+    // The bootloader's slot bookkeeping. A confirmed image by default: that is every boot but
+    // the first one after an update, and it is what the scenarios below assume unless they say
+    // otherwise.
+    MockOtaPartitionControl otaControl;
 
     ModuleState() : pendingUpdateStore(&spiffs, &jsonConverter)
     {
@@ -54,16 +56,14 @@ struct Boot
 {
     FirmwareUpdateRecoveryUseCase recovery;
     ModuleCommandExecutionUseCase commandUseCase;
-    CheckFirmwareUpdateOnStartupUseCase startupCheck;
 
     explicit Boot(ModuleState &m)
         : recovery(&m.networkStatus, &m.moduleConfig, &m.settings, &m.pendingUpdateStore,
-                   &m.logger, &m.debugSystem),
+                   &m.logger, &m.debugSystem, nullptr, &m.otaControl),
           commandUseCase(&m.logger, &m.debugSystem, nullptr, &m.firmwareUpdater,
                          nullptr, nullptr, nullptr, nullptr, &m.moduleConfig, &m.settings,
                          nullptr, nullptr, nullptr, nullptr, nullptr, nullptr,
-                         nullptr, nullptr, nullptr, &recovery),
-          startupCheck(&m.hybridApi, &commandUseCase, &m.logger, &m.debugSystem, &recovery)
+                         nullptr, nullptr, nullptr, &recovery)
     {
     }
 };
@@ -171,60 +171,6 @@ void test_server_error_is_reported_and_no_restart_is_asked(void)
     TEST_ASSERT_FALSE(m.storedUpdate(kept));
 }
 
-void test_kept_update_is_finished_on_the_next_boot(void)
-{
-    ModuleState m;
-    Boot boot(m);
-    m.firmwareUpdater.setUpdateFromURLResult(false);
-    m.firmwareUpdater.setLastHttpCode(FIRMWARE_UPDATE_HTTP_NOT_CONNECTED);
-    boot.commandUseCase.executeCommands({updateFirmwareCommand()});
-
-    m.hybridApi.reset();
-    m.hybridApi.moduleCommandsReturnValue.clear();
-    m.firmwareUpdater.reset();
-    m.firmwareUpdater.setUpdateFromURLResult(true);
-
-    Boot nextBoot(m);
-    bool applied = nextBoot.startupCheck.run();
-
-    TEST_ASSERT_TRUE(applied);
-    TEST_ASSERT_EQUAL(1, m.firmwareUpdater.getUpdateFromURLCallCount());
-    TEST_ASSERT_EQUAL_STRING(UPDATE_URL, m.firmwareUpdater.getLastUrl());
-    TEST_ASSERT_TRUE(m.hybridApi.sendModuleCommandExecutionResultCalled);
-    TEST_ASSERT_EQUAL(1, static_cast<int>(m.hybridApi.lastModuleCommandUpdates.size()));
-    TEST_ASSERT_EQUAL_STRING(COMMAND_UID, m.hybridApi.lastModuleCommandUpdates[0].uid.c_str());
-    TEST_ASSERT_EQUAL_STRING("Done", m.hybridApi.lastModuleCommandUpdates[0].status.c_str());
-
-    ModuleCommandDto kept;
-    TEST_ASSERT_FALSE(m.storedUpdate(kept));
-}
-
-void test_resumed_update_that_still_cannot_connect_stops_at_one_restart(void)
-{
-    ModuleState m;
-    Boot boot(m);
-    m.firmwareUpdater.setUpdateFromURLResult(false);
-    m.firmwareUpdater.setLastHttpCode(FIRMWARE_UPDATE_HTTP_NOT_CONNECTED);
-    m.firmwareUpdater.setLastErrorMessage("HTTP code=-1");
-    boot.commandUseCase.executeCommands({updateFirmwareCommand()});
-    m.moduleConfig.setRequestedModuleMode(ModuleModeEnum::CONFIGURED_DONE);
-
-    m.hybridApi.reset();
-    m.hybridApi.moduleCommandsReturnValue.clear();
-
-    Boot nextBoot(m);
-    bool applied = nextBoot.startupCheck.run();
-
-    TEST_ASSERT_FALSE(applied);
-    TEST_ASSERT_EQUAL_STRING("Error", m.hybridApi.lastModuleCommandUpdates[0].status.c_str());
-    TEST_ASSERT_EQUAL_STRING("Failed to start firmware update: HTTP code=-1",
-                             m.hybridApi.lastModuleCommandUpdates[0].errorMessage.c_str());
-    TEST_ASSERT_EQUAL(ModuleModeEnum::CONFIGURED_DONE, m.moduleConfig.getRequestedModuleMode());
-
-    ModuleCommandDto kept;
-    TEST_ASSERT_FALSE(m.storedUpdate(kept));
-}
-
 void test_second_update_does_not_arm_another_restart(void)
 {
     ModuleState m;
@@ -250,7 +196,7 @@ void test_kept_update_is_taken_once(void)
 {
     ModuleState m;
     Boot boot(m);
-    TEST_ASSERT_TRUE(boot.recovery.keepForNextBoot(UPDATE_URL, UPDATE_VERSION, COMMAND_UID));
+    TEST_ASSERT_TRUE(boot.recovery.keepForNextBoot(updateFirmwareCommand()));
 
     Boot afterRestart(m);
     ModuleCommandDto first;
@@ -264,28 +210,72 @@ void test_kept_update_is_taken_once(void)
     TEST_ASSERT_FALSE(afterSecondRestart.recovery.takeKeptUpdate(second));
 }
 
+/**
+ * The command is kept whole. The url and the version are not all the options may carry - the
+ * image checksum lives there too - and an update resumed without it would install an image
+ * nothing checked. The age is the one field that is dropped on purpose: the restart takes
+ * longer than a command is allowed to live.
+ */
+void test_kept_update_carries_the_whole_options_it_arrived_with(void)
+{
+    ModuleState m;
+    Boot boot(m);
+
+    ModuleCommandDto command = updateFirmwareCommand();
+    command.options = std::string("{\"url\":\"") + UPDATE_URL + "\",\"version\":\"" +
+                      UPDATE_VERSION + "\",\"md5\":\"d19215b1d714757e1fdb0060c52fd4c8\"}";
+    command.createdAt = "2026-08-17T10:00:00Z";
+
+    TEST_ASSERT_TRUE(boot.recovery.keepForNextBoot(command));
+
+    ModuleCommandDto kept;
+    TEST_ASSERT_TRUE(m.storedUpdate(kept));
+    TEST_ASSERT_EQUAL_STRING(command.options.c_str(), kept.options.c_str());
+    TEST_ASSERT_TRUE(kept.createdAt.empty());
+}
+
+/**
+ * The second half of "one update per boot": while an update is held for the probation, a new one
+ * arriving on a dead link must not take its place. Keeping it would overwrite the file the held
+ * update waits in and ask for the restart that, on an image still on probation, is a rollback.
+ */
+void test_a_second_update_cannot_displace_the_one_held_for_the_probation(void)
+{
+    ModuleState m;
+    m.otaControl.runningState = OtaImageState::PENDING_VERIFY;
+    Boot boot(m);
+
+    TEST_ASSERT_TRUE(m.pendingUpdateStore.save(updateFirmwareCommand()));
+    ModuleCommandDto taken;
+    TEST_ASSERT_FALSE_MESSAGE(boot.recovery.takeKeptUpdate(taken),
+                              "an update was taken on an image still on probation");
+
+    // A new update arrives on the same dead link that made the first one wait.
+    m.networkStatus.httpDown = true;
+    m.firmwareUpdater.setUpdateFromURLResult(false);
+    m.firmwareUpdater.setLastHttpCode(FIRMWARE_UPDATE_HTTP_NOT_CONNECTED);
+    m.firmwareUpdater.setLastErrorMessage("HTTP code=-1");
+
+    auto results = boot.commandUseCase.executeCommands({updateFirmwareCommand("second-command-uid")});
+
+    // Reported as the failure it is, rather than taken on and armed with a restart.
+    TEST_ASSERT_EQUAL_STRING("Error", results[0].status.c_str());
+    TEST_ASSERT_EQUAL(ModuleModeEnum::CONFIGURED_DONE, m.moduleConfig.getRequestedModuleMode());
+    TEST_ASSERT_EQUAL_UINT8(BOOT_TYPE_POWER_ON, m.settings.getBootType());
+
+    ModuleCommandDto stored;
+    TEST_ASSERT_TRUE(m.storedUpdate(stored));
+    TEST_ASSERT_EQUAL_STRING(COMMAND_UID, stored.uid.c_str());
+}
+
 void test_update_that_cannot_be_stored_is_not_kept(void)
 {
     ModuleState m;
     Boot boot(m);
     m.spiffs.setShouldFail(true);
 
-    TEST_ASSERT_FALSE(boot.recovery.keepForNextBoot(UPDATE_URL, UPDATE_VERSION, COMMAND_UID));
+    TEST_ASSERT_FALSE(boot.recovery.keepForNextBoot(updateFirmwareCommand()));
     TEST_ASSERT_EQUAL(ModuleModeEnum::CONFIGURED_DONE, m.moduleConfig.getRequestedModuleMode());
-}
-
-void test_startup_check_without_a_kept_update_uses_the_server(void)
-{
-    ModuleState m;
-    Boot boot(m);
-    m.hybridApi.moduleCommandsReturnValue = {updateFirmwareCommand("server-command-uid")};
-    m.firmwareUpdater.setUpdateFromURLResult(true);
-
-    bool applied = boot.startupCheck.run();
-
-    TEST_ASSERT_TRUE(applied);
-    TEST_ASSERT_EQUAL_STRING("server-command-uid",
-                             m.hybridApi.lastModuleCommandUpdates[0].uid.c_str());
 }
 
 extern "C" int run_firmware_update_recovery_tests(void)
@@ -295,11 +285,10 @@ extern "C" int run_firmware_update_recovery_tests(void)
     RUN_TEST(test_update_with_http_up_downloads_without_restart);
     RUN_TEST(test_connection_refused_keeps_the_update_and_restarts);
     RUN_TEST(test_server_error_is_reported_and_no_restart_is_asked);
-    RUN_TEST(test_kept_update_is_finished_on_the_next_boot);
-    RUN_TEST(test_resumed_update_that_still_cannot_connect_stops_at_one_restart);
     RUN_TEST(test_second_update_does_not_arm_another_restart);
     RUN_TEST(test_kept_update_is_taken_once);
+    RUN_TEST(test_kept_update_carries_the_whole_options_it_arrived_with);
+    RUN_TEST(test_a_second_update_cannot_displace_the_one_held_for_the_probation);
     RUN_TEST(test_update_that_cannot_be_stored_is_not_kept);
-    RUN_TEST(test_startup_check_without_a_kept_update_uses_the_server);
     return 0;
 }

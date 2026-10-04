@@ -37,15 +37,29 @@ public:
     
     /**
      * @brief Get rule list from server
+     * @param httpFailed Optional: set to true when the request itself failed, as opposed to the
+     *        server answering that this module has no rules. Both cases return an empty vector,
+     *        and a caller that retries has to be able to tell them apart. Same shape as
+     *        getDeviceCommand() above, for the same reason.
+     * @param readWhole Optional: set to true when every rule the answer carried was built into
+     *        the vector. A rule can be left out without the request failing - unreadable, larger
+     *        than this module accepts, or past the number of rules it keeps - and the difference
+     *        decides whether the answer may be treated as the complete set of rules this module
+     *        has. It may not: the merge retires every stored rule an authoritative snapshot does
+     *        not name, and a rule missing because the module could not take it is not a rule the
+     *        server deleted. False when the request failed.
      * @return vector of Rule containing the rule details, empty if no rules or error
      */
-    virtual std::vector<Rule> getRuleList() = 0;
+    virtual std::vector<Rule> getRuleList(bool* httpFailed = nullptr, bool* readWhole = nullptr) = 0;
     
     /**
      * @brief Get sensor types list from server
+     * @param httpFailed Optional: set to true when the request itself failed, as opposed to the
+     *        server answering that this account has no sensor models. Same shape and same reason as
+     *        getDeviceCommand() above.
      * @return vector of SensorType containing the sensor type definitions, empty if no sensor types or error
      */
-    virtual std::vector<SensorType> getSensorTypesList() = 0;
+    virtual std::vector<SensorType> getSensorTypesList(bool* httpFailed = nullptr) = 0;
     
     /**
      * @brief Sends diagnostic data to the server
@@ -63,9 +77,12 @@ public:
     
     /**
      * @brief Get pending module commands from server
+     * @param httpFailed Optional: set to true when the request itself failed, as opposed to the
+     *        server answering that this module has no commands. Same shape and same reason as
+     *        getDeviceCommand() above.
      * @return vector of ModuleCommandDto containing the command details, empty if no commands or error
      */
-    virtual std::vector<ModuleCommandDto> getModuleCommand() = 0;
+    virtual std::vector<ModuleCommandDto> getModuleCommand(bool* httpFailed = nullptr) = 0;
     
     /**
      * @brief Query the server for the module deletion status (REST only)
