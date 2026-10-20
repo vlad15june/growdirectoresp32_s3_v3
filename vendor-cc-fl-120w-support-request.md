@@ -1,0 +1,52 @@
+# Subject: CC-FL-120W (Modbus RTU, RS-485) — frozen electronic reading on unit 1; unit 2 not responding at all (hex logs attached)
+
+Dear Support,
+
+We are integrating the CC-FL-120W water meter (RS-485 / Modbus RTU version) into our IoT controller. We have two units on the bench; both exhibit issues described below, with the exact frame exchange in Appendix A.
+
+## Unit 1 — register value never updates
+
+- Wiring: DC 12–24 V on the power terminals, RS-485 A/B to our controller, 9600 8-N-1.
+- Communication works: the meter answers the documented read (Appendix A, lines 1–2). Reads are stable and repeatable.
+- **Problem:** the value never changes. We passed more than 30 liters through the meter — the mechanical digit wheels advance (verified visually) — but the register always returns `0x00000064` = 1.00 m³. Over ~30 minutes of polling, the response frame was byte-identical every time (same data, same CRC).
+- The meter only answers the **2-register** read. A 1-register read gets no response (line 3).
+- **FC04 gets no response** (line 4), although the manual lists function codes 03H/04H for reading (Appendix B).
+
+Questions: Is there a wake-up or configuration step required for the reading to update? A minimum flow or update quantization? Or is the photoelectric reading head defective (RMA)?
+
+## Unit 2 — no communication at all
+
+- Same wiring and supply, checked.
+- Our master polled the documented read (FC03, 2 registers at 0x0000) on **every Modbus address 1–247** at 9600 8-N-1 — no reply on any address.
+- Questions: initialization required before first use? Non-default baud rate possible? Dead on arrival (RMA)?
+
+Test environment: ESP32-S3 based controller; bus, frames and CRC validated by raw frame injection and with another Modbus device on the same bus — the setup itself is sound.
+
+Unit 1 serial: [SN]; Unit 2 serial: [SN].
+
+Please advise on configuration steps, or start the RMA procedure for both units.
+
+Best regards,
+Vlad Levin
+[Company] | [Email] | [Phone]
+
+---
+
+## Appendix A — frame exchange (hex, RS-485, 9600 8-N-1; unit tested at address 0x71 = 113, same behavior observed at factory address 0x01)
+
+| # | Direction | Frame | Result |
+|---|---|---|---|
+| 1 | Master → Meter | `71 03 00 00 00 02 CF 3B` (FC03, read 2 regs at 0x0000) | — |
+| 2 | Meter → Master | `71 03 04 00 00 00 64 8A 1F` (raw 100 × 0.01 = 1.00 m³; **never changes while wheels turn**) | OK |
+| 3 | Master → Meter | `71 03 00 00 00 01 8F 3A` (FC03, read 1 reg at 0x0000) | no response, 3 attempts |
+| 4 | Master → Meter | `71 04 00 00 00 02 7A FB` (FC04, read 2 input regs at 0x0000) | no response, timeout |
+
+## Appendix B — register map per the product manual (for reference)
+
+| Address | Contents | Operation | Format |
+|---|---|---|---|
+| 0x0000–0x0001 | Total water consumption | Read (03H/**04H**) | 4 bytes, MSB first; value × 0.01 = m³ |
+| 0x0015 (high byte) | Communication address | R/W (03H/10H) | 1–247 |
+| 0x0015 (low byte) | Communication baud rate | R/W (03H/10H) | 01=9600, 02=4800, 03=2400, 04=1200 |
+
+*Observed discrepancy: the manual declares 03H **and 04H** for reading, but the meter does not answer FC04 at all (Appendix A, line 4).*
